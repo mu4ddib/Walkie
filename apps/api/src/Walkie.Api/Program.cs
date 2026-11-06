@@ -22,7 +22,11 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    // Cuerpo ausente o JSON inválido: 400 (no 500) con ProblemDetails.
+    StatusCodeSelector = ex => ex is BadHttpRequestException bad ? bad.StatusCode : StatusCodes.Status500InternalServerError,
+});
 app.UseStatusCodePages();
 app.UseCors(WebCorsPolicy);
 app.UseAuthentication();
@@ -35,6 +39,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapHealthEndpoints();
 app.MapMeEndpoints();
+app.MapAppsModule();
 
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {

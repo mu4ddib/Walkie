@@ -21,7 +21,7 @@ Requiere la auth básica de la fase 0 (ADR-0003): todos los endpoints exigen tok
 Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de web pueden ir en paralelo a la API.
 
 1. [x] (#3) API: persistencia con EF Core + Postgres (módulos, `DbContext`, migración inicial, Testcontainers).
-2. [ ] (#4) API: endpoints de apps y features (FluentValidation, ProblemDetails, 401).
+2. [x] (#4) API: endpoints de apps y features (FluentValidation, ProblemDetails, 401).
 3. [ ] (#5) API: `GET/PUT` del lienzo con validación de schema (400) y concurrencia optimista (409).
 4. [ ] (#6) Web: store del grafo (acciones, `dirty`, UUID v7) con pruebas en Vitest.
 5. [ ] (#7) Web: navegación y formularios de apps y features.
@@ -37,4 +37,4 @@ Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de
 
 ## Estado
 
-Última actualización: 2026-11-06 — tarea 1 lista (módulos Apps y Canvas, migración inicial, Testcontainers). Sigue: tarea 2 (#4).
+Última actualización: 2026-11-06 — tareas 1 y 2 listas (persistencia; endpoints de apps y features con validación). Sigue: tarea 3 (#5), `GET/PUT` del lienzo.

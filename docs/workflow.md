@@ -39,6 +39,20 @@ Configuración igual en ambos computadores:
 - `.env` nunca se copia entre computadores: se genera desde `.env.example` o se usan Codespaces Secrets.
 - En Windows, el repo usa finales de línea LF (`.gitattributes`); no lo cambies.
 
+## Sesiones en la nube (Claude Code web)
+
+El contenedor de la nube no es el devcontainer. Usa el entorno de nube **Walkie** (cuenta del autor): su script de preparación instala .NET 10, `dotnet tool restore`, `dotnet restore` y `pnpm install`. Docker sí hay que arrancarlo a mano (ver tabla). Si la sesión usa otro entorno, esto es lo que falta y cómo resolverlo:
+
+| Síntoma | Solución |
+| --- | --- |
+| `dotnet: command not found` | `apt-get install -y dotnet-sdk-10.0` (paquete de Ubuntu; el script `dotnet-install` está bloqueado por la red). El SDK 10.0.1xx cumple `global.json`. |
+| Testcontainers: `Failed to connect to Docker endpoint` | El daemon no arranca solo y se pierde al reiniciar la sesión: `dockerd > /tmp/dockerd.log 2>&1 &` y espera a que `docker info` responda. |
+| `docker pull quay.io/...` → Forbidden | Usa la imagen de Docker Hub (`keycloak/keycloak:26.4`, ya así en `infra/docker-compose.yml`). |
+| `git push` → 403 "Claude doesn't have GitHub access" | Reconectar GitHub en claude.ai e instalar la Claude GitHub App en el repo. Reintentar no sirve. |
+| `dotnet ef` no existe | `dotnet tool restore` (manifiesto `dotnet-tools.json` en la raíz). |
+
+Navegador para pruebas manuales: Playwright y Chromium vienen preinstalados (`require('playwright')`).
+
 ## Uso eficiente de la IA (tokens)
 
 - Una tarea pequeña por sesión; limpiar el contexto al terminar.
@@ -48,6 +62,8 @@ Configuración igual en ambos computadores:
 - Logs: solo el fragmento relevante.
 - Si la IA repite un error, la corrección va al `CLAUDE.md` que corresponda.
 - Procedimientos repetidos → convertirlos en skill en `.claude/skills/`.
+- Lo aprendido al depurar se anota en "Trampas conocidas" del `CLAUDE.md` de la app (o en la tabla de arriba si es del entorno), en el mismo PR. Así la siguiente sesión no lo redescubre.
+- Para retomar una feature basta leer: el issue, `plan.md` (tarea y sección "Estado") y el `CLAUDE.md` de la app que se toca.
 
 ## Convenciones
 
