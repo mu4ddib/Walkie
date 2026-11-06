@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 
 namespace Walkie.IntegrationTests;
 
-public sealed class AuthTests(WalkieApiFactory factory) : IClassFixture<WalkieApiFactory>
+[Collection(ApiTestGroup.Name)]
+public sealed class AuthTests(WalkieApiFactory factory)
 {
     private static readonly Uri Me = new("/api/me", UriKind.Relative);
 

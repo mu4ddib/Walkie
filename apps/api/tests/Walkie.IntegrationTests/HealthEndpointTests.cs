@@ -3,8 +3,8 @@ using System.Net.Http.Json;
 
 namespace Walkie.IntegrationTests;
 
+[Collection(ApiTestGroup.Name)]
 public sealed class HealthEndpointTests(WalkieApiFactory factory)
-    : IClassFixture<WalkieApiFactory>
 {
     [Fact]
     public async Task Health_responde_ok_con_la_version_del_schema()
