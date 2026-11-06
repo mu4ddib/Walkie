@@ -1,0 +1,31 @@
+:root {
+  --ink: #1b1c33;
+  --paper: #f4f0e6;
+  --accent: #e85d3f;
+  --ok: #3f8f5a;
+  --warn: #d9a32b;
+  --font-title: 'Press Start 2P', monospace;
+  --font-body: 'VT323', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 20px;
+}
+
+img {
+  image-rendering: pixelated;
+}

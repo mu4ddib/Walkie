@@ -48,6 +48,8 @@ jobs:
       - if: ${{ hashFiles('apps/web/package.json') != '' }}
         run: corepack enable && pnpm --dir apps/web install --frozen-lockfile
       - if: ${{ hashFiles('apps/web/package.json') != '' }}
+        run: pnpm --dir apps/web check:schema
+      - if: ${{ hashFiles('apps/web/package.json') != '' }}
         run: pnpm --dir apps/web lint
       - if: ${{ hashFiles('apps/web/package.json') != '' }}
         run: pnpm --dir apps/web test

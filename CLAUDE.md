@@ -20,11 +20,13 @@ App → Catálogo (nodos reutilizables: api, service, database) + Features. Feat
 | --- | --- |
 | Levantar servicios | `docker compose -f infra/docker-compose.yml up -d` |
 | API | `dotnet run --project apps/api/src/Walkie.Api` |
-| Pruebas API | `dotnet test` |
+| Pruebas API | `dotnet test apps/api` |
 | Web | `pnpm --dir apps/web dev` |
 | Pruebas web | `pnpm --dir apps/web test` |
+| Lint web | `pnpm --dir apps/web lint` |
+| Regenerar tipos del schema | `pnpm --dir apps/web gen:schema` |
 
-(Los proyectos de `apps/` se crean en la fase 0; actualiza esta tabla si cambian.)
+API en http://localhost:5080 (OpenAPI en `/openapi/v1.json` en Development), web en http://localhost:5173. Actualiza esta tabla si cambian.
 
 ## Reglas
 

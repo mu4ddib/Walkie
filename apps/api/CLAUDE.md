@@ -17,6 +17,10 @@ apps/api/
     Walkie.IntegrationTests/  # xUnit + Testcontainers (Postgres real)
 ```
 
+## Estado actual
+
+Existen `Walkie.Api` (host, `/api/health`, ProblemDetails, CORS, OpenAPI), `Walkie.Shared` y `Walkie.IntegrationTests` (WebApplicationFactory). Los módulos se crean cuando una tarea los necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
+
 ## Convenciones
 
 - Minimal APIs agrupadas por módulo (`MapGroup("/api/apps")`).
