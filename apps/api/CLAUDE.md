@@ -34,7 +34,8 @@ Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, 
 ## Persistencia
 
 - Cada módulo tiene su `DbContext` **internal**, su schema de Postgres (`apps`, `canvas`) y sus migraciones en `Persistence/Migrations`. Sin FK entre módulos.
-- El módulo expone solo `Add<Módulo>Module(connectionString)` y `Migrate<Módulo>DatabaseAsync()`.
+- El módulo expone solo `Add<Módulo>Module(connectionString)`, `Map<Módulo>Module()`, `Migrate<Módulo>DatabaseAsync()` y, si otro módulo lo necesita, una interfaz en `Contracts/` (ej. `IFeatureDirectory` de Apps, que usa Canvas).
+- El schema del grafo se embebe en `Walkie.Modules.Canvas` desde `packages/schema/` (no hay copia): `GraphValidator` lo usa para el 400.
 - En Development la API aplica las migraciones al arrancar (`Database:MigrateOnStartup`); en producción va en `false`.
 - Crear una migración (desde la raíz, tras `dotnet tool restore`):
   `dotnet ef migrations add <Nombre> --project apps/api/src/Walkie.Modules.<Módulo> --startup-project apps/api/src/Walkie.Api --context <Módulo>DbContext --output-dir Persistence/Migrations`
@@ -54,6 +55,8 @@ Ya costaron tiempo; no las repitas.
 - **`jsonb` reordena claves y quita espacios**: compara grafos por contenido (`JsonElement.DeepEquals`), nunca como texto.
 - **Auth por defecto**: sin token, cualquier ruta (incluso inexistente) responde 401, no 404. Las pruebas de 404 van con `CreateAuthenticatedClient()`.
 - **Cuerpo ausente o JSON inválido** lanza `BadHttpRequestException`; `Program.cs` lo mapea a 400 con `StatusCodeSelector`. No lo quites.
+- **JsonSchema.Net 9**: `schema.Evaluate(...)` recibe `JsonElement` (no `JsonNode`) y `results.Details` puede ser `null`.
+- **Servicios compartidos entre módulos** (ej. `TimeProvider`): regístralos con `TryAddSingleton` para no duplicarlos.
 - **Endpoints en un módulo**: el `.csproj` necesita `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Validación con `.WithValidation<TRequest>()` (`Walkie.Shared.Validation`); los validadores pueden ser `internal` (se registran con `includeInternalTypes: true`).
 
 ## Cómo crear un endpoint

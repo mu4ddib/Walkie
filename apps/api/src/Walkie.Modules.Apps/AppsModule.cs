@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Walkie.Modules.Apps.Features;
 using Walkie.Modules.Apps.Persistence;
 
@@ -16,7 +17,8 @@ public static class AppsModule
         services.AddDbContext<AppsDbContext>(options => options.UseNpgsql(connectionString, ConfigureNpgsql));
         services.AddValidatorsFromAssemblyContaining<AppsDbContext>(includeInternalTypes: true);
         services.AddScoped<AppsHandlers>();
-        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<Contracts.IFeatureDirectory, FeatureDirectory>();
+        services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 

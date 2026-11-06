@@ -40,6 +40,7 @@ if (app.Environment.IsDevelopment())
 app.MapHealthEndpoints();
 app.MapMeEndpoints();
 app.MapAppsModule();
+app.MapCanvasModule();
 
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
