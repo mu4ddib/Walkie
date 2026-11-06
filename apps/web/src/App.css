@@ -1,0 +1,76 @@
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 16px;
+  border-bottom: 4px solid var(--ink);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 16px;
+}
+
+.api-status {
+  padding: 0 8px;
+  border: 2px solid var(--ink);
+}
+
+.api-status[data-state='ok'] {
+  background: var(--ok);
+  color: var(--paper);
+}
+
+.api-status[data-state='error'] {
+  background: var(--accent);
+  color: var(--paper);
+}
+
+.app-canvas {
+  min-height: 0;
+}
+
+.app-header-right,
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pixel-button {
+  font: inherit;
+  padding: 0 8px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.pixel-button:hover,
+.pixel-button:focus-visible {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.auth-screen {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 24px;
+  height: 100%;
+  margin: 0;
+}
+
+.auth-screen h1 {
+  font-family: var(--font-title);
+  font-size: 24px;
+  margin: 0;
+}

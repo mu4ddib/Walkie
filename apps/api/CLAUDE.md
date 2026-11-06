@@ -17,6 +17,10 @@ apps/api/
     Walkie.IntegrationTests/  # xUnit + Testcontainers (Postgres real)
 ```
 
+## Estado actual
+
+Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared` y `Walkie.IntegrationTests` (WebApplicationFactory). Los módulos se crean cuando una tarea los necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
+
 ## Convenciones
 
 - Minimal APIs agrupadas por módulo (`MapGroup("/api/apps")`).
@@ -25,6 +29,7 @@ apps/api/
 - Los DTOs del grafo deben coincidir con `packages/schema/walkie-graph.schema.json`.
 - Cada endpoint nuevo: prueba de integración + aparece en OpenAPI.
 - Logs con Serilog; trazas con OpenTelemetry.
+- Auth (ADR-0003): todo endpoint exige usuario autenticado por defecto; los públicos llevan `.AllowAnonymous()`. El usuario es el claim `sub`. En pruebas, `WalkieApiFactory.CreateAuthenticatedClient()` firma tokens locales; no hace falta Keycloak.
 
 ## Cómo crear un endpoint
 

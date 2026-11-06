@@ -7,6 +7,7 @@
 ```
 
 - El front solo habla con la API. La API es la única que toca Postgres y el almacenamiento.
+- Autenticación OIDC (ADR-0003): la web inicia sesión contra el proveedor (Keycloak en desarrollo) con PKCE y envía el access token; la API solo valida el JWT.
 - Módulos de la API: Apps (apps, features, catálogo), Canvas (grafo + versión), Tours, Files.
 - El grafo de cada feature se guarda como documento `jsonb` con `version` para concurrencia optimista.
 - Contrato del grafo: `packages/schema/walkie-graph.schema.json`.
@@ -24,7 +25,7 @@
 
 | Entorno | Qué |
 | --- | --- |
-| Desarrollo | Devcontainer / Codespaces + `infra/docker-compose.yml` |
+| Desarrollo | Devcontainer / Codespaces + `infra/docker-compose.yml` (Postgres, MinIO, Keycloak) |
 | CI | GitHub Actions |
 | Nube (MVP) | Contenedores administrados (Azure Container Apps, Fly.io o Railway) + Postgres administrado + S3/R2 |
 | Banca (futuro) | Self-hosted con Helm en Kubernetes/OpenShift, SSO corporativo |

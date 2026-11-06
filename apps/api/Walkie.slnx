@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Walkie.Api/Walkie.Api.csproj" />
+    <Project Path="src/Walkie.Shared/Walkie.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Walkie.IntegrationTests/Walkie.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

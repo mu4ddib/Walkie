@@ -18,7 +18,9 @@ apps/web/src/
 
 - Estado del grafo normalizado: `nodes: Record<id, Node>`, `edges: Record<id, Edge>`, `layout: Record<id, {x,y}>`.
 - Solo las acciones del store modifican el grafo. Esto permite migrar a Yjs sin tocar componentes.
-- Tipos del grafo generados desde el JSON Schema; si falta un campo, se cambia el schema primero.
+- Tipos del grafo generados desde el JSON Schema (`pnpm gen:schema` → `src/schema/walkie-graph.ts`); si falta un campo, se cambia el schema primero. CI falla si los tipos no están al día (`pnpm check:schema`).
+- URL de la API: `VITE_API_URL` (lee el `.env` de la raíz del repo).
+- Auth (ADR-0003): `react-oidc-context`; `AuthGate` protege la app y las llamadas a la API llevan `auth.user.access_token`. En pruebas se mockea `useAuth`.
 - Estilo pixel art: grilla de 8 px (`snapGrid={[8,8]}`), fuente Press Start 2P para títulos y VT323 para texto, sprites PNG con `image-rendering: pixelated`, paleta en `theme/palette.ts`. Sin sombras difusas ni gradientes.
 - Pruebas: Vitest para el store y la lógica, Playwright para flujos (crear nodo, conectar, guardar, tour).
 
