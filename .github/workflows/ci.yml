@@ -41,12 +41,19 @@ jobs:
       - name: Sin proyecto web todavía
         if: ${{ hashFiles('apps/web/package.json') == '' }}
         run: echo "apps/web aún no tiene package.json; se omite."
+      - uses: pnpm/action-setup@v4
+        if: ${{ hashFiles('apps/web/package.json') != '' }}
+        with:
+          # Usa la versión de "packageManager" de apps/web (no hay package.json en la raíz).
+          package_json_file: apps/web/package.json
       - uses: actions/setup-node@v4
         if: ${{ hashFiles('apps/web/package.json') != '' }}
         with:
           node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
       - if: ${{ hashFiles('apps/web/package.json') != '' }}
-        run: corepack enable && pnpm --dir apps/web install --frozen-lockfile
+        run: pnpm --dir apps/web install --frozen-lockfile
       - if: ${{ hashFiles('apps/web/package.json') != '' }}
         run: pnpm --dir apps/web check:schema
       - if: ${{ hashFiles('apps/web/package.json') != '' }}
