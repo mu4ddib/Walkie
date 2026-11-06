@@ -1,0 +1,3 @@
+# Migraciones de EF Core: código generado, sin analizadores.
+[**/Persistence/Migrations/*.cs]
+generated_code = true

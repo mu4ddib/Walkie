@@ -19,7 +19,7 @@ apps/api/
 
 ## Estado actual
 
-Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared` y `Walkie.IntegrationTests` (WebApplicationFactory). Los módulos se crean cuando una tarea los necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
+Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared`, `Walkie.Modules.Apps` (apps, features), `Walkie.Modules.Canvas` (lienzo `jsonb` + `version`) y `Walkie.IntegrationTests` (WebApplicationFactory + Testcontainers). Tours y Files se crean cuando una tarea los necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
 
 ## Convenciones
 
@@ -30,6 +30,15 @@ Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, 
 - Cada endpoint nuevo: prueba de integración + aparece en OpenAPI.
 - Logs con Serilog; trazas con OpenTelemetry.
 - Auth (ADR-0003): todo endpoint exige usuario autenticado por defecto; los públicos llevan `.AllowAnonymous()`. El usuario es el claim `sub`. En pruebas, `WalkieApiFactory.CreateAuthenticatedClient()` firma tokens locales; no hace falta Keycloak.
+
+## Persistencia
+
+- Cada módulo tiene su `DbContext` **internal**, su schema de Postgres (`apps`, `canvas`) y sus migraciones en `Persistence/Migrations`. Sin FK entre módulos.
+- El módulo expone solo `Add<Módulo>Module(connectionString)` y `Migrate<Módulo>DatabaseAsync()`.
+- En Development la API aplica las migraciones al arrancar (`Database:MigrateOnStartup`); en producción va en `false`.
+- Crear una migración (desde la raíz, tras `dotnet tool restore`):
+  `dotnet ef migrations add <Nombre> --project apps/api/src/Walkie.Modules.<Módulo> --startup-project apps/api/src/Walkie.Api --context <Módulo>DbContext --output-dir Persistence/Migrations`
+- Pruebas: `WalkieApiFactory` levanta un Postgres real (requiere Docker) compartido por la colección `ApiTestGroup`; cada prueba crea sus propios datos con IDs nuevos.
 
 ## Cómo crear un endpoint
 

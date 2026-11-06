@@ -1,18 +1,21 @@
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Testcontainers.PostgreSql;
 
 namespace Walkie.IntegrationTests;
 
 /// <summary>
-/// Host de pruebas. Reemplaza el proveedor OIDC por una clave simétrica local para
-/// poder emitir tokens sin Keycloak. La validación de emisor, audiencia y expiración sigue activa.
+/// Host de pruebas compartido por toda la colección <see cref="ApiTestGroup"/>:
+/// Postgres real (Testcontainers) con las migraciones aplicadas, y un emisor de tokens local
+/// en lugar de Keycloak. La validación de emisor, audiencia y expiración sigue activa.
 /// </summary>
-public sealed class WalkieApiFactory : WebApplicationFactory<Program>
+public sealed class WalkieApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string Issuer = "https://walkie-tests.local";
     public const string Audience = "walkie-api";
@@ -20,8 +23,23 @@ public sealed class WalkieApiFactory : WebApplicationFactory<Program>
     private static readonly SymmetricSecurityKey SigningKey =
         new(Encoding.UTF8.GetBytes("clave-de-pruebas-de-integracion-walkie-0123456789"));
 
-    protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17")
+        .WithDatabase("walkie_tests")
+        .Build();
+
+    public async Task InitializeAsync() => await _postgres.StartAsync();
+
+    async Task IAsyncLifetime.DisposeAsync()
     {
+        await DisposeAsync();
+        await _postgres.DisposeAsync();
+    }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseSetting("ConnectionStrings:Walkie", _postgres.GetConnectionString());
+        builder.UseSetting("Database:MigrateOnStartup", "true");
+
         builder.ConfigureServices(services =>
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, jwt =>
             {
@@ -40,12 +58,13 @@ public sealed class WalkieApiFactory : WebApplicationFactory<Program>
         string audience = Audience,
         DateTime? expires = null)
     {
+        var exp = expires ?? DateTime.UtcNow.AddMinutes(5);
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = Issuer,
             Audience = audience,
-            Expires = expires ?? DateTime.UtcNow.AddMinutes(5),
-            NotBefore = (expires ?? DateTime.UtcNow.AddMinutes(5)).AddMinutes(-10),
+            Expires = exp,
+            NotBefore = exp.AddMinutes(-10),
             Subject = new ClaimsIdentity(
             [
                 new Claim("sub", sub),
@@ -66,4 +85,11 @@ public sealed class WalkieApiFactory : WebApplicationFactory<Program>
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token ?? CreateToken());
         return client;
     }
+}
+
+/// <summary>Un solo host y un solo contenedor de Postgres para todas las pruebas de la API.</summary>
+[CollectionDefinition(Name)]
+public sealed class ApiTestGroup : ICollectionFixture<WalkieApiFactory>
+{
+    public const string Name = "api";
 }

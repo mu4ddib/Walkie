@@ -20,7 +20,8 @@ App → Catálogo (nodos reutilizables: api, service, database) + Features. Feat
 | --- | --- |
 | Levantar servicios (Postgres, MinIO, Keycloak) | `docker compose -f infra/docker-compose.yml up -d` |
 | API | `dotnet run --project apps/api/src/Walkie.Api` |
-| Pruebas API | `dotnet test apps/api` |
+| Pruebas API (requiere Docker) | `dotnet test apps/api` |
+| Nueva migración | ver `apps/api/CLAUDE.md` → Persistencia |
 | Web | `pnpm --dir apps/web dev` |
 | Pruebas web | `pnpm --dir apps/web test` |
 | Lint web | `pnpm --dir apps/web lint` |
