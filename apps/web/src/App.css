@@ -37,3 +37,40 @@
 .app-canvas {
   min-height: 0;
 }
+
+.app-header-right,
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pixel-button {
+  font: inherit;
+  padding: 0 8px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.pixel-button:hover,
+.pixel-button:focus-visible {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.auth-screen {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 24px;
+  height: 100%;
+  margin: 0;
+}
+
+.auth-screen h1 {
+  font-family: var(--font-title);
+  font-size: 24px;
+  margin: 0;
+}

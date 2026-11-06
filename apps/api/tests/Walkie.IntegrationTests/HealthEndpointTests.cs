@@ -1,11 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Walkie.IntegrationTests;
 
-public sealed class HealthEndpointTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthEndpointTests(WalkieApiFactory factory)
+    : IClassFixture<WalkieApiFactory>
 {
     [Fact]
     public async Task Health_responde_ok_con_la_version_del_schema()
@@ -24,7 +23,7 @@ public sealed class HealthEndpointTests(WebApplicationFactory<Program> factory)
     [Fact]
     public async Task Ruta_inexistente_responde_problem_details()
     {
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient();
 
         var response = await client.GetAsync(new Uri("/api/no-existe", UriKind.Relative));
 

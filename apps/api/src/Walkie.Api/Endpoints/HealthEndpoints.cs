@@ -8,7 +8,8 @@ internal static class HealthEndpoints
     {
         app.MapGet("/api/health", () => TypedResults.Ok(new HealthResponse("ok", WalkieInfo.SchemaVersion)))
             .WithName("GetHealth")
-            .WithTags("Health");
+            .WithTags("Health")
+            .AllowAnonymous();
 
         return app;
     }

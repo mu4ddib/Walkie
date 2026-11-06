@@ -28,6 +28,19 @@ services:
     volumes:
       - miniodata:/data
 
+  keycloak:
+    image: keycloak/keycloak:26.4
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-walkie_dev_admin}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      # Realm "walkie" de desarrollo: cliente walkie-web y usuario dev / walkie_dev.
+      - ./keycloak/walkie-realm.json:/opt/keycloak/data/import/walkie-realm.json:ro
+
 volumes:
   pgdata:
   miniodata:

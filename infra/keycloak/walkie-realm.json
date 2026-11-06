@@ -1,0 +1,49 @@
+{
+  "realm": "walkie",
+  "enabled": true,
+  "displayName": "Walkie (desarrollo)",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "accessTokenLifespan": 900,
+  "clients": [
+    {
+      "clientId": "walkie-web",
+      "name": "Walkie web",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-walkie-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "walkie-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "dev",
+      "email": "dev@walkie.local",
+      "emailVerified": true,
+      "firstName": "Dev",
+      "lastName": "Walkie",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "walkie_dev", "temporary": false }]
+    }
+  ]
+}
