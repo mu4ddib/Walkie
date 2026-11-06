@@ -40,10 +40,28 @@ Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, 
   `dotnet ef migrations add <Nombre> --project apps/api/src/Walkie.Modules.<Módulo> --startup-project apps/api/src/Walkie.Api --context <Módulo>DbContext --output-dir Persistence/Migrations`
 - Pruebas: `WalkieApiFactory` levanta un Postgres real (requiere Docker) compartido por la colección `ApiTestGroup`; cada prueba crea sus propios datos con IDs nuevos.
 
+## Trampas conocidas
+
+Ya costaron tiempo; no las repitas.
+
+- **Warnings = errores** (`Directory.Build.props`, analizadores `latest-recommended`). Suprimidos a propósito: CA1716 (nombre `Shared`) y, solo en `tests/`, CA1707 (nombres de prueba con `_`).
+  - No nombres clases con sufijo `Collection` (CA1711): por eso la colección de xUnit se llama `ApiTestGroup`.
+  - `Assert.Equal(esperado, real)`: la constante va primero (xUnit2000).
+- **Paquetes `Microsoft.*` en 10.0.13** o más. 10.0.0 arrastra `Microsoft.OpenApi` 2.0.0 con vulnerabilidad alta → NU1903 rompe el build.
+- **Testcontainers 4.16**: `new PostgreSqlBuilder("postgres:17")`; el constructor sin imagen es obsoleto (rompe el build). Las pruebas necesitan Docker corriendo.
+- **Migraciones**: el código generado se excluye de los analizadores con `apps/api/.editorconfig`; no lo edites a mano.
+- **Fechas**: crea con `clock.GetUtcNowForDb()` (`Walkie.Shared.Time`). Postgres guarda microsegundos y .NET ticks de 100 ns; sin truncar, el POST y el GET devuelven horas distintas.
+- **`jsonb` reordena claves y quita espacios**: compara grafos por contenido (`JsonElement.DeepEquals`), nunca como texto.
+- **Auth por defecto**: sin token, cualquier ruta (incluso inexistente) responde 401, no 404. Las pruebas de 404 van con `CreateAuthenticatedClient()`.
+- **Cuerpo ausente o JSON inválido** lanza `BadHttpRequestException`; `Program.cs` lo mapea a 400 con `StatusCodeSelector`. No lo quites.
+- **Endpoints en un módulo**: el `.csproj` necesita `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Validación con `.WithValidation<TRequest>()` (`Walkie.Shared.Validation`); los validadores pueden ser `internal` (se registran con `includeInternalTypes: true`).
+
 ## Cómo crear un endpoint
 
-1. Request/response en el módulo correspondiente.
-2. Validador.
-3. Handler (lógica) separado del mapeo HTTP.
-4. Registrar en el `MapGroup` del módulo.
-5. Prueba de integración en `tests/`.
+Ejemplo completo: `src/Walkie.Modules.Apps/` (`Contracts/`, `Features/AppsHandlers.cs`, `Features/AppsEndpoints.cs`) y `tests/Walkie.IntegrationTests/AppsEndpointsTests.cs`.
+
+1. Request/response (records públicos) en `Contracts/` del módulo.
+2. Validador `AbstractValidator<TRequest>` en `Contracts/`.
+3. Handler (lógica) en `Features/`, separado del mapeo HTTP; registrado en `Add<Módulo>Module`.
+4. Registrar en el `MapGroup` del módulo con `WithName`, `TypedResults` y `.WithValidation<T>()`.
+5. Prueba de integración en `tests/`: 401 sin token, caso feliz, 400, 404 y que aparezca en `/openapi/v1.json`.

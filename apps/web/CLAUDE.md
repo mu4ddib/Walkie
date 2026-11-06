@@ -24,6 +24,15 @@ apps/web/src/
 - Estilo pixel art: grilla de 8 px (`snapGrid={[8,8]}`), fuente Press Start 2P para títulos y VT323 para texto, sprites PNG con `image-rendering: pixelated`, paleta en `theme/palette.ts`. Sin sombras difusas ni gradientes.
 - Pruebas: Vitest para el store y la lógica, Playwright para flujos (crear nodo, conectar, guardar, tour).
 
+## Trampas conocidas
+
+- **Versiones fijadas a propósito**: TypeScript 5.9, ESLint 9, Vite 7, Vitest 4, `@vitejs/plugin-react` 5. Las majors más nuevas (TS 7, ESLint 10, Vite 8) aún no son compatibles entre sí ni con `typescript-eslint`. No las subas sin correr lint + test + build.
+- **pnpm 10.28.0** fijado en `packageManager`. Corre pnpm desde `apps/web` o con `--dir apps/web`: corepack en la raíz (sin `package.json`) baja otra versión y falla con `ERR_PNPM_BAD_PM_VERSION`. En CI se usa `pnpm/action-setup` con `package_json_file: apps/web/package.json`.
+- **`tsconfig.app.json` no incluye tipos de Node**: las pruebas en `src/` no pueden usar `node:fs`. La coherencia con el schema la verifica `pnpm check:schema`, no una prueba.
+- **`src/schema/` está excluido de ESLint** (código generado).
+- **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
+- **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
+
 ## Cómo crear un tipo de nodo
 
 1. Agregar el tipo en `packages/schema` y regenerar tipos.

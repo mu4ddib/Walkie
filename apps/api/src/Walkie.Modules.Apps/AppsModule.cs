@@ -1,6 +1,9 @@
+using FluentValidation;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Walkie.Modules.Apps.Features;
 using Walkie.Modules.Apps.Persistence;
 
 namespace Walkie.Modules.Apps;
@@ -11,8 +14,14 @@ public static class AppsModule
     public static IServiceCollection AddAppsModule(this IServiceCollection services, string connectionString)
     {
         services.AddDbContext<AppsDbContext>(options => options.UseNpgsql(connectionString, ConfigureNpgsql));
+        services.AddValidatorsFromAssemblyContaining<AppsDbContext>(includeInternalTypes: true);
+        services.AddScoped<AppsHandlers>();
+        services.AddSingleton(TimeProvider.System);
         return services;
     }
+
+    /// <summary>Endpoints <c>/api/apps</c> y <c>/api/apps/{appId}/features</c>.</summary>
+    public static IEndpointRouteBuilder MapAppsModule(this IEndpointRouteBuilder routes) => routes.MapAppsEndpoints();
 
     /// <summary>Aplica las migraciones pendientes del módulo.</summary>
     public static async Task MigrateAppsDatabaseAsync(this IServiceProvider services, CancellationToken cancellationToken = default)
