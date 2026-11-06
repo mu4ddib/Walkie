@@ -41,7 +41,7 @@ Configuración igual en ambos computadores:
 
 ## Sesiones en la nube (Claude Code web)
 
-El contenedor de la nube no es el devcontainer. Lo que falta y cómo resolverlo:
+El contenedor de la nube no es el devcontainer. Usa el entorno de nube **Walkie** (cuenta del autor): su script de preparación instala .NET 10, `dotnet tool restore`, `dotnet restore` y `pnpm install`. Docker sí hay que arrancarlo a mano (ver tabla). Si la sesión usa otro entorno, esto es lo que falta y cómo resolverlo:
 
 | Síntoma | Solución |
 | --- | --- |
