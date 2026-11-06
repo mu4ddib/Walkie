@@ -1,0 +1,24 @@
+name: Tarea de feature
+description: Una tarea de un plan.md (cabe en un PR)
+title: "<feature>: <tarea>"
+body:
+  - type: input
+    id: plan
+    attributes:
+      label: Plan
+      description: Ruta del plan y número de tarea
+      placeholder: docs/features/lienzo-base/plan.md — tarea 2
+    validations:
+      required: true
+  - type: textarea
+    id: criterio
+    attributes:
+      label: Criterio de terminado
+      placeholder: Qué debe poder verificarse al cerrar el issue
+    validations:
+      required: true
+  - type: textarea
+    id: estado
+    attributes:
+      label: Estado entre computadores
+      description: Al final de cada sesión, una línea con qué quedó y qué sigue

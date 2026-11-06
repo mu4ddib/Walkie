@@ -1,0 +1,28 @@
+# Entorno
+.env
+.env.*
+!.env.example
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+TestResults/
+
+# Node
+node_modules/
+dist/
+.vite/
+coverage/
+playwright-report/
+test-results/
+
+# Editores / SO
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code: configuración personal (la compartida sí se versiona)
+.claude/settings.local.json

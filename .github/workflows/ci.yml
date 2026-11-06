@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Validar JSON Schema del grafo
+        run: npx --yes ajv-cli@5 compile --spec=draft2020 -s packages/schema/walkie-graph.schema.json
+
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sin proyecto API todavía
+        if: ${{ hashFiles('apps/api/**/*.csproj') == '' }}
+        run: echo "apps/api aún no tiene proyectos; se omite."
+      - uses: actions/setup-dotnet@v4
+        if: ${{ hashFiles('apps/api/**/*.csproj') != '' }}
+        with:
+          global-json-file: global.json
+      - if: ${{ hashFiles('apps/api/**/*.csproj') != '' }}
+        run: dotnet restore apps/api
+      - if: ${{ hashFiles('apps/api/**/*.csproj') != '' }}
+        run: dotnet build apps/api --no-restore -c Release
+      - if: ${{ hashFiles('apps/api/**/*.csproj') != '' }}
+        run: dotnet test apps/api --no-build -c Release
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sin proyecto web todavía
+        if: ${{ hashFiles('apps/web/package.json') == '' }}
+        run: echo "apps/web aún no tiene package.json; se omite."
+      - uses: actions/setup-node@v4
+        if: ${{ hashFiles('apps/web/package.json') != '' }}
+        with:
+          node-version-file: .nvmrc
+      - if: ${{ hashFiles('apps/web/package.json') != '' }}
+        run: corepack enable && pnpm --dir apps/web install --frozen-lockfile
+      - if: ${{ hashFiles('apps/web/package.json') != '' }}
+        run: pnpm --dir apps/web lint
+      - if: ${{ hashFiles('apps/web/package.json') != '' }}
+        run: pnpm --dir apps/web test
+      - if: ${{ hashFiles('apps/web/package.json') != '' }}
+        run: pnpm --dir apps/web build
