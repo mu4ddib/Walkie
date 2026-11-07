@@ -1,4 +1,4 @@
-import { WebStorageStateStore, type UserManagerSettings } from 'oidc-client-ts';
+import { WebStorageStateStore, type User, type UserManagerSettings } from 'oidc-client-ts';
 
 /** Cliente OIDC público con PKCE (ADR-0003). Valores por defecto = Keycloak local. */
 export const oidcConfig: UserManagerSettings = {
@@ -11,7 +11,27 @@ export const oidcConfig: UserManagerSettings = {
   userStore: new WebStorageStateStore({ store: window.sessionStorage }),
 };
 
-/** Quita `?code=...&state=...` de la URL tras volver del login. */
-export function onSigninCallback() {
-  window.history.replaceState({}, document.title, window.location.pathname);
+/** Estado que viaja por el login para volver a la página que se estaba viendo. */
+export interface SigninState {
+  returnTo: string;
+}
+
+/** Ruta actual, para pasarla como `state` a `signinRedirect`. */
+export function currentPath(): SigninState {
+  return { returnTo: window.location.pathname + window.location.search + window.location.hash };
+}
+
+/** Solo rutas internas (`/algo`); evita usar el login como redirección abierta (`//otro.sitio`). */
+export function safeReturnTo(state: unknown): string {
+  const returnTo = (state as Partial<SigninState> | undefined)?.returnTo;
+  return typeof returnTo === 'string' && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/';
+}
+
+/**
+ * Tras volver del login: quita `?code=...&state=...` y vuelve a la página de origen.
+ * El `popstate` hace que react-router lea la nueva URL (replaceState no lo avisa).
+ */
+export function onSigninCallback(user: User | void) {
+  window.history.replaceState({}, document.title, safeReturnTo(user ? user.state : undefined));
+  window.dispatchEvent(new PopStateEvent('popstate'));
 }

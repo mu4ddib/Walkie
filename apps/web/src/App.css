@@ -111,9 +111,53 @@
   padding: 0 16px 16px;
 }
 
+.feature-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* El lienzo ocupa el alto restante, con o sin el aviso de conflicto encima. */
 .feature-canvas {
+  flex: 1;
   min-height: 0;
   border: 4px solid var(--ink);
+}
+
+.save-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.save-status[data-dirty] {
+  color: var(--accent);
+}
+
+.save-error {
+  color: var(--accent);
+}
+
+.conflict-dialog {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 4px solid var(--accent);
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.conflict-dialog p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.pixel-button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .app-header-right,

@@ -65,8 +65,11 @@ export interface GraphActions {
   connect(from: string, to: string, kind?: EdgeKind): string | null;
   setEdgeKind(id: string, kind: EdgeKind): void;
   removeEdge(id: string): void;
-  /** Tras un guardado exitoso: adopta la versión del servidor y limpia `dirty`. */
-  markSaved(version: number): void;
+  /**
+   * Tras un guardado exitoso: adopta la versión del servidor. Limpia `dirty` solo si el grafo
+   * sigue siendo el que se envió (`sent`); si hubo cambios mientras viajaba la petición, siguen pendientes.
+   */
+  markSaved(version: number, sent?: GraphState): void;
 }
 
 export type GraphStore = GraphState & GraphActions;
@@ -142,7 +145,11 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
       set((s) => ({ edges: omit(s.edges, id), dirty: true }));
     },
 
-    markSaved: (version) => set({ version, dirty: false }),
+    markSaved: (version, sent) => {
+      const s = get();
+      const unchanged = !sent || (s.nodes === sent.nodes && s.edges === sent.edges && s.layout === sent.layout);
+      set({ version, dirty: unchanged ? false : s.dirty });
+    },
   }));
 }
 

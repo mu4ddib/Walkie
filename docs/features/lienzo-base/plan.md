@@ -26,7 +26,7 @@ Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de
 4. [x] (#6) Web: store del grafo (acciones, `dirty`, UUID v7) con pruebas en Vitest.
 5. [x] (#7) Web: navegación y formularios de apps y features.
 6. [x] (#8) Web: paleta, nodos `screen`/`api`/`database` pixel v1, conexiones con tipo, editar título, borrar.
-7. [ ] (#9) Web: guardar (botón + Ctrl+S), indicador "sin guardar", diálogo de 409 y error de 400.
+7. [x] (#9) Web: guardar (botón + Ctrl+S), indicador "sin guardar", diálogo de 409 y error de 400.
 8. [ ] (#10) E2E con Playwright del flujo completo + job en CI (gate de la fase 1).
 
 ## Pruebas
@@ -37,4 +37,4 @@ Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de
 
 ## Estado
 
-Última actualización: 2026-11-07 — tareas 1-6 listas (API, store, navegación, lienzo editable). Sigue: tarea 7 (#9), guardar, recargar y conflicto.
+Última actualización: 2026-11-07 — tareas 1-7 listas: el flujo completo funciona (crear, dibujar, guardar, recargar idéntico, 409). Sigue: tarea 8 (#10), E2E con Playwright en CI (gate de la fase).

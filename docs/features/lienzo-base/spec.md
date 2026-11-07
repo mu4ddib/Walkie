@@ -20,7 +20,7 @@ Desarrollador autenticado que documenta un flujo existente.
 5. **Conectar.** Cuando uno dos nodos, entonces se crea una conexión con un tipo por defecto según el par (`screen→screen`: `navigation`; `screen→api`: `request`; `api→screen`: `response`; `api→database`: `reads`; cualquier otro par: `uses`) y puedo cambiarlo a `navigation`, `request`, `response`, `reads` o `writes`.
 6. **Editar título.** Cuando hago doble clic en el título de un nodo, entonces puedo editarlo (máx. 120 caracteres) y Enter lo confirma.
 7. **Borrar.** Cuando selecciono un nodo o una conexión y presiono Supr, entonces se borra; borrar un nodo borra sus conexiones y su `layout`.
-8. **Guardar y recargar.** Dado un lienzo con cambios, cuando guardo y recargo la página, entonces aparece idéntico (nodos, conexiones, posiciones). La UI marca "sin guardar" mientras haya cambios pendientes.
+8. **Guardar y recargar.** Dado un lienzo con cambios, cuando guardo (botón o Ctrl+S) y recargo la página, entonces aparece idéntico (nodos, conexiones, posiciones). La UI marca "sin guardar" mientras haya cambios pendientes y el navegador avisa si intento salir con cambios sin guardar.
 9. **Conflicto.** Dado que otra pestaña guardó antes, cuando guardo con una versión vieja, entonces la API responde 409 y la UI ofrece recargar la versión del servidor (sin fusión automática).
 10. **Grafo inválido.** Cuando la API recibe un grafo que no cumple el schema, entonces responde 400 con `ProblemDetails` que indica el error.
 11. **Estilo pixel v1.** Los nodos usan Press Start 2P en el título, VT323 en el texto, borde de 4 px sin sombras difusas ni gradientes, color por tipo desde `theme/palette.ts`.

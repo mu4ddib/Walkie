@@ -1,18 +1,15 @@
-import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { useApp, useFeatures } from '../api/hooks';
-import { Canvas } from '../canvas/Canvas';
-import { createGraphStore } from '../store/graphStore';
+import { useApp, useCanvas, useFeatures } from '../api/hooks';
+import { FeatureEditor } from '../canvas/FeatureEditor';
 import { QueryState } from '../ui/QueryState';
 
-/** Lienzo de una feature. Cargar y guardar el grafo llega en la tarea 7 de lienzo-base. */
+/** Lienzo de una feature: carga el grafo guardado y monta el editor. */
 export function FeaturePage() {
   const { appId = '', featureId = '' } = useParams();
   const app = useApp(appId);
   const features = useFeatures(appId);
   const feature = features.data?.find((f) => f.id === featureId);
-  // Un store por feature: al cambiar de feature, React monta la página de nuevo (key en routes).
-  const [store] = useState(() => createGraphStore());
+  const canvas = useCanvas(featureId);
 
   return (
     <section className="feature-page">
@@ -32,9 +29,11 @@ export function FeaturePage() {
         <>
           <QueryState isPending={features.isPending} error={features.error} notFound="Esta app no existe." />
           {feature && (
-            <div className="feature-canvas">
-              <Canvas store={store} />
-            </div>
+            <>
+              <QueryState isPending={canvas.isPending} error={canvas.error} notFound="Esta feature no existe." />
+              {/* El editor crea su store con el grafo cargado; al cambiar de feature se monta otro (key en FeatureRoute). */}
+              {canvas.data && <FeatureEditor featureId={featureId} initialGraph={canvas.data} />}
+            </>
           )}
         </>
       )}
