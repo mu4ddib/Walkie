@@ -11,8 +11,8 @@ test('crear, dibujar, guardar y recargar: el lienzo vuelve idéntico', async ({ 
 
   // Criterios 3 y 4: paleta y grilla de 8 px.
   await dropNode(page, 'Pantalla', 123, 165);
-  await dropNode(page, 'API', 483, 165);
-  await dropNode(page, 'Base de datos', 843, 165);
+  await dropNode(page, 'API', 363, 165);
+  await dropNode(page, 'Base de datos', 603, 165);
   await expect(page.locator('.pixel-node')).toHaveCount(3);
   await expect(page.locator('.pixel-node-title')).toHaveText(['Pantalla', 'API', 'Base de datos']);
   for (const transform of await page.locator('.react-flow__node').evaluateAll((ns) => ns.map((n) => (n as HTMLElement).style.transform))) {
@@ -53,8 +53,8 @@ test('borrar un nodo se lleva sus conexiones y persiste', async ({ page }) => {
   await login(page);
   await openNewFeature(page);
   await dropNode(page, 'Pantalla', 120, 160);
-  await dropNode(page, 'API', 480, 160);
-  await dropNode(page, 'Base de datos', 840, 160);
+  await dropNode(page, 'API', 360, 160);
+  await dropNode(page, 'Base de datos', 600, 160);
   await connect(page, 0, 1);
   await connect(page, 1, 2);
   await expect(page.locator('.react-flow__edge')).toHaveCount(2);

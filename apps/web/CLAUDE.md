@@ -7,6 +7,7 @@ apps/web/src/
   canvas/        # FeatureEditor.tsx (carga, guardado, 409/400), Canvas.tsx (React Flow ↔ store), Palette.tsx, canvas.css
   nodes/         # PixelNode.tsx (caja común + resumen del contenido), nodeContent.ts (límites y textos del resumen), nodeMeta.ts (etiqueta/glifo por tipo), nodeTypes.ts (registro)
   edges/         # KindEdge.tsx (tipo, label y [when] + selector de tipo), edgeMeta.ts, edgeTypes.ts
+  panel/         # PropertiesPanel.tsx (panel lateral de nodo o conexión), TextField.tsx (campo con borrador local), panel.css
   store/         # graphStore.ts (estado + acciones), GraphStoreProvider + useGraphStore (contexto para nodos/conexiones)
   tours/         # modo tour y personaje guía
   api/           # cliente HTTP (client.ts) + hooks de TanStack Query (hooks.ts)
@@ -33,7 +34,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1) + helpers
 - Pruebas de páginas: `installFakeApi({ apps, features })` reemplaza `fetch` con una API en memoria que responde como `apps/api`; `renderRoute('/ruta')` monta las rutas reales con TanStack Query. Mockea `react-oidc-context` y, si no hace falta, `../canvas/Canvas` (React Flow).
 - Editor: `FeaturePage` carga el grafo con `useCanvas` (sin refetch automático: después manda el store) y monta `<FeatureEditor initialGraph>`, que crea el store ya cargado. Guardar: botón o Ctrl+S → `useSaveCanvas` → `markSaved(version, estadoEnviado)` (si hubo cambios durante el guardado, siguen pendientes). 409 → aviso con "Recargar versión del servidor"; 400 → mensaje con la primera ruta de error. Con cambios sin guardar, `beforeunload` avisa al salir.
 - Login: `signinRedirect({ state: currentPath() })` y `onSigninCallback` vuelven a la página de origen (solo rutas internas, `safeReturnTo`).
-- Lienzo: `<Canvas store={store} />`. La selección, el nodo en edición y las medidas son estado de UI local de `Canvas`, no del store. Nodos y conexiones leen y cambian el grafo con `useGraphStore(selector)`.
+- Lienzo: `<Canvas store={store} />`. La selección, el nodo en edición y las medidas son estado de UI local de `Canvas`, no del store. Con un solo nodo o una sola conexión seleccionados, `Canvas` pasa su id a `<PropertiesPanel>` (tercera columna); si no, el panel muestra ayuda. Nodos y conexiones leen y cambian el grafo con `useGraphStore(selector)`.
 - Llamadas a la API: siempre por los hooks de `api/hooks.ts` (ponen el token y las `queryKeys`); los errores llegan como `ApiError` con `userMessage` del `ProblemDetails`.
 
 ## Trampas conocidas
@@ -59,6 +60,9 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1) + helpers
 - **`history.replaceState` no avisa a react-router**: tras cambiarlo, dispara `popstate` (ver `onSigninCallback`).
 - **Pruebas del editor**: mockea `./Canvas` con un lienzo mínimo que lee y cambia el store (React Flow no corre bien en jsdom); `installFakeApi` ya responde `GET/PUT` del lienzo con 409 por versión, y `api.next.putStatus = 400` fuerza un 400.
 - **Probar una conexión sin `<ReactFlow>`**: `EdgeLabelRenderer` hace un portal a un contenedor que solo existe dentro de `<ReactFlow>`; en Vitest se mockea para renderizar en línea (ver `src/canvas/canvas.test.tsx`).
+- **Campos del panel**: el store recorta espacios, así que un input atado directo al store no deja escribir un espacio final. Usa `TextField` (borrador local que se sincroniza si el store cambia por otra vía).
+- **Etiquetas únicas en la página**: la miga de pan es `<nav aria-label="Ruta">`; un campo "Ruta" choca con `getByLabel` en Playwright (por eso el panel dice "Ruta HTTP").
+- **Ancho del lienzo en E2E**: con paleta (200 px) y panel (280 px), a 1280 px el lienzo mide ~760 px; los `dropNode` deben caer dentro (x < 700).
 - **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
 - **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
 
@@ -67,5 +71,5 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1) + helpers
 1. Agregar el tipo en `packages/schema` y regenerar tipos.
 2. Etiqueta y glifo en `nodes/nodeMeta.ts`, color en `theme/palette.ts`, registrarlo en `nodes/nodeTypes.ts` (por defecto `PixelNode`; componente propio en `nodes/<Tipo>Node.tsx` si necesita contenido distinto). Para que aparezca en la paleta: `canvas/paletteTypes.ts`.
 3. Sprite en `packages/sprites` (múltiplos de 8 px).
-4. Panel de propiedades del tipo.
+4. Campos propios del tipo en `panel/PropertiesPanel.tsx` (`NodePanel`).
 5. Prueba del store + un caso en Playwright.
