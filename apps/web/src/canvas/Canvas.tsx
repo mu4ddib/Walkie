@@ -74,7 +74,7 @@ function CanvasInner() {
         source: edge.from,
         target: edge.to,
         type: 'kind',
-        data: { kind: edge.kind },
+        data: { kind: edge.kind, label: edge.label, when: edge.when },
         selected: selectedEdges.has(edge.id),
       })),
     [graphEdges, selectedEdges],
