@@ -19,14 +19,14 @@ apps/api/
 
 ## Estado actual
 
-Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared`, `Walkie.Modules.Apps` (apps, features), `Walkie.Modules.Canvas` (lienzo `jsonb` + `version`) y `Walkie.IntegrationTests` (WebApplicationFactory + Testcontainers). Tours y Files se crean cuando una tarea los necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
+Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared`, `Walkie.Modules.Apps` (apps, features, catálogo con versión), `Walkie.Modules.Canvas` (lienzo `jsonb` + `version`) y `Walkie.IntegrationTests` (WebApplicationFactory + Testcontainers). Tours y Files se crean cuando una tarea los necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
 
 ## Convenciones
 
 - Minimal APIs agrupadas por módulo (`MapGroup("/api/apps")`).
 - Validación con FluentValidation; errores como `ProblemDetails` (RFC 9457).
 - EF Core + Npgsql; el grafo del lienzo se guarda en una columna `jsonb`, con columna `version` (int) para concurrencia optimista: un guardado con versión vieja responde **409 Conflict**.
-- Los DTOs del grafo deben coincidir con `packages/schema/walkie-graph.schema.json`.
+- Los DTOs del grafo deben coincidir con `packages/schema/walkie-graph.schema.json`, y los del catálogo con `walkie-catalog-item.schema.json` (los validadores de FluentValidation repiten sus límites).
 - Cada endpoint nuevo: prueba de integración + aparece en OpenAPI.
 - Logs con Serilog; trazas con OpenTelemetry.
 - Auth (ADR-0003): todo endpoint exige usuario autenticado por defecto; los públicos llevan `.AllowAnonymous()`. El usuario es el claim `sub`. En pruebas, `WalkieApiFactory.CreateAuthenticatedClient()` firma tokens locales; no hace falta Keycloak.
@@ -57,6 +57,9 @@ Ya costaron tiempo; no las repitas.
 - **Cuerpo ausente o JSON inválido** lanza `BadHttpRequestException`; `Program.cs` lo mapea a 400 con `StatusCodeSelector`. No lo quites.
 - **JsonSchema.Net 9**: `schema.Evaluate(...)` recibe `JsonElement` (no `JsonNode`) y `results.Details` puede ser `null`.
 - **Servicios compartidos entre módulos** (ej. `TimeProvider`): regístralos con `TryAddSingleton` para no duplicarlos.
+- **Campos opcionales en las respuestas**: el schema no admite `null`; los records llevan `[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]` para omitirlos (ver `CatalogContracts.cs`).
+- **Concurrencia en entidades EF** (ej. `CatalogItem.Version`): compara la versión del request antes de guardar y marca la columna con `IsConcurrencyToken()`; si dos guardados leen la misma versión, el segundo lanza `DbUpdateConcurrencyException` → 409.
+- **Tabla nueva**: actualiza la lista de `PersistenceTests.Las_migraciones_crean_las_tablas_de_cada_modulo`.
 - **Endpoints en un módulo**: el `.csproj` necesita `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Validación con `.WithValidation<TRequest>()` (`Walkie.Shared.Validation`); los validadores pueden ser `internal` (se registran con `includeInternalTypes: true`).
 
 ## Cómo crear un endpoint

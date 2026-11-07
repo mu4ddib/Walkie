@@ -50,6 +50,76 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                     b.ToTable("apps", "apps");
                 });
 
+            modelBuilder.Entity("Walkie.Modules.Apps.Domain.CatalogItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("HttpMethod")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("http_method");
+
+                    b.Property<string>("HttpPath")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("http_path");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("type");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("updated_by");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppId")
+                        .HasDatabaseName("ix_catalog_items_app_id");
+
+                    b.ToTable("catalog_items", "apps");
+                });
+
             modelBuilder.Entity("Walkie.Modules.Apps.Domain.Feature", b =>
                 {
                     b.Property<Guid>("Id")
@@ -82,6 +152,15 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                         .HasDatabaseName("ix_features_app_id");
 
                     b.ToTable("features", "apps");
+                });
+
+            modelBuilder.Entity("Walkie.Modules.Apps.Domain.CatalogItem", b =>
+                {
+                    b.HasOne("Walkie.Modules.Apps.Domain.App", null)
+                        .WithMany()
+                        .HasForeignKey("AppId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Walkie.Modules.Apps.Domain.Feature", b =>

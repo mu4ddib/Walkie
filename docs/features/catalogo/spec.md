@@ -69,7 +69,7 @@ Módulo Canvas:
 
 Comunicación entre módulos (sin ciclos): Apps expone `ICatalogDirectory` (Canvas valida `catalogId`) y define `ICatalogUsage`, que implementa Canvas, para que Apps sepa si un elemento está en uso antes de borrarlo.
 
-Base de datos: tabla `apps.catalog_items` (`id`, `app_id`, `type`, `title`, `description`, `http jsonb`, `version`, `created_at`) con migración.
+Base de datos: tabla `apps.catalog_items` (`id`, `app_id`, `type`, `title`, `description`, `http_method`, `http_path`, `version`, `created_*`, `updated_*`) con migración. El tipo de un elemento no cambia después de crearlo (los `ref` dependen de él).
 
 ## Decisiones tomadas
 

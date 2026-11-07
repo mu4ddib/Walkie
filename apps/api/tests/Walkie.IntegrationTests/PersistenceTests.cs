@@ -28,7 +28,7 @@ public sealed class PersistenceTests(WalkieApiFactory factory)
                 """)
             .ToListAsync();
 
-        Assert.Equal(["apps.apps", "apps.features", "canvas.canvases"], tables);
+        Assert.Equal(["apps.apps", "apps.catalog_items", "apps.features", "canvas.canvases"], tables);
     }
 
     [Fact]
