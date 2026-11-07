@@ -45,6 +45,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 - **pnpm 10.28.0** fijado en `packageManager` de `apps/web/package.json` **y** del `package.json` de la raíz (que existe solo para eso). Si falta el de la raíz, con corepack activo `pnpm --dir apps/web …` baja otra versión y falla con `ERR_PNPM_BAD_PM_VERSION`. Si cambias la versión, cámbiala en los dos. En CI se usa `pnpm/action-setup` con `package_json_file: apps/web/package.json`.
 - **`tsconfig.app.json` no incluye tipos de Node**: las pruebas en `src/` no pueden usar `node:fs`. La coherencia con el schema la verifica `pnpm check:schema`, no una prueba.
 - **`src/schema/` está excluido de ESLint** (código generado).
+- **`format` en los schemas** (ej. `uuid`): el job `schema` del CI compila con `ajv-formats`; sin él, ajv en modo estricto falla con `unknown format`.
 - **Formato**: no hay config de Prettier; el código sigue `prettier --print-width 120 --single-quote`. Con los valores por defecto (80 columnas, comillas dobles) reformatea el archivo entero.
 - **Pruebas del store**: guarda el resultado de una acción antes de leer el estado (`const id = s().addNode(...); s().nodes[id]`). `s().nodes[s().addNode(...)]` lee el estado viejo.
 - **`Math.round` puede dar `-0`** y `toEqual` distingue `-0` de `0`: `snap()` lo normaliza.
