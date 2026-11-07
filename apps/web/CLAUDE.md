@@ -18,6 +18,7 @@ apps/web/src/
 
 - Estado del grafo normalizado: `nodes: Record<id, Node>`, `edges: Record<id, Edge>`, `layout: Record<id, {x,y}>`.
 - Solo las acciones del store modifican el grafo. Esto permite migrar a Yjs sin tocar componentes.
+- Store: `src/store/graphStore.ts`. Un store por lienzo con `createGraphStore()`; los componentes leen con `useGraph(store, selector)` y guardan con `toGraph(state)`. Acciones: `loadGraph`, `addNode`, `moveNode`, `renameNode`, `removeNode` (borra conexiones y layout), `connect` (tipo por defecto según el par; otros pares → `uses`), `setEdgeKind`, `removeEdge`, `markSaved`. Toda acción que cambia algo pone `dirty: true`; las que no cambian nada no lo tocan.
 - Tipos del grafo generados desde el JSON Schema (`pnpm gen:schema` → `src/schema/walkie-graph.ts`); si falta un campo, se cambia el schema primero. CI falla si los tipos no están al día (`pnpm check:schema`).
 - URL de la API: `VITE_API_URL` (lee el `.env` de la raíz del repo).
 - Auth (ADR-0003): `react-oidc-context`; `AuthGate` protege la app y las llamadas a la API llevan `auth.user.access_token`. En pruebas se mockea `useAuth`.
@@ -30,6 +31,9 @@ apps/web/src/
 - **pnpm 10.28.0** fijado en `packageManager`. Corre pnpm desde `apps/web` o con `--dir apps/web`: corepack en la raíz (sin `package.json`) baja otra versión y falla con `ERR_PNPM_BAD_PM_VERSION`. En CI se usa `pnpm/action-setup` con `package_json_file: apps/web/package.json`.
 - **`tsconfig.app.json` no incluye tipos de Node**: las pruebas en `src/` no pueden usar `node:fs`. La coherencia con el schema la verifica `pnpm check:schema`, no una prueba.
 - **`src/schema/` está excluido de ESLint** (código generado).
+- **Pruebas del store**: guarda el resultado de una acción antes de leer el estado (`const id = s().addNode(...); s().nodes[id]`). `s().nodes[s().addNode(...)]` lee el estado viejo.
+- **`Math.round` puede dar `-0`** y `toEqual` distingue `-0` de `0`: `snap()` lo normaliza.
+- **Quitar una clave de un objeto**: usa `omit()` del store; desestructurar con `_variable` sin usar rompe el lint (`no-unused-vars`).
 - **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
 - **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
 

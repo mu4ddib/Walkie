@@ -17,7 +17,7 @@ Desarrollador autenticado que documenta un flujo existente.
 2. **Crear feature.** Dada una App, cuando creo una Feature con nombre, entonces aparece en la App y abre un lienzo vacío.
 3. **Agregar nodos.** Dado un lienzo, cuando arrastro `screen`, `api` o `database` desde la paleta lateral, entonces aparece un nodo de ese tipo con título por defecto ("Pantalla", "API", "Base de datos").
 4. **Mover con grilla.** Cuando arrastro un nodo, entonces su posición queda en múltiplos de 8 px.
-5. **Conectar.** Cuando uno dos nodos, entonces se crea una conexión con un tipo por defecto según el par (`screen→screen`: `navigation`; `screen→api`: `request`; `api→screen`: `response`; `api→database`: `reads`) y puedo cambiarlo a `navigation`, `request`, `response`, `reads` o `writes`.
+5. **Conectar.** Cuando uno dos nodos, entonces se crea una conexión con un tipo por defecto según el par (`screen→screen`: `navigation`; `screen→api`: `request`; `api→screen`: `response`; `api→database`: `reads`; cualquier otro par: `uses`) y puedo cambiarlo a `navigation`, `request`, `response`, `reads` o `writes`.
 6. **Editar título.** Cuando hago doble clic en el título de un nodo, entonces puedo editarlo (máx. 120 caracteres) y Enter lo confirma.
 7. **Borrar.** Cuando selecciono un nodo o una conexión y presiono Supr, entonces se borra; borrar un nodo borra sus conexiones y su `layout`.
 8. **Guardar y recargar.** Dado un lienzo con cambios, cuando guardo y recargo la página, entonces aparece idéntico (nodos, conexiones, posiciones). La UI marca "sin guardar" mientras haya cambios pendientes.
