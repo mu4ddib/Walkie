@@ -14,6 +14,7 @@ import {
   preview,
 } from './nodeContent';
 import { NODE_LABELS } from './nodeMeta';
+import { NodeImage } from './NodeImage';
 
 export type WalkieFlowNode = FlowNode<{
   node: Node;
@@ -57,6 +58,7 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
           {shown.title}
         </div>
       )}
+      {node.type === 'screen' && node.assetId && <NodeImage assetId={node.assetId} />}
       <NodeContent node={shown} />
       <Handle type="source" position={Position.Right} />
     </div>

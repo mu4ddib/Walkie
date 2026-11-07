@@ -3,6 +3,8 @@ import { useAuth } from 'react-oidc-context';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
   createApp,
+  getAssetBlob,
+  uploadAsset,
   createCatalogItem,
   createFeature,
   deleteCatalogItem,
@@ -33,6 +35,7 @@ export const queryKeys = {
   catalog: (appId: string) => ['apps', appId, 'catalog'] as const,
   catalogItem: (itemId: string) => ['catalog', itemId] as const,
   catalogUsages: (itemId: string) => ['catalog', itemId, 'usages'] as const,
+  asset: (assetId: string) => ['assets', assetId] as const,
 };
 
 export function useApps() {
@@ -164,5 +167,25 @@ export function useDeleteCatalogItem(appId: string, itemId: string) {
       queryClient.removeQueries({ queryKey: queryKeys.catalogItem(itemId) });
       return queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
     },
+  });
+}
+
+export function useUploadAsset(appId: string) {
+  const token = useToken();
+  return useMutation({ mutationFn: (file: File) => uploadAsset(token, appId, file) });
+}
+
+/**
+ * URL `blob:` de una imagen para `<img src>`. Un asset no cambia nunca, así que se pide una vez por
+ * sesión (`staleTime` y `gcTime` infinitos) y la URL vive mientras la pestaña: son pocas imágenes por app.
+ */
+export function useAssetUrl(assetId: string | undefined) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.asset(assetId ?? ''),
+    queryFn: async ({ signal }) => URL.createObjectURL(await getAssetBlob(token, assetId!, signal)),
+    enabled: Boolean(assetId),
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 }

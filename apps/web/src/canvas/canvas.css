@@ -204,3 +204,14 @@
 .palette-ref {
   border-style: double;
 }
+
+.pixel-node-image {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  margin-top: 4px;
+  object-fit: contain;
+  border: 2px solid var(--node-color);
+  image-rendering: auto;
+  font-size: 16px;
+}

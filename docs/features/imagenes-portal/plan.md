@@ -20,7 +20,7 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 1. [x] (#48) ADR-0004 y módulo Files: RustFS con versión fija en docker-compose y CI, bucket creado al arrancar; `POST /api/apps/{appId}/assets` (multipart, PNG/JPEG/WebP por contenido, ≤ 5 MB) y `GET /api/assets/{assetId}`; tabla `files.assets`; pruebas de integración con RustFS (criterio 3 en la API).
 2. [x] (#49) Schema e integridad: `format: uuid`, `walkie-asset.schema.json`, tipos regenerados; Canvas valida `assetId` (existe, es de la app y solo en `screen`) y `targetFeatureId` (existe y es de la app). Pruebas de integración (criterios 6 y 11).
-3. [ ] (#50) Web, imágenes: subir desde el panel de una pantalla con el aviso de datos reales, validación de tipo y tamaño, miniatura en el nodo (imagen pedida con token y mostrada como `blob:`), verla en grande, reemplazar y quitar (criterios 1 a 5).
+3. [x] (#50) Web, imágenes: subir desde el panel de una pantalla con el aviso de datos reales, validación de tipo y tamaño, miniatura en el nodo (imagen pedida con token y mostrada como `blob:`), verla en grande, reemplazar y quitar (criterios 1 a 5).
 4. [ ] (#51) Web, portales: `portal` en la paleta; selector de feature destino (misma app, sin la actual); el nodo muestra "→ Feature" o "Sin destino"; "Abrir" (panel y doble clic) con confirmación si hay cambios sin guardar; `screen → portal` es `navigation` (criterios 7 a 10 y 12).
 5. [ ] (#52) E2E: subir una imagen a una pantalla, enlazar dos features con un portal, guardar y recargar idéntico, abrir el portal con y sin cambios pendientes (criterios 1, 5, 8 y 12).
 
@@ -32,4 +32,4 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 ## Estado
 
-Última actualización: 2026-11-07 — tareas 1 y 2 hechas (ADR-0004 y módulo Files con RustFS; schema e integridad de `assetId` y `targetFeatureId`). Siguen: tareas 3 y 4.
+Última actualización: 2026-11-07 — tareas 1 a 3 hechas (ADR-0004 y módulo Files con RustFS; schema e integridad; imágenes de pantallas en la web). Sigue: tarea 4.

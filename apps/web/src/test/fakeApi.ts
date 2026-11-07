@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { App, CatalogItem, Feature } from '../api/client';
+import { ASSET_TYPES, type App, type Asset, type CatalogItem, type Feature } from '../api/client';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 
 /**
@@ -16,10 +16,11 @@ export function installFakeApi(
 ) {
   const apps = [...(seed.apps ?? [])];
   const catalog = [...(seed.catalog ?? [])];
+  const assets = new Map<string, { asset: Asset; file: File }>();
   const features = [...(seed.features ?? [])];
   const canvases: Record<string, WalkieCanvasGraphV0> = { ...seed.canvases };
   /** Si se define, el próximo PUT del lienzo responde este estado (ej. 400). */
-  const next_: { putStatus?: number } = {};
+  const next_: { putStatus?: number; uploadStatus?: number } = {};
   let next = 1;
   const id = () => `00000000-0000-7000-8000-${String(next++).padStart(12, '0')}`;
 
@@ -34,7 +35,7 @@ export function installFakeApi(
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' ? input : input.toString());
     const method = init?.method ?? 'GET';
-    const body = init?.body ? (JSON.parse(String(init.body)) as { name?: string }) : {};
+    const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as { name?: string }) : {};
     const parts = url.pathname.split('/').filter(Boolean); // ['api','apps',id?,'features'?]
 
     // /api/features/{featureId}/canvas — como la API: 404, grafo vacío v0, 409 por versión, version + 1.
@@ -81,6 +82,15 @@ export function installFakeApi(
       return json(200, catalog[index]);
     }
 
+    // /api/assets/{assetId} — los bytes subidos.
+    if (parts[0] === 'api' && parts[1] === 'assets') {
+      const stored = assets.get(parts[2]!);
+      // Bytes fijos: el Response de Node no lee los File de jsdom.
+      return stored
+        ? new Response('imagen', { status: 200, headers: { 'Content-Type': stored.asset.contentType } })
+        : notFound();
+    }
+
     if (parts[0] !== 'api' || parts[1] !== 'apps') return notFound();
     const appId = parts[2];
 
@@ -95,6 +105,27 @@ export function installFakeApi(
 
     const app = apps.find((a) => a.id === appId);
     if (!app) return notFound();
+    // /api/apps/{appId}/assets — como la API: tipo por el archivo (aquí, su `type`), 400 o 201.
+    if (parts[3] === 'assets') {
+      const file = (init?.body as FormData).get('file') as File | null;
+      if (next_.uploadStatus === 400 || !file || !(ASSET_TYPES as readonly string[]).includes(file.type)) {
+        delete next_.uploadStatus;
+        return json(400, {
+          title: 'La imagen no es válida.',
+          errors: { file: ['Solo se aceptan imágenes PNG, JPEG o WebP.'] },
+        });
+      }
+      const asset: Asset = {
+        id: id(),
+        appId,
+        contentType: file.type as Asset['contentType'],
+        size: file.size,
+        width: 1,
+        height: 1,
+      };
+      assets.set(asset.id, { asset, file });
+      return json(201, asset);
+    }
     if (parts[3] === 'catalog') {
       if (method === 'GET')
         return json(
@@ -123,5 +154,5 @@ export function installFakeApi(
   });
 
   vi.stubGlobal('fetch', fetchMock);
-  return { apps, features, canvases, catalog, next: next_, fetchMock };
+  return { apps, features, canvases, catalog, assets, next: next_, fetchMock };
 }

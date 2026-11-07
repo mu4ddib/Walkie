@@ -261,6 +261,30 @@ describe('updateNode', () => {
   });
 });
 
+describe('updateNode con imagen', () => {
+  it('pone y quita la imagen de una pantalla', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+    s().markSaved(1);
+
+    s().updateNode(id, { assetId: 'asset-1' });
+    expect(s().nodes[id]?.assetId).toBe('asset-1');
+    expect(s().dirty).toBe(true);
+
+    s().updateNode(id, { assetId: null });
+    expect(s().nodes[id]).toEqual({ id, type: 'screen', title: 'Pantalla' });
+  });
+
+  it('ignora la imagen en nodos que no son pantallas', () => {
+    const id = s().addNode('api', { x: 0, y: 0 });
+    s().markSaved(1);
+
+    s().updateNode(id, { assetId: 'asset-1' });
+
+    expect(s().nodes[id]?.assetId).toBeUndefined();
+    expect(s().dirty).toBe(false);
+  });
+});
+
 describe('inputs', () => {
   it('addInput agrega al final con un nombre libre y tipo string', () => {
     const id = s().addNode('screen', { x: 0, y: 0 });

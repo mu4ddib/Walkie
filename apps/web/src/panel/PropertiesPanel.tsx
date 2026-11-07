@@ -14,6 +14,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { InputsSection, RuleUsages } from './InputsSection';
 import { MoveToCatalog } from './MoveToCatalog';
 import { RefPanel } from './RefPanel';
+import { ScreenImage } from './ScreenImage';
 import { useCanvasCatalog } from '../catalog/catalogContext';
 import { TextField } from './TextField';
 import './panel.css';
@@ -76,6 +77,7 @@ function NodePanel({ id }: { id: string }) {
           <RuleUsages ruleId={id} />
         </>
       )}
+      {appId && node.type === 'screen' && <ScreenImage appId={appId} node={node} />}
       {node.type === 'screen' && <InputsSection node={node} />}
       {node.type === 'api' && (
         <>

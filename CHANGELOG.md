@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Imágenes de pantallas en la web (imagenes-portal, tarea 3): subir desde el panel (PNG, JPEG o WebP, hasta 5 MB) con el aviso de no usar datos reales de clientes; miniatura en el nodo; verla en grande; reemplazar y quitar.
 - Integridad de imágenes y portales (imagenes-portal, tarea 2): `walkie-asset.schema.json`; el lienzo responde 400 si `assetId` no es una imagen de su app o no está en una pantalla, o si `targetFeatureId` no es una feature de su app o no está en un portal.
 - Módulo Files (imagenes-portal, tarea 1, ADR-0004): `POST /api/apps/{appId}/assets` (PNG, JPEG o WebP reconocidos por el contenido, hasta 5 MB) y `GET /api/assets/{assetId}`; tabla `files.assets`; bytes en S3 (RustFS en desarrollo y CI).
 - Spec y plan de `imagenes-portal` (fase 2, feature 3 de 3), con issues por tarea.
