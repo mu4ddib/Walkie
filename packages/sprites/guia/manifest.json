@@ -40,6 +40,13 @@
       "fps": 6,
       "facing": "south",
       "loop": false
+    },
+    "think": {
+      "file": "think.png",
+      "frames": 5,
+      "fps": 6,
+      "facing": "south",
+      "loop": false
     }
   }
 }
