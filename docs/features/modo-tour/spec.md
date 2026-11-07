@@ -1,7 +1,7 @@
 # Spec: Modo tour con el personaje guía
 
-- Issue padre: (se crea al aprobar)
-- Estado: borrador
+- Issue padre: #59
+- Estado: aprobada (2026-11-07)
 - Fase 3 ("modo tour"). Gate del roadmap: una persona nueva entiende el tour sin ayuda.
 
 ## Objetivo
@@ -66,8 +66,8 @@ Hojas horizontales PNG en `packages/sprites/guia/`, una por animación, generada
 - `think` (5, de frente, una vez: mano al mentón y "?" en la pantalla): para pasos sobre nodos `rule`.
 - Opcional, sin usar en esta feature: `jump`.
 
-## Preguntas abiertas
+## Decisiones tomadas
 
-1. **Entrega de los sprites**: ¿los subes al repo en `packages/sprites/guia/` o me los pasas por aquí? Necesito además, por hoja, el tamaño del cuadro y cuántos cuadros tiene.
-2. **Dónde se arman los tours**: propuesta: en el panel derecho cuando no hay nada seleccionado (hoy muestra solo un texto de ayuda), con el selector de nodo dentro del formulario del paso.
-3. **Portal en un tour**: propuesta: el globo ofrece "Ir a <feature>" y nada más (criterio 9); continuar el tour allá queda fuera de alcance.
+1. Los sprites del guía están en el repo (`packages/sprites/guia/`, con `manifest.json`); `jump` se regenera aparte y no bloquea esta feature.
+2. Los tours se arman en el panel derecho cuando no hay nada seleccionado (sección "Tours"); el nodo de cada paso se elige de una lista.
+3. Un paso sobre un `portal` solo ofrece "Ir a <feature>"; continuar el tour allá queda fuera de alcance.

@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Spec y plan de `modo-tour` (fase 3), con issues por tarea; sprites del guía Walkie en `packages/sprites/guia/` (idle, walk, point, talk, celebrate, think) con su `manifest.json`.
 - E2E de imágenes y portales (imagenes-portal, tarea 5): imagen en una pantalla y portal a otra feature; guardar y recargar idéntico; abrir el portal con cambios pendientes (cancelar y aceptar). Cierra la feature y la fase 2.
 - Portales en la web (imagenes-portal, tarea 4): `portal` en la paleta; el panel elige la feature destino (de la misma app, sin la actual); el nodo muestra "→ Feature", "Sin destino" o "Destino no encontrado"; "Abrir" y el doble clic llevan al otro lienzo, con confirmación si hay cambios sin guardar; `screen → portal` es `navigation`.
 - Imágenes de pantallas en la web (imagenes-portal, tarea 3): subir desde el panel (PNG, JPEG o WebP, hasta 5 MB) con el aviso de no usar datos reales de clientes; miniatura en el nodo; verla en grande; reemplazar y quitar.
