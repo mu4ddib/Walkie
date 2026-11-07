@@ -62,8 +62,8 @@ Sin endpoints nuevos: los tours viajan en el `PUT /api/features/{featureId}/canv
 
 Hojas horizontales PNG en `packages/sprites/guia/`, una por animación, generadas con PixelLab y retocadas en Pixelorama: cuadros de 64×64 con fondo transparente y los pies en la línea `y = 54` en todos los cuadros. `manifest.json` dice por hoja la cantidad de cuadros, los cuadros por segundo, hacia dónde mira y si se repite. La web las dibuja escaladas ×2 con `image-rendering: pixelated`.
 
-- Recibida: `idle` (4 cuadros, 6 fps, de frente).
-- Por recibir: `walk` (de lado, para caminar hasta el nodo), `point`, `talk`, `celebrate`. `jump` y `think` son opcionales en esta feature.
+- Recibidas (todas a 6 fps): `idle` (4 cuadros, de frente) y `walk` (6 cuadros, mirando al este; hacia el oeste se refleja en el código).
+- Por recibir: `point`, `talk`, `celebrate`. `jump` y `think` son opcionales en esta feature.
 
 ## Preguntas abiertas
 
