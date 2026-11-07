@@ -32,6 +32,8 @@ export interface NodePatch {
   description?: string;
   expression?: string;
   http?: { method?: HttpMethod | null; path?: string };
+  /** Imagen de una pantalla (ADR-0004); `null` la quita. Se ignora en otros tipos. */
+  assetId?: string | null;
 }
 
 /** Cambios de un input. `options` solo aplica a `enum`; `ruleIds` solo a nodos `rule` existentes. */
@@ -296,6 +298,10 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           http = withText(http, 'path', patch.http.path, TEXT_MAX_LENGTH);
           if (Object.keys(http).length > 0) next.http = http;
           else delete next.http;
+        }
+        if (patch.assetId !== undefined && node.type === 'screen') {
+          if (patch.assetId) next.assetId = patch.assetId;
+          else delete next.assetId;
         }
         putNode(next);
       },

@@ -1,5 +1,6 @@
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import type { WalkieCatalogItemV0 } from '../schema/walkie-catalog-item';
+import type { WalkieAssetV0 } from '../schema/walkie-asset';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:5080';
 
@@ -35,6 +36,13 @@ export type NewCatalogItem = Pick<CatalogItem, 'type' | 'title' | 'description' 
 /** Lo que se envía al editar: el tipo no cambia; `version` es la que se cargó. */
 export type CatalogItemChanges = Pick<CatalogItem, 'title' | 'description' | 'http' | 'version'>;
 
+/** Imagen subida a una app (`packages/schema/walkie-asset.schema.json`, ADR-0004). */
+export type Asset = WalkieAssetV0;
+
+/** Formatos y tamaño que acepta la API (spec imagenes-portal, decisión 2). */
+export const ASSET_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export const ASSET_MAX_SIZE = 5 * 1024 * 1024;
+
 /** Cuerpo `ProblemDetails` (RFC 9457) que devuelve la API en los errores. */
 export interface Problem {
   title?: string;
@@ -58,12 +66,13 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit & { token?: string } = {}): Promise<T> {
+/** `fetch` a la API con el token; un error HTTP llega como `ApiError`. JSON solo si el cuerpo es texto. */
+async function send(path: string, init: RequestInit & { token?: string } = {}): Promise<Response> {
   const { token, headers, ...rest } = init;
   const res = await fetch(`${baseUrl}${path}`, {
     ...rest,
     headers: {
-      ...(rest.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(typeof rest.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
       ...headers,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
@@ -72,6 +81,11 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
     const problem = (await res.json().catch(() => undefined)) as Problem | undefined;
     throw new ApiError(res.status, problem);
   }
+  return res;
+}
+
+async function request<T>(path: string, init: RequestInit & { token?: string } = {}): Promise<T> {
+  const res = await send(path, init);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
@@ -154,4 +168,17 @@ export function deleteCatalogItem(token: string, itemId: string): Promise<void> 
 /** Features cuyo lienzo tiene un `ref` al elemento. */
 export function listCatalogUsages(token: string, itemId: string, signal?: AbortSignal): Promise<Feature[]> {
   return request(`/api/catalog/${encodeURIComponent(itemId)}/usages`, { token, signal });
+}
+
+/** Sube una imagen (multipart, campo `file`); la API la reconoce por su contenido. */
+export function uploadAsset(token: string, appId: string, file: File): Promise<Asset> {
+  const body = new FormData();
+  body.append('file', file);
+  return request(`/api/apps/${encodeURIComponent(appId)}/assets`, { token, method: 'POST', body });
+}
+
+/** Bytes de una imagen. `<img src>` no manda el token, así que se piden con `fetch` (ADR-0004). */
+export async function getAssetBlob(token: string, assetId: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await send(`/api/assets/${encodeURIComponent(assetId)}`, { token, signal });
+  return res.blob();
 }
