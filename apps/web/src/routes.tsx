@@ -1,12 +1,12 @@
 import { Link, type RouteObject } from 'react-router';
 import { AppPage } from './pages/AppPage';
 import { AppsPage } from './pages/AppsPage';
-import { FeaturePage } from './pages/FeaturePage';
+import { FeatureRoute } from './pages/FeatureRoute';
 
 export const routes: RouteObject[] = [
   { path: '/', element: <AppsPage /> },
   { path: '/apps/:appId', element: <AppPage /> },
-  { path: '/apps/:appId/features/:featureId', element: <FeaturePage /> },
+  { path: '/apps/:appId/features/:featureId', element: <FeatureRoute /> },
   {
     path: '*',
     element: (
@@ -17,3 +17,4 @@ export const routes: RouteObject[] = [
     ),
   },
 ];
+
