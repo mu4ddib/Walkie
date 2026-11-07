@@ -4,10 +4,10 @@
 
 ```
 apps/web/src/
-  canvas/        # React Flow: lienzo, controles, minimapa
-  nodes/         # un componente por tipo de nodo (ScreenNode, ApiNode, RuleNode...)
-  edges/         # tipos de conexión (navigation, request, response, uses)
-  store/         # Zustand: estado normalizado del grafo + acciones
+  canvas/        # Canvas.tsx (React Flow ↔ store), Palette.tsx (paleta lateral), canvas.css (estilo pixel)
+  nodes/         # PixelNode.tsx (caja común), nodeMeta.ts (etiqueta/glifo por tipo), nodeTypes.ts (registro)
+  edges/         # KindEdge.tsx (etiqueta + selector de tipo), edgeMeta.ts, edgeTypes.ts
+  store/         # graphStore.ts (estado + acciones), GraphStoreProvider + useGraphStore (contexto para nodos/conexiones)
   tours/         # modo tour y personaje guía
   api/           # cliente HTTP (client.ts) + hooks de TanStack Query (hooks.ts)
   pages/         # una página por ruta (AppsPage, AppPage, FeaturePage)
@@ -29,6 +29,7 @@ apps/web/src/
 - Estilo pixel art: grilla de 8 px (`snapGrid={[8,8]}`), fuente Press Start 2P para títulos y VT323 para texto, sprites PNG con `image-rendering: pixelated`, paleta en `theme/palette.ts`. Sin sombras difusas ni gradientes.
 - Pruebas: Vitest para el store y la lógica, Playwright para flujos (crear nodo, conectar, guardar, tour).
 - Pruebas de páginas: `installFakeApi({ apps, features })` reemplaza `fetch` con una API en memoria que responde como `apps/api`; `renderRoute('/ruta')` monta las rutas reales con TanStack Query. Mockea `react-oidc-context` y, si no hace falta, `../canvas/Canvas` (React Flow).
+- Lienzo: `<Canvas store={store} />`. La selección, el nodo en edición y las medidas son estado de UI local de `Canvas`, no del store. Nodos y conexiones leen y cambian el grafo con `useGraphStore(selector)`.
 - Llamadas a la API: siempre por los hooks de `api/hooks.ts` (ponen el token y las `queryKeys`); los errores llegan como `ApiError` con `userMessage` del `ProblemDetails`.
 
 ## Trampas conocidas
@@ -40,13 +41,18 @@ apps/web/src/
 - **Pruebas del store**: guarda el resultado de una acción antes de leer el estado (`const id = s().addNode(...); s().nodes[id]`). `s().nodes[s().addNode(...)]` lee el estado viejo.
 - **`Math.round` puede dar `-0`** y `toEqual` distingue `-0` de `0`: `snap()` lo normaliza.
 - **Quitar una clave de un objeto**: usa `omit()` del store; desestructurar con `_variable` sin usar rompe el lint (`no-unused-vars`).
+- **React Flow controlado**: `Canvas` reconstruye los nodos desde el store; hay que devolverles `measured` (guardado de los cambios `dimensions`). Sin eso, React Flow los oculta un instante para medirlos en cada cambio (ej. al seleccionar) y se pierden clics: el doble clic para editar fallaba.
+- **`fitView` con lienzo vacío**: ajusta el zoom cuando aparece el primer nodo y los siguientes caen en otro sitio. Solo se usa si el lienzo ya trae nodos al montarse.
+- **Doble clic en nodos**: usa `onNodeDoubleClick` del `<ReactFlow>` y pasa `editing` por `data`; con `zoomOnDoubleClick={false}`.
+- **Fast refresh (`react-refresh/only-export-components`)**: un `.tsx` solo exporta componentes. Constantes y hooks van en `.ts` aparte (por eso existen `nodeMeta.ts`, `edgeMeta.ts`, `paletteTypes.ts`, `useGraphStore.ts`).
+- **Probar el lienzo con Playwright**: el arrastre desde la paleta es HTML5 DnD; dispáralo con `dispatchEvent('dragstart'|'drop', { dataTransfer })` (ver tarea 8). Conectar: `mouse.down` en `.react-flow__handle-right` y `mouse.up` en `.react-flow__handle-left` del destino.
 - **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
 - **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
 
 ## Cómo crear un tipo de nodo
 
 1. Agregar el tipo en `packages/schema` y regenerar tipos.
-2. Componente en `nodes/<Tipo>Node.tsx` + registrarlo en `nodeTypes`.
+2. Etiqueta y glifo en `nodes/nodeMeta.ts`, color en `theme/palette.ts`, registrarlo en `nodes/nodeTypes.ts` (por defecto `PixelNode`; componente propio en `nodes/<Tipo>Node.tsx` si necesita contenido distinto). Para que aparezca en la paleta: `canvas/paletteTypes.ts`.
 3. Sprite en `packages/sprites` (múltiplos de 8 px).
 4. Panel de propiedades del tipo.
 5. Prueba del store + un caso en Playwright.

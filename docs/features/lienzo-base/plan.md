@@ -25,7 +25,7 @@ Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de
 3. [x] (#5) API: `GET/PUT` del lienzo con validación de schema (400) y concurrencia optimista (409).
 4. [x] (#6) Web: store del grafo (acciones, `dirty`, UUID v7) con pruebas en Vitest.
 5. [x] (#7) Web: navegación y formularios de apps y features.
-6. [ ] (#8) Web: paleta, nodos `screen`/`api`/`database` pixel v1, conexiones con tipo, editar título, borrar.
+6. [x] (#8) Web: paleta, nodos `screen`/`api`/`database` pixel v1, conexiones con tipo, editar título, borrar.
 7. [ ] (#9) Web: guardar (botón + Ctrl+S), indicador "sin guardar", diálogo de 409 y error de 400.
 8. [ ] (#10) E2E con Playwright del flujo completo + job en CI (gate de la fase 1).
 
@@ -37,4 +37,4 @@ Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de
 
 ## Estado
 
-Última actualización: 2026-11-07 — tareas 1-5 listas (API, store, navegación de apps y features). Sigue: tarea 6 (#8), nodos y conexiones en el lienzo.
+Última actualización: 2026-11-07 — tareas 1-6 listas (API, store, navegación, lienzo editable). Sigue: tarea 7 (#9), guardar, recargar y conflicto.
