@@ -31,6 +31,16 @@ describe('addNode', () => {
   });
 });
 
+describe('addRef', () => {
+  it('crea un nodo ref con catalogId, el título del elemento y posición en la grilla', () => {
+    const id = s().addRef({ id: 'item-1', title: '  Consultar cliente ' }, { x: 13, y: 21 });
+
+    expect(s().nodes[id]).toEqual({ id, type: 'ref', title: 'Consultar cliente', catalogId: 'item-1' });
+    expect(s().layout[id]).toEqual({ x: 16, y: 24 });
+    expect(s().dirty).toBe(true);
+  });
+});
+
 describe('moveNode', () => {
   it('ajusta la posición a múltiplos de 8', () => {
     const id = s().addNode('screen', { x: 0, y: 0 });

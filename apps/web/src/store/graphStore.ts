@@ -134,6 +134,8 @@ export interface GraphState {
 export interface GraphActions {
   loadGraph(graph: WalkieCanvasGraphV0): void;
   addNode(type: NodeType, position: Position): string;
+  /** Nodo `ref` a un elemento del catálogo; `title` guarda su título como último conocido. */
+  addRef(item: { id: string; title: string }, position: Position): string;
   moveNode(id: string, position: Position): void;
   renameNode(id: string, title: string): void;
   /** Título, descripción, expresión y `http` (método y ruta). */
@@ -232,7 +234,18 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         return id;
       },
 
-      moveNode: (id, position) => {
+      addRef: (item, position) => {
+      const id = newId();
+      const title = item.title.trim().slice(0, TITLE_MAX_LENGTH) || DEFAULT_TITLES.ref;
+      set((s) => ({
+        nodes: { ...s.nodes, [id]: { id, type: 'ref', title, catalogId: item.id } },
+        layout: { ...s.layout, [id]: { x: snap(position.x), y: snap(position.y) } },
+        dirty: true,
+      }));
+      return id;
+    },
+
+    moveNode: (id, position) => {
         const current = get().layout[id];
         if (!get().nodes[id]) return;
         const x = snap(position.x);

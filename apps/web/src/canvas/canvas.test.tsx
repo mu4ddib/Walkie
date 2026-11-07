@@ -8,6 +8,9 @@ import { PixelNode, type WalkieFlowNode } from '../nodes/PixelNode';
 import type { EdgeProps } from '@xyflow/react';
 import { createGraphStore, type GraphStore, type NodeType } from '../store/graphStore';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
+import { MemoryRouter } from 'react-router';
+import type { CatalogItem } from '../api/client';
+import { CatalogContext, toCanvasCatalog } from '../catalog/catalogContext';
 import { Palette } from './Palette';
 
 // `EdgeLabelRenderer` hace un portal al contenedor de <ReactFlow>, que aquí no existe: se renderiza en línea.
@@ -169,5 +172,79 @@ describe('KindEdge', () => {
     );
 
     expect(document.querySelector('.kind-edge-label')?.textContent).toBe('responde · Cliente [404]');
+  });
+});
+
+const consultar: CatalogItem = {
+  id: 'item-1',
+  appId: 'app-1',
+  type: 'api',
+  title: 'Consultar cliente',
+  http: { method: 'GET', path: '/clientes/{id}' },
+  version: 1,
+};
+
+describe('Palette con catálogo', () => {
+  it('ofrece los elementos del catálogo y crea un ref con clic', async () => {
+    const onAddRef = vi.fn();
+    render(
+      <MemoryRouter>
+        <Palette onAdd={vi.fn()} catalog={{ appId: 'app-1', items: [consultar], onAddRef }} />
+      </MemoryRouter>,
+    );
+
+    const section = screen.getByRole('region', { name: 'Catálogo' });
+    const item = within(section).getByRole('button', { name: /Consultar cliente/ });
+    expect(item.draggable).toBe(true);
+    await userEvent.click(item);
+    expect(onAddRef).toHaveBeenCalledWith(consultar);
+  });
+
+  it('con el catálogo vacío enlaza a la página del catálogo', () => {
+    render(
+      <MemoryRouter>
+        <Palette onAdd={vi.fn()} catalog={{ appId: 'app-1', items: [], onAddRef: vi.fn() }} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: /Crea APIs/ })).toHaveAttribute('href', '/apps/app-1/catalog');
+  });
+});
+
+describe('PixelNode de un ref', () => {
+  function renderRef(catalogId: string) {
+    const store = createGraphStore();
+    const id = store.getState().addRef({ id: catalogId, title: 'Título viejo' }, { x: 0, y: 0 });
+    const node = store.getState().nodes[id]!;
+    const props = {
+      id,
+      data: { node, editing: false, onEditDone: vi.fn() },
+      selected: false,
+    } as unknown as NodeProps<WalkieFlowNode>;
+    render(
+      <GraphStoreProvider store={store}>
+        <CatalogContext.Provider value={toCanvasCatalog('app-1', [consultar])}>
+          <ReactFlowProvider>
+            <PixelNode {...props} />
+          </ReactFlowProvider>
+        </CatalogContext.Provider>
+      </GraphStoreProvider>,
+    );
+  }
+
+  it('se ve como su elemento, con los datos actuales y la marca de catálogo', () => {
+    renderRef('item-1');
+
+    expect(document.querySelector('.pixel-node-kind')).toHaveTextContent('</> APIcatálogo');
+    expect(document.querySelector('.pixel-node-title')).toHaveTextContent('Consultar cliente');
+    expect(screen.getByText('GET /clientes/{id}')).toBeInTheDocument();
+  });
+
+  it('si el elemento ya no existe, muestra "Elemento no encontrado" con el último título', () => {
+    renderRef('nada');
+
+    expect(document.querySelector('.pixel-node-kind')).toHaveTextContent('Elemento no encontrado');
+    expect(document.querySelector('.pixel-node-title')).toHaveTextContent('Título viejo');
+    expect(document.querySelector('.pixel-node')).toHaveAttribute('data-ref', 'missing');
   });
 });

@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Handle, Position, type NodeProps, type Node as FlowNode } from '@xyflow/react';
+import { refTarget, useCanvasCatalog } from '../catalog/catalogContext';
 import type { Node } from '../schema/walkie-graph';
 import { TITLE_MAX_LENGTH } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
@@ -27,27 +28,36 @@ export type WalkieFlowNode = FlowNode<{
  */
 export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
   const { node, editing, onEditDone } = data;
-  const meta = NODE_LABELS[node.type];
+  const { items } = useCanvasCatalog();
+  // Un `ref` se ve como su elemento del catálogo, con los datos actuales (spec catalogo, criterio 7).
+  const target = refTarget(node, items);
+  const shown: Node = target
+    ? { ...node, type: target.type, title: target.title, description: target.description, http: target.http }
+    : node;
+  const missing = node.type === 'ref' && !target;
+  const meta = NODE_LABELS[shown.type];
 
   return (
     <div
       className="pixel-node"
       data-type={node.type}
+      data-ref={node.type === 'ref' ? (missing ? 'missing' : 'ok') : undefined}
       data-selected={selected || undefined}
-      style={{ '--node-color': nodeColors[node.type] } as CSSProperties}
+      style={{ '--node-color': nodeColors[shown.type] } as CSSProperties}
     >
       <Handle type="target" position={Position.Left} />
       <div className="pixel-node-kind">
-        <span aria-hidden="true">{meta.glyph}</span> {meta.label}
+        <span aria-hidden="true">{meta.glyph}</span> {missing ? 'Elemento no encontrado' : meta.label}
+        {target && <span className="pixel-node-badge">catálogo</span>}
       </div>
       {editing ? (
         <TitleInput id={id} title={node.title} onDone={onEditDone} />
       ) : (
-        <div className="pixel-node-title" title="Doble clic para editar">
-          {node.title}
+        <div className="pixel-node-title" title={node.type === 'ref' ? undefined : 'Doble clic para editar'}>
+          {shown.title}
         </div>
       )}
-      <NodeContent node={node} />
+      <NodeContent node={shown} />
       <Handle type="source" position={Position.Right} />
     </div>
   );
