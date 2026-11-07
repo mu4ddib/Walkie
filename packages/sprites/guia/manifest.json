@@ -1,0 +1,52 @@
+{
+  "$comment": "Walkie, el guía de los tours (PixelLab + Pixelorama). Hojas horizontales PNG con fondo transparente; los pies tocan la línea baselineY (celebrate despega del suelo en su salto). loop=false: se reproduce una vez y queda en el último cuadro.",
+  "frame": {
+    "width": 64,
+    "height": 64,
+    "baselineY": 54
+  },
+  "animations": {
+    "idle": {
+      "file": "idle.png",
+      "frames": 4,
+      "fps": 6,
+      "facing": "south",
+      "loop": true
+    },
+    "walk": {
+      "file": "walk.png",
+      "frames": 6,
+      "fps": 6,
+      "facing": "east",
+      "loop": true
+    },
+    "point": {
+      "file": "point.png",
+      "frames": 5,
+      "fps": 6,
+      "facing": "east",
+      "loop": false
+    },
+    "talk": {
+      "file": "talk.png",
+      "frames": 5,
+      "fps": 6,
+      "facing": "south",
+      "loop": true
+    },
+    "celebrate": {
+      "file": "celebrate.png",
+      "frames": 5,
+      "fps": 6,
+      "facing": "south",
+      "loop": false
+    },
+    "think": {
+      "file": "think.png",
+      "frames": 5,
+      "fps": 6,
+      "facing": "south",
+      "loop": false
+    }
+  }
+}
