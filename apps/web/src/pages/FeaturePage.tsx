@@ -14,8 +14,9 @@ export function FeaturePage() {
   const canvas = useCanvas(featureId);
   const catalogQuery = useCatalog(appId);
   const catalog = useMemo(
-    () => (catalogQuery.data ? toCanvasCatalog(appId, catalogQuery.data) : undefined),
-    [appId, catalogQuery.data],
+    () =>
+      catalogQuery.data ? toCanvasCatalog(appId, catalogQuery.data, features.data ?? [], featureId) : undefined,
+    [appId, catalogQuery.data, features.data, featureId],
   );
 
   return (

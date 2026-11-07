@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Handle, Position, type NodeProps, type Node as FlowNode } from '@xyflow/react';
-import { refTarget, useCanvasCatalog } from '../catalog/catalogContext';
+import { portalTarget, refTarget, useCanvasCatalog } from '../catalog/catalogContext';
 import type { Node } from '../schema/walkie-graph';
 import { TITLE_MAX_LENGTH } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
@@ -29,33 +29,54 @@ export type WalkieFlowNode = FlowNode<{
  */
 export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
   const { node, editing, onEditDone } = data;
-  const { items } = useCanvasCatalog();
+  const { items, features } = useCanvasCatalog();
   // Un `ref` se ve como su elemento del catálogo, con los datos actuales (spec catalogo, criterio 7).
   const target = refTarget(node, items);
   const shown: Node = target
     ? { ...node, type: target.type, title: target.title, description: target.description, http: target.http }
     : node;
-  const missing = node.type === 'ref' && !target;
+  // Un `portal` muestra el nombre actual de su feature destino (spec imagenes-portal, criterio 7).
+  const destination = portalTarget(node, features);
+  const missing =
+    (node.type === 'ref' && !target) || (node.type === 'portal' && !!node.targetFeatureId && !destination);
+  const title =
+    node.type !== 'portal'
+      ? shown.title
+      : destination
+        ? `→ ${destination.name}`
+        : node.targetFeatureId
+          ? `→ ${node.title}`
+          : 'Sin destino';
   const meta = NODE_LABELS[shown.type];
 
   return (
     <div
       className="pixel-node"
       data-type={node.type}
-      data-ref={node.type === 'ref' ? (missing ? 'missing' : 'ok') : undefined}
+      data-ref={node.type === 'ref' || node.type === 'portal' ? (missing ? 'missing' : 'ok') : undefined}
       data-selected={selected || undefined}
       style={{ '--node-color': nodeColors[shown.type] } as CSSProperties}
     >
       <Handle type="target" position={Position.Left} />
       <div className="pixel-node-kind">
-        <span aria-hidden="true">{meta.glyph}</span> {missing ? 'Elemento no encontrado' : meta.label}
+        <span aria-hidden="true">{meta.glyph}</span>{' '}
+        {missing ? (node.type === 'portal' ? 'Destino no encontrado' : 'Elemento no encontrado') : meta.label}
         {target && <span className="pixel-node-badge">catálogo</span>}
       </div>
       {editing ? (
         <TitleInput id={id} title={node.title} onDone={onEditDone} />
       ) : (
-        <div className="pixel-node-title" title={node.type === 'ref' ? undefined : 'Doble clic para editar'}>
-          {shown.title}
+        <div
+          className="pixel-node-title"
+          title={
+            node.type === 'portal'
+              ? 'Doble clic para abrir'
+              : node.type === 'ref'
+                ? undefined
+                : 'Doble clic para editar'
+          }
+        >
+          {title}
         </div>
       )}
       {node.type === 'screen' && node.assetId && <NodeImage assetId={node.assetId} />}

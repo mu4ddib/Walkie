@@ -121,6 +121,7 @@ describe('connect', () => {
     ['api', 'service', 'request'],
     ['service', 'database', 'reads'],
     ['screen', 'rule', 'uses'],
+    ['screen', 'portal', 'navigation'],
     ['database', 'screen', 'uses'],
     ['rule', 'service', 'uses'],
   ] as const)('%s → %s usa %s por defecto', (from, to, kind) => {
@@ -282,6 +283,22 @@ describe('updateNode con imagen', () => {
 
     expect(s().nodes[id]?.assetId).toBeUndefined();
     expect(s().dirty).toBe(false);
+  });
+});
+
+describe('updateNode con destino', () => {
+  it('pone y quita el destino de un portal, e ignora otros tipos', () => {
+    const portal = s().addNode('portal', { x: 0, y: 0 });
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+
+    s().updateNode(portal, { targetFeatureId: 'feat-2', title: 'Transferir' });
+    expect(s().nodes[portal]).toEqual({ id: portal, type: 'portal', title: 'Transferir', targetFeatureId: 'feat-2' });
+
+    s().updateNode(portal, { targetFeatureId: null });
+    expect(s().nodes[portal]?.targetFeatureId).toBeUndefined();
+
+    s().updateNode(screen, { targetFeatureId: 'feat-2' });
+    expect(s().nodes[screen]?.targetFeatureId).toBeUndefined();
   });
 });
 

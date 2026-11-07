@@ -34,6 +34,8 @@ export interface NodePatch {
   http?: { method?: HttpMethod | null; path?: string };
   /** Imagen de una pantalla (ADR-0004); `null` la quita. Se ignora en otros tipos. */
   assetId?: string | null;
+  /** Feature destino de un `portal`; `null` la quita. Se ignora en otros tipos. */
+  targetFeatureId?: string | null;
 }
 
 /** Cambios de un input. `options` solo aplica a `enum`; `ruleIds` solo a nodos `rule` existentes. */
@@ -61,6 +63,7 @@ export const DEFAULT_TITLES: Record<NodeType, string> = {
 /** Tipo de conexión por defecto según el par (spec, criterio 5). Otros pares: `uses`. */
 export function defaultEdgeKind(from: NodeType, to: NodeType): EdgeKind {
   if (from === 'screen' && to === 'screen') return 'navigation';
+  if (from === 'screen' && to === 'portal') return 'navigation';
   if (from === 'screen' && to === 'api') return 'request';
   if (from === 'api' && to === 'screen') return 'response';
   if (from === 'api' && to === 'database') return 'reads';
@@ -302,6 +305,10 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         if (patch.assetId !== undefined && node.type === 'screen') {
           if (patch.assetId) next.assetId = patch.assetId;
           else delete next.assetId;
+        }
+        if (patch.targetFeatureId !== undefined && node.type === 'portal') {
+          if (patch.targetFeatureId) next.targetFeatureId = patch.targetFeatureId;
+          else delete next.targetFeatureId;
         }
         putNode(next);
       },

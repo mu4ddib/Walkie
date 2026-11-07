@@ -20,7 +20,7 @@ vi.mock('@xyflow/react', async (importOriginal) => ({
 }));
 
 describe('Palette', () => {
-  it('ofrece los seis tipos y agrega con clic', async () => {
+  it('ofrece los siete tipos y agrega con clic', async () => {
     const onAdd = vi.fn();
     render(<Palette onAdd={onAdd} />);
 
@@ -32,6 +32,7 @@ describe('Palette', () => {
       '</> API',
       '{ } Servicio',
       '(=) Base de datos',
+      '@ Portal',
     ]);
     expect(items.every((b) => b.draggable)).toBe(true);
 

@@ -13,7 +13,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import type { StoreApi } from 'zustand/vanilla';
 import type { CatalogItem } from '../api/client';
-import { CatalogContext, effectiveType, type CanvasCatalog } from '../catalog/catalogContext';
+import { CatalogContext, effectiveType, portalTarget, type CanvasCatalog } from '../catalog/catalogContext';
 import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
 import { nodeTypes } from '../nodes/nodeTypes';
@@ -25,6 +25,7 @@ import { useGraphStore } from '../store/useGraphStore';
 import { GRID, palette } from '../theme/palette';
 import { Palette } from './Palette';
 import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES } from './paletteTypes';
+import { useOpenFeature } from './useOpenFeature';
 import './canvas.css';
 
 const NO_CATALOG: CanvasCatalog = { appId: '', items: {} };
@@ -51,6 +52,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const graphEdges = useGraphStore((s) => s.edges);
   const { addNode, addRef, moveNode, removeNode, connect, removeEdge } = useGraphStore((s) => s);
   const { screenToFlowPosition } = useReactFlow();
+  const openFeature = useOpenFeature();
   // fitView solo si el lienzo ya trae nodos al montarse: con un lienzo vacío, React Flow
   // ajustaría el zoom al aparecer el primer nodo y los siguientes caerían en otro lugar.
   const [fitOnMount] = useState(() => Object.keys(graphNodes).length > 0);
@@ -193,8 +195,17 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          // El título de un `ref` es el de su elemento: se edita en el catálogo (criterio 8).
-          onNodeDoubleClick={(_, node) => node.type !== 'ref' && setEditingId(node.id)}
+          // El título de un `ref` se edita en el catálogo; el doble clic en un `portal` abre su destino.
+          onNodeDoubleClick={(_, flowNode) => {
+            const node = graphNodes[flowNode.id];
+            if (!node || node.type === 'ref') return;
+            if (node.type === 'portal') {
+              const target = portalTarget(node, catalog.features);
+              if (target) openFeature(target.id);
+              return;
+            }
+            setEditingId(node.id);
+          }}
           zoomOnDoubleClick={false}
           connectOnClick={false}
           snapToGrid
