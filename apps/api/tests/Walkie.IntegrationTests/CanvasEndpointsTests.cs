@@ -13,6 +13,7 @@ public sealed class CanvasEndpointsTests(WalkieApiFactory factory)
     private const string Screen = "0193a1b2-0000-7000-8000-00000000000a";
     private const string Api = "0193a1b2-0000-7000-8000-00000000000b";
     private const string Edge = "0193a1b2-0000-7000-8000-00000000000c";
+    private const string Rule = "0193a1b2-0000-7000-8000-00000000000d";
 
     [Fact]
     public async Task Sin_token_responde_401()
@@ -139,6 +140,83 @@ public sealed class CanvasEndpointsTests(WalkieApiFactory factory)
         Assert.Contains(errorPath, problem.Errors.Keys);
     }
 
+    [Theory]
+    [InlineData("""{"schemaVersion":0,"version":0,"nodes":{"n1":{"id":"n1","type":"screen","title":"x","inputs":[{"name":"cc","type":"string","ruleIds":["fantasma"]}]}},"edges":{},"layout":{}}""", "/nodes/n1/inputs/0/ruleIds/0")]
+    [InlineData("""{"schemaVersion":0,"version":0,"nodes":{"n1":{"id":"n1","type":"screen","title":"x","inputs":[{"name":"cc","type":"string","ruleIds":["a"]}]},"a":{"id":"a","type":"api","title":"API"}},"edges":{},"layout":{}}""", "/nodes/n1/inputs/0/ruleIds/0")]
+    [InlineData("""{"schemaVersion":0,"version":0,"nodes":{"n1":{"id":"n1","type":"screen","title":"x","inputs":[{"name":"cc","type":"string"},{"name":"cc","type":"number"}]}},"edges":{},"layout":{}}""", "/nodes/n1/inputs/1/name")]
+    [InlineData("""{"schemaVersion":0,"version":0,"nodes":{"n1":{"id":"n1","type":"screen","title":"x","inputs":[{"name":"cc","type":"string","options":["A"]}]}},"edges":{},"layout":{}}""", "/nodes/n1/inputs/0/options")]
+    public async Task Inputs_con_reglas_rotas_nombres_repetidos_u_opciones_fuera_de_enum_responden_400(string body, string errorPath)
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var featureId = await CreateFeatureAsync(client);
+
+        var response = await PutRawAsync(client, featureId, body);
+
+        var problem = await AssertValidationProblemAsync(response);
+        Assert.Contains(errorPath, problem.Errors.Keys);
+    }
+
+    [Theory]
+    [InlineData("description", 2001)]
+    [InlineData("expression", 2001)]
+    public async Task Textos_de_nodo_por_encima_del_limite_responden_400(string field, int length)
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var featureId = await CreateFeatureAsync(client);
+        var graph = Graph(0);
+        graph["nodes"]![Screen]![field] = new string('x', length);
+
+        var response = await client.PutAsJsonAsync(CanvasUri(featureId), graph);
+
+        var problem = await AssertValidationProblemAsync(response);
+        Assert.Contains($"/nodes/{Screen}/{field}", problem.Errors.Keys);
+    }
+
+    [Theory]
+    [InlineData("""{"name":"","type":"string"}""", "/name")]
+    [InlineData("""{"name":"cc","type":"enum","options":[""]}""", "/options/0")]
+    public async Task Inputs_que_no_cumplen_los_limites_responden_400(string input, string suffix)
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var featureId = await CreateFeatureAsync(client);
+        var graph = Graph(0);
+        graph["nodes"]![Screen]!["inputs"] = new JsonArray(JsonNode.Parse(input));
+
+        var response = await client.PutAsJsonAsync(CanvasUri(featureId), graph);
+
+        var problem = await AssertValidationProblemAsync(response);
+        Assert.Contains($"/nodes/{Screen}/inputs/0{suffix}", problem.Errors.Keys);
+    }
+
+    [Theory]
+    [InlineData("label")]
+    [InlineData("when")]
+    public async Task Etiqueta_o_condicion_de_conexion_por_encima_de_60_responden_400(string field)
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var featureId = await CreateFeatureAsync(client);
+        var graph = Graph(0);
+        graph["edges"]![Edge]![field] = new string('x', 61);
+
+        var response = await client.PutAsJsonAsync(CanvasUri(featureId), graph);
+
+        var problem = await AssertValidationProblemAsync(response);
+        Assert.Contains($"/edges/{Edge}/{field}", problem.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task Grafo_con_inputs_reglas_contrato_y_condiciones_se_guarda_y_recarga_identico()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var featureId = await CreateFeatureAsync(client);
+        var graph = RichGraph(0);
+
+        var saved = await client.PutAsJsonAsync(CanvasUri(featureId), graph);
+
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        AssertSameJson(RichGraph(1).ToJsonString(), await client.GetFromJsonAsync<JsonElement>(CanvasUri(featureId)));
+    }
+
     [Fact]
     public async Task Los_endpoints_aparecen_en_openapi()
     {
@@ -171,6 +249,27 @@ public sealed class CanvasEndpointsTests(WalkieApiFactory factory)
             [Api] = new JsonObject { ["x"] = 240, ["y"] = 0 },
         },
     };
+
+    /// <summary>Lienzo con todo lo de panel-propiedades: inputs, reglas, contrato y condiciones (datos ficticios).</summary>
+    private static JsonObject RichGraph(int version)
+    {
+        var graph = Graph(version);
+        var nodes = graph["nodes"]!.AsObject();
+        nodes[Rule] = new JsonObject
+        {
+            ["id"] = Rule, ["type"] = "rule", ["title"] = "Documento válido",
+            ["expression"] = "cc: solo dígitos, de 6 a 10",
+        };
+        nodes[Screen]!["description"] = "Pide documento y tipo de cuenta.";
+        nodes[Screen]!["inputs"] = new JsonArray(
+            new JsonObject { ["name"] = "documento", ["type"] = "string", ["required"] = true, ["ruleIds"] = new JsonArray(Rule) },
+            new JsonObject { ["name"] = "cuenta", ["type"] = "enum", ["options"] = new JsonArray("Ahorros", "Corriente") });
+        nodes[Api]!["http"] = new JsonObject { ["method"] = "POST", ["path"] = "/clientes/{id}" };
+        graph["edges"]![Edge]!["label"] = "Ingresar";
+        graph["edges"]![Edge]!["when"] = "200";
+        graph["layout"]![Rule] = new JsonObject { ["x"] = 0, ["y"] = 160 };
+        return graph;
+    }
 
     private static async Task<Guid> CreateFeatureAsync(HttpClient client)
     {

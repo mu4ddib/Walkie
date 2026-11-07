@@ -54,6 +54,10 @@ export interface Node {
     name: string;
     type: 'string' | 'number' | 'boolean' | 'date' | 'enum' | 'file';
     required?: boolean;
+    /**
+     * Opciones de un input enum (solo para type enum)
+     */
+    options?: string[];
     ruleIds?: Id[];
   }[];
   /**

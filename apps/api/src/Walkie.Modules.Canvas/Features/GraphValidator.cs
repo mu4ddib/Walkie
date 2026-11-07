@@ -6,7 +6,7 @@ namespace Walkie.Modules.Canvas.Features;
 
 /// <summary>
 /// Valida un grafo contra <c>packages/schema/walkie-graph.schema.json</c> (embebido en el ensamblado)
-/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones y layout apuntan a nodos).
+/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones y layout apuntan a nodos, inputs y reglas).
 /// </summary>
 internal sealed class GraphValidator
 {
@@ -53,12 +53,19 @@ internal sealed class GraphValidator
         var nodes = graph.GetProperty("nodes");
         var nodeIds = nodes.EnumerateObject().Select(n => n.Name).ToHashSet(StringComparer.Ordinal);
 
+        var ruleIds = nodes.EnumerateObject()
+            .Where(n => n.Value.GetProperty("type").GetString() == "rule")
+            .Select(n => n.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
         foreach (var node in nodes.EnumerateObject())
         {
             if (node.Value.GetProperty("id").GetString() != node.Name)
             {
                 errors[$"/nodes/{node.Name}/id"] = ["El id del nodo debe coincidir con su clave."];
             }
+
+            InputErrors(node, nodeIds, ruleIds, errors);
         }
 
         foreach (var edge in graph.GetProperty("edges").EnumerateObject())
@@ -86,6 +93,51 @@ internal sealed class GraphValidator
         }
 
         return errors;
+    }
+
+    /// <summary>Inputs de un nodo: nombres únicos, <c>options</c> solo en <c>enum</c> y <c>ruleIds</c> a nodos <c>rule</c>.</summary>
+    private static void InputErrors(
+        JsonProperty node, HashSet<string> nodeIds, HashSet<string> ruleIds, Dictionary<string, string[]> errors)
+    {
+        if (!node.Value.TryGetProperty("inputs", out var inputs))
+        {
+            return;
+        }
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var i = 0;
+        foreach (var input in inputs.EnumerateArray())
+        {
+            var path = $"/nodes/{node.Name}/inputs/{i}";
+            if (!names.Add(input.GetProperty("name").GetString()!))
+            {
+                errors[$"{path}/name"] = ["Ya hay un input con ese nombre en el nodo."];
+            }
+
+            if (input.TryGetProperty("options", out _) && input.GetProperty("type").GetString() != "enum")
+            {
+                errors[$"{path}/options"] = ["Solo los inputs enum tienen opciones."];
+            }
+
+            if (input.TryGetProperty("ruleIds", out var refs))
+            {
+                var j = 0;
+                foreach (var rule in refs.EnumerateArray())
+                {
+                    var id = rule.GetString()!;
+                    if (!ruleIds.Contains(id))
+                    {
+                        errors[$"{path}/ruleIds/{j}"] = [nodeIds.Contains(id)
+                            ? "El input apunta a un nodo que no es una regla."
+                            : "El input apunta a una regla que no existe."];
+                    }
+
+                    j++;
+                }
+            }
+
+            i++;
+        }
     }
 
     private static JsonSchema LoadSchema()
