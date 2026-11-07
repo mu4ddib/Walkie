@@ -7,7 +7,7 @@ using Walkie.Shared.Time;
 namespace Walkie.Modules.Apps.Features;
 
 /// <summary>Catálogo de una app: lógica separada del mapeo HTTP.</summary>
-internal sealed class CatalogHandlers(AppsDbContext db, TimeProvider clock)
+internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, TimeProvider clock)
 {
     /// <summary>Elementos ordenados por tipo y título; <c>null</c> si la app no existe.</summary>
     public async Task<IReadOnlyList<CatalogItemResponse>?> ListAsync(Guid appId, CancellationToken ct)
@@ -99,6 +99,47 @@ internal sealed class CatalogHandlers(AppsDbContext db, TimeProvider clock)
         return new UpdateResult.Saved(ToResponse(item));
     }
 
+    /// <summary>Features cuyo lienzo usa el elemento, por nombre; <c>null</c> si el elemento no existe.</summary>
+    public async Task<IReadOnlyList<FeatureResponse>?> UsagesAsync(Guid itemId, CancellationToken ct)
+    {
+        if (!await db.CatalogItems.AnyAsync(i => i.Id == itemId, ct).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return await FeaturesUsingAsync(itemId, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Borra el elemento si ningún lienzo lo usa (ADR-0002: no dejar <c>ref</c> rotos).</summary>
+    public async Task<DeleteResult> DeleteAsync(Guid itemId, CancellationToken ct)
+    {
+        var item = await db.CatalogItems.SingleOrDefaultAsync(i => i.Id == itemId, ct).ConfigureAwait(false);
+        if (item is null)
+        {
+            return new DeleteResult.NotFound();
+        }
+
+        var features = await FeaturesUsingAsync(itemId, ct).ConfigureAwait(false);
+        if (features.Count > 0)
+        {
+            return new DeleteResult.InUse(features);
+        }
+
+        db.CatalogItems.Remove(item);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return new DeleteResult.Deleted();
+    }
+
+    private async Task<IReadOnlyList<FeatureResponse>> FeaturesUsingAsync(Guid itemId, CancellationToken ct)
+    {
+        var ids = await usage.FeaturesUsingAsync(itemId, ct).ConfigureAwait(false);
+        return await db.Features.AsNoTracking()
+            .Where(f => ids.Contains(f.Id))
+            .OrderBy(f => f.Name).ThenBy(f => f.Id)
+            .Select(f => new FeatureResponse(f.Id, f.AppId, f.Name, f.CreatedAt))
+            .ToListAsync(ct).ConfigureAwait(false);
+    }
+
     /// <summary>Textos recortados; vacío = sin valor (así la respuesta no trae campos vacíos).</summary>
     private static void Apply(CatalogItem item, string? description, HttpContract? http)
     {
@@ -117,6 +158,13 @@ internal sealed class CatalogHandlers(AppsDbContext db, TimeProvider clock)
         item.Description,
         item.HttpMethod is null && item.HttpPath is null ? null : new HttpContract(item.HttpMethod, item.HttpPath),
         item.Version);
+}
+
+internal abstract record DeleteResult
+{
+    public sealed record Deleted : DeleteResult;
+    public sealed record NotFound : DeleteResult;
+    public sealed record InUse(IReadOnlyList<FeatureResponse> Features) : DeleteResult;
 }
 
 internal abstract record UpdateResult

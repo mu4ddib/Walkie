@@ -11,7 +11,7 @@ namespace Walkie.Modules.Canvas.Features;
 
 /// <summary>Lógica de carga y guardado del lienzo, separada del mapeo HTTP.</summary>
 internal sealed class CanvasHandlers(
-    CanvasDbContext db, IFeatureDirectory features, GraphValidator validator, TimeProvider clock)
+    CanvasDbContext db, IFeatureDirectory features, ICatalogDirectory catalog, GraphValidator validator, TimeProvider clock)
 {
     /// <summary>Lienzo de una feature que aún no se ha guardado.</summary>
     internal const string EmptyGraph = """{"schemaVersion":0,"version":0,"nodes":{},"edges":{},"layout":{}}""";
@@ -44,6 +44,11 @@ internal sealed class CanvasHandlers(
         }
 
         var errors = validator.Validate(graph);
+        if (errors.Count == 0)
+        {
+            errors = await RefErrorsAsync(featureId, graph, ct).ConfigureAwait(false);
+        }
+
         if (errors.Count > 0)
         {
             return new SaveResult.Invalid(errors);
@@ -93,6 +98,31 @@ internal sealed class CanvasHandlers(
         }
 
         return new SaveResult.Saved(Parse(json));
+    }
+
+    /// <summary>Cada <c>ref</c> apunta a un elemento del catálogo de la app de la feature (400 si no).</summary>
+    private async Task<Dictionary<string, string[]>> RefErrorsAsync(Guid featureId, JsonElement graph, CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var refs = graph.GetProperty("nodes").EnumerateObject()
+            .Where(n => n.Value.GetProperty("type").GetString() == "ref")
+            .ToList();
+        if (refs.Count == 0)
+        {
+            return errors;
+        }
+
+        var items = await catalog.CatalogItemIdsForFeatureAsync(featureId, ct).ConfigureAwait(false);
+        foreach (var node in refs)
+        {
+            var catalogId = node.Value.GetProperty("catalogId").GetString();
+            if (!Guid.TryParse(catalogId, out var id) || !items.Contains(id))
+            {
+                errors[$"/nodes/{node.Name}/catalogId"] = ["El elemento del catálogo no existe en esta app."];
+            }
+        }
+
+        return errors;
     }
 
     private Task<int> CurrentVersionAsync(Guid featureId, CancellationToken ct) =>

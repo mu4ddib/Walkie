@@ -19,6 +19,7 @@ public static class AppsModule
         services.AddScoped<AppsHandlers>();
         services.AddScoped<CatalogHandlers>();
         services.AddScoped<Contracts.IFeatureDirectory, FeatureDirectory>();
+        services.AddScoped<Contracts.ICatalogDirectory, CatalogDirectory>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

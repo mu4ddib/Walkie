@@ -62,9 +62,11 @@ Módulo Apps (el catálogo es de la app):
 - `PUT /api/catalog/{itemId}` con el elemento y su `version` → 200 con `version` + 1 | 409 con `currentVersion` | 400 | 404.
 - `DELETE /api/catalog/{itemId}` → 204 | 409 `{ features: [{ id, appId, name }] }` si algún lienzo lo usa | 404.
 
+- `GET /api/catalog/{itemId}/usages` → features cuyo lienzo tiene un `ref` a ese elemento | 404.
+
 Módulo Canvas:
 
-- `GET /api/catalog/{itemId}/usages` → features cuyo lienzo tiene un `ref` a ese elemento (consulta `jsonb`).
+- `ICatalogUsage` (consulta `jsonb` de los grafos) para "Usado en" y el borrado.
 - `PUT /api/features/{featureId}/canvas` valida que cada `catalogId` exista y sea de la app de la feature.
 
 Comunicación entre módulos (sin ciclos): Apps expone `ICatalogDirectory` (Canvas valida `catalogId`) y define `ICatalogUsage`, que implementa Canvas, para que Apps sepa si un elemento está en uso antes de borrarlo.
