@@ -11,6 +11,7 @@
 - Módulos de la API: Apps (apps, features, catálogo), Canvas (grafo + versión), Tours, Files.
 - El grafo de cada feature se guarda como documento `jsonb` con `version` para concurrencia optimista.
 - Una base Postgres con un schema por módulo (`apps`, `canvas`), cada uno con sus migraciones; sin claves foráneas entre módulos.
+- Los módulos se hablan por interfaces de `Contracts/`: Canvas usa `IFeatureDirectory` e `ICatalogDirectory` de Apps; Apps define `ICatalogUsage` (qué lienzos usan un elemento del catálogo) y Canvas la implementa. Canvas depende de Apps, nunca al revés.
 - Contrato del grafo: `packages/schema/walkie-graph.schema.json`.
 
 ## Preparado para colaboración

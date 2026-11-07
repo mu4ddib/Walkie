@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Referencias al catálogo en la API (catalogo, tarea 2): el lienzo valida que cada `ref` apunte a un elemento de su app (400 en `/nodes/{id}/catalogId`); `GET /api/catalog/{itemId}/usages` ("Usado en") y `DELETE /api/catalog/{itemId}` (204, o 409 con las features que lo usan).
 - Catálogo en la API (catalogo, tarea 1): `packages/schema/walkie-catalog-item.schema.json`, `catalogId` obligatorio en nodos `ref`; tabla `apps.catalog_items` y `GET/POST /api/apps/{appId}/catalog`, `GET/PUT /api/catalog/{itemId}` con concurrencia optimista (409).
 - Spec y plan de `catalogo` (fase 2, feature 2 de 3), con issues por tarea.
 - E2E de panel-propiedades (tarea 6): pantalla con inputs y regla asociada, API con método y ruta y conexión con condición; guardar, recargar idéntico (lienzo y panel) y borrar la regla sin dejar referencias rotas. Cierra la feature.

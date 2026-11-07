@@ -23,6 +23,13 @@ internal static class CatalogEndpoints
             .WithSummary("Guarda el elemento si su version coincide con la guardada; responde el elemento con version + 1.")
             .WithValidation<UpdateCatalogItemRequest>()
             .ProducesProblem(StatusCodes.Status409Conflict);
+        items.MapDelete("/{itemId:guid}", DeleteCatalogItem)
+            .WithName("DeleteCatalogItem")
+            .WithSummary("Borra el elemento; 409 con las features que lo usan si algún lienzo tiene un ref a él.")
+            .ProducesProblem(StatusCodes.Status409Conflict);
+        items.MapGet("/{itemId:guid}/usages", ListCatalogItemUsages)
+            .WithName("ListCatalogItemUsages")
+            .WithSummary("Features cuyo lienzo tiene un nodo ref al elemento.");
 
         return routes;
     }
@@ -58,6 +65,25 @@ internal static class CatalogEndpoints
                 extensions: new Dictionary<string, object?> { ["currentVersion"] = conflict.CurrentVersion }),
             _ => TypedResults.NotFound(),
         };
+
+    private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> DeleteCatalogItem(
+        Guid itemId, CatalogHandlers handlers, CancellationToken ct) =>
+        await handlers.DeleteAsync(itemId, ct).ConfigureAwait(false) switch
+        {
+            DeleteResult.Deleted => TypedResults.NoContent(),
+            DeleteResult.InUse inUse => TypedResults.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "El elemento se usa en otros lienzos.",
+                detail: "Quita sus nodos ref de esas features antes de borrarlo.",
+                extensions: new Dictionary<string, object?> { ["features"] = inUse.Features }),
+            _ => TypedResults.NotFound(),
+        };
+
+    private static async Task<Results<Ok<IReadOnlyList<FeatureResponse>>, NotFound>> ListCatalogItemUsages(
+        Guid itemId, CatalogHandlers handlers, CancellationToken ct) =>
+        await handlers.UsagesAsync(itemId, ct).ConfigureAwait(false) is { } features
+            ? TypedResults.Ok(features)
+            : TypedResults.NotFound();
 
     /// <summary>Claim <c>sub</c> (ADR-0003). La política por defecto garantiza que existe.</summary>
     private static string UserId(ClaimsPrincipal user) =>
