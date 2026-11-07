@@ -22,7 +22,7 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 2. [x] (#49) Schema e integridad: `format: uuid`, `walkie-asset.schema.json`, tipos regenerados; Canvas valida `assetId` (existe, es de la app y solo en `screen`) y `targetFeatureId` (existe y es de la app). Pruebas de integración (criterios 6 y 11).
 3. [x] (#50) Web, imágenes: subir desde el panel de una pantalla con el aviso de datos reales, validación de tipo y tamaño, miniatura en el nodo (imagen pedida con token y mostrada como `blob:`), verla en grande, reemplazar y quitar (criterios 1 a 5).
 4. [x] (#51) Web, portales: `portal` en la paleta; selector de feature destino (misma app, sin la actual); el nodo muestra "→ Feature" o "Sin destino"; "Abrir" (panel y doble clic) con confirmación si hay cambios sin guardar; `screen → portal` es `navigation` (criterios 7 a 10 y 12).
-5. [ ] (#52) E2E: subir una imagen a una pantalla, enlazar dos features con un portal, guardar y recargar idéntico, abrir el portal con y sin cambios pendientes (criterios 1, 5, 8 y 12).
+5. [x] (#52) E2E: subir una imagen a una pantalla, enlazar dos features con un portal, guardar y recargar idéntico, abrir el portal con y sin cambios pendientes (criterios 1, 5, 8 y 12).
 
 ## Pruebas
 
@@ -32,4 +32,4 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 ## Estado
 
-Última actualización: 2026-11-07 — tareas 1 a 4 hechas (ADR-0004 y módulo Files con RustFS; schema e integridad; imágenes de pantallas; portales en la web). Sigue: tarea 5 (E2E).
+Última actualización: 2026-11-07 — feature completa (tareas 1 a 5). La E2E `apps/web/e2e/imagenes-portal.spec.ts` cubre los criterios 1, 5, 8 y 12 en CI. Cierra la fase 2.

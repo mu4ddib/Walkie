@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- E2E de imágenes y portales (imagenes-portal, tarea 5): imagen en una pantalla y portal a otra feature; guardar y recargar idéntico; abrir el portal con cambios pendientes (cancelar y aceptar). Cierra la feature y la fase 2.
 - Portales en la web (imagenes-portal, tarea 4): `portal` en la paleta; el panel elige la feature destino (de la misma app, sin la actual); el nodo muestra "→ Feature", "Sin destino" o "Destino no encontrado"; "Abrir" y el doble clic llevan al otro lienzo, con confirmación si hay cambios sin guardar; `screen → portal` es `navigation`.
 - Imágenes de pantallas en la web (imagenes-portal, tarea 3): subir desde el panel (PNG, JPEG o WebP, hasta 5 MB) con el aviso de no usar datos reales de clientes; miniatura en el nodo; verla en grande; reemplazar y quitar.
 - Integridad de imágenes y portales (imagenes-portal, tarea 2): `walkie-asset.schema.json`; el lienzo responde 400 si `assetId` no es una imagen de su app o no está en una pantalla, o si `targetFeatureId` no es una feature de su app o no está en un portal.
