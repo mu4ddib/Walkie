@@ -81,9 +81,10 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: apps/web/pnpm-lock.yaml
-      - name: Levantar Postgres y Keycloak
+      - name: Levantar Postgres, RustFS y Keycloak
         run: |
           docker compose -f infra/docker-compose.yml up -d --wait postgres
+          docker compose -f infra/docker-compose.yml up -d rustfs
           docker compose -f infra/docker-compose.yml up -d keycloak
           for i in $(seq 1 90); do curl -sf http://localhost:8080/realms/walkie >/dev/null && exit 0; sleep 2; done
           docker compose -f infra/docker-compose.yml logs keycloak | tail -50

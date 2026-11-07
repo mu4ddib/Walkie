@@ -7,7 +7,7 @@ Walkie es un lienzo interactivo para documentar apps (pantallas, inputs, reglas,
 - `apps/web` — React + TS + Vite + React Flow. Ver `apps/web/CLAUDE.md`.
 - `apps/api` — ASP.NET Core .NET 10, monolito modular. Ver `apps/api/CLAUDE.md`.
 - `packages/schema` — JSON Schema del grafo. **Fuente de verdad**: front y back se ajustan a él, nunca al revés.
-- `infra/` — docker-compose (Postgres, MinIO, Keycloak) y realm de Keycloak de desarrollo.
+- `infra/` — docker-compose (Postgres, RustFS (S3), Keycloak) y realm de Keycloak de desarrollo.
 - `docs/` — `vision.md`, `architecture.md`, `glossary.md`, `adr/`, `features/<feature>/{spec,plan}.md`, `workflow.md`.
 
 ## Modelo de dominio (resumen)
@@ -18,14 +18,14 @@ App → Catálogo (nodos reutilizables: api, service, database) + Features. Feat
 
 | Tarea | Comando |
 | --- | --- |
-| Levantar servicios (Postgres, MinIO, Keycloak) | `docker compose -f infra/docker-compose.yml up -d` |
+| Levantar servicios (Postgres, RustFS, Keycloak) | `docker compose -f infra/docker-compose.yml up -d` |
 | API | `dotnet run --project apps/api/src/Walkie.Api` |
 | Pruebas API (requiere Docker) | `dotnet test apps/api` |
 | Nueva migración | ver `apps/api/CLAUDE.md` → Persistencia |
 | Web | `pnpm --dir apps/web dev` |
 | Pruebas web | `pnpm --dir apps/web test` |
 | Lint web | `pnpm --dir apps/web lint` |
-| E2E (requiere Postgres y Keycloak levantados) | `pnpm --dir apps/web e2e --trace off` |
+| E2E (requiere Postgres, RustFS y Keycloak levantados) | `pnpm --dir apps/web e2e --trace off` |
 | Regenerar tipos del schema | `pnpm --dir apps/web gen:schema` |
 
 API en http://localhost:5080 (OpenAPI en `/openapi/v1.json` en Development), web en http://localhost:5173, Keycloak en http://localhost:8080 (usuario de prueba `dev` / `walkie_dev`). Actualiza esta tabla si cambian.

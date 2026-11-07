@@ -19,7 +19,7 @@ Walkie is an interactive canvas for documenting how your organization's apps act
 | --- | --- |
 | Web | React + TypeScript + Vite, React Flow, Zustand, TanStack Query |
 | API | ASP.NET Core (.NET 10), modular monolith |
-| Data | PostgreSQL (`jsonb` for canvases), S3-compatible storage (MinIO locally) |
+| Data | PostgreSQL (`jsonb` for canvases), S3-compatible storage (RustFS locally, ADR-0004) |
 | Contract | JSON Schema in `packages/schema` |
 | Dev environment | Dev Container / GitHub Codespaces |
 
@@ -34,7 +34,7 @@ cd Walkie
 # or create a Codespace from GitHub
 ```
 
-The container installs .NET, Node, and the GitHub CLI, then starts Postgres and MinIO automatically.
+The container installs .NET, Node, and the GitHub CLI, then starts Postgres and RustFS (S3) automatically.
 
 ## Repository layout
 
