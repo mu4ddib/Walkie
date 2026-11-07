@@ -24,7 +24,7 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 3. [x] (#36) Web, página del catálogo: ruta `/apps/:appId/catalog` enlazada desde la app; lista agrupada por tipo; crear; editar con 409; detalle con "Usado en"; borrar con el 409 explicado (criterios 1 a 5).
 4. [x] (#37) Web, nodos `ref`: el editor carga el catálogo; sección "Catálogo" en la paleta; `addRef` en el store; el nodo se ve como su elemento con marca de catálogo, o "Elemento no encontrado"; tipo de conexión por defecto con el tipo del elemento; panel de solo lectura con "Editar en el catálogo"; sin renombrar con doble clic (criterios 6 a 10 y 11).
 5. [x] (#38) Web, "Mover al catálogo": botón en el panel de `api`/`service`/`database`; crea el elemento y `convertToRef` reemplaza el nodo conservando id, posición y conexiones (criterio 10b).
-6. [ ] (#39) E2E: crear elementos en el catálogo, usarlos con `ref` en dos features, editar uno y verlo cambiado en ambos lienzos, "Mover al catálogo", guardar y recargar idéntico, borrar bloqueado por uso (criterios 5, 7, 10b y 11).
+6. [x] (#39) E2E: crear elementos en el catálogo, usarlos con `ref` en dos features, editar uno y verlo cambiado en ambos lienzos, "Mover al catálogo", guardar y recargar idéntico, borrar bloqueado por uso (criterios 5, 7, 10b y 11).
 
 ## Pruebas
 
@@ -34,4 +34,4 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 ## Estado
 
-Última actualización: 2026-11-07 — tareas 1 a 5 hechas (API del catálogo y sus `ref`; página del catálogo; nodos `ref` en el lienzo; "Mover al catálogo"). Sigue: tarea 6 (E2E).
+Última actualización: 2026-11-07 — feature completa (tareas 1 a 6). La E2E `apps/web/e2e/catalogo.spec.ts` cubre los criterios 5, 7, 10b y 11 en CI. Sigue: feature 3 de la fase 2 (imágenes + `portal`).

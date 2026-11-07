@@ -1,7 +1,7 @@
 # Spec: Catálogo de la app y nodos `ref`
 
 - Issue padre: #33
-- Estado: aprobada (2026-11-07)
+- Estado: implementada (2026-11-07), verificada por `apps/web/e2e/catalogo.spec.ts`
 - Fase 2 ("cajas ricas"), feature 2 de 3. La 1 (panel-propiedades) está implementada; la 3 es imágenes + `portal`.
 
 ## Objetivo
@@ -16,25 +16,25 @@ Desarrollador que documenta varias features de la misma app y no quiere copiar e
 
 **Catálogo de la app**
 
-- [ ] 1. Dada una app, cuando abro su catálogo (`/apps/:appId/catalog`, enlazado desde la página de la app), entonces veo sus elementos agrupados por tipo (`api`, `service`, `database`) con su título y, en las APIs, `MÉTODO /ruta`.
-- [ ] 2. Dado el catálogo, cuando creo un elemento con tipo y título, entonces aparece en la lista; el título es obligatorio (máx. 120) y el tipo solo puede ser `api`, `service` o `database`.
-- [ ] 3. Dado un elemento, cuando edito su título, descripción y, si es `api`, método y ruta, y guardo, entonces el cambio queda guardado. Si otra persona lo guardó antes, la API responde 409 y la UI ofrece recargarlo (igual que el lienzo).
-- [ ] 4. Dado un elemento, cuando abro su detalle, entonces veo en qué features se usa ("Usado en"), con enlace a cada lienzo.
-- [ ] 5. Dado un elemento que no se usa en ningún lienzo, cuando lo borro, entonces desaparece. Si se usa, la API responde 409 con la lista de features que lo usan y la UI la muestra; no se borra.
+- [x] 1. Dada una app, cuando abro su catálogo (`/apps/:appId/catalog`, enlazado desde la página de la app), entonces veo sus elementos agrupados por tipo (`api`, `service`, `database`) con su título y, en las APIs, `MÉTODO /ruta`.
+- [x] 2. Dado el catálogo, cuando creo un elemento con tipo y título, entonces aparece en la lista; el título es obligatorio (máx. 120) y el tipo solo puede ser `api`, `service` o `database`.
+- [x] 3. Dado un elemento, cuando edito su título, descripción y, si es `api`, método y ruta, y guardo, entonces el cambio queda guardado. Si otra persona lo guardó antes, la API responde 409 y la UI ofrece recargarlo (igual que el lienzo).
+- [x] 4. Dado un elemento, cuando abro su detalle, entonces veo en qué features se usa ("Usado en"), con enlace a cada lienzo.
+- [x] 5. Dado un elemento que no se usa en ningún lienzo, cuando lo borro, entonces desaparece. Si se usa, la API responde 409 con la lista de features que lo usan y la UI la muestra; no se borra.
 
 **Nodos `ref` en el lienzo**
 
-- [ ] 6. Dado un lienzo, cuando abro la paleta, entonces además de los tipos de siempre veo una sección "Catálogo" con los elementos de la app; al arrastrar uno (o hacer clic), se crea un nodo `ref` que apunta a él.
-- [ ] 7. Dado un nodo `ref`, entonces se ve como el elemento al que apunta (color, glifo, título y `MÉTODO /ruta`) con una marca de "catálogo"; si el elemento cambia en el catálogo, el lienzo lo muestra cambiado al abrirlo.
-- [ ] 8. Dado un nodo `ref` seleccionado, entonces el panel muestra los datos del elemento en solo lectura y un enlace "Editar en el catálogo"; el título del nodo no se edita con doble clic.
-- [ ] 9. Dado que conecto un nodo `ref`, entonces el tipo por defecto de la conexión se calcula con el tipo del elemento (ej. `screen → ref(api)` es `request`).
-- [ ] 10. Dado un lienzo con un nodo `ref` cuyo elemento ya no existe (caso límite: datos viejos), entonces el nodo se ve como "Elemento no encontrado" con su último título conocido y se puede borrar.
-- [ ] 10b. Dado un nodo `api`, `service` o `database` del lienzo, cuando uso "Mover al catálogo" en su panel, entonces se crea el elemento en el catálogo con su título, descripción y método y ruta, y el nodo pasa a ser un `ref` a él con el mismo id, posición y conexiones; el lienzo queda "Sin guardar".
+- [x] 6. Dado un lienzo, cuando abro la paleta, entonces además de los tipos de siempre veo una sección "Catálogo" con los elementos de la app; al arrastrar uno (o hacer clic), se crea un nodo `ref` que apunta a él.
+- [x] 7. Dado un nodo `ref`, entonces se ve como el elemento al que apunta (color, glifo, título y `MÉTODO /ruta`) con una marca de "catálogo"; si el elemento cambia en el catálogo, el lienzo lo muestra cambiado al abrirlo.
+- [x] 8. Dado un nodo `ref` seleccionado, entonces el panel muestra los datos del elemento en solo lectura y un enlace "Editar en el catálogo"; el título del nodo no se edita con doble clic.
+- [x] 9. Dado que conecto un nodo `ref`, entonces el tipo por defecto de la conexión se calcula con el tipo del elemento (ej. `screen → ref(api)` es `request`).
+- [x] 10. Dado un lienzo con un nodo `ref` cuyo elemento ya no existe (caso límite: datos viejos), entonces el nodo se ve como "Elemento no encontrado" con su último título conocido y se puede borrar.
+- [x] 10b. Dado un nodo `api`, `service` o `database` del lienzo, cuando uso "Mover al catálogo" en su panel, entonces se crea el elemento en el catálogo con su título, descripción y método y ruta, y el nodo pasa a ser un `ref` a él con el mismo id, posición y conexiones; el lienzo queda "Sin guardar".
 
 **Persistencia e integridad**
 
-- [ ] 11. Dado un lienzo con nodos `ref`, cuando guardo y recargo, entonces aparece idéntico.
-- [ ] 12. Dado un grafo con un nodo `ref` sin `catalogId`, con un `catalogId` que no existe o que es de otra app, cuando la API lo recibe, entonces responde 400 en `/nodes/{id}/catalogId`.
+- [x] 11. Dado un lienzo con nodos `ref`, cuando guardo y recargo, entonces aparece idéntico.
+- [x] 12. Dado un grafo con un nodo `ref` sin `catalogId`, con un `catalogId` que no existe o que es de otra app, cuando la API lo recibe, entonces responde 400 en `/nodes/{id}/catalogId`.
 
 ## Fuera de alcance
 
