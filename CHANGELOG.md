@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- E2E de panel-propiedades (tarea 6): pantalla con inputs y regla asociada, API con método y ruta y conexión con condición; guardar, recargar idéntico (lienzo y panel) y borrar la regla sin dejar referencias rotas. Cierra la feature.
 - Inputs en el panel (panel-propiedades, tarea 5): una pantalla agrega, edita (nombre, tipo, obligatorio, opciones de un `enum` una por línea) y quita inputs; los asocia a reglas del lienzo; avisa si un nombre se repite. El panel de una regla muestra qué inputs la usan.
 - Panel de propiedades (panel-propiedades, tarea 4): columna derecha del lienzo; con un nodo seleccionado edita título, descripción, expresión (regla) y método y ruta (API); con una conexión, tipo, etiqueta y condición; con cero o varios, muestra ayuda. Los cambios se ven al instante en el lienzo.
 - Lienzo con contenido (panel-propiedades, tarea 3): `actor`, `rule` y `service` en la paleta; los nodos muestran descripción, `MÉTODO /ruta`, hasta 5 inputs (obligatorios con `*`) y 3 líneas de la expresión, con "+N más"; las conexiones muestran su etiqueta y su condición (`[200]`).
@@ -26,6 +27,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Estructura inicial del repo: documentación, ADR-0001 (stack), ADR-0002 (lienzos por feature), schema del grafo v0, devcontainer, docker-compose, CI y plantillas de GitHub.
 
 ### Fixed
+- Al borrar un nodo o una conexión seleccionados, su id quedaba en la selección y el panel mostraba la ayuda al seleccionar otro elemento.
 - Tras iniciar sesión se volvía siempre al inicio; ahora se vuelve a la página que se estaba abriendo.
 - `pnpm --dir apps/web …` desde la raíz fallaba con corepack activo; un `package.json` mínimo en la raíz fija la versión de pnpm.
 - Petición sin cuerpo o con JSON inválido respondía 500; ahora 400.

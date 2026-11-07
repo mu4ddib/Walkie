@@ -85,7 +85,10 @@ function CanvasInner() {
     (changes: NodeChange<WalkieFlowNode>[]) => {
       for (const change of changes) {
         if (change.type === 'position' && change.position) moveNode(change.id, change.position);
-        if (change.type === 'remove') removeNode(change.id);
+        if (change.type === 'remove') {
+          removeNode(change.id);
+          setSelectedNodes((s) => toggle(s, change.id, false));
+        }
         if (change.type === 'select') setSelectedNodes((s) => toggle(s, change.id, change.selected));
         if (change.type === 'dimensions' && change.dimensions) {
           const { width, height } = change.dimensions;
@@ -101,17 +104,23 @@ function CanvasInner() {
   const onEdgesChange = useCallback(
     (changes: EdgeChange<WalkieFlowEdge>[]) => {
       for (const change of changes) {
-        if (change.type === 'remove') removeEdge(change.id);
+        if (change.type === 'remove') {
+          removeEdge(change.id);
+          setSelectedEdges((s) => toggle(s, change.id, false));
+        }
         if (change.type === 'select') setSelectedEdges((s) => toggle(s, change.id, change.selected));
       }
     },
     [removeEdge],
   );
 
-  // Panel de propiedades: solo con un único elemento seleccionado (nodo o conexión).
-  const single = selectedNodes.size + selectedEdges.size === 1;
-  const panelNodeId = single ? ([...selectedNodes][0] ?? null) : null;
-  const panelEdgeId = single ? ([...selectedEdges][0] ?? null) : null;
+  // Panel de propiedades: solo con un único elemento seleccionado (nodo o conexión). Se filtra por lo
+  // que existe: React Flow no deselecciona lo que se borra (ni las conexiones que caen en cascada).
+  const liveNodes = [...selectedNodes].filter((id) => graphNodes[id]);
+  const liveEdges = [...selectedEdges].filter((id) => graphEdges[id]);
+  const single = liveNodes.length + liveEdges.length === 1;
+  const panelNodeId = single ? (liveNodes[0] ?? null) : null;
+  const panelEdgeId = single ? (liveEdges[0] ?? null) : null;
 
   const onConnect = useCallback((c: Connection) => void connect(c.source, c.target), [connect]);
 
