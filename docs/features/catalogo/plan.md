@@ -21,7 +21,7 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 1. [x] (#34) Schema y CRUD del catálogo en la API: `walkie-catalog-item.schema.json`, `catalogId` obligatorio en `ref`, tipos regenerados; tabla `apps.catalog_items` con migración; `GET/POST /api/apps/{appId}/catalog`, `GET/PUT /api/catalog/{itemId}` (409 por versión). Pruebas de integración (criterios 2 y 3 en la API).
 2. [x] (#35) Integridad y borrado en la API: Canvas valida `catalogId` (existe y es de la app de la feature, 400 en `/nodes/{id}/catalogId`); `GET /api/catalog/{itemId}/usages`; `DELETE /api/catalog/{itemId}` con 409 y la lista de features si se usa (`ICatalogUsage` implementado por Canvas). Pruebas de integración (criterios 4, 5 y 12 en la API).
-3. [ ] (#36) Web, página del catálogo: ruta `/apps/:appId/catalog` enlazada desde la app; lista agrupada por tipo; crear; editar con 409; detalle con "Usado en"; borrar con el 409 explicado (criterios 1 a 5).
+3. [x] (#36) Web, página del catálogo: ruta `/apps/:appId/catalog` enlazada desde la app; lista agrupada por tipo; crear; editar con 409; detalle con "Usado en"; borrar con el 409 explicado (criterios 1 a 5).
 4. [ ] (#37) Web, nodos `ref`: el editor carga el catálogo; sección "Catálogo" en la paleta; `addRef` en el store; el nodo se ve como su elemento con marca de catálogo, o "Elemento no encontrado"; tipo de conexión por defecto con el tipo del elemento; panel de solo lectura con "Editar en el catálogo"; sin renombrar con doble clic (criterios 6 a 10 y 11).
 5. [ ] (#38) Web, "Mover al catálogo": botón en el panel de `api`/`service`/`database`; crea el elemento y `convertToRef` reemplaza el nodo conservando id, posición y conexiones (criterio 10b).
 6. [ ] (#39) E2E: crear elementos en el catálogo, usarlos con `ref` en dos features, editar uno y verlo cambiado en ambos lienzos, "Mover al catálogo", guardar y recargar idéntico, borrar bloqueado por uso (criterios 5, 7, 10b y 11).
@@ -34,4 +34,4 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 ## Estado
 
-Última actualización: 2026-11-07 — tareas 1 y 2 hechas (schema y CRUD del catálogo; validación de `ref`, "Usado en" y borrado protegido en la API). Siguen: tareas 3 y 4.
+Última actualización: 2026-11-07 — tareas 1 a 3 hechas (schema y CRUD del catálogo; validación de `ref`, "Usado en" y borrado protegido en la API; página del catálogo en la web). Sigue: tarea 4.

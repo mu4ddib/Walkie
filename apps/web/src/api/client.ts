@@ -1,4 +1,5 @@
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
+import type { WalkieCatalogItemV0 } from '../schema/walkie-catalog-item';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:5080';
 
@@ -25,6 +26,14 @@ export interface Feature {
   name: string;
   createdAt: string;
 }
+
+/** Elemento del catálogo (`packages/schema/walkie-catalog-item.schema.json`). */
+export type CatalogItem = WalkieCatalogItemV0;
+export type CatalogItemType = CatalogItem['type'];
+/** Lo que se envía al crear: sin id, app ni versión. */
+export type NewCatalogItem = Pick<CatalogItem, 'type' | 'title' | 'description' | 'http'>;
+/** Lo que se envía al editar: el tipo no cambia; `version` es la que se cargó. */
+export type CatalogItemChanges = Pick<CatalogItem, 'title' | 'description' | 'http' | 'version'>;
 
 /** Cuerpo `ProblemDetails` (RFC 9457) que devuelve la API en los errores. */
 export interface Problem {
@@ -63,6 +72,7 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
     const problem = (await res.json().catch(() => undefined)) as Problem | undefined;
     throw new ApiError(res.status, problem);
   }
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
@@ -109,4 +119,39 @@ export function saveCanvas(token: string, featureId: string, graph: WalkieCanvas
     method: 'PUT',
     body: JSON.stringify(graph),
   });
+}
+
+export function listCatalog(token: string, appId: string, signal?: AbortSignal): Promise<CatalogItem[]> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/catalog`, { token, signal });
+}
+
+export function createCatalogItem(token: string, appId: string, item: NewCatalogItem): Promise<CatalogItem> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/catalog`, {
+    token,
+    method: 'POST',
+    body: JSON.stringify(item),
+  });
+}
+
+export function getCatalogItem(token: string, itemId: string, signal?: AbortSignal): Promise<CatalogItem> {
+  return request(`/api/catalog/${encodeURIComponent(itemId)}`, { token, signal });
+}
+
+/** Guarda si `version` coincide; si no, 409 con `currentVersion` como `ApiError`. */
+export function updateCatalogItem(token: string, itemId: string, changes: CatalogItemChanges): Promise<CatalogItem> {
+  return request(`/api/catalog/${encodeURIComponent(itemId)}`, {
+    token,
+    method: 'PUT',
+    body: JSON.stringify(changes),
+  });
+}
+
+/** 204; si algún lienzo lo usa, 409 con `features` como `ApiError`. */
+export function deleteCatalogItem(token: string, itemId: string): Promise<void> {
+  return request(`/api/catalog/${encodeURIComponent(itemId)}`, { token, method: 'DELETE' });
+}
+
+/** Features cuyo lienzo tiene un `ref` al elemento. */
+export function listCatalogUsages(token: string, itemId: string, signal?: AbortSignal): Promise<Feature[]> {
+  return request(`/api/catalog/${encodeURIComponent(itemId)}/usages`, { token, signal });
 }
