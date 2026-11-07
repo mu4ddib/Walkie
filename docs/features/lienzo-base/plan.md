@@ -27,7 +27,7 @@ Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de
 5. [x] (#7) Web: navegación y formularios de apps y features.
 6. [x] (#8) Web: paleta, nodos `screen`/`api`/`database` pixel v1, conexiones con tipo, editar título, borrar.
 7. [x] (#9) Web: guardar (botón + Ctrl+S), indicador "sin guardar", diálogo de 409 y error de 400.
-8. [ ] (#10) E2E con Playwright del flujo completo + job en CI (gate de la fase 1).
+8. [x] (#10) E2E con Playwright del flujo completo + job en CI (gate de la fase 1).
 
 ## Pruebas
 
@@ -37,4 +37,4 @@ Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de
 
 ## Estado
 
-Última actualización: 2026-11-07 — tareas 1-7 listas: el flujo completo funciona (crear, dibujar, guardar, recargar idéntico, 409). Sigue: tarea 8 (#10), E2E con Playwright en CI (gate de la fase).
+Última actualización: 2026-11-07 — **fase 1 completa**: las 8 tareas listas y el gate ("un flujo se guarda y se recarga igual") cubierto por la E2E en CI. Sigue: fase 2 (cajas ricas), que necesita su spec con la skill `nueva-feature`.

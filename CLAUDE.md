@@ -25,6 +25,7 @@ App → Catálogo (nodos reutilizables: api, service, database) + Features. Feat
 | Web | `pnpm --dir apps/web dev` |
 | Pruebas web | `pnpm --dir apps/web test` |
 | Lint web | `pnpm --dir apps/web lint` |
+| E2E (requiere Postgres y Keycloak levantados) | `pnpm --dir apps/web e2e --trace off` |
 | Regenerar tipos del schema | `pnpm --dir apps/web gen:schema` |
 
 API en http://localhost:5080 (OpenAPI en `/openapi/v1.json` en Development), web en http://localhost:5173, Keycloak en http://localhost:8080 (usuario de prueba `dev` / `walkie_dev`). Actualiza esta tabla si cambian.

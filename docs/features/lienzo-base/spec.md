@@ -1,7 +1,7 @@
 # Spec: Lienzo base
 
 - Issue padre: #2
-- Estado: aprobada (2026-11-06)
+- Estado: implementada (2026-11-07), verificada por `apps/web/e2e/lienzo-base.spec.ts`
 
 ## Objetivo
 
