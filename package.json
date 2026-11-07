@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "description": "Solo fija la versión de pnpm para corepack al correr comandos desde la raíz (pnpm --dir apps/web ...). Las dependencias viven en apps/web.",
+  "packageManager": "pnpm@10.28.0"
+}

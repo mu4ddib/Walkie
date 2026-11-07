@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Navegación de apps y features (lienzo-base, tarea 5): rutas con react-router (lista de apps → app → lienzo de la feature), formularios para crear apps y features con TanStack Query, mensajes de carga, vacío, 404 y validación.
 - Store del grafo en la web (lienzo-base, tarea 4): `createGraphStore()` con Zustand, estado normalizado por ID, IDs UUID v7, snap a 8 px, tipo de conexión por defecto según el par, borrado en cascada y flag `dirty`.
 - Guardar y cargar el lienzo (lienzo-base, tarea 3): `GET/PUT /api/features/{featureId}/canvas` con validación contra `packages/schema` e integridad del grafo (400), concurrencia optimista (409 con `currentVersion`) y 404 si la feature no existe.
 - Endpoints de apps y features (lienzo-base, tarea 2): `POST/GET /api/apps`, `GET /api/apps/{appId}`, `POST/GET /api/apps/{appId}/features`, con FluentValidation (400 `ValidationProblemDetails`), 404 y 401.
@@ -16,4 +17,5 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Estructura inicial del repo: documentación, ADR-0001 (stack), ADR-0002 (lienzos por feature), schema del grafo v0, devcontainer, docker-compose, CI y plantillas de GitHub.
 
 ### Fixed
+- `pnpm --dir apps/web …` desde la raíz fallaba con corepack activo; un `package.json` mínimo en la raíz fija la versión de pnpm.
 - Petición sin cuerpo o con JSON inválido respondía 500; ahora 400.
