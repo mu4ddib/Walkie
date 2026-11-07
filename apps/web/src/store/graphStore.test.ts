@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { StoreApi } from 'zustand/vanilla';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
-import { createGraphStore, defaultEdgeKind, snap, toGraph, type GraphStore } from './graphStore';
+import { createGraphStore, defaultEdgeKind, inputNameError, snap, toGraph, type GraphStore } from './graphStore';
 
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -82,7 +82,12 @@ describe('connect', () => {
     ['screen', 'api', 'request'],
     ['api', 'screen', 'response'],
     ['api', 'database', 'reads'],
+    ['actor', 'screen', 'navigation'],
+    ['api', 'service', 'request'],
+    ['service', 'database', 'reads'],
+    ['screen', 'rule', 'uses'],
     ['database', 'screen', 'uses'],
+    ['rule', 'service', 'uses'],
   ] as const)('%s → %s usa %s por defecto', (from, to, kind) => {
     expect(defaultEdgeKind(from, to)).toBe(kind);
   });
@@ -143,6 +148,205 @@ describe('removeNode', () => {
     expect(Object.keys(s().nodes).sort()).toEqual([b, c].sort());
     expect(s().layout[a]).toBeUndefined();
     expect(Object.keys(s().edges)).toEqual([keep]);
+  });
+});
+
+describe('removeNode de una regla', () => {
+  it('quita la regla de los ruleIds de los inputs, sin tocar las demás', () => {
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+    const r1 = s().addNode('rule', { x: 0, y: 0 });
+    const r2 = s().addNode('rule', { x: 0, y: 0 });
+    s().addInput(screen, { name: 'documento', ruleIds: [r1, r2] });
+    s().addInput(screen, { name: 'clave', ruleIds: [r1] });
+
+    s().removeNode(r1);
+
+    expect(s().nodes[screen]?.inputs).toEqual([
+      { name: 'documento', type: 'string', ruleIds: [r2] },
+      { name: 'clave', type: 'string' },
+    ]);
+  });
+});
+
+describe('updateNode', () => {
+  it('cambia título, descripción y expresión, recortados', () => {
+    const id = s().addNode('rule', { x: 0, y: 0 });
+    s().markSaved(1);
+
+    s().updateNode(id, { title: '  Documento válido ', description: ' Valida la cc ', expression: 'cc: solo dígitos' });
+
+    expect(s().nodes[id]).toEqual({
+      id,
+      type: 'rule',
+      title: 'Documento válido',
+      description: 'Valida la cc',
+      expression: 'cc: solo dígitos',
+    });
+    expect(s().dirty).toBe(true);
+  });
+
+  it('un texto vacío quita el campo; un título vacío se ignora', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+    s().updateNode(id, { description: 'algo' });
+
+    s().updateNode(id, { title: '  ', description: '' });
+
+    expect(s().nodes[id]).toEqual({ id, type: 'screen', title: 'Pantalla' });
+  });
+
+  it('respeta los límites del schema', () => {
+    const id = s().addNode('rule', { x: 0, y: 0 });
+
+    s().updateNode(id, { title: 'x'.repeat(200), expression: 'y'.repeat(3000) });
+
+    expect(s().nodes[id]?.title).toHaveLength(120);
+    expect(s().nodes[id]?.expression).toHaveLength(2000);
+  });
+
+  it('guarda método y ruta de una API y los quita al vaciarlos', () => {
+    const id = s().addNode('api', { x: 0, y: 0 });
+
+    s().updateNode(id, { http: { method: 'POST', path: ' /clientes/{id} ' } });
+    expect(s().nodes[id]?.http).toEqual({ method: 'POST', path: '/clientes/{id}' });
+
+    s().updateNode(id, { http: { path: '' } });
+    expect(s().nodes[id]?.http).toEqual({ method: 'POST' });
+
+    s().updateNode(id, { http: { method: null } });
+    expect(s().nodes[id]?.http).toBeUndefined();
+  });
+
+  it('no marca cambios si nada cambia', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+    s().markSaved(1);
+
+    s().updateNode(id, { title: 'Pantalla', description: '' });
+
+    expect(s().dirty).toBe(false);
+  });
+});
+
+describe('inputs', () => {
+  it('addInput agrega al final con un nombre libre y tipo string', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+
+    const first = s().addInput(id);
+    const second = s().addInput(id);
+
+    expect([first, second]).toEqual([0, 1]);
+    expect(s().nodes[id]?.inputs).toEqual([
+      { name: 'campo', type: 'string' },
+      { name: 'campo 2', type: 'string' },
+    ]);
+  });
+
+  it('addInput rechaza nombres repetidos o vacíos y nodos inexistentes', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+    s().addInput(id, { name: 'cc' });
+
+    expect(s().addInput(id, { name: ' cc ' })).toBeNull();
+    expect(s().addInput(id, { name: ' ' })).toBeNull();
+    expect(s().addInput('nada')).toBeNull();
+    expect(s().nodes[id]?.inputs).toHaveLength(1);
+  });
+
+  it('updateInput cambia nombre, tipo y obligatorio', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+    s().addInput(id);
+
+    expect(s().updateInput(id, 0, { name: 'fecha', type: 'date', required: true })).toBe(true);
+
+    expect(s().nodes[id]?.inputs).toEqual([{ name: 'fecha', type: 'date', required: true }]);
+  });
+
+  it('updateInput no permite nombres repetidos ni vacíos', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+    s().addInput(id, { name: 'cc' });
+    s().addInput(id, { name: 'clave' });
+    s().markSaved(1);
+
+    expect(s().updateInput(id, 1, { name: 'cc' })).toBe(false);
+    expect(s().updateInput(id, 1, { name: '' })).toBe(false);
+    expect(s().updateInput(id, 0, { name: 'cc' })).toBe(true);
+    expect(s().nodes[id]?.inputs?.map((i) => i.name)).toEqual(['cc', 'clave']);
+    expect(s().dirty).toBe(false);
+  });
+
+  it('inputNameError explica por qué un nombre no sirve', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+    s().addInput(id, { name: 'cc' });
+    const node = s().nodes[id]!;
+
+    expect(inputNameError(node, 'cc')).toBe('Ya hay un input con ese nombre.');
+    expect(inputNameError(node, '  ')).toBe('El nombre no puede quedar vacío.');
+    expect(inputNameError(node, 'cc', 0)).toBeNull();
+    expect(inputNameError(node, 'clave')).toBeNull();
+  });
+
+  it('options solo en enum: se limpian y se descartan al cambiar de tipo', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+    s().addInput(id, { name: 'cuenta', type: 'enum' });
+
+    s().updateInput(id, 0, { options: [' Ahorros ', '', 'Corriente', 'Ahorros'] });
+    expect(s().nodes[id]?.inputs?.[0]?.options).toEqual(['Ahorros', 'Corriente']);
+
+    s().updateInput(id, 0, { type: 'string' });
+    expect(s().nodes[id]?.inputs?.[0]).toEqual({ name: 'cuenta', type: 'string' });
+
+    s().addInput(id, { name: 'otro', options: ['A'] });
+    expect(s().nodes[id]?.inputs?.[1]).toEqual({ name: 'otro', type: 'string' });
+  });
+
+  it('ruleIds solo acepta reglas existentes, sin repetidos', () => {
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+    const rule = s().addNode('rule', { x: 0, y: 0 });
+    const api = s().addNode('api', { x: 0, y: 0 });
+    s().addInput(screen);
+
+    s().updateInput(screen, 0, { ruleIds: [rule, api, 'nada', rule] });
+
+    expect(s().nodes[screen]?.inputs?.[0]?.ruleIds).toEqual([rule]);
+
+    s().updateInput(screen, 0, { ruleIds: [] });
+    expect(s().nodes[screen]?.inputs?.[0]).toEqual({ name: 'campo', type: 'string' });
+  });
+
+  it('removeInput quita el input y, si era el último, el campo inputs', () => {
+    const id = s().addNode('screen', { x: 0, y: 0 });
+    s().addInput(id, { name: 'a' });
+    s().addInput(id, { name: 'b' });
+
+    s().removeInput(id, 0);
+    expect(s().nodes[id]?.inputs).toEqual([{ name: 'b', type: 'string' }]);
+
+    s().removeInput(id, 0);
+    expect(s().nodes[id]).toEqual({ id, type: 'screen', title: 'Pantalla' });
+  });
+});
+
+describe('updateEdge', () => {
+  it('cambia tipo, etiqueta y condición, recortados al límite', () => {
+    const api = s().addNode('api', { x: 0, y: 0 });
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+    const id = s().connect(api, screen)!;
+
+    s().updateEdge(id, { kind: 'navigation', label: ' Ver detalle ', when: '200' });
+    expect(s().edges[id]).toEqual({ id, from: api, to: screen, kind: 'navigation', label: 'Ver detalle', when: '200' });
+
+    s().updateEdge(id, { label: 'x'.repeat(80), when: '' });
+    expect(s().edges[id]?.label).toHaveLength(60);
+    expect(s().edges[id]?.when).toBeUndefined();
+  });
+
+  it('no marca cambios si nada cambia', () => {
+    const api = s().addNode('api', { x: 0, y: 0 });
+    const db = s().addNode('database', { x: 0, y: 0 });
+    const id = s().connect(api, db)!;
+    s().markSaved(1);
+
+    s().updateEdge(id, { kind: 'reads', label: '' });
+
+    expect(s().dirty).toBe(false);
   });
 });
 
