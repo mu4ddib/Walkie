@@ -23,7 +23,7 @@ Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de
 1. [x] (#3) API: persistencia con EF Core + Postgres (módulos, `DbContext`, migración inicial, Testcontainers).
 2. [x] (#4) API: endpoints de apps y features (FluentValidation, ProblemDetails, 401).
 3. [x] (#5) API: `GET/PUT` del lienzo con validación de schema (400) y concurrencia optimista (409).
-4. [ ] (#6) Web: store del grafo (acciones, `dirty`, UUID v7) con pruebas en Vitest.
+4. [x] (#6) Web: store del grafo (acciones, `dirty`, UUID v7) con pruebas en Vitest.
 5. [ ] (#7) Web: navegación y formularios de apps y features.
 6. [ ] (#8) Web: paleta, nodos `screen`/`api`/`database` pixel v1, conexiones con tipo, editar título, borrar.
 7. [ ] (#9) Web: guardar (botón + Ctrl+S), indicador "sin guardar", diálogo de 409 y error de 400.
@@ -37,4 +37,4 @@ Cada tarea cabe en una sesión y en un PR. Orden: API primero; las tareas 4-6 de
 
 ## Estado
 
-Última actualización: 2026-11-06 — API de la fase lista (tareas 1-3). Sigue: tarea 4 (#6), store del grafo en la web.
+Última actualización: 2026-11-07 — API lista (tareas 1-3) y store del grafo (tarea 4). Sigue: tarea 5 (#7), navegación de apps y features.
