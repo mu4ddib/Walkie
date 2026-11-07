@@ -15,7 +15,7 @@ apps/web/src/
   ui/            # piezas reutilizables (NameForm, QueryState)
   routes.tsx     # rutas de react-router: / · /apps/:appId · /apps/:appId/features/:featureId
   test/          # helpers de pruebas: fakeApi.ts (API falsa en memoria), render.tsx (renderRoute)
-apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1) + helpers.ts (login, dropNode, connect, rename, visibleGraph)
+apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-propiedades.spec.ts + helpers.ts (login, dropNode, connect, rename, visibleGraph)
   theme/         # paleta pixel, fuentes, sprites
   schema/        # tipos generados desde packages/schema (no editar a mano)
 ```
@@ -49,6 +49,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1) + helpers
 - **Quitar una clave de un objeto**: usa `omit()` del store; desestructurar con `_variable` sin usar rompe el lint (`no-unused-vars`).
 - **React Flow controlado**: `Canvas` reconstruye los nodos desde el store; hay que devolverles `measured` (guardado de los cambios `dimensions`). Sin eso, React Flow los oculta un instante para medirlos en cada cambio (ej. al seleccionar) y se pierden clics: el doble clic para editar fallaba.
 - **`fitView` con lienzo vacío**: ajusta el zoom cuando aparece el primer nodo y los siguientes caen en otro sitio. Solo se usa si el lienzo ya trae nodos al montarse.
+- **React Flow no deselecciona lo borrado**: un cambio `remove` no trae `select: false`. `Canvas` quita el id de la selección y el panel filtra por lo que existe (las conexiones borradas en cascada nunca reciben `remove`).
 - **Doble clic en nodos**: usa `onNodeDoubleClick` del `<ReactFlow>` y pasa `editing` por `data`; con `zoomOnDoubleClick={false}`.
 - **Fast refresh (`react-refresh/only-export-components`)**: un `.tsx` solo exporta componentes. Constantes y hooks van en `.ts` aparte (por eso existen `nodeMeta.ts`, `edgeMeta.ts`, `paletteTypes.ts`, `useGraphStore.ts`).
 - **Probar el lienzo con Playwright**: usa los helpers de `e2e/helpers.ts` (`dropNode` dispara el HTML5 DnD con `dataTransfer`; `connect` arrastra de `.react-flow__handle-right` a `.react-flow__handle-left`).

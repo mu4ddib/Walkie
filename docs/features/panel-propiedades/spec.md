@@ -1,7 +1,7 @@
 # Spec: Panel de propiedades y tipos de nodo restantes
 
 - Issue padre: #19
-- Estado: aprobada (2026-11-07)
+- Estado: implementada (2026-11-07), verificada por `apps/web/e2e/panel-propiedades.spec.ts`
 - Fase 2 ("cajas ricas"), feature 1 de 3. Las otras dos: catálogo + `ref`; imágenes + `portal`.
 
 ## Objetivo
@@ -16,30 +16,30 @@ Desarrollador que documenta un flujo y necesita dejar escrito qué pide cada pan
 
 **Paleta y tipos nuevos**
 
-- [ ] 1. Dado un lienzo, cuando abro la paleta, entonces además de `screen`, `api` y `database` veo `actor`, `rule` y `service`, cada uno con su color y glifo, y los agrego igual que los demás.
-- [ ] 2. Dado que conecto nodos de tipos nuevos, entonces la conexión toma un tipo por defecto según el par: `actor→screen` navigation, `api→service` request, `service→database` reads, `screen→rule` uses; cualquier otro par sigue en `uses`.
+- [x] 1. Dado un lienzo, cuando abro la paleta, entonces además de `screen`, `api` y `database` veo `actor`, `rule` y `service`, cada uno con su color y glifo, y los agrego igual que los demás.
+- [x] 2. Dado que conecto nodos de tipos nuevos, entonces la conexión toma un tipo por defecto según el par: `actor→screen` navigation, `api→service` request, `service→database` reads, `screen→rule` uses; cualquier otro par sigue en `uses`.
 
 **Panel de propiedades**
 
-- [ ] 3. Dado un lienzo, cuando selecciono un solo nodo, entonces se abre un panel lateral derecho con sus propiedades; con cero o varios seleccionados, el panel muestra un texto de ayuda.
-- [ ] 4. Dado el panel de cualquier nodo, cuando edito título o descripción, entonces el cambio se ve en el nodo al instante y el lienzo queda "Sin guardar".
-- [ ] 5. Dado un nodo `rule`, cuando escribo su expresión (texto libre, ej. "cc: solo dígitos, de 6 a 10"), entonces el nodo muestra las primeras líneas de la expresión.
-- [ ] 6. Dado un nodo `api`, cuando elijo el método (GET, POST, PUT, PATCH, DELETE) y escribo la ruta (ej. `/clientes/{id}`), entonces el nodo muestra `MÉTODO /ruta`.
-- [ ] 7. Dada una conexión seleccionada, cuando abro el panel, entonces puedo cambiar su tipo, su etiqueta (`label`) y su condición (`when`, ej. "200" o "404"), y la etiqueta y la condición se ven sobre la conexión.
+- [x] 3. Dado un lienzo, cuando selecciono un solo nodo, entonces se abre un panel lateral derecho con sus propiedades; con cero o varios seleccionados, el panel muestra un texto de ayuda.
+- [x] 4. Dado el panel de cualquier nodo, cuando edito título o descripción, entonces el cambio se ve en el nodo al instante y el lienzo queda "Sin guardar".
+- [x] 5. Dado un nodo `rule`, cuando escribo su expresión (texto libre, ej. "cc: solo dígitos, de 6 a 10"), entonces el nodo muestra las primeras líneas de la expresión.
+- [x] 6. Dado un nodo `api`, cuando elijo el método (GET, POST, PUT, PATCH, DELETE) y escribo la ruta (ej. `/clientes/{id}`), entonces el nodo muestra `MÉTODO /ruta`.
+- [x] 7. Dada una conexión seleccionada, cuando abro el panel, entonces puedo cambiar su tipo, su etiqueta (`label`) y su condición (`when`, ej. "200" o "404"), y la etiqueta y la condición se ven sobre la conexión.
 
 **Inputs de pantalla y reglas**
 
-- [ ] 8. Dado un nodo `screen`, cuando agrego un input en el panel, entonces puedo darle nombre, tipo (`string`, `number`, `boolean`, `date`, `enum`, `file`) y marcarlo como obligatorio; el nodo lista sus inputs y marca los obligatorios con `*`.
-- [ ] 8b. Dado un input de tipo `enum`, cuando escribo sus opciones (una por línea, ej. "Ahorros", "Corriente"), entonces quedan guardadas con el input; al cambiar a otro tipo, las opciones se descartan.
-- [ ] 8c. Dado un nodo con mucho contenido, entonces dentro de la caja se ven como máximo 5 inputs y 3 líneas de la expresión de una regla, seguidos de "+N más"; el detalle completo está en el panel.
-- [ ] 9. Dado un input, cuando lo asocio a una o varias reglas, entonces solo puedo elegir nodos `rule` del mismo lienzo, y el panel de la regla muestra qué inputs la usan.
-- [ ] 10. Dado un input, cuando lo quito, entonces desaparece del nodo; no hay inputs con el mismo nombre en una pantalla (el panel lo impide y avisa).
-- [ ] 11. Dado un nodo `rule` asociado a inputs, cuando lo borro, entonces las asociaciones desaparecen de esos inputs (no quedan referencias rotas).
+- [x] 8. Dado un nodo `screen`, cuando agrego un input en el panel, entonces puedo darle nombre, tipo (`string`, `number`, `boolean`, `date`, `enum`, `file`) y marcarlo como obligatorio; el nodo lista sus inputs y marca los obligatorios con `*`.
+- [x] 8b. Dado un input de tipo `enum`, cuando escribo sus opciones (una por línea, ej. "Ahorros", "Corriente"), entonces quedan guardadas con el input; al cambiar a otro tipo, las opciones se descartan.
+- [x] 8c. Dado un nodo con mucho contenido, entonces dentro de la caja se ven como máximo 5 inputs y 3 líneas de la expresión de una regla, seguidos de "+N más"; el detalle completo está en el panel.
+- [x] 9. Dado un input, cuando lo asocio a una o varias reglas, entonces solo puedo elegir nodos `rule` del mismo lienzo, y el panel de la regla muestra qué inputs la usan.
+- [x] 10. Dado un input, cuando lo quito, entonces desaparece del nodo; no hay inputs con el mismo nombre en una pantalla (el panel lo impide y avisa).
+- [x] 11. Dado un nodo `rule` asociado a inputs, cuando lo borro, entonces las asociaciones desaparecen de esos inputs (no quedan referencias rotas).
 
 **Persistencia**
 
-- [ ] 12. Dado un lienzo con todo lo anterior, cuando guardo y recargo, entonces aparece idéntico (descripciones, inputs, reglas asociadas, método y ruta, etiquetas y condiciones de las conexiones).
-- [ ] 13. Dado un grafo con un input asociado a un nodo que no existe o que no es `rule`, cuando la API lo recibe, entonces responde 400 con la ruta del error (ej. `/nodes/n1/inputs/0/ruleIds/0`).
+- [x] 12. Dado un lienzo con todo lo anterior, cuando guardo y recargo, entonces aparece idéntico (descripciones, inputs, reglas asociadas, método y ruta, etiquetas y condiciones de las conexiones).
+- [x] 13. Dado un grafo con un input asociado a un nodo que no existe o que no es `rule`, cuando la API lo recibe, entonces responde 400 con la ruta del error (ej. `/nodes/n1/inputs/0/ruleIds/0`).
 
 ## Fuera de alcance
 
