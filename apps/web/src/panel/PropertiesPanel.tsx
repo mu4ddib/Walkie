@@ -13,6 +13,7 @@ import {
 import { useGraphStore } from '../store/useGraphStore';
 import { InputsSection, RuleUsages } from './InputsSection';
 import { MoveToCatalog } from './MoveToCatalog';
+import { PortalPanel } from './PortalPanel';
 import { RefPanel } from './RefPanel';
 import { ScreenImage } from './ScreenImage';
 import { useCanvasCatalog } from '../catalog/catalogContext';
@@ -44,6 +45,7 @@ function NodePanel({ id }: { id: string }) {
   const { appId } = useCanvasCatalog();
   if (!node) return null;
   if (node.type === 'ref') return <RefPanel node={node} />;
+  if (node.type === 'portal') return <PortalPanel node={node} />;
   const meta = NODE_LABELS[node.type];
 
   return (

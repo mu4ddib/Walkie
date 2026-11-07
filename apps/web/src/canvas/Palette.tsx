@@ -60,7 +60,7 @@ export function Palette({ onAdd, catalog }: PaletteProps) {
         </section>
       )}
       <p className="palette-hint">
-        Arrastra al lienzo. Une nodos desde el punto derecho. Doble clic edita el título; Supr borra.
+        Arrastra al lienzo. Une nodos desde el punto derecho. Doble clic edita el título (o abre un portal); Supr borra.
       </p>
     </aside>
   );
