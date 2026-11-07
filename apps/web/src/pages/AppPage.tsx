@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router';
 import { useApp, useCreateFeature, useFeatures } from '../api/hooks';
 import { NameForm } from '../ui/NameForm';
+import { catalogPath } from './catalogPaths';
 import { QueryState } from '../ui/QueryState';
 
 export function AppPage() {
@@ -22,6 +23,10 @@ export function AppPage() {
     <section className="page">
       <Breadcrumb appName={app.data.name} />
       <h2>{app.data.name}</h2>
+      <p>
+        <Link to={catalogPath(appId)}>Catálogo de la app</Link> — APIs, servicios y bases de datos compartidos por sus
+        lienzos.
+      </p>
       <NameForm
         label="Nueva feature"
         submitLabel="Crear feature"

@@ -196,3 +196,80 @@
   font-size: 24px;
   margin: 0;
 }
+
+/* Catálogo de la app */
+.catalog-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
+  gap: 16px;
+  align-items: start;
+}
+
+.catalog-group h3,
+.catalog-editor h3,
+.catalog-usages h4 {
+  font-family: var(--font-title);
+  font-size: 12px;
+  margin: 16px 0 8px;
+}
+
+.catalog-http {
+  opacity: 0.8;
+}
+
+.item-list a[aria-current='page'] {
+  outline: 2px solid var(--accent);
+}
+
+.catalog-form select {
+  font: inherit;
+}
+
+.catalog-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 4px solid var(--ink);
+  background: var(--paper);
+}
+
+.catalog-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catalog-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.catalog-editor input,
+.catalog-editor textarea,
+.catalog-editor select {
+  font: inherit;
+  padding: 2px 4px;
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.catalog-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.catalog-delete [role='alert'],
+.catalog-editor [role='alert'] {
+  color: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .catalog-layout {
+    grid-template-columns: 1fr;
+  }
+}

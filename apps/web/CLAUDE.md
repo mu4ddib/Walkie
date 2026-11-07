@@ -11,9 +11,9 @@ apps/web/src/
   store/         # graphStore.ts (estado + acciones), GraphStoreProvider + useGraphStore (contexto para nodos/conexiones)
   tours/         # modo tour y personaje guía
   api/           # cliente HTTP (client.ts) + hooks de TanStack Query (hooks.ts)
-  pages/         # una página por ruta (AppsPage, AppPage, FeaturePage)
+  pages/         # una página por ruta (AppsPage, AppPage, FeaturePage, CatalogPage) + catalogPaths.ts (rutas y tipos del catálogo)
   ui/            # piezas reutilizables (NameForm, QueryState)
-  routes.tsx     # rutas de react-router: / · /apps/:appId · /apps/:appId/features/:featureId
+  routes.tsx     # rutas de react-router: / · /apps/:appId · /apps/:appId/catalog[/:itemId] · /apps/:appId/features/:featureId
   test/          # helpers de pruebas: fakeApi.ts (API falsa en memoria), render.tsx (renderRoute)
 apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-propiedades.spec.ts + helpers.ts (login, dropNode, connect, rename, visibleGraph)
   theme/         # paleta pixel, fuentes, sprites
@@ -31,7 +31,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 - Estilo pixel art: grilla de 8 px (`snapGrid={[8,8]}`), fuente Press Start 2P para títulos y VT323 para texto, sprites PNG con `image-rendering: pixelated`, paleta en `theme/palette.ts`. Sin sombras difusas ni gradientes.
 - Pruebas: Vitest para el store y la lógica (`src/**/*.test.ts(x)`), Playwright para flujos (`e2e/*.spec.ts`).
 - E2E: `docker compose -f infra/docker-compose.yml up -d postgres keycloak` y luego `pnpm --dir apps/web e2e --trace off`. Playwright levanta la API y la web (o reutiliza las que estén corriendo, salvo con `CI=1`). Cada prueba crea su propia app con nombre único. En CI corre el job `e2e`, con el reporte como artefacto si falla.
-- Pruebas de páginas: `installFakeApi({ apps, features })` reemplaza `fetch` con una API en memoria que responde como `apps/api`; `renderRoute('/ruta')` monta las rutas reales con TanStack Query. Mockea `react-oidc-context` y, si no hace falta, `../canvas/Canvas` (React Flow).
+- Pruebas de páginas: `installFakeApi({ apps, features, canvases, catalog })` reemplaza `fetch` con una API en memoria que responde como `apps/api`; `renderRoute('/ruta')` monta las rutas reales con TanStack Query. Mockea `react-oidc-context` y, si no hace falta, `../canvas/Canvas` (React Flow).
 - Editor: `FeaturePage` carga el grafo con `useCanvas` (sin refetch automático: después manda el store) y monta `<FeatureEditor initialGraph>`, que crea el store ya cargado. Guardar: botón o Ctrl+S → `useSaveCanvas` → `markSaved(version, estadoEnviado)` (si hubo cambios durante el guardado, siguen pendientes). 409 → aviso con "Recargar versión del servidor"; 400 → mensaje con la primera ruta de error. Con cambios sin guardar, `beforeunload` avisa al salir.
 - Login: `signinRedirect({ state: currentPath() })` y `onSigninCallback` vuelven a la página de origen (solo rutas internas, `safeReturnTo`).
 - Lienzo: `<Canvas store={store} />`. La selección, el nodo en edición y las medidas son estado de UI local de `Canvas`, no del store. Con un solo nodo o una sola conexión seleccionados, `Canvas` pasa su id a `<PropertiesPanel>` (tercera columna); si no, el panel muestra ayuda. Nodos y conexiones leen y cambian el grafo con `useGraphStore(selector)`.
@@ -64,6 +64,8 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 - **Campos del panel**: el store recorta espacios, así que un input atado directo al store no deja escribir un espacio final. Usa `TextField` (borrador local que se sincroniza si el store cambia por otra vía; con `validate` muestra el error y no llama a `onChange`, ej. nombres de input repetidos).
 - **Etiquetas únicas en la página**: la miga de pan es `<nav aria-label="Ruta">`; un campo "Ruta" choca con `getByLabel` en Playwright (por eso el panel dice "Ruta HTTP"). También hay dos `role="status"` (API ok y guardado): usa `.save-status`. En el panel, "Tipo" y "Nombre" se repiten por input: usa `.nth(i)`.
 - **Ancho del lienzo en E2E**: con paleta (200 px) y panel (280 px), a 1280 px el lienzo mide ~760 px; los `dropNode` deben caer dentro (x < 700).
+- **Mutaciones y formularios con `key={version}`**: si el formulario se monta de nuevo al guardar (nueva versión), una mutación creada dentro pierde `isSuccess`/`error`. Créala en el padre y pásala (ver `ItemDetail` en `CatalogPage.tsx`); al recargar tras un 409, `update.reset()`.
+- **Respuestas 204**: `request()` de `api/client.ts` devuelve `undefined` sin leer el cuerpo.
 - **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
 - **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
 
