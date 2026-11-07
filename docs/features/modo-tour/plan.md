@@ -17,7 +17,7 @@ Basado en `spec.md` (aprobada el 2026-11-07). Issue padre: #59.
 
 Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1; la 3 depende de la 2; la 4 es independiente (solo sprites y web); la 5 depende de la 2 y la 4; la 6 cierra.
 
-1. [ ] (#60) Schema e integridad: límites y `additionalProperties: false` en tours y pasos, tipos regenerados; `GraphValidator` valida clave del tour y `nodeId` de cada paso. Pruebas de integración (criterio 12).
+1. [x] (#60) Schema e integridad: límites y `additionalProperties: false` en tours y pasos, tipos regenerados; `GraphValidator` valida clave del tour y `nodeId` de cada paso. Pruebas de integración (criterio 12).
 2. [ ] (#61) Store: `addTour`, `renameTour`, `removeTour`, `addStep`, `updateStepNote`, `moveStep`, `removeStep`; `removeNode` quita los pasos de ese nodo. Pruebas en Vitest (criterios 3 y 4 en el store).
 3. [ ] (#62) Panel "Tours": con nada seleccionado, lista de tours, "Nuevo tour", editor del tour (nombre, pasos con nodo y nota, subir/bajar, quitar, borrar tour) y "Ver tour" (criterios 1 a 3).
 4. [ ] (#63) Guía animado: `tours/Guide.tsx` lee `packages/sprites/guia/manifest.json`, reproduce una animación (en bucle o una vez), se refleja al mirar al oeste, escala ×2 pixelado y respeta `prefers-reduced-motion`. Pruebas del componente (criterio 10 en parte).
@@ -32,4 +32,4 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 ## Estado
 
-Última actualización: 2026-11-07 — spec aprobada, sprites en el repo (sin `jump`), plan e issues creados. Sigue: tarea 1.
+Última actualización: 2026-11-07 — tarea 1 hecha (schema e integridad de los tours en la API). Siguen: tareas 2 y 4.

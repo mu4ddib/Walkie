@@ -6,7 +6,7 @@ namespace Walkie.Modules.Canvas.Features;
 
 /// <summary>
 /// Valida un grafo contra <c>packages/schema/walkie-graph.schema.json</c> (embebido en el ensamblado)
-/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones y layout apuntan a nodos, inputs y reglas).
+/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones, layout y pasos de tours apuntan a nodos, inputs y reglas).
 /// </summary>
 internal sealed class GraphValidator
 {
@@ -86,6 +86,11 @@ internal sealed class GraphValidator
             }
         }
 
+        if (graph.TryGetProperty("tours", out var tours))
+        {
+            TourErrors(tours, nodeIds, errors);
+        }
+
         foreach (var position in graph.GetProperty("layout").EnumerateObject())
         {
             if (!nodeIds.Contains(position.Name))
@@ -95,6 +100,29 @@ internal sealed class GraphValidator
         }
 
         return errors;
+    }
+
+    /// <summary>Tours: clave = <c>id</c> y cada paso apunta a un nodo existente (spec modo-tour, criterio 12).</summary>
+    private static void TourErrors(JsonElement tours, HashSet<string> nodeIds, Dictionary<string, string[]> errors)
+    {
+        foreach (var tour in tours.EnumerateObject())
+        {
+            if (tour.Value.GetProperty("id").GetString() != tour.Name)
+            {
+                errors[$"/tours/{tour.Name}/id"] = ["El id del tour debe coincidir con su clave."];
+            }
+
+            var i = 0;
+            foreach (var step in tour.Value.GetProperty("steps").EnumerateArray())
+            {
+                if (!nodeIds.Contains(step.GetProperty("nodeId").GetString()!))
+                {
+                    errors[$"/tours/{tour.Name}/steps/{i}/nodeId"] = ["El paso apunta a un nodo que no existe."];
+                }
+
+                i++;
+            }
+        }
     }
 
     /// <summary>La propiedad solo puede estar en nodos del tipo dado.</summary>

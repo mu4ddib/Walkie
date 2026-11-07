@@ -102,18 +102,22 @@
     },
     "tour": {
       "type": "object",
+      "description": "Recorrido guiado por pasos sobre los nodos del lienzo (modo tour)",
       "required": ["id", "name", "steps"],
+      "additionalProperties": false,
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "name": { "type": "string" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
         "steps": {
           "type": "array",
+          "description": "En orden; cada paso centra y resalta su nodo",
           "items": {
             "type": "object",
             "required": ["nodeId"],
+            "additionalProperties": false,
             "properties": {
               "nodeId": { "$ref": "#/$defs/id" },
-              "note": { "type": "string" }
+              "note": { "type": "string", "maxLength": 500, "description": "Lo que el guía cuenta en el paso" }
             }
           }
         }
