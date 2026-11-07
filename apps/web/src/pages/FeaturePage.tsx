@@ -1,5 +1,7 @@
 import { Link, useParams } from 'react-router';
-import { useApp, useCanvas, useFeatures } from '../api/hooks';
+import { useMemo } from 'react';
+import { useApp, useCanvas, useCatalog, useFeatures } from '../api/hooks';
+import { toCanvasCatalog } from '../catalog/catalogContext';
 import { FeatureEditor } from '../canvas/FeatureEditor';
 import { QueryState } from '../ui/QueryState';
 
@@ -10,6 +12,11 @@ export function FeaturePage() {
   const features = useFeatures(appId);
   const feature = features.data?.find((f) => f.id === featureId);
   const canvas = useCanvas(featureId);
+  const catalogQuery = useCatalog(appId);
+  const catalog = useMemo(
+    () => (catalogQuery.data ? toCanvasCatalog(appId, catalogQuery.data) : undefined),
+    [appId, catalogQuery.data],
+  );
 
   return (
     <section className="feature-page">
@@ -31,8 +38,15 @@ export function FeaturePage() {
           {feature && (
             <>
               <QueryState isPending={canvas.isPending} error={canvas.error} notFound="Esta feature no existe." />
+              <QueryState
+                isPending={catalogQuery.isPending}
+                error={catalogQuery.error}
+                notFound="Esta app no existe."
+              />
               {/* El editor crea su store con el grafo cargado; al cambiar de feature se monta otro (key en FeatureRoute). */}
-              {canvas.data && <FeatureEditor featureId={featureId} initialGraph={canvas.data} />}
+              {canvas.data && catalog && (
+                <FeatureEditor featureId={featureId} initialGraph={canvas.data} catalog={catalog} />
+              )}
             </>
           )}
         </>

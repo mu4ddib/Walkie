@@ -11,6 +11,7 @@ import {
 } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { InputsSection, RuleUsages } from './InputsSection';
+import { RefPanel } from './RefPanel';
 import { TextField } from './TextField';
 import './panel.css';
 
@@ -37,6 +38,7 @@ function NodePanel({ id }: { id: string }) {
   const updateNode = useGraphStore((s) => s.updateNode);
   const methodId = useId();
   if (!node) return null;
+  if (node.type === 'ref') return <RefPanel node={node} />;
   const meta = NODE_LABELS[node.type];
 
   return (

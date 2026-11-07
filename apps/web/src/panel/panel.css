@@ -102,3 +102,23 @@
   padding-left: 16px;
   font-size: 16px;
 }
+
+.panel-readonly {
+  margin: 0;
+  font-size: 16px;
+}
+
+.panel-readonly dt {
+  opacity: 0.7;
+}
+
+.panel-readonly dd {
+  margin: 0 0 8px;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.properties-panel a.pixel-button {
+  align-self: flex-start;
+  text-decoration: none;
+}

@@ -3,6 +3,7 @@ import { useStore } from 'zustand';
 import { ApiError } from '../api/client';
 import { useFetchCanvas, useSaveCanvas } from '../api/hooks';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
+import type { CanvasCatalog } from '../catalog/catalogContext';
 import { createGraphStore, toGraph } from '../store/graphStore';
 import { Canvas } from './Canvas';
 
@@ -12,7 +13,16 @@ type Status = { kind: 'idle' } | { kind: 'saved' } | { kind: 'error'; message: s
  * Lienzo editable de una feature con guardado manual (botón y Ctrl+S), indicador de cambios
  * pendientes y manejo de 409 (recargar la versión del servidor) y 400 (grafo inválido).
  */
-export function FeatureEditor({ featureId, initialGraph }: { featureId: string; initialGraph: WalkieCanvasGraphV0 }) {
+export function FeatureEditor({
+  featureId,
+  initialGraph,
+  catalog,
+}: {
+  featureId: string;
+  initialGraph: WalkieCanvasGraphV0;
+  /** Catálogo de la app para los nodos `ref` y la paleta. */
+  catalog?: CanvasCatalog;
+}) {
   const [store] = useState(() => {
     const s = createGraphStore();
     s.getState().loadGraph(initialGraph);
@@ -104,7 +114,7 @@ export function FeatureEditor({ featureId, initialGraph }: { featureId: string; 
         </div>
       )}
       <div className="feature-canvas">
-        <Canvas key={canvasKey} store={store} />
+        <Canvas key={canvasKey} store={store} catalog={catalog} />
       </div>
     </div>
   );

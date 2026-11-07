@@ -12,35 +12,44 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { StoreApi } from 'zustand/vanilla';
+import type { CatalogItem } from '../api/client';
+import { CatalogContext, effectiveType, type CanvasCatalog } from '../catalog/catalogContext';
 import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
 import { nodeTypes } from '../nodes/nodeTypes';
 import { PropertiesPanel } from '../panel/PropertiesPanel';
 import type { WalkieFlowNode } from '../nodes/PixelNode';
-import type { GraphStore, NodeType } from '../store/graphStore';
+import { defaultEdgeKind, type GraphStore, type NodeType, type Position } from '../store/graphStore';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { useGraphStore } from '../store/useGraphStore';
 import { GRID, palette } from '../theme/palette';
 import { Palette } from './Palette';
-import { PALETTE_MIME, PALETTE_TYPES } from './paletteTypes';
+import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES } from './paletteTypes';
 import './canvas.css';
 
-/** Lienzo de una feature. Todo cambio del grafo pasa por las acciones del store. */
-export function Canvas({ store }: { store: StoreApi<GraphStore> }) {
+const NO_CATALOG: CanvasCatalog = { appId: '', items: {} };
+
+/**
+ * Lienzo de una feature. Todo cambio del grafo pasa por las acciones del store. `catalog` es el catálogo
+ * de la app: los nodos `ref` lo leen por contexto y la paleta lo ofrece para crear `ref`.
+ */
+export function Canvas({ store, catalog = NO_CATALOG }: { store: StoreApi<GraphStore>; catalog?: CanvasCatalog }) {
   return (
     <GraphStoreProvider store={store}>
-      <ReactFlowProvider>
-        <CanvasInner />
-      </ReactFlowProvider>
+      <CatalogContext.Provider value={catalog}>
+        <ReactFlowProvider>
+          <CanvasInner catalog={catalog} />
+        </ReactFlowProvider>
+      </CatalogContext.Provider>
     </GraphStoreProvider>
   );
 }
 
-function CanvasInner() {
+function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const graphNodes = useGraphStore((s) => s.nodes);
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
-  const { addNode, moveNode, removeNode, connect, removeEdge } = useGraphStore((s) => s);
+  const { addNode, addRef, moveNode, removeNode, connect, removeEdge } = useGraphStore((s) => s);
   const { screenToFlowPosition } = useReactFlow();
   // fitView solo si el lienzo ya trae nodos al montarse: con un lienzo vacío, React Flow
   // ajustaría el zoom al aparecer el primer nodo y los siguientes caerían en otro lugar.
@@ -122,30 +131,52 @@ function CanvasInner() {
   const panelNodeId = single ? (liveNodes[0] ?? null) : null;
   const panelEdgeId = single ? (liveEdges[0] ?? null) : null;
 
-  const onConnect = useCallback((c: Connection) => void connect(c.source, c.target), [connect]);
+  // Un `ref` conecta como su elemento del catálogo (spec catalogo, criterio 9).
+  const onConnect = useCallback(
+    (c: Connection) => {
+      const source = graphNodes[c.source];
+      const target = graphNodes[c.target];
+      const kind =
+        source && target
+          ? defaultEdgeKind(effectiveType(source, catalog.items), effectiveType(target, catalog.items))
+          : undefined;
+      connect(c.source, c.target, kind);
+    },
+    [connect, graphNodes, catalog.items],
+  );
 
   const addAt = useCallback(
-    (type: NodeType, clientX: number, clientY: number) => {
-      const id = addNode(type, screenToFlowPosition({ x: clientX, y: clientY }));
+    (create: (position: Position) => string, clientX: number, clientY: number) => {
+      const id = create(screenToFlowPosition({ x: clientX, y: clientY }));
       setSelectedNodes(new Set([id]));
     },
-    [addNode, screenToFlowPosition],
+    [screenToFlowPosition],
   );
 
   function onDrop(event: DragEvent) {
     event.preventDefault();
     const type = event.dataTransfer.getData(PALETTE_MIME) as NodeType;
-    if (PALETTE_TYPES.includes(type)) addAt(type, event.clientX, event.clientY);
+    const item = catalog.items[event.dataTransfer.getData(PALETTE_REF_MIME)];
+    if (PALETTE_TYPES.includes(type)) addAt((p) => addNode(type, p), event.clientX, event.clientY);
+    else if (item) addAt((p) => addRef(item, p), event.clientX, event.clientY);
   }
 
-  function onPaletteClick(type: NodeType) {
+  function addAtCenter(create: (position: Position) => string) {
     const pane = document.querySelector('.canvas-flow')?.getBoundingClientRect();
-    addAt(type, pane ? pane.left + pane.width / 2 : 0, pane ? pane.top + pane.height / 2 : 0);
+    addAt(create, pane ? pane.left + pane.width / 2 : 0, pane ? pane.top + pane.height / 2 : 0);
   }
+
+  const paletteCatalog = catalog.appId
+    ? {
+        appId: catalog.appId,
+        items: Object.values(catalog.items),
+        onAddRef: (item: CatalogItem) => addAtCenter((p) => addRef(item, p)),
+      }
+    : undefined;
 
   return (
     <div className="canvas">
-      <Palette onAdd={onPaletteClick} />
+      <Palette onAdd={(type) => addAtCenter((p) => addNode(type, p))} catalog={paletteCatalog} />
       <div
         className="canvas-flow"
         onDragOver={(e) => {
@@ -162,7 +193,8 @@ function CanvasInner() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeDoubleClick={(_, node) => setEditingId(node.id)}
+          // El título de un `ref` es el de su elemento: se edita en el catálogo (criterio 8).
+          onNodeDoubleClick={(_, node) => node.type !== 'ref' && setEditingId(node.id)}
           zoomOnDoubleClick={false}
           connectOnClick={false}
           snapToGrid
