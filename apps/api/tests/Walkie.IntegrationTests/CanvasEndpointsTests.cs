@@ -114,6 +114,7 @@ public sealed class CanvasEndpointsTests(WalkieApiFactory factory)
     [InlineData("""{"schemaVersion":1,"version":0,"nodes":{},"edges":{},"layout":{}}""", "/schemaVersion")]
     [InlineData("""{"schemaVersion":0,"version":0,"nodes":{},"edges":{},"layout":{},"extra":true}""", "/")]
     [InlineData("""[]""", "/")]
+    [InlineData("""{"schemaVersion":0,"version":0,"nodes":{"a":{"id":"a","type":"ref","title":"x"}},"edges":{},"layout":{}}""", "/nodes/a")]
     public async Task Grafo_que_no_cumple_el_schema_responde_400(string body, string errorPath)
     {
         using var client = factory.CreateAuthenticatedClient();

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-catalog-item.schema.json",
+  "title": "Walkie catalog item v0",
+  "description": "Elemento reutilizable del catálogo de una app (ADR-0002). Los lienzos lo usan con nodos ref (catalogId).",
+  "type": "object",
+  "required": ["id", "appId", "type", "title", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid", "description": "Generado por la API" },
+    "appId": { "type": "string", "format": "uuid" },
+    "type": { "enum": ["api", "service", "database"] },
+    "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "description": { "type": "string", "maxLength": 2000 },
+    "http": {
+      "type": "object",
+      "description": "Contrato básico (solo type api)",
+      "additionalProperties": false,
+      "properties": {
+        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+        "path": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "version": { "type": "integer", "minimum": 1, "description": "Versión para concurrencia optimista" }
+  }
+}

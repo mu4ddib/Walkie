@@ -17,13 +17,15 @@ public static class AppsModule
         services.AddDbContext<AppsDbContext>(options => options.UseNpgsql(connectionString, ConfigureNpgsql));
         services.AddValidatorsFromAssemblyContaining<AppsDbContext>(includeInternalTypes: true);
         services.AddScoped<AppsHandlers>();
+        services.AddScoped<CatalogHandlers>();
         services.AddScoped<Contracts.IFeatureDirectory, FeatureDirectory>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 
-    /// <summary>Endpoints <c>/api/apps</c> y <c>/api/apps/{appId}/features</c>.</summary>
-    public static IEndpointRouteBuilder MapAppsModule(this IEndpointRouteBuilder routes) => routes.MapAppsEndpoints();
+    /// <summary>Endpoints <c>/api/apps</c>, <c>/api/apps/{appId}/features</c>, <c>/api/apps/{appId}/catalog</c> y <c>/api/catalog</c>.</summary>
+    public static IEndpointRouteBuilder MapAppsModule(this IEndpointRouteBuilder routes) =>
+        routes.MapAppsEndpoints().MapCatalogEndpoints();
 
     /// <summary>Aplica las migraciones pendientes del módulo.</summary>
     public static async Task MigrateAppsDatabaseAsync(this IServiceProvider services, CancellationToken cancellationToken = default)

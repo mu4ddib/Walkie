@@ -1,6 +1,6 @@
 namespace Walkie.Modules.Apps.Domain;
 
-/// <summary>Aplicación documentada. Contiene features (y, en la fase 2, el catálogo).</summary>
+/// <summary>Aplicación documentada. Contiene features y su catálogo (<see cref="CatalogItem"/>).</summary>
 internal sealed class App
 {
     public const int NameMaxLength = 120;
