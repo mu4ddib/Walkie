@@ -1,0 +1,56 @@
+/* Panel de propiedades, estilo pixel v1: bordes duros, sin gradientes. */
+
+.properties-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-left: 4px solid var(--ink);
+  background: var(--paper);
+  overflow: auto;
+}
+
+.properties-panel h3 {
+  font-family: var(--font-title);
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+
+.panel-help {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.8;
+}
+
+.panel-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panel-field label {
+  font-size: 16px;
+}
+
+.panel-field input,
+.panel-field textarea,
+.panel-field select {
+  font: inherit;
+  font-size: 18px;
+  padding: 2px 4px;
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.panel-field textarea {
+  resize: vertical;
+}
+
+.panel-field input:focus,
+.panel-field textarea:focus,
+.panel-field select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}

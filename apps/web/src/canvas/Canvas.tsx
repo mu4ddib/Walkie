@@ -15,6 +15,7 @@ import type { StoreApi } from 'zustand/vanilla';
 import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
 import { nodeTypes } from '../nodes/nodeTypes';
+import { PropertiesPanel } from '../panel/PropertiesPanel';
 import type { WalkieFlowNode } from '../nodes/PixelNode';
 import type { GraphStore, NodeType } from '../store/graphStore';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
@@ -107,6 +108,11 @@ function CanvasInner() {
     [removeEdge],
   );
 
+  // Panel de propiedades: solo con un único elemento seleccionado (nodo o conexión).
+  const single = selectedNodes.size + selectedEdges.size === 1;
+  const panelNodeId = single ? ([...selectedNodes][0] ?? null) : null;
+  const panelEdgeId = single ? ([...selectedEdges][0] ?? null) : null;
+
   const onConnect = useCallback((c: Connection) => void connect(c.source, c.target), [connect]);
 
   const addAt = useCallback(
@@ -161,6 +167,7 @@ function CanvasInner() {
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>
+      <PropertiesPanel nodeId={panelNodeId} edgeId={panelEdgeId} />
     </div>
   );
 }
