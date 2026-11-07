@@ -20,6 +20,9 @@ export const INPUT_NAME_MAX_LENGTH = 60;
 /** Máximo del schema para `edge.label` y `edge.when`. */
 export const EDGE_TEXT_MAX_LENGTH = 60;
 
+/** Tipos que pueden vivir en el catálogo de la app (ADR-0002). */
+export const CATALOG_NODE_TYPES: readonly NodeType[] = ['api', 'service', 'database'];
+
 export const INPUT_TYPES: readonly InputType[] = ['string', 'number', 'boolean', 'date', 'enum', 'file'];
 export const HTTP_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
@@ -136,6 +139,11 @@ export interface GraphActions {
   addNode(type: NodeType, position: Position): string;
   /** Nodo `ref` a un elemento del catálogo; `title` guarda su título como último conocido. */
   addRef(item: { id: string; title: string }, position: Position): string;
+  /**
+   * "Mover al catálogo" (spec catalogo, criterio 10b): el nodo pasa a ser un `ref` a `catalogId`
+   * con el mismo id, posición y conexiones. Solo para `api`, `service` y `database`.
+   */
+  convertToRef(id: string, catalogId: string): void;
   moveNode(id: string, position: Position): void;
   renameNode(id: string, title: string): void;
   /** Título, descripción, expresión y `http` (método y ruta). */
@@ -243,6 +251,12 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         dirty: true,
       }));
       return id;
+    },
+
+    convertToRef: (id, catalogId) => {
+      const node = get().nodes[id];
+      if (!node || !CATALOG_NODE_TYPES.includes(node.type)) return;
+      set((s) => ({ nodes: { ...s.nodes, [id]: { id, type: 'ref', title: node.title, catalogId } }, dirty: true }));
     },
 
     moveNode: (id, position) => {

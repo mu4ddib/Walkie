@@ -6,12 +6,15 @@ import {
   HTTP_METHODS,
   TEXT_MAX_LENGTH,
   TITLE_MAX_LENGTH,
+  CATALOG_NODE_TYPES,
   type EdgeKind,
   type HttpMethod,
 } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { InputsSection, RuleUsages } from './InputsSection';
+import { MoveToCatalog } from './MoveToCatalog';
 import { RefPanel } from './RefPanel';
+import { useCanvasCatalog } from '../catalog/catalogContext';
 import { TextField } from './TextField';
 import './panel.css';
 
@@ -37,6 +40,7 @@ function NodePanel({ id }: { id: string }) {
   const node = useGraphStore((s) => s.nodes[id]);
   const updateNode = useGraphStore((s) => s.updateNode);
   const methodId = useId();
+  const { appId } = useCanvasCatalog();
   if (!node) return null;
   if (node.type === 'ref') return <RefPanel node={node} />;
   const meta = NODE_LABELS[node.type];
@@ -99,6 +103,8 @@ function NodePanel({ id }: { id: string }) {
           />
         </>
       )}
+      {/* Solo con catálogo (lienzo de una app): el botón llama a la API. */}
+      {appId && CATALOG_NODE_TYPES.includes(node.type) && <MoveToCatalog appId={appId} node={node} />}
     </>
   );
 }

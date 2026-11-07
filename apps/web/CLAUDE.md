@@ -8,7 +8,7 @@ apps/web/src/
   nodes/         # PixelNode.tsx (caja común + resumen del contenido), nodeContent.ts (límites y textos del resumen), nodeMeta.ts (etiqueta/glifo por tipo), nodeTypes.ts (registro)
   catalog/       # catalogContext.ts: catálogo de la app visto desde el lienzo (contexto, refTarget, effectiveType)
   edges/         # KindEdge.tsx (tipo, label y [when] + selector de tipo), edgeMeta.ts, edgeTypes.ts
-  panel/         # PropertiesPanel.tsx (panel lateral de nodo o conexión), RefPanel.tsx (ref en solo lectura), InputsSection.tsx (inputs de pantalla + "Usada por" de una regla), TextField.tsx (campo con borrador local y `validate`), panel.css
+  panel/         # PropertiesPanel.tsx (panel lateral de nodo o conexión), RefPanel.tsx (ref en solo lectura), MoveToCatalog.tsx ("Mover al catálogo"), InputsSection.tsx (inputs de pantalla + "Usada por" de una regla), TextField.tsx (campo con borrador local y `validate`), panel.css
   store/         # graphStore.ts (estado + acciones), GraphStoreProvider + useGraphStore (contexto para nodos/conexiones)
   tours/         # modo tour y personaje guía
   api/           # cliente HTTP (client.ts) + hooks de TanStack Query (hooks.ts)
@@ -25,7 +25,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 
 - Estado del grafo normalizado: `nodes: Record<id, Node>`, `edges: Record<id, Edge>`, `layout: Record<id, {x,y}>`.
 - Solo las acciones del store modifican el grafo. Esto permite migrar a Yjs sin tocar componentes.
-- Store: `src/store/graphStore.ts`. Un store por lienzo con `createGraphStore()`; los componentes leen con `useGraph(store, selector)` y guardan con `toGraph(state)`. Acciones: `loadGraph`, `addNode`, `addRef` (nodo `ref` con `catalogId` y el título como último conocido), `moveNode`, `renameNode`, `updateNode` (título, descripción, expresión, `http`), `addInput`/`updateInput`/`removeInput` (nombres únicos —`inputNameError` dice por qué no—, `options` solo en `enum`, `ruleIds` solo a reglas existentes), `removeNode` (borra conexiones, layout y, si es una regla, sus `ruleIds`), `connect` (tipo por defecto según el par; otros pares → `uses`), `setEdgeKind`, `updateEdge` (tipo, `label`, `when`), `removeEdge`, `markSaved`. Un texto vacío quita el campo opcional (así el grafo recarga idéntico) y los textos se recortan al límite del schema. Toda acción que cambia algo pone `dirty: true`; las que no cambian nada no lo tocan.
+- Store: `src/store/graphStore.ts`. Un store por lienzo con `createGraphStore()`; los componentes leen con `useGraph(store, selector)` y guardan con `toGraph(state)`. Acciones: `loadGraph`, `addNode`, `addRef` (nodo `ref` con `catalogId` y el título como último conocido), `convertToRef` (api/service/database → `ref` con el mismo id, posición y conexiones), `moveNode`, `renameNode`, `updateNode` (título, descripción, expresión, `http`), `addInput`/`updateInput`/`removeInput` (nombres únicos —`inputNameError` dice por qué no—, `options` solo en `enum`, `ruleIds` solo a reglas existentes), `removeNode` (borra conexiones, layout y, si es una regla, sus `ruleIds`), `connect` (tipo por defecto según el par; otros pares → `uses`), `setEdgeKind`, `updateEdge` (tipo, `label`, `when`), `removeEdge`, `markSaved`. Un texto vacío quita el campo opcional (así el grafo recarga idéntico) y los textos se recortan al límite del schema. Toda acción que cambia algo pone `dirty: true`; las que no cambian nada no lo tocan.
 - Tipos generados desde los JSON Schema (`pnpm gen:schema` → `src/schema/walkie-graph.ts` y `walkie-catalog-item.ts`; un schema nuevo se agrega a `targets` en `scripts/gen-schema-types.mjs`); si falta un campo, se cambia el schema primero. CI falla si los tipos no están al día (`pnpm check:schema`).
 - URL de la API: `VITE_API_URL` (lee el `.env` de la raíz del repo).
 - Auth (ADR-0003): `react-oidc-context`; `AuthGate` protege la app y las llamadas a la API llevan `auth.user.access_token`. En pruebas se mockea `useAuth`.
@@ -69,6 +69,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 - **Mutaciones y formularios con `key={version}`**: si el formulario se monta de nuevo al guardar (nueva versión), una mutación creada dentro pierde `isSuccess`/`error`. Créala en el padre y pásala (ver `ItemDetail` en `CatalogPage.tsx`); al recargar tras un 409, `update.reset()`.
 - **Respuestas 204**: `request()` de `api/client.ts` devuelve `undefined` sin leer el cuerpo.
 - **`Link` fuera de un router**: la paleta con catálogo y el panel de un `ref` usan `<Link>`; en Vitest envuélvelos en `<MemoryRouter>`.
+- **Componentes del panel que llaman a la API** (`MoveToCatalog`): solo se montan con catálogo en el contexto (`appId`), así las pruebas del panel sin `QueryClientProvider` siguen funcionando.
 - **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
 - **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
 
