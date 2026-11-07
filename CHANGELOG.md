@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Spec y plan de `panel-propiedades` (fase 2, feature 1 de 3), con issues por tarea.
 - E2E con Playwright del flujo completo (lienzo-base, tarea 8): crear, dibujar, grilla de 8 px, tipos de conexión, editar, borrar, guardar, recargar idéntico y conflicto 409 con dos pestañas, contra API, Keycloak y Postgres reales; job `e2e` en CI. Cierra la fase 1.
 - Guardar y recargar el lienzo (lienzo-base, tarea 7): botón Guardar y Ctrl+S, indicador "Sin guardar"/"Guardado", aviso al salir con cambios, 409 con opción de recargar la versión del servidor y 400 con el motivo.
 - Lienzo editable (lienzo-base, tarea 6): paleta lateral (arrastrar o clic) con `screen`, `api` y `database`; nodos pixel v1 con color por tipo; conexiones en escalones con etiqueta y selector de tipo; editar el título con doble clic (Enter confirma, Escape cancela); borrar con Supr.
