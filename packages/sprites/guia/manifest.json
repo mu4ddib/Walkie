@@ -1,0 +1,7 @@
+{
+  "$comment": "Walkie, el guía de los tours (PixelLab + Pixelorama). Hojas horizontales PNG con fondo transparente; los pies tocan la línea baselineY en todos los cuadros.",
+  "frame": { "width": 64, "height": 64, "baselineY": 54 },
+  "animations": {
+    "idle": { "file": "idle.png", "frames": 4, "fps": 6, "facing": "south", "loop": true }
+  }
+}
