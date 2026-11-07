@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Guardar y cargar el lienzo (lienzo-base, tarea 3): `GET/PUT /api/features/{featureId}/canvas` con validación contra `packages/schema` e integridad del grafo (400), concurrencia optimista (409 con `currentVersion`) y 404 si la feature no existe.
 - Endpoints de apps y features (lienzo-base, tarea 2): `POST/GET /api/apps`, `GET /api/apps/{appId}`, `POST/GET /api/apps/{appId}/features`, con FluentValidation (400 `ValidationProblemDetails`), 404 y 401.
 - Documentación de trampas conocidas por app y guía de sesiones en la nube en `docs/workflow.md`.
 - Persistencia (lienzo-base, tarea 1): módulos `Walkie.Modules.Apps` y `Walkie.Modules.Canvas` con EF Core + Npgsql, schema por módulo, migración inicial (`apps`, `features`, `canvases` con `graph jsonb` y `version`), migraciones al arrancar en Development y pruebas con Postgres real (Testcontainers).

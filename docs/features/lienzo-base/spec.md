@@ -45,7 +45,8 @@ Todos los endpoints requieren autenticación (401 sin token).
 - `POST /api/apps` `{ name }` → 201 · `GET /api/apps` · `GET /api/apps/{appId}`
 - `POST /api/apps/{appId}/features` `{ name }` → 201 · `GET /api/apps/{appId}/features`
 - `GET /api/features/{featureId}/canvas` → el grafo (`WalkieGraph`, con su `version`). Una feature nueva devuelve un grafo vacío con `version: 0`.
-- `PUT /api/features/{featureId}/canvas` con el grafo → 200 con el grafo guardado y `version` + 1 | 409 si `version` no coincide con la guardada | 400 si no cumple el schema.
+- `PUT /api/features/{featureId}/canvas` con el grafo → 200 con el grafo guardado y `version` + 1 | 409 si `version` no coincide con la guardada (`ProblemDetails` con `currentVersion`) | 400 si no cumple el schema o su integridad | 404 si la feature no existe.
+- Integridad (lo que el schema no expresa): la clave de cada nodo y conexión es igual a su `id`; `from`/`to` y las claves de `layout` apuntan a nodos existentes. Los errores van en `errors` por ruta JSON (ej. `/edges/e1/to`).
 
 La versión viaja dentro del grafo (`version` ya es obligatorio en el schema), así que no hace falta un sobre `{ version, graph }`.
 
