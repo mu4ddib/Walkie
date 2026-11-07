@@ -50,7 +50,7 @@
           "enum": ["actor", "screen", "rule", "api", "service", "database", "ref", "portal"]
         },
         "title": { "type": "string", "maxLength": 120 },
-        "description": { "type": "string" },
+        "description": { "type": "string", "maxLength": 2000 },
         "assetId": { "type": "string", "description": "Imagen o diseño adjunto (screen)" },
         "inputs": {
           "type": "array",
@@ -58,14 +58,19 @@
             "type": "object",
             "required": ["name", "type"],
             "properties": {
-              "name": { "type": "string" },
+              "name": { "type": "string", "minLength": 1, "maxLength": 60 },
               "type": { "enum": ["string", "number", "boolean", "date", "enum", "file"] },
               "required": { "type": "boolean" },
+              "options": {
+                "type": "array",
+                "description": "Opciones de un input enum (solo para type enum)",
+                "items": { "type": "string", "minLength": 1, "maxLength": 60 }
+              },
               "ruleIds": { "type": "array", "items": { "$ref": "#/$defs/id" } }
             }
           }
         },
-        "expression": { "type": "string", "description": "Regla en lenguaje natural o pseudo-código (rule)" },
+        "expression": { "type": "string", "maxLength": 2000, "description": "Regla en lenguaje natural o pseudo-código (rule)" },
         "http": {
           "type": "object",
           "description": "Contrato (api)",
@@ -89,8 +94,8 @@
         "from": { "$ref": "#/$defs/id" },
         "to": { "$ref": "#/$defs/id" },
         "kind": { "enum": ["navigation", "request", "response", "uses", "reads", "writes"] },
-        "label": { "type": "string" },
-        "when": { "type": "string", "description": "Condición, ej. código de respuesta 200 o 404" }
+        "label": { "type": "string", "maxLength": 60 },
+        "when": { "type": "string", "maxLength": 60, "description": "Condición, ej. código de respuesta 200 o 404" }
       }
     },
     "tour": {

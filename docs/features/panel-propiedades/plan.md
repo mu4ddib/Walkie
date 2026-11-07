@@ -16,7 +16,7 @@ Basado en `spec.md` (aprobada el 2026-11-07). Issue padre: #19.
 
 Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1; la 3 y la 4 dependen de la 2; la 5 depende de la 4; la 6 cierra.
 
-1. [ ] (#20) Schema y validación en la API: límites y `input.options` en el schema, tipos regenerados; `GraphValidator` valida `ruleIds` (existe y es `rule`), nombres de input únicos y `options` solo en `enum`. Pruebas de integración (criterio 13).
+1. [x] (#20) Schema y validación en la API: límites y `input.options` en el schema, tipos regenerados; `GraphValidator` valida `ruleIds` (existe y es `rule`), nombres de input únicos y `options` solo en `enum`. Pruebas de integración (criterio 13).
 2. [ ] (#21) Web, store: `updateNode` (título, descripción, expresión, `http`), `addInput`/`updateInput`/`removeInput` (nombres únicos, `options` solo en `enum`), `updateEdge` (`label`, `when`); `removeNode` de una regla limpia los `ruleIds`; tipos por defecto de los pares nuevos. Pruebas en Vitest (criterios 2, 10, 11).
 3. [ ] (#22) Web, lienzo: `actor`, `rule` y `service` en la paleta; contenido dentro de los nodos (inputs con `*`, expresión, `MÉTODO /ruta`, "+N más"); etiqueta y condición sobre las conexiones (criterios 1, 5, 6 en el nodo, 8c).
 4. [ ] (#23) Web, panel de propiedades: panel lateral para un nodo (título, descripción, expresión, método y ruta) o una conexión (tipo, etiqueta, condición); ayuda con cero o varios seleccionados (criterios 3 a 7).
@@ -31,4 +31,4 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 ## Estado
 
-Última actualización: 2026-11-07 — spec aprobada, plan e issues creados. Sigue: tarea 1.
+Última actualización: 2026-11-07 — tarea 1 hecha (schema con límites y `input.options`, `GraphValidator` valida inputs y reglas). Sigue: tarea 2.

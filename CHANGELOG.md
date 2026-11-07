@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Schema y validación de propiedades (panel-propiedades, tarea 1): límites en `description`, `expression` (2000), `input.name` y `edge.label/when` (60); `input.options` para inputs `enum`. La API responde 400 si un input apunta a una regla que no existe o a un nodo que no es `rule`, repite nombre en el nodo o tiene `options` sin ser `enum`.
 - Spec y plan de `panel-propiedades` (fase 2, feature 1 de 3), con issues por tarea.
 - E2E con Playwright del flujo completo (lienzo-base, tarea 8): crear, dibujar, grilla de 8 px, tipos de conexión, editar, borrar, guardar, recargar idéntico y conflicto 409 con dos pestañas, contra API, Keycloak y Postgres reales; job `e2e` en CI. Cierra la fase 1.
 - Guardar y recargar el lienzo (lienzo-base, tarea 7): botón Guardar y Ctrl+S, indicador "Sin guardar"/"Guardado", aviso al salir con cambios, 409 con opción de recargar la versión del servidor y 400 con el motivo.
