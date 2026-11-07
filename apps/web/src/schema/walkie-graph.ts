@@ -47,7 +47,7 @@ export interface Node {
   title: string;
   description?: string;
   /**
-   * Imagen o diseño adjunto (screen)
+   * Imagen adjunta (solo screen); id de walkie-asset
    */
   assetId?: string;
   inputs?: {
@@ -80,7 +80,7 @@ export interface Node {
    */
   catalogId?: string;
   /**
-   * Feature destino (portal)
+   * Feature destino de la misma app (portal); en un portal, title guarda su último nombre conocido
    */
   targetFeatureId?: string;
 }

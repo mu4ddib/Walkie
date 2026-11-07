@@ -66,6 +66,8 @@ internal sealed class GraphValidator
             }
 
             InputErrors(node, nodeIds, ruleIds, errors);
+            OnlyOn(node, "assetId", "screen", "Solo las pantallas tienen imagen.", errors);
+            OnlyOn(node, "targetFeatureId", "portal", "Solo los portales tienen feature destino.", errors);
         }
 
         foreach (var edge in graph.GetProperty("edges").EnumerateObject())
@@ -93,6 +95,15 @@ internal sealed class GraphValidator
         }
 
         return errors;
+    }
+
+    /// <summary>La propiedad solo puede estar en nodos del tipo dado.</summary>
+    private static void OnlyOn(JsonProperty node, string property, string type, string message, Dictionary<string, string[]> errors)
+    {
+        if (node.Value.TryGetProperty(property, out _) && node.Value.GetProperty("type").GetString() != type)
+        {
+            errors[$"/nodes/{node.Name}/{property}"] = [message];
+        }
     }
 
     /// <summary>Inputs de un nodo: nombres únicos, <c>options</c> solo en <c>enum</c> y <c>ruleIds</c> a nodos <c>rule</c>.</summary>

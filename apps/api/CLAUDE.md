@@ -26,7 +26,7 @@ Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, 
 - Minimal APIs agrupadas por módulo (`MapGroup("/api/apps")`).
 - Validación con FluentValidation; errores como `ProblemDetails` (RFC 9457).
 - EF Core + Npgsql; el grafo del lienzo se guarda en una columna `jsonb`, con columna `version` (int) para concurrencia optimista: un guardado con versión vieja responde **409 Conflict**.
-- Los DTOs del grafo deben coincidir con `packages/schema/walkie-graph.schema.json`, y los del catálogo con `walkie-catalog-item.schema.json` (los validadores de FluentValidation repiten sus límites).
+- Los DTOs del grafo deben coincidir con `packages/schema/walkie-graph.schema.json`, los del catálogo con `walkie-catalog-item.schema.json` y los de imágenes con `walkie-asset.schema.json` (los validadores de FluentValidation repiten sus límites).
 - Cada endpoint nuevo: prueba de integración + aparece en OpenAPI.
 - Logs con Serilog; trazas con OpenTelemetry.
 - Auth (ADR-0003): todo endpoint exige usuario autenticado por defecto; los públicos llevan `.AllowAnonymous()`. El usuario es el claim `sub`. En pruebas, `WalkieApiFactory.CreateAuthenticatedClient()` firma tokens locales; no hace falta Keycloak.
@@ -34,8 +34,8 @@ Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, 
 ## Persistencia
 
 - Cada módulo tiene su `DbContext` **internal**, su schema de Postgres (`apps`, `canvas`, `files`) y sus migraciones en `Persistence/Migrations`. Sin FK entre módulos.
-- El módulo expone solo `Add<Módulo>Module(connectionString)`, `Map<Módulo>Module()`, `Migrate<Módulo>DatabaseAsync()` y, si otro módulo lo necesita, una interfaz en `Contracts/` (ej. `IFeatureDirectory` e `ICatalogDirectory` de Apps, que usa Canvas). Si Apps necesita algo que solo sabe Canvas, Apps define la interfaz y Canvas la implementa (`ICatalogUsage`): así no hay referencias en ciclo.
-- El schema del grafo se embebe en `Walkie.Modules.Canvas` desde `packages/schema/` (no hay copia): `GraphValidator` lo usa para el 400 y suma la integridad que el schema no expresa (claves = ids, conexiones y layout a nodos existentes, `ruleIds` a nodos `rule`, nombres de input únicos, `options` solo en `enum`). Lo que necesita la base (cada `catalogId` de un `ref` es de la app de la feature) lo valida `CanvasHandlers` después.
+- El módulo expone solo `Add<Módulo>Module(connectionString)`, `Map<Módulo>Module()`, `Migrate<Módulo>DatabaseAsync()` y, si otro módulo lo necesita, una interfaz en `Contracts/` (ej. `IFeatureDirectory` e `ICatalogDirectory` de Apps e `IAssetDirectory` de Files, que usa Canvas; Files usa `IAppDirectory`). Dependencias: Canvas → Apps y Files; Files → Apps. Si Apps necesita algo que solo sabe Canvas, Apps define la interfaz y Canvas la implementa (`ICatalogUsage`): así no hay referencias en ciclo.
+- El schema del grafo se embebe en `Walkie.Modules.Canvas` desde `packages/schema/` (no hay copia): `GraphValidator` lo usa para el 400 y suma la integridad que el schema no expresa (claves = ids, conexiones y layout a nodos existentes, `ruleIds` a nodos `rule`, nombres de input únicos, `options` solo en `enum`, `assetId` solo en `screen`, `targetFeatureId` solo en `portal`). Lo que necesita la base (`catalogId`, `assetId` y `targetFeatureId` existen y son de la app de la feature) lo valida `CanvasHandlers.ReferenceErrorsAsync` después.
 - En Development la API aplica las migraciones al arrancar (`Database:MigrateOnStartup`); en producción va en `false`.
 - Crear una migración (desde la raíz, tras `dotnet tool restore`):
   `dotnet ef migrations add <Nombre> --project apps/api/src/Walkie.Modules.<Módulo> --startup-project apps/api/src/Walkie.Api --context <Módulo>DbContext --output-dir Persistence/Migrations`
@@ -56,7 +56,7 @@ Ya costaron tiempo; no las repitas.
 - **`jsonb` reordena claves y quita espacios**: compara grafos por contenido (`JsonElement.DeepEquals`), nunca como texto.
 - **Auth por defecto**: sin token, cualquier ruta (incluso inexistente) responde 401, no 404. Las pruebas de 404 van con `CreateAuthenticatedClient()`.
 - **Cuerpo ausente o JSON inválido** lanza `BadHttpRequestException`; `Program.cs` lo mapea a 400 con `StatusCodeSelector`. No lo quites.
-- **JsonSchema.Net 9**: `schema.Evaluate(...)` recibe `JsonElement` (no `JsonNode`) y `results.Details` puede ser `null`.
+- **JsonSchema.Net 9**: `schema.Evaluate(...)` recibe `JsonElement` (no `JsonNode`) y `results.Details` puede ser `null`. `format` (ej. `uuid`) es solo anotación: los ids se validan con `Guid.TryParse` en la integridad.
 - **Servicios compartidos entre módulos** (ej. `TimeProvider`): regístralos con `TryAddSingleton` para no duplicarlos.
 - **Campos opcionales en las respuestas**: el schema no admite `null`; los records llevan `[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]` para omitirlos (ver `CatalogContracts.cs`).
 - **Concurrencia en entidades EF** (ej. `CatalogItem.Version`): compara la versión del request antes de guardar y marca la columna con `IsConcurrencyToken()`; si dos guardados leen la misma versión, el segundo lanza `DbUpdateConcurrencyException` → 409.

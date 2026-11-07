@@ -13,8 +13,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - name: Validar JSON Schema del grafo
-        run: npx --yes ajv-cli@5 compile --spec=draft2020 -s packages/schema/walkie-graph.schema.json
+      - name: Validar los JSON Schema
+        # ajv-formats: sin él, ajv en modo estricto rechaza `format: uuid`.
+        run: |
+          for schema in packages/schema/*.schema.json; do
+            npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv compile --spec=draft2020 -c ajv-formats -s "$schema"
+          done
 
   api:
     runs-on: ubuntu-latest

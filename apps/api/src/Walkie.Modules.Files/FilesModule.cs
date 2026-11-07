@@ -20,6 +20,7 @@ public static class FilesModule
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.Section));
         services.AddSingleton<IFileStorage, S3FileStorage>();
         services.AddScoped<AssetHandlers>();
+        services.AddScoped<Contracts.IAssetDirectory, AssetDirectory>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

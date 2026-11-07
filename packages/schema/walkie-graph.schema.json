@@ -51,7 +51,7 @@
         },
         "title": { "type": "string", "maxLength": 120 },
         "description": { "type": "string", "maxLength": 2000 },
-        "assetId": { "type": "string", "description": "Imagen o diseño adjunto (screen)" },
+        "assetId": { "type": "string", "format": "uuid", "description": "Imagen adjunta (solo screen); id de walkie-asset" },
         "inputs": {
           "type": "array",
           "items": {
@@ -82,7 +82,7 @@
           }
         },
         "catalogId": { "type": "string", "minLength": 1, "description": "Elemento del catálogo de la app (ref)" },
-        "targetFeatureId": { "type": "string", "description": "Feature destino (portal)" }
+        "targetFeatureId": { "type": "string", "format": "uuid", "description": "Feature destino de la misma app (portal); en un portal, title guarda su último nombre conocido" }
       },
       "if": { "properties": { "type": { "const": "ref" } } },
       "then": { "required": ["catalogId"], "description": "En un ref, title guarda el último título conocido del elemento" }
