@@ -1,7 +1,7 @@
 # Spec: Imágenes en pantallas y nodos `portal`
 
 - Issue padre: #47
-- Estado: aprobada (2026-11-07)
+- Estado: implementada (2026-11-07), verificada por `apps/web/e2e/imagenes-portal.spec.ts`
 - Fase 2 ("cajas ricas"), feature 3 de 3. Las otras dos (panel-propiedades, catalogo) están implementadas.
 
 ## Objetivo
@@ -16,21 +16,21 @@ Desarrollador que documenta un flujo y quiere que quien lo lea vea cómo es cada
 
 **Imágenes en pantallas**
 
-- [ ] 1. Dado un nodo `screen` seleccionado, cuando subo una imagen desde el panel (PNG, JPEG o WebP, hasta 5 MB), entonces el nodo muestra su miniatura y el lienzo queda "Sin guardar".
-- [ ] 2. Dado el panel de subida, entonces muestra el aviso "No subas capturas con datos reales de clientes" (CLAUDE.md: nada de datos reales).
-- [ ] 3. Dado un archivo de otro tipo o de más de 5 MB, cuando lo elijo, entonces la UI lo rechaza con el motivo y la API también (400).
-- [ ] 4. Dada una pantalla con imagen, cuando hago clic en la miniatura del panel, entonces la veo en grande; puedo reemplazarla o quitarla.
-- [ ] 5. Dado un lienzo con imágenes, cuando guardo y recargo, entonces las pantallas muestran las mismas imágenes.
-- [ ] 6. Dado un grafo con un `assetId` que no existe o que es de otra app, cuando la API lo recibe, entonces responde 400 en `/nodes/{id}/assetId`.
+- [x] 1. Dado un nodo `screen` seleccionado, cuando subo una imagen desde el panel (PNG, JPEG o WebP, hasta 5 MB), entonces el nodo muestra su miniatura y el lienzo queda "Sin guardar".
+- [x] 2. Dado el panel de subida, entonces muestra el aviso "No subas capturas con datos reales de clientes" (CLAUDE.md: nada de datos reales).
+- [x] 3. Dado un archivo de otro tipo o de más de 5 MB, cuando lo elijo, entonces la UI lo rechaza con el motivo y la API también (400).
+- [x] 4. Dada una pantalla con imagen, cuando hago clic en la miniatura del panel, entonces la veo en grande; puedo reemplazarla o quitarla.
+- [x] 5. Dado un lienzo con imágenes, cuando guardo y recargo, entonces las pantallas muestran las mismas imágenes.
+- [x] 6. Dado un grafo con un `assetId` que no existe o que es de otra app, cuando la API lo recibe, entonces responde 400 en `/nodes/{id}/assetId`.
 
 **Nodos `portal`**
 
-- [ ] 7. Dado un lienzo, cuando agrego un `portal` desde la paleta, entonces el panel me pide la feature destino (solo features de la misma app, sin la actual); el nodo muestra "→ Nombre de la feature".
-- [ ] 8. Dado un `portal` con destino, cuando uso "Abrir" (botón del panel o doble clic en el nodo), entonces voy al lienzo destino; si hay cambios sin guardar, la UI pide confirmación antes de salir.
-- [ ] 9. Dado un `portal` sin destino, entonces el nodo muestra "Sin destino" y "Abrir" está deshabilitado.
-- [ ] 10. Dado que conecto una pantalla a un `portal`, entonces la conexión es `navigation` por defecto.
-- [ ] 11. Dado un grafo con un `targetFeatureId` que no existe o que es de otra app, cuando la API lo recibe, entonces responde 400 en `/nodes/{id}/targetFeatureId`.
-- [ ] 12. Dado un lienzo con portales, cuando guardo y recargo, entonces aparece idéntico.
+- [x] 7. Dado un lienzo, cuando agrego un `portal` desde la paleta, entonces el panel me pide la feature destino (solo features de la misma app, sin la actual); el nodo muestra "→ Nombre de la feature".
+- [x] 8. Dado un `portal` con destino, cuando uso "Abrir" (botón del panel o doble clic en el nodo), entonces voy al lienzo destino; si hay cambios sin guardar, la UI pide confirmación antes de salir.
+- [x] 9. Dado un `portal` sin destino, entonces el nodo muestra "Sin destino" y "Abrir" está deshabilitado.
+- [x] 10. Dado que conecto una pantalla a un `portal`, entonces la conexión es `navigation` por defecto.
+- [x] 11. Dado un grafo con un `targetFeatureId` que no existe o que es de otra app, cuando la API lo recibe, entonces responde 400 en `/nodes/{id}/targetFeatureId`.
+- [x] 12. Dado un lienzo con portales, cuando guardo y recargo, entonces aparece idéntico.
 
 ## Fuera de alcance
 

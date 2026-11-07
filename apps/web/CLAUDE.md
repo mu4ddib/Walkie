@@ -16,7 +16,7 @@ apps/web/src/
   ui/            # piezas reutilizables (NameForm, QueryState)
   routes.tsx     # rutas de react-router: / · /apps/:appId · /apps/:appId/catalog[/:itemId] · /apps/:appId/features/:featureId
   test/          # helpers de pruebas: fakeApi.ts (API falsa en memoria), render.tsx (renderRoute)
-apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-propiedades.spec.ts, catalogo.spec.ts + helpers.ts (login, dropNode, connect, rename, visibleGraph)
+apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-propiedades.spec.ts, catalogo.spec.ts, imagenes-portal.spec.ts (genera su PNG en memoria) + helpers.ts (login, dropNode, connect, rename, visibleGraph)
   theme/         # paleta pixel, fuentes, sprites
   schema/        # tipos generados desde packages/schema (no editar a mano)
 ```
