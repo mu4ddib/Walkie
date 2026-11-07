@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- "Mover al catálogo" (catalogo, tarea 5): en el panel de un nodo `api`, `service` o `database`, crea el elemento con su título, descripción, método y ruta, y convierte el nodo en `ref` con el mismo id, posición y conexiones.
 - Nodos `ref` en el lienzo (catalogo, tarea 4): sección "Catálogo" en la paleta (arrastrar o clic); el nodo se ve como su elemento con marca "catálogo" y datos actuales, o "Elemento no encontrado"; conecta con el tipo de su elemento; panel de solo lectura con "Editar en el catálogo".
 - Página del catálogo (catalogo, tarea 3): `/apps/:appId/catalog`, enlazada desde la app; elementos agrupados por tipo con `MÉTODO /ruta`; crear; editar título, descripción, método y ruta con aviso y recarga si otra persona guardó antes; "Usado en" con enlaces a los lienzos; borrar, o la lista de lienzos que lo impiden.
 - Referencias al catálogo en la API (catalogo, tarea 2): el lienzo valida que cada `ref` apunte a un elemento de su app (400 en `/nodes/{id}/catalogId`); `GET /api/catalog/{itemId}/usages` ("Usado en") y `DELETE /api/catalog/{itemId}` (204, o 409 con las features que lo usan).

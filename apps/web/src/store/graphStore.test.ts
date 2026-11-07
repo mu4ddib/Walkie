@@ -41,6 +41,31 @@ describe('addRef', () => {
   });
 });
 
+describe('convertToRef', () => {
+  it('convierte una API en ref conservando id, posición y conexiones', () => {
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+    const api = s().addNode('api', { x: 240, y: 0 });
+    s().updateNode(api, { title: 'Consultar cliente', description: 'Por documento' });
+    const edge = s().connect(screen, api)!;
+    s().markSaved(1);
+
+    s().convertToRef(api, 'item-1');
+
+    expect(s().nodes[api]).toEqual({ id: api, type: 'ref', title: 'Consultar cliente', catalogId: 'item-1' });
+    expect(s().layout[api]).toEqual({ x: 240, y: 0 });
+    expect(s().edges[edge]).toMatchObject({ from: screen, to: api });
+    expect(s().dirty).toBe(true);
+  });
+
+  it('ignora nodos que no van al catálogo', () => {
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+
+    s().convertToRef(screen, 'item-1');
+
+    expect(s().nodes[screen]?.type).toBe('screen');
+  });
+});
+
 describe('moveNode', () => {
   it('ajusta la posición a múltiplos de 8', () => {
     const id = s().addNode('screen', { x: 0, y: 0 });

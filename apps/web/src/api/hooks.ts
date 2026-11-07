@@ -15,6 +15,7 @@ import {
   listFeatures,
   saveCanvas,
   updateCatalogItem,
+  type CatalogItem,
   type CatalogItemChanges,
   type NewCatalogItem,
 } from './client';
@@ -134,7 +135,11 @@ export function useCreateCatalogItem(appId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (item: NewCatalogItem) => createCatalogItem(token, appId, item),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) }),
+    onSuccess: (created) => {
+      // Se agrega ya a la lista: el lienzo la usa para dibujar el `ref` recién creado sin esperar el refetch.
+      queryClient.setQueryData<CatalogItem[]>(queryKeys.catalog(appId), (items) => items && [...items, created]);
+      return queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+    },
   });
 }
 
