@@ -4,7 +4,7 @@
 
 ```
 apps/web/src/
-  canvas/        # Canvas.tsx (React Flow ↔ store), Palette.tsx (paleta lateral), canvas.css (estilo pixel)
+  canvas/        # FeatureEditor.tsx (carga, guardado, 409/400), Canvas.tsx (React Flow ↔ store), Palette.tsx, canvas.css
   nodes/         # PixelNode.tsx (caja común), nodeMeta.ts (etiqueta/glifo por tipo), nodeTypes.ts (registro)
   edges/         # KindEdge.tsx (etiqueta + selector de tipo), edgeMeta.ts, edgeTypes.ts
   store/         # graphStore.ts (estado + acciones), GraphStoreProvider + useGraphStore (contexto para nodos/conexiones)
@@ -29,6 +29,8 @@ apps/web/src/
 - Estilo pixel art: grilla de 8 px (`snapGrid={[8,8]}`), fuente Press Start 2P para títulos y VT323 para texto, sprites PNG con `image-rendering: pixelated`, paleta en `theme/palette.ts`. Sin sombras difusas ni gradientes.
 - Pruebas: Vitest para el store y la lógica, Playwright para flujos (crear nodo, conectar, guardar, tour).
 - Pruebas de páginas: `installFakeApi({ apps, features })` reemplaza `fetch` con una API en memoria que responde como `apps/api`; `renderRoute('/ruta')` monta las rutas reales con TanStack Query. Mockea `react-oidc-context` y, si no hace falta, `../canvas/Canvas` (React Flow).
+- Editor: `FeaturePage` carga el grafo con `useCanvas` (sin refetch automático: después manda el store) y monta `<FeatureEditor initialGraph>`, que crea el store ya cargado. Guardar: botón o Ctrl+S → `useSaveCanvas` → `markSaved(version, estadoEnviado)` (si hubo cambios durante el guardado, siguen pendientes). 409 → aviso con "Recargar versión del servidor"; 400 → mensaje con la primera ruta de error. Con cambios sin guardar, `beforeunload` avisa al salir.
+- Login: `signinRedirect({ state: currentPath() })` y `onSigninCallback` vuelven a la página de origen (solo rutas internas, `safeReturnTo`).
 - Lienzo: `<Canvas store={store} />`. La selección, el nodo en edición y las medidas son estado de UI local de `Canvas`, no del store. Nodos y conexiones leen y cambian el grafo con `useGraphStore(selector)`.
 - Llamadas a la API: siempre por los hooks de `api/hooks.ts` (ponen el token y las `queryKeys`); los errores llegan como `ApiError` con `userMessage` del `ProblemDetails`.
 
@@ -46,6 +48,10 @@ apps/web/src/
 - **Doble clic en nodos**: usa `onNodeDoubleClick` del `<ReactFlow>` y pasa `editing` por `data`; con `zoomOnDoubleClick={false}`.
 - **Fast refresh (`react-refresh/only-export-components`)**: un `.tsx` solo exporta componentes. Constantes y hooks van en `.ts` aparte (por eso existen `nodeMeta.ts`, `edgeMeta.ts`, `paletteTypes.ts`, `useGraphStore.ts`).
 - **Probar el lienzo con Playwright**: el arrastre desde la paleta es HTML5 DnD; dispáralo con `dispatchEvent('dragstart'|'drop', { dataTransfer })` (ver tarea 8). Conectar: `mouse.down` en `.react-flow__handle-right` y `mouse.up` en `.react-flow__handle-left` del destino.
+- **Layout del editor**: `.feature-editor` es flex en columna y `.feature-canvas` tiene `flex: 1`. Con grid y filas fijas, si el aviso de conflicto no está, el lienzo cae en una fila `auto` y se encoge.
+- **Sesión por pestaña**: el token vive en `sessionStorage`, así que una pestaña nueva muestra "Iniciar sesión" (entra sin contraseña si Keycloak tiene sesión). En Playwright, cada `newPage()` necesita ese clic.
+- **`history.replaceState` no avisa a react-router**: tras cambiarlo, dispara `popstate` (ver `onSigninCallback`).
+- **Pruebas del editor**: mockea `./Canvas` con un lienzo mínimo que lee y cambia el store (React Flow no corre bien en jsdom); `installFakeApi` ya responde `GET/PUT` del lienzo con 409 por versión, y `api.next.putStatus = 400` fuerza un 400.
 - **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
 - **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
 

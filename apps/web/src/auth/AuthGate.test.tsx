@@ -17,7 +17,7 @@ describe('AuthGate', () => {
 
     expect(screen.queryByText('contenido privado')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
-    expect(auth.current.signinRedirect).toHaveBeenCalledOnce();
+    expect(auth.current.signinRedirect).toHaveBeenCalledWith({ state: { returnTo: '/' } });
   });
 
   it('con sesión muestra el contenido', () => {

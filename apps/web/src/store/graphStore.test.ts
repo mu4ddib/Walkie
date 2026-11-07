@@ -175,6 +175,27 @@ describe('loadGraph, markSaved y toGraph', () => {
     expect(toGraph(s()).version).toBe(4);
   });
 
+  it('markSaved mantiene dirty si el grafo cambió mientras se guardaba', () => {
+    s().loadGraph(graph);
+    s().renameNode('n1', 'Enviado');
+    const sent = s();
+
+    s().renameNode('n1', 'Cambio posterior');
+    s().markSaved(4, sent);
+
+    expect(s().version).toBe(4);
+    expect(s().dirty).toBe(true);
+  });
+
+  it('markSaved limpia dirty si el grafo es el enviado', () => {
+    s().loadGraph(graph);
+    s().renameNode('n1', 'Enviado');
+
+    s().markSaved(4, s());
+
+    expect(s().dirty).toBe(false);
+  });
+
   it('las acciones no mutan el objeto cargado', () => {
     const copy = structuredClone(graph);
     s().loadGraph(copy);

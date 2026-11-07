@@ -1,3 +1,5 @@
+import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
+
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:5080';
 
 export interface Health {
@@ -93,5 +95,18 @@ export function createFeature(token: string, appId: string, name: string): Promi
     token,
     method: 'POST',
     body: JSON.stringify({ name }),
+  });
+}
+
+export function getCanvas(token: string, featureId: string, signal?: AbortSignal): Promise<WalkieCanvasGraphV0> {
+  return request(`/api/features/${encodeURIComponent(featureId)}/canvas`, { token, signal });
+}
+
+/** Guarda el grafo; la API responde el grafo con `version` + 1, o 409 / 400 como `ApiError`. */
+export function saveCanvas(token: string, featureId: string, graph: WalkieCanvasGraphV0): Promise<WalkieCanvasGraphV0> {
+  return request(`/api/features/${encodeURIComponent(featureId)}/canvas`, {
+    token,
+    method: 'PUT',
+    body: JSON.stringify(graph),
   });
 }

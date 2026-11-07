@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Guardar y recargar el lienzo (lienzo-base, tarea 7): botón Guardar y Ctrl+S, indicador "Sin guardar"/"Guardado", aviso al salir con cambios, 409 con opción de recargar la versión del servidor y 400 con el motivo.
 - Lienzo editable (lienzo-base, tarea 6): paleta lateral (arrastrar o clic) con `screen`, `api` y `database`; nodos pixel v1 con color por tipo; conexiones en escalones con etiqueta y selector de tipo; editar el título con doble clic (Enter confirma, Escape cancela); borrar con Supr.
 - Navegación de apps y features (lienzo-base, tarea 5): rutas con react-router (lista de apps → app → lienzo de la feature), formularios para crear apps y features con TanStack Query, mensajes de carga, vacío, 404 y validación.
 - Store del grafo en la web (lienzo-base, tarea 4): `createGraphStore()` con Zustand, estado normalizado por ID, IDs UUID v7, snap a 8 px, tipo de conexión por defecto según el par, borrado en cascada y flag `dirty`.
@@ -18,5 +19,6 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Estructura inicial del repo: documentación, ADR-0001 (stack), ADR-0002 (lienzos por feature), schema del grafo v0, devcontainer, docker-compose, CI y plantillas de GitHub.
 
 ### Fixed
+- Tras iniciar sesión se volvía siempre al inicio; ahora se vuelve a la página que se estaba abriendo.
 - `pnpm --dir apps/web …` desde la raíz fallaba con corepack activo; un `package.json` mínimo en la raíz fija la versión de pnpm.
 - Petición sin cuerpo o con JSON inválido respondía 500; ahora 400.
