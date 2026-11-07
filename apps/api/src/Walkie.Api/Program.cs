@@ -2,6 +2,7 @@ using Walkie.Api.Auth;
 using Walkie.Api.Endpoints;
 using Walkie.Modules.Apps;
 using Walkie.Modules.Canvas;
+using Walkie.Modules.Files;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,7 @@ var connectionString = builder.Configuration.GetConnectionString("Walkie")
     ?? throw new InvalidOperationException("Falta ConnectionStrings:Walkie (variable de entorno ConnectionStrings__Walkie).");
 builder.Services.AddAppsModule(connectionString);
 builder.Services.AddCanvasModule(connectionString);
+builder.Services.AddFilesModule(connectionString, builder.Configuration);
 
 const string WebCorsPolicy = "web";
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
@@ -41,11 +43,13 @@ app.MapHealthEndpoints();
 app.MapMeEndpoints();
 app.MapAppsModule();
 app.MapCanvasModule();
+app.MapFilesModule();
 
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
     await app.Services.MigrateAppsDatabaseAsync();
     await app.Services.MigrateCanvasDatabaseAsync();
+    await app.Services.MigrateFilesAsync();
 }
 
 await app.RunAsync();

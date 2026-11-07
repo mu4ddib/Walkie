@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Módulo Files (imagenes-portal, tarea 1, ADR-0004): `POST /api/apps/{appId}/assets` (PNG, JPEG o WebP reconocidos por el contenido, hasta 5 MB) y `GET /api/assets/{assetId}`; tabla `files.assets`; bytes en S3 (RustFS en desarrollo y CI).
 - Spec y plan de `imagenes-portal` (fase 2, feature 3 de 3), con issues por tarea.
 - E2E del catálogo (catalogo, tarea 6): un elemento usado con `ref` en dos features, editado una vez y visto cambiado en ambas; "Mover al catálogo"; guardar y recargar idéntico; borrado bloqueado por uso. Cierra la feature.
 - "Mover al catálogo" (catalogo, tarea 5): en el panel de un nodo `api`, `service` o `database`, crea el elemento con su título, descripción, método y ruta, y convierte el nodo en `ref` con el mismo id, posición y conexiones.
@@ -35,6 +36,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Estructura inicial del repo: documentación, ADR-0001 (stack), ADR-0002 (lienzos por feature), schema del grafo v0, devcontainer, docker-compose, CI y plantillas de GitHub.
 
 ### Fixed
+- `infra/docker-compose.yml` usaba `minio/minio:latest`, que ya no existe en Docker Hub: el almacenamiento S3 de desarrollo es `rustfs/rustfs:1.0.4`.
 - Al borrar un nodo o una conexión seleccionados, su id quedaba en la selección y el panel mostraba la ayuda al seleccionar otro elemento.
 - Tras iniciar sesión se volvía siempre al inicio; ahora se vuelve a la página que se estaba abriendo.
 - `pnpm --dir apps/web …` desde la raíz fallaba con corepack activo; un `package.json` mínimo en la raíz fija la versión de pnpm.

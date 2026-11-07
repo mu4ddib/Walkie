@@ -16,8 +16,8 @@
     "5080": { "label": "api" },
     "5432": { "label": "postgres" },
     "8080": { "label": "keycloak" },
-    "9000": { "label": "minio" },
-    "9001": { "label": "minio console" }
+    "9000": { "label": "rustfs (S3)" },
+    "9001": { "label": "rustfs console" }
   },
   "customizations": {
     "vscode": {

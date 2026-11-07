@@ -23,12 +23,12 @@ public sealed class PersistenceTests(WalkieApiFactory factory)
             .SqlQuery<string>($"""
                 SELECT table_schema || '.' || table_name AS "Value"
                 FROM information_schema.tables
-                WHERE table_schema IN ('apps', 'canvas') AND table_name NOT LIKE '\_\_%'
+                WHERE table_schema IN ('apps', 'canvas', 'files') AND table_name NOT LIKE '\_\_%'
                 ORDER BY 1
                 """)
             .ToListAsync();
 
-        Assert.Equal(["apps.apps", "apps.catalog_items", "apps.features", "canvas.canvases"], tables);
+        Assert.Equal(["apps.apps", "apps.catalog_items", "apps.features", "canvas.canvases", "files.assets"], tables);
     }
 
     [Fact]

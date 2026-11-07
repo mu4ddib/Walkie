@@ -63,6 +63,7 @@ Web: `<img>` no manda el token, así que la web pide la imagen con `fetch` + tok
 
 ## Decisiones tomadas
 
-1. Los bytes van a MinIO/S3, como dice `docs/architecture.md`, detrás de una interfaz `IFileStorage`. Se registra en el ADR-0004; MinIO se levanta en CI y el bucket se crea al arrancar.
+1. Los bytes van a un almacenamiento S3, como dice `docs/architecture.md`, detrás de una interfaz `IFileStorage`. Se registra en el ADR-0004; el bucket se crea al arrancar.
+4. MinIO dejó de publicar imágenes en Docker Hub (y quay.io no se alcanza desde la nube de desarrollo): en desarrollo y CI se usa RustFS (compatible con S3, Apache-2.0) con versión fija. Decidido el 2026-11-07 al empezar la tarea 1.
 2. Formatos PNG, JPEG y WebP, hasta 5 MB. SVG queda fuera (puede traer scripts).
 3. Abrir un portal con cambios sin guardar pide confirmación ("Tienes cambios sin guardar. ¿Salir igual?"); no se guarda solo.

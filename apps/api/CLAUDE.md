@@ -11,7 +11,7 @@ apps/api/
     Walkie.Modules.Apps/   # apps, features, catálogo
     Walkie.Modules.Canvas/ # lienzos (grafo en jsonb), versionado
     Walkie.Modules.Tours/
-    Walkie.Modules.Files/  # adjuntos en S3/MinIO
+    Walkie.Modules.Files/  # imágenes en S3 (RustFS en desarrollo), ADR-0004
     Walkie.Shared/         # tipos comunes, resultados, errores
   tests/
     Walkie.IntegrationTests/  # xUnit + Testcontainers (Postgres real)
@@ -19,7 +19,7 @@ apps/api/
 
 ## Estado actual
 
-Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared`, `Walkie.Modules.Apps` (apps, features, catálogo con versión), `Walkie.Modules.Canvas` (lienzo `jsonb` + `version`) y `Walkie.IntegrationTests` (WebApplicationFactory + Testcontainers). Tours y Files se crean cuando una tarea los necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
+Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared`, `Walkie.Modules.Apps` (apps, features, catálogo con versión), `Walkie.Modules.Canvas` (lienzo `jsonb` + `version`), `Walkie.Modules.Files` (imágenes: datos en `files.assets`, bytes en S3; ADR-0004) y `Walkie.IntegrationTests` (WebApplicationFactory + Testcontainers). Tours se crea cuando una tarea lo necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
 
 ## Convenciones
 
@@ -33,13 +33,14 @@ Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, 
 
 ## Persistencia
 
-- Cada módulo tiene su `DbContext` **internal**, su schema de Postgres (`apps`, `canvas`) y sus migraciones en `Persistence/Migrations`. Sin FK entre módulos.
+- Cada módulo tiene su `DbContext` **internal**, su schema de Postgres (`apps`, `canvas`, `files`) y sus migraciones en `Persistence/Migrations`. Sin FK entre módulos.
 - El módulo expone solo `Add<Módulo>Module(connectionString)`, `Map<Módulo>Module()`, `Migrate<Módulo>DatabaseAsync()` y, si otro módulo lo necesita, una interfaz en `Contracts/` (ej. `IFeatureDirectory` e `ICatalogDirectory` de Apps, que usa Canvas). Si Apps necesita algo que solo sabe Canvas, Apps define la interfaz y Canvas la implementa (`ICatalogUsage`): así no hay referencias en ciclo.
 - El schema del grafo se embebe en `Walkie.Modules.Canvas` desde `packages/schema/` (no hay copia): `GraphValidator` lo usa para el 400 y suma la integridad que el schema no expresa (claves = ids, conexiones y layout a nodos existentes, `ruleIds` a nodos `rule`, nombres de input únicos, `options` solo en `enum`). Lo que necesita la base (cada `catalogId` de un `ref` es de la app de la feature) lo valida `CanvasHandlers` después.
 - En Development la API aplica las migraciones al arrancar (`Database:MigrateOnStartup`); en producción va en `false`.
 - Crear una migración (desde la raíz, tras `dotnet tool restore`):
   `dotnet ef migrations add <Nombre> --project apps/api/src/Walkie.Modules.<Módulo> --startup-project apps/api/src/Walkie.Api --context <Módulo>DbContext --output-dir Persistence/Migrations`
-- Pruebas: `WalkieApiFactory` levanta un Postgres real (requiere Docker) compartido por la colección `ApiTestGroup`; cada prueba crea sus propios datos con IDs nuevos.
+- Almacenamiento (ADR-0004): sección `Storage` (`Endpoint`, `Bucket`, `AccessKey`, `SecretKey`; en producción por variables `Storage__*`). En desarrollo, RustFS de `infra/docker-compose.yml`; `MigrateFilesAsync` crea el bucket al arrancar, así que la API no arranca sin el almacenamiento.
+- Pruebas: `WalkieApiFactory` levanta un Postgres y un RustFS reales (requiere Docker) compartido por la colección `ApiTestGroup`; cada prueba crea sus propios datos con IDs nuevos.
 
 ## Trampas conocidas
 
@@ -60,6 +61,9 @@ Ya costaron tiempo; no las repitas.
 - **Campos opcionales en las respuestas**: el schema no admite `null`; los records llevan `[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]` para omitirlos (ver `CatalogContracts.cs`).
 - **Concurrencia en entidades EF** (ej. `CatalogItem.Version`): compara la versión del request antes de guardar y marca la columna con `IsConcurrencyToken()`; si dos guardados leen la misma versión, el segundo lanza `DbUpdateConcurrencyException` → 409.
 - **Buscar dentro del `jsonb`**: `db.Database.SqlQuery<T>($"...")` con la columna como `"Value"` y `jsonb_each(graph -> 'nodes')` (ver `CatalogUsage`). La interpolación se parametriza; no concatenes strings.
+- **Subir archivos en Minimal APIs**: un endpoint con `IFormFile` exige antiforgery; la API usa bearer, así que lleva `.DisableAntiforgery()`. Reconoce el tipo por el contenido (`ImageInspector`), no por la extensión.
+- **SDK de AWS v4 con servidores compatibles (RustFS)**: `RequestChecksumCalculation` y `ResponseChecksumValidation` en `WHEN_REQUIRED` y `ForcePathStyle = true`; si no, el servidor rechaza las subidas.
+- **Imágenes de Docker**: `minio/minio` ya no existe en Docker Hub y `quay.io` está bloqueado en la nube; usa `rustfs/rustfs:1.0.4`. Docker Hub puede responder 429 sin login: espera y reintenta.
 - **Tabla nueva**: actualiza la lista de `PersistenceTests.Las_migraciones_crean_las_tablas_de_cada_modulo`.
 - **Endpoints en un módulo**: el `.csproj` necesita `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Validación con `.WithValidation<TRequest>()` (`Walkie.Shared.Validation`); los validadores pueden ser `internal` (se registran con `includeInternalTypes: true`).
 
