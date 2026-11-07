@@ -54,3 +54,51 @@
   outline: 2px solid var(--accent);
   outline-offset: 0;
 }
+
+.panel-error {
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 2px solid var(--ink);
+}
+
+.panel-section h4 {
+  font-family: var(--font-title);
+  font-size: 10px;
+  margin: 0;
+}
+
+.panel-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px;
+  border: 2px solid var(--ink);
+}
+
+.panel-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+}
+
+.panel-check input {
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
+  accent-color: var(--ink);
+}
+
+.panel-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 16px;
+}

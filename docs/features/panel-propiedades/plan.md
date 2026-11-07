@@ -20,7 +20,7 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 2. [x] (#21) Web, store: `updateNode` (título, descripción, expresión, `http`), `addInput`/`updateInput`/`removeInput` (nombres únicos, `options` solo en `enum`), `updateEdge` (`label`, `when`); `removeNode` de una regla limpia los `ruleIds`; tipos por defecto de los pares nuevos. Pruebas en Vitest (criterios 2, 10, 11).
 3. [x] (#22) Web, lienzo: `actor`, `rule` y `service` en la paleta; contenido dentro de los nodos (inputs con `*`, expresión, `MÉTODO /ruta`, "+N más"); etiqueta y condición sobre las conexiones (criterios 1, 5, 6 en el nodo, 8c).
 4. [x] (#23) Web, panel de propiedades: panel lateral para un nodo (título, descripción, expresión, método y ruta) o una conexión (tipo, etiqueta, condición); ayuda con cero o varios seleccionados (criterios 3 a 7).
-5. [ ] (#24) Web, inputs en el panel: agregar, editar (nombre, tipo, obligatorio, opciones `enum`), quitar y asociar reglas del lienzo; el panel de una regla lista los inputs que la usan (criterios 8, 8b, 9, 10).
+5. [x] (#24) Web, inputs en el panel: agregar, editar (nombre, tipo, obligatorio, opciones `enum`), quitar y asociar reglas del lienzo; el panel de una regla lista los inputs que la usan (criterios 8, 8b, 9, 10).
 6. [ ] (#25) E2E: documentar una pantalla con inputs y reglas, una API con método y ruta y una conexión con condición; guardar, recargar idéntico y borrar una regla asociada (criterios 11 y 12).
 
 ## Pruebas
@@ -31,4 +31,4 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 ## Estado
 
-Última actualización: 2026-11-07 — tareas 1 a 4 hechas (schema y validación en la API; acciones del store; tipos nuevos y contenido en el lienzo; panel de propiedades de nodo y conexión). Sigue: tarea 5.
+Última actualización: 2026-11-07 — tareas 1 a 5 hechas (schema y validación en la API; acciones del store; tipos nuevos y contenido en el lienzo; panel de nodo y conexión; inputs y reglas en el panel). Sigue: tarea 6 (E2E).

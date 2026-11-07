@@ -10,6 +10,7 @@ import {
   type HttpMethod,
 } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
+import { InputsSection, RuleUsages } from './InputsSection';
 import { TextField } from './TextField';
 import './panel.css';
 
@@ -57,15 +58,19 @@ function NodePanel({ id }: { id: string }) {
         onChange={(description) => updateNode(id, { description })}
       />
       {node.type === 'rule' && (
-        <TextField
-          label="Expresión"
-          multiline
-          placeholder="cc: solo dígitos, de 6 a 10"
-          value={node.expression ?? ''}
-          maxLength={TEXT_MAX_LENGTH}
-          onChange={(expression) => updateNode(id, { expression })}
-        />
+        <>
+          <TextField
+            label="Expresión"
+            multiline
+            placeholder="cc: solo dígitos, de 6 a 10"
+            value={node.expression ?? ''}
+            maxLength={TEXT_MAX_LENGTH}
+            onChange={(expression) => updateNode(id, { expression })}
+          />
+          <RuleUsages ruleId={id} />
+        </>
       )}
+      {node.type === 'screen' && <InputsSection node={node} />}
       {node.type === 'api' && (
         <>
           <div className="panel-field">

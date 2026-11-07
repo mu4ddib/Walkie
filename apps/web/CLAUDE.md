@@ -7,7 +7,7 @@ apps/web/src/
   canvas/        # FeatureEditor.tsx (carga, guardado, 409/400), Canvas.tsx (React Flow ↔ store), Palette.tsx, canvas.css
   nodes/         # PixelNode.tsx (caja común + resumen del contenido), nodeContent.ts (límites y textos del resumen), nodeMeta.ts (etiqueta/glifo por tipo), nodeTypes.ts (registro)
   edges/         # KindEdge.tsx (tipo, label y [when] + selector de tipo), edgeMeta.ts, edgeTypes.ts
-  panel/         # PropertiesPanel.tsx (panel lateral de nodo o conexión), TextField.tsx (campo con borrador local), panel.css
+  panel/         # PropertiesPanel.tsx (panel lateral de nodo o conexión), InputsSection.tsx (inputs de pantalla + "Usada por" de una regla), TextField.tsx (campo con borrador local y `validate`), panel.css
   store/         # graphStore.ts (estado + acciones), GraphStoreProvider + useGraphStore (contexto para nodos/conexiones)
   tours/         # modo tour y personaje guía
   api/           # cliente HTTP (client.ts) + hooks de TanStack Query (hooks.ts)
@@ -60,8 +60,8 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1) + helpers
 - **`history.replaceState` no avisa a react-router**: tras cambiarlo, dispara `popstate` (ver `onSigninCallback`).
 - **Pruebas del editor**: mockea `./Canvas` con un lienzo mínimo que lee y cambia el store (React Flow no corre bien en jsdom); `installFakeApi` ya responde `GET/PUT` del lienzo con 409 por versión, y `api.next.putStatus = 400` fuerza un 400.
 - **Probar una conexión sin `<ReactFlow>`**: `EdgeLabelRenderer` hace un portal a un contenedor que solo existe dentro de `<ReactFlow>`; en Vitest se mockea para renderizar en línea (ver `src/canvas/canvas.test.tsx`).
-- **Campos del panel**: el store recorta espacios, así que un input atado directo al store no deja escribir un espacio final. Usa `TextField` (borrador local que se sincroniza si el store cambia por otra vía).
-- **Etiquetas únicas en la página**: la miga de pan es `<nav aria-label="Ruta">`; un campo "Ruta" choca con `getByLabel` en Playwright (por eso el panel dice "Ruta HTTP").
+- **Campos del panel**: el store recorta espacios, así que un input atado directo al store no deja escribir un espacio final. Usa `TextField` (borrador local que se sincroniza si el store cambia por otra vía; con `validate` muestra el error y no llama a `onChange`, ej. nombres de input repetidos).
+- **Etiquetas únicas en la página**: la miga de pan es `<nav aria-label="Ruta">`; un campo "Ruta" choca con `getByLabel` en Playwright (por eso el panel dice "Ruta HTTP"). También hay dos `role="status"` (API ok y guardado): usa `.save-status`. En el panel, "Tipo" y "Nombre" se repiten por input: usa `.nth(i)`.
 - **Ancho del lienzo en E2E**: con paleta (200 px) y panel (280 px), a 1280 px el lienzo mide ~760 px; los `dropNode` deben caer dentro (x < 700).
 - **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
 - **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
