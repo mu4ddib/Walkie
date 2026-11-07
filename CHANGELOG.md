@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Lienzo con contenido (panel-propiedades, tarea 3): `actor`, `rule` y `service` en la paleta; los nodos muestran descripción, `MÉTODO /ruta`, hasta 5 inputs (obligatorios con `*`) y 3 líneas de la expresión, con "+N más"; las conexiones muestran su etiqueta y su condición (`[200]`).
 - Store de propiedades (panel-propiedades, tarea 2): `updateNode` (título, descripción, expresión, método y ruta), `addInput`/`updateInput`/`removeInput` con nombres únicos y `options` solo en `enum`, `updateEdge` (tipo, etiqueta, condición); borrar una regla limpia los inputs que la usaban; tipos por defecto para `actor→screen`, `api→service`, `service→database` y `screen→rule`.
 - Schema y validación de propiedades (panel-propiedades, tarea 1): límites en `description`, `expression` (2000), `input.name` y `edge.label/when` (60); `input.options` para inputs `enum`. La API responde 400 si un input apunta a una regla que no existe o a un nodo que no es `rule`, repite nombre en el nodo o tiene `options` sin ser `enum`.
 - Spec y plan de `panel-propiedades` (fase 2, feature 1 de 3), con issues por tarea.

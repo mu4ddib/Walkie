@@ -4,6 +4,14 @@ import type { Node } from '../schema/walkie-graph';
 import { TITLE_MAX_LENGTH } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { nodeColors } from '../theme/palette';
+import {
+  MAX_VISIBLE_EXPRESSION_LINES,
+  MAX_VISIBLE_INPUTS,
+  expressionLines,
+  httpLabel,
+  moreLabel,
+  preview,
+} from './nodeContent';
 import { NODE_LABELS } from './nodeMeta';
 
 export type WalkieFlowNode = FlowNode<{
@@ -13,8 +21,10 @@ export type WalkieFlowNode = FlowNode<{
   onEditDone: () => void;
 }>;
 
-
-/** Caja pixel art común a todos los tipos: borde de 4 px con el color del tipo, título editable. */
+/**
+ * Caja pixel art común a todos los tipos: borde de 4 px con el color del tipo, título editable
+ * y un resumen del contenido (descripción, `MÉTODO /ruta`, inputs, expresión). El detalle, en el panel.
+ */
 export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
   const { node, editing, onEditDone } = data;
   const meta = NODE_LABELS[node.type];
@@ -37,8 +47,42 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
           {node.title}
         </div>
       )}
+      <NodeContent node={node} />
       <Handle type="source" position={Position.Right} />
     </div>
+  );
+}
+
+function NodeContent({ node }: { node: Node }) {
+  const http = httpLabel(node.http);
+  const inputs = preview(node.inputs ?? [], MAX_VISIBLE_INPUTS);
+  const lines = preview(expressionLines(node.expression), MAX_VISIBLE_EXPRESSION_LINES);
+
+  return (
+    <>
+      {http && <div className="pixel-node-http">{http}</div>}
+      {node.description && <p className="pixel-node-description">{node.description}</p>}
+      {inputs.shown.length > 0 && (
+        <ul className="pixel-node-list" aria-label="Inputs">
+          {inputs.shown.map((input) => (
+            <li key={input.name}>
+              {input.name}
+              {input.required && <span title="Obligatorio">*</span>}
+              <span className="pixel-node-muted"> : {input.type}</span>
+            </li>
+          ))}
+          {inputs.more > 0 && <li className="pixel-node-muted">{moreLabel(inputs.more)}</li>}
+        </ul>
+      )}
+      {lines.shown.length > 0 && (
+        <div className="pixel-node-expression" aria-label="Expresión">
+          {lines.shown.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+          {lines.more > 0 && <div className="pixel-node-muted">{moreLabel(lines.more)}</div>}
+        </div>
+      )}
+    </>
   );
 }
 

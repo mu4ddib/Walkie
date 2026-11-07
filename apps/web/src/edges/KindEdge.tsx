@@ -3,10 +3,12 @@ import type { EdgeKind } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { KIND_LABELS, SELECTABLE_KINDS } from './edgeMeta';
 
-export type WalkieFlowEdge = FlowEdge<{ kind: EdgeKind }>;
+export type WalkieFlowEdge = FlowEdge<{ kind: EdgeKind; label?: string; when?: string }>;
 
-
-/** Conexión en escalones (pixel) con su tipo como etiqueta; seleccionada, permite cambiar el tipo. */
+/**
+ * Conexión en escalones (pixel) con su tipo, su etiqueta y su condición (`[200]`);
+ * seleccionada, permite cambiar el tipo.
+ */
 export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowEdge>) {
   const setEdgeKind = useGraphStore((s) => s.setEdgeKind);
   const kind = data?.kind ?? 'uses';
@@ -37,6 +39,8 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
           ) : (
             KIND_LABELS[kind]
           )}
+          {data?.label && <span className="kind-edge-text"> · {data.label}</span>}
+          {data?.when && <span className="kind-edge-when"> [{data.when}]</span>}
         </div>
       </EdgeLabelRenderer>
     </>

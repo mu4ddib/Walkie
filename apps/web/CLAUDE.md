@@ -5,8 +5,8 @@
 ```
 apps/web/src/
   canvas/        # FeatureEditor.tsx (carga, guardado, 409/400), Canvas.tsx (React Flow ↔ store), Palette.tsx, canvas.css
-  nodes/         # PixelNode.tsx (caja común), nodeMeta.ts (etiqueta/glifo por tipo), nodeTypes.ts (registro)
-  edges/         # KindEdge.tsx (etiqueta + selector de tipo), edgeMeta.ts, edgeTypes.ts
+  nodes/         # PixelNode.tsx (caja común + resumen del contenido), nodeContent.ts (límites y textos del resumen), nodeMeta.ts (etiqueta/glifo por tipo), nodeTypes.ts (registro)
+  edges/         # KindEdge.tsx (tipo, label y [when] + selector de tipo), edgeMeta.ts, edgeTypes.ts
   store/         # graphStore.ts (estado + acciones), GraphStoreProvider + useGraphStore (contexto para nodos/conexiones)
   tours/         # modo tour y personaje guía
   api/           # cliente HTTP (client.ts) + hooks de TanStack Query (hooks.ts)
@@ -58,6 +58,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1) + helpers
 - **Sesión por pestaña**: el token vive en `sessionStorage`, así que una pestaña nueva muestra "Iniciar sesión" (entra sin contraseña si Keycloak tiene sesión). En Playwright, cada `newPage()` necesita ese clic.
 - **`history.replaceState` no avisa a react-router**: tras cambiarlo, dispara `popstate` (ver `onSigninCallback`).
 - **Pruebas del editor**: mockea `./Canvas` con un lienzo mínimo que lee y cambia el store (React Flow no corre bien en jsdom); `installFakeApi` ya responde `GET/PUT` del lienzo con 409 por versión, y `api.next.putStatus = 400` fuerza un 400.
+- **Probar una conexión sin `<ReactFlow>`**: `EdgeLabelRenderer` hace un portal a un contenedor que solo existe dentro de `<ReactFlow>`; en Vitest se mockea para renderizar en línea (ver `src/canvas/canvas.test.tsx`).
 - **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
 - **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
 
