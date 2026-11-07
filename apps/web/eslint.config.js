@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'src/schema'] },
+  { ignores: ['dist', 'coverage', 'src/schema', 'playwright-report', 'test-results'] },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -20,6 +20,10 @@ export default tseslint.config(
     // Fast refresh no aplica a pruebas ni a sus helpers.
     files: ['src/test/**', '**/*.test.{ts,tsx}'],
     rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  {
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {
     files: ['scripts/**/*.mjs'],

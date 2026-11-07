@@ -62,3 +62,44 @@ jobs:
         run: pnpm --dir apps/web test
       - if: ${{ hashFiles('apps/web/package.json') != '' }}
         run: pnpm --dir apps/web build
+
+  # Gate de la fase 1: flujo completo con API, Keycloak y Postgres reales (apps/web/e2e).
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [api, web]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - name: Levantar Postgres y Keycloak
+        run: |
+          docker compose -f infra/docker-compose.yml up -d --wait postgres
+          docker compose -f infra/docker-compose.yml up -d keycloak
+          for i in $(seq 1 90); do curl -sf http://localhost:8080/realms/walkie >/dev/null && exit 0; sleep 2; done
+          docker compose -f infra/docker-compose.yml logs keycloak | tail -50
+          exit 1
+      - run: pnpm --dir apps/web install --frozen-lockfile
+      - run: pnpm --dir apps/web exec playwright install --with-deps chromium
+      - run: dotnet build apps/api/src/Walkie.Api
+      - name: E2E (Playwright levanta la API y la web)
+        run: pnpm --dir apps/web e2e
+        env:
+          CI: true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7

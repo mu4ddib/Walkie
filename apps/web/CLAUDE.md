@@ -14,6 +14,7 @@ apps/web/src/
   ui/            # piezas reutilizables (NameForm, QueryState)
   routes.tsx     # rutas de react-router: / · /apps/:appId · /apps/:appId/features/:featureId
   test/          # helpers de pruebas: fakeApi.ts (API falsa en memoria), render.tsx (renderRoute)
+apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1) + helpers.ts (login, dropNode, connect, rename, visibleGraph)
   theme/         # paleta pixel, fuentes, sprites
   schema/        # tipos generados desde packages/schema (no editar a mano)
 ```
@@ -27,7 +28,8 @@ apps/web/src/
 - URL de la API: `VITE_API_URL` (lee el `.env` de la raíz del repo).
 - Auth (ADR-0003): `react-oidc-context`; `AuthGate` protege la app y las llamadas a la API llevan `auth.user.access_token`. En pruebas se mockea `useAuth`.
 - Estilo pixel art: grilla de 8 px (`snapGrid={[8,8]}`), fuente Press Start 2P para títulos y VT323 para texto, sprites PNG con `image-rendering: pixelated`, paleta en `theme/palette.ts`. Sin sombras difusas ni gradientes.
-- Pruebas: Vitest para el store y la lógica, Playwright para flujos (crear nodo, conectar, guardar, tour).
+- Pruebas: Vitest para el store y la lógica (`src/**/*.test.ts(x)`), Playwright para flujos (`e2e/*.spec.ts`).
+- E2E: `docker compose -f infra/docker-compose.yml up -d postgres keycloak` y luego `pnpm --dir apps/web e2e --trace off`. Playwright levanta la API y la web (o reutiliza las que estén corriendo, salvo con `CI=1`). Cada prueba crea su propia app con nombre único. En CI corre el job `e2e`, con el reporte como artefacto si falla.
 - Pruebas de páginas: `installFakeApi({ apps, features })` reemplaza `fetch` con una API en memoria que responde como `apps/api`; `renderRoute('/ruta')` monta las rutas reales con TanStack Query. Mockea `react-oidc-context` y, si no hace falta, `../canvas/Canvas` (React Flow).
 - Editor: `FeaturePage` carga el grafo con `useCanvas` (sin refetch automático: después manda el store) y monta `<FeatureEditor initialGraph>`, que crea el store ya cargado. Guardar: botón o Ctrl+S → `useSaveCanvas` → `markSaved(version, estadoEnviado)` (si hubo cambios durante el guardado, siguen pendientes). 409 → aviso con "Recargar versión del servidor"; 400 → mensaje con la primera ruta de error. Con cambios sin guardar, `beforeunload` avisa al salir.
 - Login: `signinRedirect({ state: currentPath() })` y `onSigninCallback` vuelven a la página de origen (solo rutas internas, `safeReturnTo`).
@@ -47,7 +49,10 @@ apps/web/src/
 - **`fitView` con lienzo vacío**: ajusta el zoom cuando aparece el primer nodo y los siguientes caen en otro sitio. Solo se usa si el lienzo ya trae nodos al montarse.
 - **Doble clic en nodos**: usa `onNodeDoubleClick` del `<ReactFlow>` y pasa `editing` por `data`; con `zoomOnDoubleClick={false}`.
 - **Fast refresh (`react-refresh/only-export-components`)**: un `.tsx` solo exporta componentes. Constantes y hooks van en `.ts` aparte (por eso existen `nodeMeta.ts`, `edgeMeta.ts`, `paletteTypes.ts`, `useGraphStore.ts`).
-- **Probar el lienzo con Playwright**: el arrastre desde la paleta es HTML5 DnD; dispáralo con `dispatchEvent('dragstart'|'drop', { dataTransfer })` (ver tarea 8). Conectar: `mouse.down` en `.react-flow__handle-right` y `mouse.up` en `.react-flow__handle-left` del destino.
+- **Probar el lienzo con Playwright**: usa los helpers de `e2e/helpers.ts` (`dropNode` dispara el HTML5 DnD con `dataTransfer`; `connect` arrastra de `.react-flow__handle-right` a `.react-flow__handle-left`).
+- **`@playwright/test` fijado en 1.63.0**: es la versión de los navegadores preinstalados en la nube (`/opt/pw-browsers`); no corras `playwright install` ahí. Si la subes, el CI la instala solo, pero en la nube habrá que usar `executablePath`.
+- **Login en E2E**: después del clic en "Iniciar sesión" espera `form.or(botón Salir)`; revisar el formulario de Keycloak sin esperar falla porque la navegación aún no ocurrió.
+- **Vitest solo corre `src/**/*.test.ts(x)`** (`vite.config.ts`): sin eso recogería `e2e/*.spec.ts`.
 - **Layout del editor**: `.feature-editor` es flex en columna y `.feature-canvas` tiene `flex: 1`. Con grid y filas fijas, si el aviso de conflicto no está, el lienzo cae en una fila `auto` y se encoge.
 - **Sesión por pestaña**: el token vive en `sessionStorage`, así que una pestaña nueva muestra "Iniciar sesión" (entra sin contraseña si Keycloak tiene sesión). En Playwright, cada `newPage()` necesita ese clic.
 - **`history.replaceState` no avisa a react-router**: tras cambiarlo, dispara `popstate` (ver `onSigninCallback`).

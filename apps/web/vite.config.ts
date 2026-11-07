@@ -9,6 +9,8 @@ export default defineConfig({
   server: { port: 5173, strictPort: true },
   test: {
     environment: 'jsdom',
+    // Las E2E (e2e/*.spec.ts) las corre Playwright, no Vitest.
+    include: ['src/**/*.test.{ts,tsx}'],
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
