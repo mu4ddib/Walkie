@@ -4,6 +4,8 @@ import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
   createApp,
   createShare,
+  getSharedAssetBlob,
+  getSharedFeature,
   listShares,
   revokeShare,
   getAssetBlob,
@@ -41,6 +43,8 @@ export const queryKeys = {
   catalogUsages: (itemId: string) => ['catalog', itemId, 'usages'] as const,
   asset: (assetId: string) => ['assets', assetId] as const,
   shares: (featureId: string) => ['canvas', featureId, 'shares'] as const,
+  shared: (shareToken: string) => ['shared', shareToken] as const,
+  sharedAsset: (shareToken: string, assetId: string) => ['shared', shareToken, 'assets', assetId] as const,
 };
 
 export function useApps() {
@@ -183,12 +187,18 @@ export function useUploadAsset(appId: string) {
 /**
  * URL `blob:` de una imagen para `<img src>`. Un asset no cambia nunca, así que se pide una vez por
  * sesión (`staleTime` y `gcTime` infinitos) y la URL vive mientras la pestaña: son pocas imágenes por app.
+ * Con `shareToken` (vista de un enlace) se pide sin sesión, por el endpoint público del enlace.
  */
-export function useAssetUrl(assetId: string | undefined) {
+export function useAssetUrl(assetId: string | undefined, shareToken?: string) {
   const token = useToken();
   return useQuery({
-    queryKey: queryKeys.asset(assetId ?? ''),
-    queryFn: async ({ signal }) => URL.createObjectURL(await getAssetBlob(token, assetId!, signal)),
+    queryKey: shareToken ? queryKeys.sharedAsset(shareToken, assetId ?? '') : queryKeys.asset(assetId ?? ''),
+    queryFn: async ({ signal }) =>
+      URL.createObjectURL(
+        shareToken
+          ? await getSharedAssetBlob(shareToken, assetId!, signal)
+          : await getAssetBlob(token, assetId!, signal),
+      ),
     enabled: Boolean(assetId),
     staleTime: Infinity,
     gcTime: Infinity,
@@ -219,5 +229,20 @@ export function useRevokeShare(featureId: string) {
   return useMutation({
     mutationFn: (shareId: string) => revokeShare(token, shareId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shares(featureId) }),
+  });
+}
+
+/**
+ * La feature de un enlace de solo lectura, sin sesión. Sin refetch automático: el lienzo se carga una vez
+ * en su store (recargar la página trae la última versión guardada). Un 404 no se reintenta.
+ */
+export function useSharedFeature(shareToken: string) {
+  return useQuery({
+    queryKey: queryKeys.shared(shareToken),
+    queryFn: ({ signal }) => getSharedFeature(shareToken, signal),
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: Infinity,
   });
 }

@@ -13,6 +13,11 @@ export interface CanvasCatalog {
   /** Features de la app (destinos de los `portal`) y la del lienzo actual. */
   features?: Record<string, Feature>;
   featureId?: string;
+  /**
+   * Vista de un enlace de solo lectura (spec enlace-solo-lectura, ADR-0005): el lienzo no se edita, los
+   * portales no se abren (la otra feature no está compartida) y las imágenes se piden con el token del enlace.
+   */
+  share?: { token: string };
 }
 
 export const CatalogContext = createContext<CanvasCatalog>({ appId: '', items: {} });

@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { ASSET_TYPES, SHARE_DAYS, type App, type Asset, type CatalogItem, type Feature, type Share } from '../api/client';
+import { ASSET_TYPES, SHARE_DAYS, type App, type Asset, type CatalogItem, type Feature, type Share, type SharedFeature } from '../api/client';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 
 /**
@@ -13,6 +13,8 @@ export function installFakeApi(
     canvases?: Record<string, WalkieCanvasGraphV0>;
     catalog?: CatalogItem[];
     shares?: Share[];
+    /** Lo que responde `GET /api/public/shares/{token}` por token (los demás tokens: 404). */
+    shared?: Record<string, SharedFeature>;
   } = {},
 ) {
   const apps = [...(seed.apps ?? [])];
@@ -40,6 +42,15 @@ export function installFakeApi(
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as { name?: string }) : {};
     const parts = url.pathname.split('/').filter(Boolean); // ['api','apps',id?,'features'?]
+
+    // /api/public/shares/{token}[/assets/{assetId}] — sin sesión; 404 si el token no está o la imagen no es de una pantalla.
+    if (parts[1] === 'public' && parts[2] === 'shares') {
+      const view = seed.shared?.[parts[3]!];
+      if (!view) return notFound();
+      if (parts[4] !== 'assets') return json(200, view);
+      const used = Object.values(view.graph.nodes).some((n) => n.type === 'screen' && n.assetId === parts[5]);
+      return used ? new Response('imagen', { status: 200, headers: { 'Content-Type': 'image/png' } }) : notFound();
+    }
 
     // /api/features/{featureId}/shares y /api/shares/{shareId} — como la API: 400 por duración, 404, 204 al revocar.
     if (parts[1] === 'features' && parts[3] === 'shares') {

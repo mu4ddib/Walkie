@@ -84,3 +84,43 @@
 .share-close {
   align-self: flex-end;
 }
+
+/* Vista pública /s/:token (enlace-solo-lectura, criterios 5 a 10). */
+.shared-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 16px 16px;
+}
+
+.shared-page h2 {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 14px;
+}
+
+.shared-bar {
+  margin: 0;
+  padding: 4px 8px;
+  border: 2px solid var(--ink);
+  background: var(--warn);
+}
+
+.shared-unavailable {
+  margin: 32px auto;
+  max-width: 480px;
+  padding: 16px;
+  border: 4px solid var(--ink);
+  box-shadow: 8px 8px 0 var(--ink);
+  text-align: center;
+}
+
+.shared-tours .tours-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}

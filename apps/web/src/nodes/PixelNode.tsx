@@ -29,7 +29,7 @@ export type WalkieFlowNode = FlowNode<{
  */
 export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
   const { node, editing, onEditDone } = data;
-  const { items, features } = useCanvasCatalog();
+  const { items, features, share } = useCanvasCatalog();
   // Un `ref` se ve como su elemento del catálogo, con los datos actuales (spec catalogo, criterio 7).
   const target = refTarget(node, items);
   const shown: Node = target
@@ -37,8 +37,10 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
     : node;
   // Un `portal` muestra el nombre actual de su feature destino (spec imagenes-portal, criterio 7).
   const destination = portalTarget(node, features);
+  // En un enlace no se conocen las otras features: el portal muestra su título (último nombre conocido).
   const missing =
-    (node.type === 'ref' && !target) || (node.type === 'portal' && !!node.targetFeatureId && !destination);
+    (node.type === 'ref' && !target) ||
+    (node.type === 'portal' && !share && !!node.targetFeatureId && !destination);
   const title =
     node.type !== 'portal'
       ? shown.title
@@ -69,10 +71,10 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
         <div
           className="pixel-node-title"
           title={
-            node.type === 'portal'
-              ? 'Doble clic para abrir'
-              : node.type === 'ref'
-                ? undefined
+            share || node.type === 'ref'
+              ? undefined
+              : node.type === 'portal'
+                ? 'Doble clic para abrir'
                 : 'Doble clic para editar'
           }
         >

@@ -18,6 +18,7 @@ import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
 import { nodeTypes } from '../nodes/nodeTypes';
 import { PropertiesPanel } from '../panel/PropertiesPanel';
+import { SharedTours } from '../tours/SharedTours';
 import { TourPlayer } from '../tours/TourPlayer';
 import type { WalkieFlowNode } from '../nodes/PixelNode';
 import { defaultEdgeKind, type GraphStore, type NodeType, type Position } from '../store/graphStore';
@@ -33,7 +34,8 @@ const NO_CATALOG: CanvasCatalog = { appId: '', items: {} };
 
 /**
  * Lienzo de una feature. Todo cambio del grafo pasa por las acciones del store. `catalog` es el catálogo
- * de la app: los nodos `ref` lo leen por contexto y la paleta lo ofrece para crear `ref`.
+ * de la app: los nodos `ref` lo leen por contexto y la paleta lo ofrece para crear `ref`. Con `catalog.share`
+ * (vista de un enlace) queda de solo lectura: sin paleta ni panel, solo la lista de tours.
  */
 export function Canvas({ store, catalog = NO_CATALOG }: { store: StoreApi<GraphStore>; catalog?: CanvasCatalog }) {
   return (
@@ -67,6 +69,9 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const [playing, setPlaying] = useState<{ tourId: string; step: number } | null>(null);
   const tours = useGraphStore((s) => s.tours);
   const tourNodeId = playing ? tours[playing.tourId]?.steps[playing.step]?.nodeId : undefined;
+  // Un enlace de solo lectura (spec enlace-solo-lectura, criterio 6) o el modo tour bloquean la edición.
+  const readOnly = Boolean(catalog.share);
+  const locked = readOnly || playing !== null;
   const flowRef = useRef<HTMLDivElement>(null);
   const [pane, setPane] = useState({ width: 0, height: 0 });
   useEffect(() => {
@@ -184,6 +189,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
 
   function onDrop(event: DragEvent) {
     event.preventDefault();
+    if (locked) return;
     const type = event.dataTransfer.getData(PALETTE_MIME) as NodeType;
     const item = catalog.items[event.dataTransfer.getData(PALETTE_REF_MIME)];
     if (PALETTE_TYPES.includes(type)) addAt((p) => addNode(type, p), event.clientX, event.clientY);
@@ -204,8 +210,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     : undefined;
 
   return (
-    <div className={playing ? 'canvas canvas-touring' : 'canvas'}>
-      <Palette onAdd={(type) => addAtCenter((p) => addNode(type, p))} catalog={paletteCatalog} />
+    <div className={['canvas', readOnly && 'canvas-readonly', playing && 'canvas-touring'].filter(Boolean).join(' ')}>
+      {!readOnly && <Palette onAdd={(type) => addAtCenter((p) => addNode(type, p))} catalog={paletteCatalog} />}
       <div
         ref={flowRef}
         className="canvas-flow"
@@ -225,7 +231,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           onConnect={onConnect}
           // El título de un `ref` se edita en el catálogo; el doble clic en un `portal` abre su destino.
           onNodeDoubleClick={(_, flowNode) => {
-            if (playing) return;
+            if (locked) return;
             const node = graphNodes[flowNode.id];
             if (!node || node.type === 'ref') return;
             if (node.type === 'portal') {
@@ -239,10 +245,10 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           connectOnClick={false}
           snapToGrid
           snapGrid={[GRID, GRID]}
-          deleteKeyCode={playing ? null : ['Delete', 'Backspace']}
-          nodesDraggable={!playing}
-          nodesConnectable={!playing}
-          elementsSelectable={!playing}
+          deleteKeyCode={locked ? null : ['Delete', 'Backspace']}
+          nodesDraggable={!locked}
+          nodesConnectable={!locked}
+          elementsSelectable={!locked}
           fitView={fitOnMount}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           proOptions={{ hideAttribution: true }}
@@ -261,11 +267,15 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           />
         )}
       </div>
-      <PropertiesPanel
-        nodeId={panelNodeId}
-        edgeId={panelEdgeId}
-        tours={{ openTourId, onOpen: setOpenTourId, onPlay: startTour }}
-      />
+      {readOnly ? (
+        <SharedTours onPlay={startTour} />
+      ) : (
+        <PropertiesPanel
+          nodeId={panelNodeId}
+          edgeId={panelEdgeId}
+          tours={{ openTourId, onOpen: setOpenTourId, onPlay: startTour }}
+        />
+      )}
     </div>
   );
 }

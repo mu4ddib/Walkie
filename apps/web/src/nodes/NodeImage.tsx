@@ -1,8 +1,9 @@
 import { useAssetUrl } from '../api/hooks';
+import { useCanvasCatalog } from '../catalog/catalogContext';
 
 /** Miniatura de la imagen de una pantalla dentro del nodo (spec imagenes-portal, criterio 1). */
 export function NodeImage({ assetId }: { assetId: string }) {
-  const url = useAssetUrl(assetId);
+  const url = useAssetUrl(assetId, useCanvasCatalog().share?.token);
   if (url.isError) return <div className="pixel-node-image pixel-node-muted">Imagen no disponible</div>;
   if (!url.data) return <div className="pixel-node-image pixel-node-muted">Cargando imagen…</div>;
   return <img className="pixel-node-image" src={url.data} alt="Imagen de la pantalla" draggable={false} />;

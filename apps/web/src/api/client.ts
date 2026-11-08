@@ -2,6 +2,7 @@ import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import type { WalkieCatalogItemV0 } from '../schema/walkie-catalog-item';
 import type { WalkieAssetV0 } from '../schema/walkie-asset';
 import type { WalkieShareV0 } from '../schema/walkie-share';
+import type { WalkieSharedFeatureV0 } from '../schema/walkie-shared-feature';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:5080';
 
@@ -46,6 +47,9 @@ export const ASSET_MAX_SIZE = 5 * 1024 * 1024;
 
 /** Enlace de solo lectura (`packages/schema/walkie-share.schema.json`, ADR-0005). `token` solo llega al crearlo. */
 export type Share = WalkieShareV0;
+
+/** Lo que ve quien abre un enlace (`walkie-shared-feature.schema.json`). */
+export type SharedFeature = WalkieSharedFeatureV0;
 
 /** Duraciones que acepta la API, en días (spec enlace-solo-lectura, criterio 1). */
 export const SHARE_DAYS = [7, 30, 90] as const;
@@ -213,4 +217,18 @@ export function listShares(token: string, featureId: string, signal?: AbortSigna
 /** 204: el enlace deja de funcionar en el acto. */
 export function revokeShare(token: string, shareId: string): Promise<void> {
   return request(`/api/shares/${encodeURIComponent(shareId)}`, { token, method: 'DELETE' });
+}
+
+/** La feature de un enlace, sin sesión; 404 como `ApiError` si está revocado, caducado o no existe. */
+export function getSharedFeature(shareToken: string, signal?: AbortSignal): Promise<SharedFeature> {
+  return request(`/api/public/shares/${encodeURIComponent(shareToken)}`, { signal });
+}
+
+/** Bytes de una imagen del lienzo compartido, sin sesión. */
+export async function getSharedAssetBlob(shareToken: string, assetId: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await send(
+    `/api/public/shares/${encodeURIComponent(shareToken)}/assets/${encodeURIComponent(assetId)}`,
+    { signal },
+  );
+  return res.blob();
 }
