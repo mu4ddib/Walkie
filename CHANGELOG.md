@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Diálogo "Compartir" en el editor (enlace-solo-lectura, tarea 3): aviso de qué ve quien tenga el enlace, duración de 7, 30 o 90 días (30 por defecto), la URL una sola vez con "Copiar", y la lista de enlaces activos con autor, caducidad y último acceso (o "Nunca abierto"), cada uno con "Revocar".
 - Endpoints públicos del enlace (enlace-solo-lectura, tarea 2): `GET /api/public/shares/{token}` (nombres de la app y la feature, último grafo guardado y solo el catálogo que usa; registra el último acceso) y `GET /api/public/shares/{token}/assets/{assetId}` (solo imágenes de las pantallas del grafo), sin sesión y con 404 igual si el enlace está revocado, caducado o no existe; `packages/schema/walkie-shared-feature.schema.json` con `$ref` al grafo y al catálogo.
 - Enlaces de solo lectura en la API (enlace-solo-lectura, tarea 1, ADR-0005): módulo Sharing con `sharing.shares`; `POST/GET /api/features/{featureId}/shares` (7, 30 o 90 días; el token de 256 bits solo viaja al crear y la base guarda su hash) y `DELETE /api/shares/{shareId}`; `packages/schema/walkie-share.schema.json`.
 - Spec y plan de `enlace-solo-lectura` (fase 4), con issues por tarea.
