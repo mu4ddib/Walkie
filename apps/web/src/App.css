@@ -139,6 +139,11 @@
   color: var(--accent);
 }
 
+.save-note {
+  color: var(--ink);
+  opacity: 0.8;
+}
+
 .conflict-dialog {
   display: flex;
   flex-wrap: wrap;

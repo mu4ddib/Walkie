@@ -232,3 +232,23 @@ export async function getSharedAssetBlob(shareToken: string, assetId: string, si
   );
   return res.blob();
 }
+
+/** Archivo descargado de la API: el nombre sale de `Content-Disposition` (la API lo expone por CORS). */
+export interface Download {
+  fileName: string;
+  blob: Blob;
+}
+
+/** El `.zip` de la feature (su `.md` e `img/`), con la última versión guardada (spec export-markdown). */
+export async function exportFeature(token: string, featureId: string): Promise<Download> {
+  const res = await send(`/api/features/${encodeURIComponent(featureId)}/export`, { token });
+  return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? 'feature.zip', blob: await res.blob() };
+}
+
+/** `filename*=UTF-8''…` o `filename=…` de un `Content-Disposition`. */
+export function fileNameOf(disposition: string | null): string | undefined {
+  if (!disposition) return undefined;
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  if (encoded) return decodeURIComponent(encoded.trim());
+  return /filename="?([^";]+)"?/i.exec(disposition)?.[1]?.trim();
+}

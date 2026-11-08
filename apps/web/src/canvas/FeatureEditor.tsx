@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 import { ApiError } from '../api/client';
-import { useFetchCanvas, useSaveCanvas } from '../api/hooks';
+import { useExportFeature, useFetchCanvas, useSaveCanvas } from '../api/hooks';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import type { CanvasCatalog } from '../catalog/catalogContext';
 import { createGraphStore, toGraph } from '../store/graphStore';
 import { ShareDialog } from '../share/ShareDialog';
+import { saveFile } from '../ui/download';
 import { Canvas } from './Canvas';
 
 type Status = { kind: 'idle' } | { kind: 'saved' } | { kind: 'error'; message: string } | { kind: 'conflict'; serverVersion?: number };
@@ -36,6 +37,19 @@ export function FeatureEditor({
   const fetchCanvas = useFetchCanvas(featureId);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [sharing, setSharing] = useState(false);
+  const exporter = useExportFeature(featureId);
+  // Se exporta lo guardado (spec export-markdown, criterio 1): con cambios pendientes, se avisa.
+  const [exportedDirty, setExportedDirty] = useState(false);
+
+  async function exportNow() {
+    setExportedDirty(store.getState().dirty);
+    try {
+      const file = await exporter.mutateAsync();
+      saveFile(file.blob, file.fileName);
+    } catch {
+      // El error lo muestra `exporter.isError`.
+    }
+  }
 
   const saveNow = useCallback(async () => {
     const state = store.getState();
@@ -99,7 +113,26 @@ export function FeatureEditor({
             {status.message}
           </span>
         )}
-        <button type="button" className="pixel-button save-bar-end" onClick={() => setSharing(true)}>
+        {exporter.isError && (
+          <span role="alert" className="save-error">
+            No se pudo exportar. Revisa la conexión y vuelve a intentarlo.
+          </span>
+        )}
+        {exportedDirty && exporter.isSuccess && (
+          <span className="save-note" role="note">
+            Se exportó lo guardado: los cambios sin guardar no se incluyen.
+          </span>
+        )}
+        <button
+          type="button"
+          className="pixel-button save-bar-end"
+          onClick={() => void exportNow()}
+          disabled={exporter.isPending}
+          title="Baja un .zip con el documento Markdown y las imágenes"
+        >
+          {exporter.isPending ? 'Exportando…' : 'Exportar'}
+        </button>
+        <button type="button" className="pixel-button" onClick={() => setSharing(true)}>
           Compartir
         </button>
       </div>

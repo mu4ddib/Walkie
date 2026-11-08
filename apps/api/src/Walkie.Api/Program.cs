@@ -24,7 +24,8 @@ const string WebCorsPolicy = "web";
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>
     options.AddPolicy(WebCorsPolicy, policy =>
-        policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
+        // Content-Disposition expuesto: la web lee el nombre del archivo del export (spec export-markdown).
+        policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("Content-Disposition")));
 
 var app = builder.Build();
 

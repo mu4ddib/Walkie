@@ -4,6 +4,7 @@ import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
   createApp,
   createShare,
+  exportFeature,
   getSharedAssetBlob,
   getSharedFeature,
   listShares,
@@ -245,4 +246,10 @@ export function useSharedFeature(shareToken: string) {
     refetchOnReconnect: false,
     staleTime: Infinity,
   });
+}
+
+/** Descarga el `.zip` del export de la feature (no cambia nada en la API). */
+export function useExportFeature(featureId: string) {
+  const token = useToken();
+  return useMutation({ mutationFn: () => exportFeature(token, featureId) });
 }
