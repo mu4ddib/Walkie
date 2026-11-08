@@ -16,7 +16,9 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "paths": { "@sprites/*": ["../../packages/sprites/*"] }
   },
   "include": ["src"]
 }
