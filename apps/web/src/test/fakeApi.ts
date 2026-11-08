@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { ASSET_TYPES, type App, type Asset, type CatalogItem, type Feature } from '../api/client';
+import { ASSET_TYPES, SHARE_DAYS, type App, type Asset, type CatalogItem, type Feature, type Share } from '../api/client';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 
 /**
@@ -12,6 +12,7 @@ export function installFakeApi(
     features?: Feature[];
     canvases?: Record<string, WalkieCanvasGraphV0>;
     catalog?: CatalogItem[];
+    shares?: Share[];
   } = {},
 ) {
   const apps = [...(seed.apps ?? [])];
@@ -19,6 +20,8 @@ export function installFakeApi(
   const assets = new Map<string, { asset: Asset; file: File }>();
   const features = [...(seed.features ?? [])];
   const canvases: Record<string, WalkieCanvasGraphV0> = { ...seed.canvases };
+  /** Enlaces de solo lectura activos (los revocados salen de la lista, como en la API). */
+  const shares = [...(seed.shares ?? [])];
   /** Si se define, el próximo PUT del lienzo responde este estado (ej. 400). */
   const next_: { putStatus?: number; uploadStatus?: number } = {};
   let next = 1;
@@ -37,6 +40,38 @@ export function installFakeApi(
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as { name?: string }) : {};
     const parts = url.pathname.split('/').filter(Boolean); // ['api','apps',id?,'features'?]
+
+    // /api/features/{featureId}/shares y /api/shares/{shareId} — como la API: 400 por duración, 404, 204 al revocar.
+    if (parts[1] === 'features' && parts[3] === 'shares') {
+      const featureId = parts[2]!;
+      if (!features.some((f) => f.id === featureId)) return notFound();
+      if (method === 'GET') {
+        return json(
+          200,
+          shares.filter((s) => s.featureId === featureId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        );
+      }
+      const { expiresInDays } = JSON.parse(String(init?.body)) as { expiresInDays: number };
+      if (!(SHARE_DAYS as readonly number[]).includes(expiresInDays)) {
+        return json(400, { title: 'Error de validación', errors: { ExpiresInDays: ['La duración debe ser de 7, 30 o 90 días.'] } });
+      }
+      const created = Date.UTC(2026, 10, 8, 12, shares.length);
+      const share: Share = {
+        id: id(),
+        featureId,
+        createdByName: 'Ana Prueba',
+        createdAt: new Date(created).toISOString(),
+        expiresAt: new Date(created + expiresInDays * 86_400_000).toISOString(),
+      };
+      shares.push(share);
+      return json(201, { ...share, token: `token${share.id.replaceAll('-', '')}`.padEnd(43, 'x').slice(0, 43) });
+    }
+    if (parts[0] === 'api' && parts[1] === 'shares') {
+      const index = shares.findIndex((s) => s.id === parts[2]);
+      if (index < 0) return notFound();
+      shares.splice(index, 1);
+      return new Response(null, { status: 204 });
+    }
 
     // /api/features/{featureId}/canvas — como la API: 404, grafo vacío v0, 409 por versión, version + 1.
     if (parts[1] === 'features' && parts[3] === 'canvas') {
@@ -154,5 +189,5 @@ export function installFakeApi(
   });
 
   vi.stubGlobal('fetch', fetchMock);
-  return { apps, features, canvases, catalog, assets, next: next_, fetchMock };
+  return { apps, features, canvases, catalog, assets, shares, next: next_, fetchMock };
 }

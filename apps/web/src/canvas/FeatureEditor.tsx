@@ -5,6 +5,7 @@ import { useFetchCanvas, useSaveCanvas } from '../api/hooks';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import type { CanvasCatalog } from '../catalog/catalogContext';
 import { createGraphStore, toGraph } from '../store/graphStore';
+import { ShareDialog } from '../share/ShareDialog';
 import { Canvas } from './Canvas';
 
 type Status = { kind: 'idle' } | { kind: 'saved' } | { kind: 'error'; message: string } | { kind: 'conflict'; serverVersion?: number };
@@ -34,6 +35,7 @@ export function FeatureEditor({
   const save = useSaveCanvas(featureId);
   const fetchCanvas = useFetchCanvas(featureId);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  const [sharing, setSharing] = useState(false);
 
   const saveNow = useCallback(async () => {
     const state = store.getState();
@@ -97,7 +99,11 @@ export function FeatureEditor({
             {status.message}
           </span>
         )}
+        <button type="button" className="pixel-button save-bar-end" onClick={() => setSharing(true)}>
+          Compartir
+        </button>
       </div>
+      {sharing && <ShareDialog featureId={featureId} onClose={() => setSharing(false)} />}
       {status.kind === 'conflict' && (
         <div role="alertdialog" aria-labelledby="conflict-title" className="conflict-dialog">
           <p id="conflict-title">

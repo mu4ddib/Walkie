@@ -3,6 +3,9 @@ import { useAuth } from 'react-oidc-context';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
   createApp,
+  createShare,
+  listShares,
+  revokeShare,
   getAssetBlob,
   uploadAsset,
   createCatalogItem,
@@ -20,6 +23,7 @@ import {
   type CatalogItem,
   type CatalogItemChanges,
   type NewCatalogItem,
+  type ShareDays,
 } from './client';
 
 /** Access token de la sesión actual. `AuthGate` garantiza que existe dentro de la app. */
@@ -36,6 +40,7 @@ export const queryKeys = {
   catalogItem: (itemId: string) => ['catalog', itemId] as const,
   catalogUsages: (itemId: string) => ['catalog', itemId, 'usages'] as const,
   asset: (assetId: string) => ['assets', assetId] as const,
+  shares: (featureId: string) => ['canvas', featureId, 'shares'] as const,
 };
 
 export function useApps() {
@@ -187,5 +192,32 @@ export function useAssetUrl(assetId: string | undefined) {
     enabled: Boolean(assetId),
     staleTime: Infinity,
     gcTime: Infinity,
+  });
+}
+
+/** Enlaces activos de la feature (diálogo "Compartir"). */
+export function useShares(featureId: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.shares(featureId),
+    queryFn: ({ signal }) => listShares(token, featureId, signal),
+  });
+}
+
+export function useCreateShare(featureId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (days: ShareDays) => createShare(token, featureId, days),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shares(featureId) }),
+  });
+}
+
+export function useRevokeShare(featureId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (shareId: string) => revokeShare(token, shareId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shares(featureId) }),
   });
 }

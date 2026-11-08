@@ -1,6 +1,7 @@
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import type { WalkieCatalogItemV0 } from '../schema/walkie-catalog-item';
 import type { WalkieAssetV0 } from '../schema/walkie-asset';
+import type { WalkieShareV0 } from '../schema/walkie-share';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:5080';
 
@@ -42,6 +43,18 @@ export type Asset = WalkieAssetV0;
 /** Formatos y tamaño que acepta la API (spec imagenes-portal, decisión 2). */
 export const ASSET_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 export const ASSET_MAX_SIZE = 5 * 1024 * 1024;
+
+/** Enlace de solo lectura (`packages/schema/walkie-share.schema.json`, ADR-0005). `token` solo llega al crearlo. */
+export type Share = WalkieShareV0;
+
+/** Duraciones que acepta la API, en días (spec enlace-solo-lectura, criterio 1). */
+export const SHARE_DAYS = [7, 30, 90] as const;
+export type ShareDays = (typeof SHARE_DAYS)[number];
+
+/** URL que se comparte: la arma la web, porque la API no conoce su dominio. */
+export function shareUrl(token: string): string {
+  return `${window.location.origin}/s/${token}`;
+}
 
 /** Cuerpo `ProblemDetails` (RFC 9457) que devuelve la API en los errores. */
 export interface Problem {
@@ -181,4 +194,23 @@ export function uploadAsset(token: string, appId: string, file: File): Promise<A
 export async function getAssetBlob(token: string, assetId: string, signal?: AbortSignal): Promise<Blob> {
   const res = await send(`/api/assets/${encodeURIComponent(assetId)}`, { token, signal });
   return res.blob();
+}
+
+/** Crea un enlace; la respuesta trae el `token` (la única vez que viaja). */
+export function createShare(token: string, featureId: string, expiresInDays: ShareDays): Promise<Share> {
+  return request(`/api/features/${encodeURIComponent(featureId)}/shares`, {
+    token,
+    method: 'POST',
+    body: JSON.stringify({ expiresInDays }),
+  });
+}
+
+/** Enlaces activos de la feature (sin token), del más nuevo al más viejo. */
+export function listShares(token: string, featureId: string, signal?: AbortSignal): Promise<Share[]> {
+  return request(`/api/features/${encodeURIComponent(featureId)}/shares`, { token, signal });
+}
+
+/** 204: el enlace deja de funcionar en el acto. */
+export function revokeShare(token: string, shareId: string): Promise<void> {
+  return request(`/api/shares/${encodeURIComponent(shareId)}`, { token, method: 'DELETE' });
 }
