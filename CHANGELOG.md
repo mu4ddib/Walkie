@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Endpoint del export (export-markdown, tarea 2): `GET /api/features/{featureId}/export` devuelve `<slug>.zip` con `<slug>.md` (última versión guardada) e `img/` con las imágenes de las pantallas; 404 si la feature no existe.
 - Generador del documento Markdown (export-markdown, tarea 1): módulo `Walkie.Modules.Export` con encabezado, índice, diagrama Mermaid, secciones por tipo (inputs, expresiones, `MÉTODO /ruta`, portales, elementos del catálogo), conexiones y tours; textos escapados para Markdown y Mermaid, orden estable y nombres de archivo como slugs.
 - Spec y plan de `export-markdown` (fase 4, feature 2), con issues por tarea.
 - E2E del enlace de solo lectura (enlace-solo-lectura, tarea 5): crear el enlace, abrirlo en un navegador sin sesión, ver el lienzo con imagen sin poder editarlo, recorrer el tour sin abrir el portal, ver el último acceso y un cambio guardado al recargar, revocar y ver "Este enlace ya no está disponible". El generador de PNG de prueba pasa a `e2e/helpers.ts`. Cierra la feature.

@@ -2,6 +2,7 @@ using Walkie.Api.Auth;
 using Walkie.Api.Endpoints;
 using Walkie.Modules.Apps;
 using Walkie.Modules.Canvas;
+using Walkie.Modules.Export;
 using Walkie.Modules.Files;
 using Walkie.Modules.Sharing;
 
@@ -17,6 +18,7 @@ builder.Services.AddAppsModule(connectionString);
 builder.Services.AddCanvasModule(connectionString);
 builder.Services.AddFilesModule(connectionString, builder.Configuration);
 builder.Services.AddSharingModule(connectionString);
+builder.Services.AddExportModule();
 
 const string WebCorsPolicy = "web";
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
@@ -47,6 +49,7 @@ app.MapAppsModule();
 app.MapCanvasModule();
 app.MapFilesModule();
 app.MapSharingModule();
+app.MapExportModule();
 
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
