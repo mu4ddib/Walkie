@@ -15,9 +15,14 @@ jobs:
           node-version-file: .nvmrc
       - name: Validar los JSON Schema
         # ajv-formats: sin él, ajv en modo estricto rechaza `format: uuid`.
+        # -r con los demás schemas: walkie-shared-feature usa `$ref` a walkie-graph y walkie-catalog-item.
         run: |
           for schema in packages/schema/*.schema.json; do
-            npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv compile --spec=draft2020 -c ajv-formats -s "$schema"
+            refs=()
+            for other in packages/schema/*.schema.json; do
+              if [ "$other" != "$schema" ]; then refs+=(-r "$other"); fi
+            done
+            npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv compile --spec=draft2020 -c ajv-formats -s "$schema" "${refs[@]}"
           done
 
   api:

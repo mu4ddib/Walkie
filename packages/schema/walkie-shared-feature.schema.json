@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-shared-feature.schema.json",
+  "title": "Walkie shared feature v0",
+  "description": "Lo que ve quien abre un enlace de solo lectura (GET /api/public/shares/{token}, ADR-0005): una feature, sin nada más de su app.",
+  "type": "object",
+  "required": ["appName", "featureName", "expiresAt", "graph", "catalog"],
+  "additionalProperties": false,
+  "properties": {
+    "appName": { "type": "string", "minLength": 1 },
+    "featureName": { "type": "string", "minLength": 1 },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "graph": { "$ref": "walkie-graph.schema.json" },
+    "catalog": {
+      "type": "array",
+      "description": "Solo los elementos del catálogo que usan los nodos ref del grafo",
+      "items": { "$ref": "walkie-catalog-item.schema.json" }
+    }
+  }
+}

@@ -17,12 +17,17 @@ public static class SharingModule
         services.AddDbContext<SharingDbContext>(options => options.UseNpgsql(connectionString, ConfigureNpgsql));
         services.AddValidatorsFromAssemblyContaining<SharingDbContext>(includeInternalTypes: true);
         services.AddScoped<ShareHandlers>();
+        services.AddScoped<PublicShareHandlers>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 
-    /// <summary>Endpoints <c>/api/features/{featureId}/shares</c> y <c>/api/shares/{shareId}</c>.</summary>
-    public static IEndpointRouteBuilder MapSharingModule(this IEndpointRouteBuilder routes) => routes.MapShareEndpoints();
+    /// <summary>
+    /// Endpoints con sesión <c>/api/features/{featureId}/shares</c> y <c>/api/shares/{shareId}</c>,
+    /// y sin sesión <c>/api/public/shares/{token}</c>.
+    /// </summary>
+    public static IEndpointRouteBuilder MapSharingModule(this IEndpointRouteBuilder routes) =>
+        routes.MapShareEndpoints().MapPublicShareEndpoints();
 
     /// <summary>Aplica las migraciones pendientes del módulo.</summary>
     public static async Task MigrateSharingDatabaseAsync(this IServiceProvider services, CancellationToken cancellationToken = default)

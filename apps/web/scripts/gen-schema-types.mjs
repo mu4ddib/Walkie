@@ -11,6 +11,16 @@ const targets = [
   { schema: 'walkie-catalog-item.schema.json', out: 'walkie-catalog-item.ts', name: 'WalkieCatalogItem' },
   { schema: 'walkie-asset.schema.json', out: 'walkie-asset.ts', name: 'WalkieAsset' },
   { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },
+  // Usa `$ref` a otros schemas: sus tipos se importan de su propio archivo en vez de repetirse.
+  {
+    schema: 'walkie-shared-feature.schema.json',
+    out: 'walkie-shared-feature.ts',
+    name: 'WalkieSharedFeature',
+    imports: [
+      "import type { WalkieCanvasGraphV0 } from './walkie-graph';",
+      "import type { WalkieCatalogItemV0 } from './walkie-catalog-item';",
+    ],
+  },
 ];
 
 const check = process.argv.includes('--check');
@@ -20,9 +30,12 @@ for (const target of targets) {
   const schemaPath = fileURLToPath(new URL(`../../../packages/schema/${target.schema}`, import.meta.url));
   const outPath = fileURLToPath(new URL(`../src/schema/${target.out}`, import.meta.url));
   const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+  const banner = `/* Generado desde packages/schema/${target.schema}. No editar a mano: \`pnpm gen:schema\`. */`;
   const ts = await compile(schema, target.name, {
-    bannerComment: `/* Generado desde packages/schema/${target.schema}. No editar a mano: \`pnpm gen:schema\`. */`,
+    bannerComment: [banner, ...(target.imports ?? [])].join('\n'),
     additionalProperties: false,
+    cwd: fileURLToPath(new URL('../../../packages/schema/', import.meta.url)),
+    declareExternallyReferenced: !target.imports,
     style: { singleQuote: true },
   });
 

@@ -165,7 +165,7 @@ internal sealed class CanvasHandlers(
     private Task<int> CurrentVersionAsync(Guid featureId, CancellationToken ct) =>
         db.Canvases.AsNoTracking().Where(c => c.FeatureId == featureId).Select(c => c.Version).SingleAsync(ct);
 
-    private static JsonElement Parse(string json)
+    internal static JsonElement Parse(string json)
     {
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.Clone();
