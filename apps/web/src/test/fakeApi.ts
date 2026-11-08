@@ -43,6 +43,9 @@ export function installFakeApi(
     const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as { name?: string }) : {};
     const parts = url.pathname.split('/').filter(Boolean); // ['api','apps',id?,'features'?]
 
+    // /api/health — la API responde; así el aviso compacto de "sin conexión" no aparece.
+    if (parts[1] === 'health') return json(200, { status: 'ok', schemaVersion: 0 });
+
     // /api/public/shares/{token}[/assets/{assetId}] — sin sesión; 404 si el token no está o la imagen no es de una pantalla.
     if (parts[1] === 'public' && parts[2] === 'shares') {
       const view = seed.shared?.[parts[3]!];

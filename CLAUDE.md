@@ -60,7 +60,7 @@ Si `dotnet` no existe, Docker no responde, una imagen no baja o el push da 403, 
   - `frontend-design` (anthropics/skills) — dirección visual al crear o rehacer UI.
   - `ui-ux-pro-max` (nextlevelbuilder/ui-ux-pro-max-skill) — reglas de UX/accesibilidad y búsqueda local de estilos, paletas y tipografías. Su `SKILL.md` usa `${CLAUDE_PLUGIN_ROOT}`, que aquí no existe: corre el buscador desde la raíz con `python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<consulta>" --domain <ux|style|color|typography>`.
   - `canvas-design` (anthropics/skills) — piezas visuales estáticas (PNG/PDF), ej. pósters o material del piloto.
-  - Al aplicarlas, la estética pixel de Walkie (`apps/web/CLAUDE.md`: grilla de 8 px, Press Start 2P + VT323, sin sombras difusas ni gradientes) manda sobre sus sugerencias genéricas.
+  - Al aplicarlas, el sistema visual de Walkie (`apps/web/CLAUDE.md` → Estilo: arena/piedra/especia, Plex + Press Start 2P, grilla de 8 px, sin gradientes) manda sobre sus sugerencias genéricas.
 
 ## Para ahorrar contexto
 

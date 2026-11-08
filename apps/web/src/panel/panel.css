@@ -1,25 +1,23 @@
-/* Panel de propiedades, estilo pixel v1: bordes duros, sin gradientes. */
+/* Inspector (panel de propiedades): texto legible en Plex Sans, secciones separadas por aire y líneas suaves. */
 
 .properties-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px;
-  border-left: 4px solid var(--ink);
-  background: var(--paper);
-  overflow: auto;
+  gap: 12px;
+  padding: 4px 14px 16px;
+  font-size: 14px;
 }
 
 .properties-panel h3 {
-  font-family: var(--font-title);
-  font-size: 12px;
-  margin: 0 0 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .panel-help {
   margin: 0;
-  font-size: 16px;
-  opacity: 0.8;
+  color: var(--stone-700);
+  font-size: 13px;
 }
 
 .panel-field {
@@ -29,49 +27,46 @@
 }
 
 .panel-field label {
-  font-size: 16px;
+  color: var(--stone-700);
+  font-size: 12.5px;
+  font-weight: 500;
 }
 
 .panel-field input,
 .panel-field textarea,
 .panel-field select {
-  font: inherit;
-  font-size: 18px;
-  padding: 2px 4px;
-  border: 2px solid var(--ink);
-  border-radius: 0;
-  background: var(--paper);
-  color: var(--ink);
+  font-size: 14px;
 }
 
 .panel-field textarea {
   resize: vertical;
+  min-height: 64px;
 }
 
-.panel-field input:focus,
-.panel-field textarea:focus,
-.panel-field select:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 0;
+.panel-field textarea[aria-label*='Expresión'],
+.panel-field textarea.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
 }
 
 .panel-error {
-  font-size: 16px;
-  color: var(--accent);
+  color: var(--danger);
+  font-size: 12.5px;
 }
 
 .panel-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 2px solid var(--ink);
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dune-200);
 }
 
 .panel-section h4 {
-  font-family: var(--font-title);
-  font-size: 10px;
   margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .panel-input {
@@ -79,42 +74,50 @@
   flex-direction: column;
   gap: 8px;
   margin: 0;
-  padding: 8px;
-  border: 2px solid var(--ink);
+  padding: 10px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand);
+}
+
+.panel-input legend {
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
 }
 
 .panel-check {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 16px;
+  font-size: 13px;
 }
 
 .panel-check input {
   width: 16px;
   height: 16px;
-  border-radius: 0;
-  accent-color: var(--ink);
+  accent-color: var(--spice);
 }
 
 .panel-list {
   margin: 0;
-  padding-left: 16px;
-  font-size: 16px;
+  padding-left: 18px;
+  font-size: 13px;
 }
 
 .panel-readonly {
   margin: 0;
-  font-size: 16px;
+  font-size: 13px;
 }
 
 .panel-readonly dt {
-  opacity: 0.7;
+  color: var(--stone-700);
+  font-size: 12px;
 }
 
 .panel-readonly dd {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 
@@ -125,15 +128,20 @@
 
 .panel-warning {
   margin: 0;
-  padding: 4px;
-  border: 2px solid var(--warn);
-  font-size: 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--warn);
+  border-left-width: 4px;
+  border-radius: var(--radius-s);
+  background: #f7ead0;
+  font-size: 13px;
 }
 
 .panel-thumbnail {
   padding: 0;
-  border: 2px solid var(--ink);
-  background: var(--paper);
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  background: var(--sand);
   cursor: zoom-in;
   font: inherit;
 }
@@ -143,6 +151,7 @@
   width: 100%;
   max-height: 200px;
   object-fit: contain;
+  image-rendering: auto;
 }
 
 .panel-file {
@@ -168,14 +177,15 @@
   justify-content: center;
   gap: 16px;
   padding: 32px;
-  background: rgb(27 28 51 / 85%);
+  background: rgb(43 36 29 / 82%);
 }
 
 .image-dialog img {
   max-width: 100%;
   max-height: calc(100% - 64px);
-  border: 4px solid var(--paper);
-  background: var(--paper);
+  border-radius: var(--radius-m);
+  background: var(--sand);
+  image-rendering: auto;
 }
 
 .link-button {
@@ -183,14 +193,19 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--ink);
+  color: var(--spice-strong);
   font: inherit;
-  font-size: 18px;
+  font-size: 13px;
   text-decoration: underline;
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 
 .tours-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
   list-style: none;
   padding: 0;
 }
@@ -198,7 +213,7 @@
 .tour-editor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .tour-steps {
@@ -213,12 +228,19 @@
 .tour-step {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-  border: 2px solid var(--ink);
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand);
 }
 
 .tour-step-actions {
   display: flex;
   gap: 4px;
+}
+
+.tour-step-actions .pixel-button {
+  min-height: 28px;
+  padding: 0 8px;
 }

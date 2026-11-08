@@ -5,10 +5,11 @@ import { expect, type Page } from '@playwright/test';
 const USER = { username: 'dev', password: 'walkie_dev' };
 
 /**
- * Inicia sesión desde la pantalla de login de Walkie. Si Keycloak ya tiene sesión (otra pestaña
+ * Inicia sesión desde la pantalla de login de Walkie. Por defecto entra por la lista de apps (`/` abre
+ * el último lienzo, que en las pruebas depende de las anteriores). Si Keycloak ya tiene sesión (otra pestaña
  * del mismo contexto), vuelve sin pedir contraseña. Termina en la página que se abrió.
  */
-export async function login(page: Page, path = '/') {
+export async function login(page: Page, path = '/apps') {
   await page.goto(path);
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
   const form = page.locator('#kc-login');

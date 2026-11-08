@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useStore } from 'zustand';
 import { ApiError } from '../api/client';
 import { useExportFeature, useFetchCanvas, useSaveCanvas } from '../api/hooks';
@@ -7,7 +8,13 @@ import type { CanvasCatalog } from '../catalog/catalogContext';
 import { createGraphStore, toGraph } from '../store/graphStore';
 import { ShareDialog } from '../share/ShareDialog';
 import { saveFile } from '../ui/download';
+import { ApiStatus } from '../api/ApiStatus';
+import { UserMenu } from '../auth/UserMenu';
+import { LocationBar } from '../workspace/LocationBar';
+import { APPS_PATH } from '../workspace/paths';
 import { Canvas } from './Canvas';
+import { OPEN_HELP_EVENT } from './canvasShortcuts';
+import { UNSAVED_CONFIRM } from './useOpenFeature';
 
 type Status = { kind: 'idle' } | { kind: 'saved' } | { kind: 'error'; message: string } | { kind: 'conflict'; serverVersion?: number };
 
@@ -19,11 +26,14 @@ export function FeatureEditor({
   featureId,
   initialGraph,
   catalog,
+  location,
 }: {
   featureId: string;
   initialGraph: WalkieCanvasGraphV0;
   /** Catálogo de la app para los nodos `ref` y la paleta. */
   catalog?: CanvasCatalog;
+  /** Dónde está el editor, para la barra superior (app y feature con sus nombres). */
+  location?: { appId: string; appName?: string; featureName?: string };
 }) {
   const [store] = useState(() => {
     const s = createGraphStore();
@@ -93,49 +103,95 @@ export function FeatureEditor({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [dirty]);
 
+  const navigate = useNavigate();
+  // Cambiar de app o feature desde la barra: con cambios sin guardar se confirma (spec imagenes-portal, decisión 3).
+  const go = useCallback(
+    (path: string) => {
+      if (store.getState().dirty && !window.confirm(UNSAVED_CONFIRM)) return;
+      void navigate(path);
+    },
+    [navigate, store],
+  );
+
   return (
     <div className="feature-editor">
-      <div className="save-bar">
-        <button
-          type="button"
-          className="pixel-button"
-          onClick={() => void saveNow()}
-          disabled={!dirty || save.isPending}
-          title="Guardar (Ctrl+S)"
+      <header className="workspace-bar">
+        <a
+          className="brand"
+          href={APPS_PATH}
+          onClick={(e) => {
+            e.preventDefault();
+            go(APPS_PATH);
+          }}
         >
-          {save.isPending ? 'Guardando…' : 'Guardar'}
-        </button>
-        <span className="save-status" role="status" data-dirty={dirty || undefined}>
-          {dirty ? 'Sin guardar' : status.kind === 'saved' ? 'Guardado' : 'Al día'}
-        </span>
-        {status.kind === 'error' && (
-          <span role="alert" className="save-error">
-            {status.message}
-          </span>
+          Walkie
+        </a>
+        {location && (
+          <LocationBar
+            appId={location.appId}
+            appName={location.appName}
+            featureId={featureId}
+            featureName={location.featureName}
+            onNavigate={go}
+          />
         )}
-        {exporter.isError && (
-          <span role="alert" className="save-error">
-            No se pudo exportar. Revisa la conexión y vuelve a intentarlo.
+        <div className="save-bar">
+          <span className="save-status" role="status" data-dirty={dirty || undefined} data-saved={status.kind === 'saved' || undefined}>
+            {dirty ? 'Sin guardar' : status.kind === 'saved' ? 'Guardado' : 'Al día'}
           </span>
-        )}
-        {exportedDirty && exporter.isSuccess && (
-          <span className="save-note" role="note">
-            Se exportó lo guardado: los cambios sin guardar no se incluyen.
-          </span>
-        )}
-        <button
-          type="button"
-          className="pixel-button save-bar-end"
-          onClick={() => void exportNow()}
-          disabled={exporter.isPending}
-          title="Baja un .zip con el documento Markdown y las imágenes"
-        >
-          {exporter.isPending ? 'Exportando…' : 'Exportar'}
-        </button>
-        <button type="button" className="pixel-button" onClick={() => setSharing(true)}>
-          Compartir
-        </button>
-      </div>
+          <button
+            type="button"
+            className={dirty ? 'pixel-button is-primary' : 'pixel-button'}
+            onClick={() => void saveNow()}
+            disabled={!dirty || save.isPending}
+            data-tip="Guardar · Ctrl+S"
+          >
+            {save.isPending ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+        <div className="workspace-messages">
+          {status.kind === 'error' && (
+            <span role="alert" className="save-error">
+              {status.message}
+            </span>
+          )}
+          {exporter.isError && (
+            <span role="alert" className="save-error">
+              No se pudo exportar. Revisa la conexión y vuelve a intentarlo.
+            </span>
+          )}
+          {exportedDirty && exporter.isSuccess && (
+            <span className="save-note" role="note">
+              Se exportó lo guardado: los cambios sin guardar no se incluyen.
+            </span>
+          )}
+        </div>
+        <div className="workspace-actions">
+          <button
+            type="button"
+            className="pixel-button is-ghost"
+            onClick={() => void exportNow()}
+            disabled={exporter.isPending}
+            data-tip="Baja un .zip con el documento Markdown y las imágenes"
+          >
+            {exporter.isPending ? 'Exportando…' : 'Exportar'}
+          </button>
+          <button type="button" className="pixel-button" onClick={() => setSharing(true)}>
+            Compartir
+          </button>
+          <button
+            type="button"
+            className="pixel-button is-ghost icon-button"
+            aria-label="Atajos y ayuda"
+            data-tip="Atajos · ?"
+            onClick={() => window.dispatchEvent(new Event(OPEN_HELP_EVENT))}
+          >
+            ?
+          </button>
+          <ApiStatus compact />
+          <UserMenu />
+        </div>
+      </header>
       {sharing && <ShareDialog featureId={featureId} onClose={() => setSharing(false)} />}
       {status.kind === 'conflict' && (
         <div role="alertdialog" aria-labelledby="conflict-title" className="conflict-dialog">

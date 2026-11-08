@@ -52,7 +52,7 @@ export function AppPage() {
 function Breadcrumb({ appName }: { appName?: string }) {
   return (
     <nav className="breadcrumb" aria-label="Ruta">
-      <Link to="/">Apps</Link>
+      <Link to="/apps">Apps</Link>
       {appName && <span> / {appName}</span>}
     </nav>
   );

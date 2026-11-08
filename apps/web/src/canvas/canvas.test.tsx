@@ -19,24 +19,25 @@ vi.mock('@xyflow/react', async (importOriginal) => ({
   EdgeLabelRenderer: ({ children }: { children: ReactNode }) => <foreignObject>{children}</foreignObject>,
 }));
 
-describe('Palette', () => {
-  it('ofrece los siete tipos y agrega con clic', async () => {
+describe('Palette (barra de herramientas)', () => {
+  it('ofrece los siete tipos con su tecla y agrega con clic', async () => {
     const onAdd = vi.fn();
     render(<Palette onAdd={onAdd} />);
 
-    const items = screen.getAllByRole('button');
-    expect(items.map((b) => b.textContent)).toEqual([
-      'o/ Actor',
-      '[ ] Pantalla',
-      '§ Regla',
-      '</> API',
-      '{ } Servicio',
-      '(=) Base de datos',
-      '@ Portal',
+    const tools = screen.getAllByRole('button');
+    expect(tools.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Actor',
+      'Pantalla',
+      'Regla',
+      'API',
+      'Servicio',
+      'Base de datos',
+      'Portal',
     ]);
-    expect(items.every((b) => b.draggable)).toBe(true);
+    expect(tools.map((b) => b.getAttribute('aria-keyshortcuts'))).toEqual(['1', '2', '3', '4', '5', '6', '7']);
+    expect(tools.every((b) => b.draggable)).toBe(true);
 
-    await userEvent.click(screen.getByRole('button', { name: /API/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'API' }));
     expect(onAdd).toHaveBeenCalledWith('api');
   });
 });
@@ -185,29 +186,38 @@ const consultar: CatalogItem = {
   version: 1,
 };
 
-describe('Palette con catálogo', () => {
-  it('ofrece los elementos del catálogo y crea un ref con clic', async () => {
+describe('Palette con catálogo (Componentes)', () => {
+  it('abre el panel, explica el catálogo, busca y crea un ref con clic', async () => {
     const onAddRef = vi.fn();
+    const otro: CatalogItem = { id: 'item-2', appId: 'app-1', type: 'database', title: 'Clientes', version: 1 };
     render(
       <MemoryRouter>
-        <Palette onAdd={vi.fn()} catalog={{ appId: 'app-1', items: [consultar], onAddRef }} />
+        <Palette onAdd={vi.fn()} catalog={{ appId: 'app-1', items: [consultar, otro], onAddRef }} />
       </MemoryRouter>,
     );
 
+    const toggle = screen.getByRole('button', { name: 'Componentes' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(toggle);
     const section = screen.getByRole('region', { name: 'Catálogo' });
+    expect(section).toHaveTextContent('compartidos por todos los lienzos de la app');
+
+    await userEvent.type(within(section).getByLabelText('Buscar componentes'), 'consul');
+    expect(within(section).queryByRole('button', { name: /Clientes/ })).not.toBeInTheDocument();
     const item = within(section).getByRole('button', { name: /Consultar cliente/ });
     expect(item.draggable).toBe(true);
     await userEvent.click(item);
     expect(onAddRef).toHaveBeenCalledWith(consultar);
   });
 
-  it('con el catálogo vacío enlaza a la página del catálogo', () => {
+  it('con el catálogo vacío enlaza a la página del catálogo', async () => {
     render(
       <MemoryRouter>
         <Palette onAdd={vi.fn()} catalog={{ appId: 'app-1', items: [], onAddRef: vi.fn() }} />
       </MemoryRouter>,
     );
 
+    await userEvent.click(screen.getByRole('button', { name: 'Componentes' }));
     expect(screen.getByRole('link', { name: /Crea APIs/ })).toHaveAttribute('href', '/apps/app-1/catalog');
   });
 });

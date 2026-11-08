@@ -1,11 +1,43 @@
+/*
+ * Sistema visual de Walkie (spec espacio-de-trabajo, decisión 2 y 3): desierto a mediodía.
+ * Arena y duna para superficies, piedra para texto, especia para la acción principal y el azul
+ * "de Ibad" solo para foco y selección. Press Start 2P solo en marca y etiquetas de tipo.
+ */
 :root {
-  --ink: #1b1c33;
-  --paper: #f4f0e6;
-  --accent: #e85d3f;
-  --ok: #3f8f5a;
-  --warn: #d9a32b;
+  /* Superficies */
+  --sand: #f6efe3; /* fondo y lienzo */
+  --sand-raised: #fbf7ef; /* paneles flotantes */
+  --dune-100: #ede2cf;
+  --dune-200: #decdb0;
+  --dune-300: #cbb58f;
+  /* Texto */
+  --stone-500: #8c7b66;
+  --stone-700: #5b4e40;
+  --ink: #2b241d;
+  /* Acentos */
+  --spice: #a9581a;
+  --spice-strong: #8a4612;
+  --spice-tint: #f3ddc3;
+  --ibad: #2d5f8f;
+  --ibad-tint: #dbe6f0;
+  --ok: #4f7a45;
+  --warn: #b7861f;
+  --danger: #a8402e;
+  /* Alias heredados (componentes que aún no migraron) */
+  --paper: var(--sand);
+  --accent: var(--spice);
+
   --font-title: 'Press Start 2P', monospace;
-  --font-body: 'VT323', monospace;
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --radius-s: 4px;
+  --radius-m: 8px;
+  --shadow-float: 0 1px 0 rgb(43 36 29 / 4%), 0 8px 20px -10px rgb(43 36 29 / 35%);
+  --shadow-pixel: 3px 3px 0 rgb(91 78 64 / 55%);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --t-fast: 120ms;
+  --t-med: 200ms;
 }
 
 * {
@@ -20,12 +52,174 @@ body,
 }
 
 body {
-  background: var(--paper);
+  background: var(--sand);
   color: var(--ink);
   font-family: var(--font-body);
-  font-size: 20px;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.25;
+}
+
+code,
+kbd,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 5px;
+  border: 1px solid var(--dune-300);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  text-align: center;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--spice-strong);
+  text-underline-offset: 3px;
 }
 
 img {
   image-rendering: pixelated;
+}
+
+/* Foco visible y consistente en todo: el azul de Ibad marca lo que el usuario tiene en la mano. */
+:focus-visible {
+  outline: 2px solid var(--ibad);
+  outline-offset: 2px;
+}
+
+/* Campos */
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--sand-raised);
+  border: 1px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  padding: 5px 8px;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--stone-500);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--ibad);
+  box-shadow: 0 0 0 3px var(--ibad-tint);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--stone-500);
+}
+
+input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+/* Botones: secundario por defecto (.pixel-button), principal (.is-primary), sin borde (.is-ghost). */
+.pixel-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--sand-raised);
+  border: 1px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+
+.pixel-button:hover:not(:disabled) {
+  background: var(--dune-100);
+  border-color: var(--stone-500);
+}
+
+.pixel-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.pixel-button.is-primary {
+  color: #fff8ee;
+  background: var(--spice);
+  border-color: var(--spice-strong);
+}
+
+.pixel-button.is-primary:hover:not(:disabled) {
+  background: var(--spice-strong);
+}
+
+.pixel-button.is-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.pixel-button.is-ghost:hover:not(:disabled) {
+  background: var(--dune-100);
+  border-color: transparent;
+}
+
+.pixel-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.icon-button {
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Superficie flotante (barras y paneles sobre el lienzo). */
+.floating {
+  background: var(--sand-raised);
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-float);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+  }
 }
