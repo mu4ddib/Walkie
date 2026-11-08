@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import { v7 as uuidv7 } from 'uuid';
-import type { Edge, Node, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
+import type { Edge, Node, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import { GRID } from '../theme/palette';
 
 export type NodeType = Node['type'];
@@ -17,6 +17,10 @@ export const TITLE_MAX_LENGTH = 120;
 export const TEXT_MAX_LENGTH = 2000;
 /** Máximo del schema para `input.name` y cada opción de un `enum`. */
 export const INPUT_NAME_MAX_LENGTH = 60;
+/** Máximo del schema para el nombre de un tour. */
+export const TOUR_NAME_MAX_LENGTH = 60;
+/** Máximo del schema para la nota de un paso. */
+export const STEP_NOTE_MAX_LENGTH = 500;
 /** Máximo del schema para `edge.label` y `edge.when`. */
 export const EDGE_TEXT_MAX_LENGTH = 60;
 
@@ -90,6 +94,12 @@ function withText<T extends object>(obj: T, key: keyof T & string, value: string
   return copy as T;
 }
 
+/** Paso con la nota recortada al límite; vacía o ausente, sin `note`. */
+function withNote(step: Tour['steps'][number], note: string | undefined): Tour['steps'][number] {
+  const clean = note?.trim().slice(0, STEP_NOTE_MAX_LENGTH);
+  return clean ? { ...step, note: clean } : { nodeId: step.nodeId };
+}
+
 /** Igualdad superficial de valores JSON (suficiente para detectar parches sin efecto). */
 function sameJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -133,6 +143,8 @@ export interface GraphState {
   nodes: Record<string, Node>;
   edges: Record<string, Edge>;
   layout: WalkieCanvasGraphV0['layout'];
+  /** Tours del lienzo (modo tour), por id. */
+  tours: Record<string, Tour>;
   /** Versión guardada en el servidor (concurrencia optimista). */
   version: number;
   /** Hay cambios sin guardar. */
@@ -166,6 +178,19 @@ export interface GraphActions {
   /** Tipo, etiqueta (`label`) y condición (`when`). */
   updateEdge(id: string, patch: EdgePatch): void;
   removeEdge(id: string): void;
+  /** Crea un tour vacío; devuelve su id o `null` si el nombre queda vacío. */
+  addTour(name: string): string | null;
+  renameTour(id: string, name: string): void;
+  removeTour(id: string): void;
+  /** Agrega un paso al final; devuelve su índice o `null` si el tour o el nodo no existen. */
+  addStep(tourId: string, nodeId: string, note?: string): number | null;
+  /** Cambia el nodo de un paso (debe existir). */
+  setStepNode(tourId: string, index: number, nodeId: string): void;
+  /** Nota del paso; vacía la quita. */
+  updateStepNote(tourId: string, index: number, note: string): void;
+  /** Sube (-1) o baja (+1) un paso; fuera de rango no hace nada. */
+  moveStep(tourId: string, index: number, delta: -1 | 1): void;
+  removeStep(tourId: string, index: number): void;
   /**
    * Tras un guardado exitoso: adopta la versión del servidor. Limpia `dirty` solo si el grafo
    * sigue siendo el que se envió (`sent`); si hubo cambios mientras viajaba la petición, siguen pendientes.
@@ -179,6 +204,7 @@ const emptyState: GraphState = {
   nodes: {},
   edges: {},
   layout: {},
+  tours: {},
   version: 0,
   dirty: false,
 };
@@ -189,6 +215,8 @@ const emptyState: GraphState = {
  */
 export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphStore> {
   return createStore<GraphStore>()((set, get) => {
+    const putTour = (tour: Tour) => set((s) => ({ tours: { ...s.tours, [tour.id]: tour }, dirty: true }));
+
     /** Reemplaza el nodo si cambió y marca `dirty`. */
     const putNode = (node: Node) => {
       if (sameJson(get().nodes[node.id], node)) return;
@@ -227,6 +255,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           nodes: graph.nodes,
           edges: graph.edges,
           layout: graph.layout,
+          tours: graph.tours ?? {},
           version: graph.version,
           dirty: false,
         }),
@@ -248,23 +277,23 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
       },
 
       addRef: (item, position) => {
-      const id = newId();
-      const title = item.title.trim().slice(0, TITLE_MAX_LENGTH) || DEFAULT_TITLES.ref;
-      set((s) => ({
-        nodes: { ...s.nodes, [id]: { id, type: 'ref', title, catalogId: item.id } },
-        layout: { ...s.layout, [id]: { x: snap(position.x), y: snap(position.y) } },
-        dirty: true,
-      }));
-      return id;
-    },
+        const id = newId();
+        const title = item.title.trim().slice(0, TITLE_MAX_LENGTH) || DEFAULT_TITLES.ref;
+        set((s) => ({
+          nodes: { ...s.nodes, [id]: { id, type: 'ref', title, catalogId: item.id } },
+          layout: { ...s.layout, [id]: { x: snap(position.x), y: snap(position.y) } },
+          dirty: true,
+        }));
+        return id;
+      },
 
-    convertToRef: (id, catalogId) => {
-      const node = get().nodes[id];
-      if (!node || !CATALOG_NODE_TYPES.includes(node.type)) return;
-      set((s) => ({ nodes: { ...s.nodes, [id]: { id, type: 'ref', title: node.title, catalogId } }, dirty: true }));
-    },
+      convertToRef: (id, catalogId) => {
+        const node = get().nodes[id];
+        if (!node || !CATALOG_NODE_TYPES.includes(node.type)) return;
+        set((s) => ({ nodes: { ...s.nodes, [id]: { id, type: 'ref', title: node.title, catalogId } }, dirty: true }));
+      },
 
-    moveNode: (id, position) => {
+      moveNode: (id, position) => {
         const current = get().layout[id];
         if (!get().nodes[id]) return;
         const x = snap(position.x);
@@ -366,7 +395,17 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           }
           const layout = omit(s.layout, id);
           const edges = Object.fromEntries(Object.entries(s.edges).filter(([, e]) => e.from !== id && e.to !== id));
-          return { nodes, layout, edges, dirty: true };
+          // Los pasos de tours sobre el nodo desaparecen (spec modo-tour, criterio 4).
+          const usedInTours = Object.values(s.tours).some((t) => t.steps.some((step) => step.nodeId === id));
+          const tours = usedInTours
+            ? Object.fromEntries(
+                Object.entries(s.tours).map(([key, t]) => [
+                  key,
+                  { ...t, steps: t.steps.filter((x) => x.nodeId !== id) },
+                ]),
+              )
+            : s.tours;
+          return { nodes, layout, edges, tours, dirty: true };
         });
       },
 
@@ -410,9 +449,69 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         set((s) => ({ edges: omit(s.edges, id), dirty: true }));
       },
 
+      addTour: (name) => {
+        const clean = name.trim().slice(0, TOUR_NAME_MAX_LENGTH);
+        if (!clean) return null;
+        const id = newId();
+        set((s) => ({ tours: { ...s.tours, [id]: { id, name: clean, steps: [] } }, dirty: true }));
+        return id;
+      },
+
+      renameTour: (id, name) => {
+        const tour = get().tours[id];
+        const clean = name.trim().slice(0, TOUR_NAME_MAX_LENGTH);
+        if (!tour || !clean || clean === tour.name) return;
+        putTour({ ...tour, name: clean });
+      },
+
+      removeTour: (id) => {
+        if (!get().tours[id]) return;
+        set((s) => ({ tours: omit(s.tours, id), dirty: true }));
+      },
+
+      addStep: (tourId, nodeId, note) => {
+        const tour = get().tours[tourId];
+        if (!tour || !get().nodes[nodeId]) return null;
+        putTour({ ...tour, steps: [...tour.steps, withNote({ nodeId }, note)] });
+        return tour.steps.length;
+      },
+
+      setStepNode: (tourId, index, nodeId) => {
+        const tour = get().tours[tourId];
+        const step = tour?.steps[index];
+        if (!tour || !step || !get().nodes[nodeId] || step.nodeId === nodeId) return;
+        putTour({ ...tour, steps: tour.steps.map((x, i) => (i === index ? { ...x, nodeId } : x)) });
+      },
+
+      updateStepNote: (tourId, index, note) => {
+        const tour = get().tours[tourId];
+        const step = tour?.steps[index];
+        if (!tour || !step) return;
+        const next = withNote({ nodeId: step.nodeId }, note);
+        if (next.note === step.note) return;
+        putTour({ ...tour, steps: tour.steps.map((x, i) => (i === index ? next : x)) });
+      },
+
+      moveStep: (tourId, index, delta) => {
+        const tour = get().tours[tourId];
+        const target = index + delta;
+        if (!tour || !tour.steps[index] || target < 0 || target >= tour.steps.length) return;
+        const steps = [...tour.steps];
+        [steps[index], steps[target]] = [steps[target]!, steps[index]!];
+        putTour({ ...tour, steps });
+      },
+
+      removeStep: (tourId, index) => {
+        const tour = get().tours[tourId];
+        if (!tour?.steps[index]) return;
+        putTour({ ...tour, steps: tour.steps.filter((_, i) => i !== index) });
+      },
+
       markSaved: (version, sent) => {
         const s = get();
-        const unchanged = !sent || (s.nodes === sent.nodes && s.edges === sent.edges && s.layout === sent.layout);
+        const unchanged =
+          !sent ||
+          (s.nodes === sent.nodes && s.edges === sent.edges && s.layout === sent.layout && s.tours === sent.tours);
         set({ version, dirty: unchanged ? false : s.dirty });
       },
     };
@@ -421,13 +520,16 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
 
 /** Grafo listo para `PUT /api/features/{id}/canvas`. */
 export function toGraph(state: GraphState): WalkieCanvasGraphV0 {
-  return {
+  const graph: WalkieCanvasGraphV0 = {
     schemaVersion: 0,
     version: state.version,
     nodes: state.nodes,
     edges: state.edges,
     layout: state.layout,
   };
+  // Sin tours, el grafo no lleva el campo (así un lienzo sin tours recarga idéntico).
+  if (Object.keys(state.tours).length > 0) graph.tours = state.tours;
+  return graph;
 }
 
 /** Hook para leer el store desde componentes. */
