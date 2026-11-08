@@ -1,7 +1,7 @@
 # Spec: Modo tour con el personaje guía
 
 - Issue padre: #59
-- Estado: aprobada (2026-11-07)
+- Estado: implementada (2026-11-08), verificada por `apps/web/e2e/modo-tour.spec.ts`
 - Fase 3 ("modo tour"). Gate del roadmap: una persona nueva entiende el tour sin ayuda.
 
 ## Objetivo
@@ -17,24 +17,24 @@ Que quien documenta un lienzo arme tours por pasos sobre sus nodos, y que quien 
 
 **Armar tours (autor)**
 
-- [ ] 1. Dado un lienzo sin nada seleccionado, el panel derecho muestra la sección "Tours" con los tours de la feature y "Nuevo tour"; al crear uno le doy nombre (1 a 60 caracteres).
-- [ ] 2. Dado un tour abierto en el panel, cuando uso "Agregar paso", elijo un nodo del lienzo y escribo la nota del paso (hasta 500 caracteres); el paso se agrega al final.
-- [ ] 3. Dado un tour con pasos, puedo editar la nota, subir o bajar un paso, quitarlo, renombrar el tour y borrarlo. El lienzo queda "Sin guardar" y los tours se guardan con el lienzo.
-- [ ] 4. Dado un nodo que aparece en pasos de un tour, cuando lo borro, entonces esos pasos desaparecen (no quedan pasos rotos).
+- [x] 1. Dado un lienzo sin nada seleccionado, el panel derecho muestra la sección "Tours" con los tours de la feature y "Nuevo tour"; al crear uno le doy nombre (1 a 60 caracteres).
+- [x] 2. Dado un tour abierto en el panel, cuando uso "Agregar paso", elijo un nodo del lienzo y escribo la nota del paso (hasta 500 caracteres); el paso se agrega al final.
+- [x] 3. Dado un tour con pasos, puedo editar la nota, subir o bajar un paso, quitarlo, renombrar el tour y borrarlo. El lienzo queda "Sin guardar" y los tours se guardan con el lienzo.
+- [x] 4. Dado un nodo que aparece en pasos de un tour, cuando lo borro, entonces esos pasos desaparecen (no quedan pasos rotos).
 
 **Recorrer un tour (lector)**
 
-- [ ] 5. Dado un tour con pasos, cuando uso "Ver tour", entonces entro al modo tour: el lienzo no se puede editar, la paleta y el panel se ocultan y aparece la barra del tour con "Paso 1 de N", "Anterior", "Siguiente" y "Salir".
-- [ ] 6. Dado un paso, la vista se centra en su nodo, el nodo queda resaltado y el resto se atenúa; el guía camina hasta el nodo, lo señala y muestra la nota en un globo de diálogo (animación de hablar mientras aparece el texto).
-- [ ] 7. Dado el modo tour, las flechas ← y → cambian de paso y Esc sale; al salir, el lienzo vuelve a como estaba (zoom y posición incluidos).
-- [ ] 8. Dado el último paso, "Siguiente" pasa a "Terminar" y el guía celebra; al terminar se sale del modo tour.
-- [ ] 9. Dado un paso sobre un nodo `portal` con destino, el globo ofrece "Ir a <feature>", que abre esa feature (sus tours se pueden ver desde ahí).
-- [ ] 10. Dado que el sistema pide menos movimiento (`prefers-reduced-motion`), el guía aparece junto al nodo sin caminar ni saltar y la vista cambia sin animación.
+- [x] 5. Dado un tour con pasos, cuando uso "Ver tour", entonces entro al modo tour: el lienzo no se puede editar, la paleta y el panel se ocultan y aparece la barra del tour con "Paso 1 de N", "Anterior", "Siguiente" y "Salir".
+- [x] 6. Dado un paso, la vista se centra en su nodo, el nodo queda resaltado y el resto se atenúa; el guía camina hasta el nodo, lo señala y muestra la nota en un globo de diálogo (animación de hablar mientras aparece el texto).
+- [x] 7. Dado el modo tour, las flechas ← y → cambian de paso y Esc sale; al salir, el lienzo vuelve a como estaba (zoom y posición incluidos).
+- [x] 8. Dado el último paso, "Siguiente" pasa a "Terminar" y el guía celebra; al terminar se sale del modo tour.
+- [x] 9. Dado un paso sobre un nodo `portal` con destino, el globo ofrece "Ir a <feature>", que abre esa feature (sus tours se pueden ver desde ahí).
+- [x] 10. Dado que el sistema pide menos movimiento (`prefers-reduced-motion`), el guía aparece junto al nodo sin caminar ni saltar y la vista cambia sin animación.
 
 **Persistencia e integridad**
 
-- [ ] 11. Dado un lienzo con tours, cuando guardo y recargo, entonces los tours aparecen idénticos (nombres, pasos, orden y notas).
-- [ ] 12. Dado un grafo con un paso cuyo `nodeId` no existe o un tour cuya clave no es su `id`, cuando la API lo recibe, entonces responde 400 en `/tours/{id}/steps/{i}/nodeId` o `/tours/{id}/id`.
+- [x] 11. Dado un lienzo con tours, cuando guardo y recargo, entonces los tours aparecen idénticos (nombres, pasos, orden y notas).
+- [x] 12. Dado un grafo con un paso cuyo `nodeId` no existe o un tour cuya clave no es su `id`, cuando la API lo recibe, entonces responde 400 en `/tours/{id}/steps/{i}/nodeId` o `/tours/{id}/id`.
 
 ## Fuera de alcance
 
