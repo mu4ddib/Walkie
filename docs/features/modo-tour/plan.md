@@ -21,7 +21,7 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 2. [x] (#61) Store: `addTour`, `renameTour`, `removeTour`, `addStep`, `updateStepNote`, `moveStep`, `removeStep`; `removeNode` quita los pasos de ese nodo. Pruebas en Vitest (criterios 3 y 4 en el store).
 3. [x] (#62) Panel "Tours": con nada seleccionado, lista de tours, "Nuevo tour", editor del tour (nombre, pasos con nodo y nota, subir/bajar, quitar, borrar tour) y "Ver tour" (criterios 1 a 3).
 4. [x] (#63) Guía animado: `tours/Guide.tsx` lee `packages/sprites/guia/manifest.json`, reproduce una animación (en bucle o una vez), se refleja al mirar al oeste, escala ×2 pixelado y respeta `prefers-reduced-motion`. Pruebas del componente (criterio 10 en parte).
-5. [ ] (#64) Modo tour: lienzo de solo lectura sin paleta ni panel, barra con "Paso i de N", Anterior/Siguiente/Salir y teclado; centrar y resaltar el nodo, atenuar el resto; el guía camina, señala y habla con el globo de la nota (piensa en reglas); "Terminar" con celebración; "Ir a <feature>" en portales; al salir vuelve la vista anterior (criterios 5 a 10).
+5. [x] (#64) Modo tour: lienzo de solo lectura sin paleta ni panel, barra con "Paso i de N", Anterior/Siguiente/Salir y teclado; centrar y resaltar el nodo, atenuar el resto; el guía camina, señala y habla con el globo de la nota (piensa en reglas); "Terminar" con celebración; "Ir a <feature>" en portales; al salir vuelve la vista anterior (criterios 5 a 10).
 6. [ ] (#65) E2E: armar un tour de tres pasos (con una regla y un portal), guardar y recargar idéntico, recorrerlo con teclado y botones, terminar; marcar la fase 3 en el roadmap (criterios 5, 8, 9 y 11).
 
 ## Pruebas
@@ -32,4 +32,4 @@ Cada tarea cabe en una sesión y en un PR. La 1 va primero; la 2 depende de la 1
 
 ## Estado
 
-Última actualización: 2026-11-07 — tareas 1 a 4 hechas (schema e integridad en la API; acciones en el store; sección "Tours" del panel; guía animado). Sigue: tarea 5.
+Última actualización: 2026-11-07 — tareas 1 a 5 hechas (schema e integridad en la API; acciones en el store; sección "Tours" del panel; guía animado; modo tour). Sigue: tarea 6 (E2E y cierre de la fase 3).

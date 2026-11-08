@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -18,6 +18,7 @@ import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
 import { nodeTypes } from '../nodes/nodeTypes';
 import { PropertiesPanel } from '../panel/PropertiesPanel';
+import { TourPlayer } from '../tours/TourPlayer';
 import type { WalkieFlowNode } from '../nodes/PixelNode';
 import { defaultEdgeKind, type GraphStore, type NodeType, type Position } from '../store/graphStore';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
@@ -34,28 +35,19 @@ const NO_CATALOG: CanvasCatalog = { appId: '', items: {} };
  * Lienzo de una feature. Todo cambio del grafo pasa por las acciones del store. `catalog` es el catálogo
  * de la app: los nodos `ref` lo leen por contexto y la paleta lo ofrece para crear `ref`.
  */
-export function Canvas({
-  store,
-  catalog = NO_CATALOG,
-  onPlayTour,
-}: {
-  store: StoreApi<GraphStore>;
-  catalog?: CanvasCatalog;
-  /** "Ver tour" en la sección de tours del panel (modo tour). */
-  onPlayTour?: (tourId: string) => void;
-}) {
+export function Canvas({ store, catalog = NO_CATALOG }: { store: StoreApi<GraphStore>; catalog?: CanvasCatalog }) {
   return (
     <GraphStoreProvider store={store}>
       <CatalogContext.Provider value={catalog}>
         <ReactFlowProvider>
-          <CanvasInner catalog={catalog} onPlay={onPlayTour} />
+          <CanvasInner catalog={catalog} />
         </ReactFlowProvider>
       </CatalogContext.Provider>
     </GraphStoreProvider>
   );
 }
 
-function CanvasInner({ catalog, onPlay }: { catalog: CanvasCatalog; onPlay?: (tourId: string) => void }) {
+function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const graphNodes = useGraphStore((s) => s.nodes);
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
@@ -71,6 +63,28 @@ function CanvasInner({ catalog, onPlay }: { catalog: CanvasCatalog; onPlay?: (to
   const [selectedEdges, setSelectedEdges] = useState<ReadonlySet<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [openTourId, setOpenTourId] = useState<string | null>(null);
+  // Modo tour (spec modo-tour): qué tour y en qué paso; el lienzo queda de solo lectura.
+  const [playing, setPlaying] = useState<{ tourId: string; step: number } | null>(null);
+  const tours = useGraphStore((s) => s.tours);
+  const tourNodeId = playing ? tours[playing.tourId]?.steps[playing.step]?.nodeId : undefined;
+  const flowRef = useRef<HTMLDivElement>(null);
+  const [pane, setPane] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const el = flowRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setPane({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const startTour = useCallback((tourId: string) => {
+    setSelectedNodes(new Set());
+    setSelectedEdges(new Set());
+    setEditingId(null);
+    setPlaying({ tourId, step: 0 });
+  }, []);
   // Medidas que reporta React Flow. Si no se devuelven en `measured`, al reconstruir los nodos
   // React Flow los oculta un instante para medirlos otra vez y se pierden clics (ej. doble clic).
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
@@ -85,8 +99,9 @@ function CanvasInner({ catalog, onPlay }: { catalog: CanvasCatalog; onPlay?: (to
         data: { node, editing: editingId === node.id, onEditDone: stopEditing },
         selected: selectedNodes.has(node.id),
         measured: measured[node.id],
+        className: playing ? (node.id === tourNodeId ? 'tour-current' : 'tour-dim') : undefined,
       })),
-    [graphNodes, layout, selectedNodes, editingId, stopEditing, measured],
+    [graphNodes, layout, selectedNodes, editingId, stopEditing, measured, playing, tourNodeId],
   );
 
   const edges = useMemo<WalkieFlowEdge[]>(
@@ -189,9 +204,10 @@ function CanvasInner({ catalog, onPlay }: { catalog: CanvasCatalog; onPlay?: (to
     : undefined;
 
   return (
-    <div className="canvas">
+    <div className={playing ? 'canvas canvas-touring' : 'canvas'}>
       <Palette onAdd={(type) => addAtCenter((p) => addNode(type, p))} catalog={paletteCatalog} />
       <div
+        ref={flowRef}
         className="canvas-flow"
         onDragOver={(e) => {
           e.preventDefault();
@@ -209,6 +225,7 @@ function CanvasInner({ catalog, onPlay }: { catalog: CanvasCatalog; onPlay?: (to
           onConnect={onConnect}
           // El título de un `ref` se edita en el catálogo; el doble clic en un `portal` abre su destino.
           onNodeDoubleClick={(_, flowNode) => {
+            if (playing) return;
             const node = graphNodes[flowNode.id];
             if (!node || node.type === 'ref') return;
             if (node.type === 'portal') {
@@ -222,7 +239,10 @@ function CanvasInner({ catalog, onPlay }: { catalog: CanvasCatalog; onPlay?: (to
           connectOnClick={false}
           snapToGrid
           snapGrid={[GRID, GRID]}
-          deleteKeyCode={['Delete', 'Backspace']}
+          deleteKeyCode={playing ? null : ['Delete', 'Backspace']}
+          nodesDraggable={!playing}
+          nodesConnectable={!playing}
+          elementsSelectable={!playing}
           fitView={fitOnMount}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           proOptions={{ hideAttribution: true }}
@@ -230,11 +250,21 @@ function CanvasInner({ catalog, onPlay }: { catalog: CanvasCatalog; onPlay?: (to
           <Background variant={BackgroundVariant.Dots} gap={GRID * 3} color={palette.grid} />
           <Controls showInteractive={false} />
         </ReactFlow>
+        {playing && (
+          <TourPlayer
+            tourId={playing.tourId}
+            step={playing.step}
+            sizes={measured}
+            pane={pane}
+            onStep={(step) => setPlaying((p) => p && { ...p, step })}
+            onExit={() => setPlaying(null)}
+          />
+        )}
       </div>
       <PropertiesPanel
         nodeId={panelNodeId}
         edgeId={panelEdgeId}
-        tours={{ openTourId, onOpen: setOpenTourId, onPlay }}
+        tours={{ openTourId, onOpen: setOpenTourId, onPlay: startTour }}
       />
     </div>
   );
