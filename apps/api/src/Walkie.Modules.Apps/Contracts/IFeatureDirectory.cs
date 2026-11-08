@@ -10,4 +10,9 @@ public interface IFeatureDirectory
 
     /// <summary>Ids de las features de la app (para validar los <c>portal</c>).</summary>
     Task<IReadOnlySet<Guid>> FeatureIdsOfAppAsync(Guid appId, CancellationToken cancellationToken);
+
+    /// <summary>La feature con su app y los nombres de ambas (Sharing); <c>null</c> si no existe.</summary>
+    Task<FeatureSummary?> DescribeAsync(Guid featureId, CancellationToken cancellationToken);
 }
+
+public sealed record FeatureSummary(Guid Id, Guid AppId, string AppName, string Name);

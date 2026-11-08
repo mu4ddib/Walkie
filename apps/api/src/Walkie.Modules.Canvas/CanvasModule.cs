@@ -17,6 +17,7 @@ public static class CanvasModule
         services.AddSingleton<GraphValidator>();
         services.AddScoped<CanvasHandlers>();
         services.AddScoped<Apps.Contracts.ICatalogUsage, CatalogUsage>();
+        services.AddScoped<Contracts.ICanvasReader, CanvasReader>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

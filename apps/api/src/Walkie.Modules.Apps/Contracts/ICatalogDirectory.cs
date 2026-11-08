@@ -5,4 +5,8 @@ public interface ICatalogDirectory
 {
     /// <summary>Ids de los elementos del catálogo de la app a la que pertenece la feature.</summary>
     Task<IReadOnlySet<Guid>> CatalogItemIdsForFeatureAsync(Guid featureId, CancellationToken cancellationToken);
+
+    /// <summary>De <paramref name="itemIds"/>, los elementos que existen en el catálogo de la app (Sharing).</summary>
+    Task<IReadOnlyList<CatalogItemResponse>> ItemsOfAppAsync(
+        Guid appId, IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 }

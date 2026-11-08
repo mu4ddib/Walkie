@@ -150,7 +150,7 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
 
     private static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
-    private static CatalogItemResponse ToResponse(CatalogItem item) => new(
+    internal static CatalogItemResponse ToResponse(CatalogItem item) => new(
         item.Id,
         item.AppId,
         item.Type,

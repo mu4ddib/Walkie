@@ -16,4 +16,9 @@ internal sealed class FeatureDirectory(AppsDbContext db) : IFeatureDirectory
     public async Task<IReadOnlySet<Guid>> FeatureIdsOfAppAsync(Guid appId, CancellationToken cancellationToken) =>
         (await db.Features.Where(f => f.AppId == appId).Select(f => f.Id)
             .ToListAsync(cancellationToken).ConfigureAwait(false)).ToHashSet();
+
+    public async Task<FeatureSummary?> DescribeAsync(Guid featureId, CancellationToken cancellationToken) =>
+        await db.Features.Where(f => f.Id == featureId)
+            .Join(db.Apps, f => f.AppId, a => a.Id, (f, a) => new FeatureSummary(f.Id, a.Id, a.Name, f.Name))
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 }
