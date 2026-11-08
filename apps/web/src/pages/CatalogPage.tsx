@@ -321,7 +321,7 @@ function FeatureLinks({ appId, features }: { appId: string; features: Feature[] 
 function Breadcrumb({ appId, appName }: { appId: string; appName?: string }) {
   return (
     <nav className="breadcrumb" aria-label="Ruta">
-      <Link to="/">Apps</Link>
+      <Link to="/apps">Apps</Link>
       {appName && (
         <>
           {' / '}

@@ -33,7 +33,10 @@ test('catálogo compartido entre dos lienzos con ref, Mover al catálogo y borra
   for (const feature of ['Transferir', 'Pagar']) {
     await openFeature(page, app, feature);
     await dropNode(page, 'Pantalla', 80, 120);
+    // El catálogo está en el panel "Componentes" de la barra de herramientas (spec espacio-de-trabajo).
+    await page.getByRole('button', { name: 'Componentes' }).click();
     await dropNode(page, 'Consultar cliente', 400, 120);
+    await page.getByRole('button', { name: 'Componentes' }).click();
     await connect(page, 0, 1);
     await page.locator('.react-flow__pane').click({ position: { x: 700, y: 600 } });
     await expect(page.locator('.kind-edge-label')).toHaveText('llama');
@@ -87,9 +90,18 @@ test('catálogo compartido entre dos lienzos con ref, Mover al catálogo y borra
 /** Campo del panel por su etiqueta exacta. */
 const field = (page: Page, label: string) => page.getByLabel(label, { exact: true });
 
+/** Abre una feature: desde una página con miga de pan, por el enlace de la app; desde el editor, con su selector. */
 async function openFeature(page: Page, app: string, feature: string) {
-  await page.getByRole('navigation', { name: 'Ruta' }).getByRole('link', { name: app }).click();
-  await page.getByRole('link', { name: feature, exact: true }).click();
+  const ruta = page.getByRole('navigation', { name: 'Ruta' });
+  const appLink = ruta.getByRole('link', { name: app });
+  if ((await appLink.count()) > 0) {
+    await appLink.click();
+    await page.getByRole('link', { name: feature, exact: true }).click();
+  } else {
+    await ruta.getByRole('button').last().click();
+    await page.getByRole('dialog', { name: 'Cambiar de feature' }).getByRole('link', { name: feature, exact: true }).click();
+  }
+  await expect(ruta).toContainText(feature);
   await expect(page.locator('.react-flow')).toBeVisible();
 }
 

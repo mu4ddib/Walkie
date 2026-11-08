@@ -1,0 +1,232 @@
+/* Espacio de trabajo: bienvenida del primer ingreso y selectores de app y feature. */
+
+.welcome-stage {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: 24px 16px;
+  /* El lienzo de fondo: la misma arena punteada que el editor. */
+  background-color: var(--sand);
+  background-image: radial-gradient(var(--dune-300) 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+
+.welcome-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(480px, 100%);
+  padding: 28px 28px 24px;
+}
+
+.welcome-guide {
+  align-self: flex-start;
+  margin: -8px 0 -6px -12px;
+}
+
+.welcome-card h2 {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.welcome-lead {
+  margin: 0;
+  color: var(--stone-700);
+}
+
+.welcome-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.welcome-form label {
+  color: var(--stone-700);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.welcome-form input {
+  min-height: 36px;
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.welcome-form .pixel-button {
+  min-height: 40px;
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+.welcome-sample {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dune-200);
+  color: var(--stone-700);
+  font-size: 13.5px;
+}
+
+.welcome-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+/* Barra de ubicación: app ▾ / feature ▾ */
+.location-bar {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.location-sep {
+  color: var(--dune-300);
+  font-size: 16px;
+}
+
+.popover {
+  position: relative;
+  min-width: 0;
+}
+
+.popover-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.popover-trigger:hover,
+.popover-trigger[aria-expanded='true'] {
+  background: var(--dune-100);
+}
+
+.popover-trigger > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.location-app {
+  color: var(--stone-700);
+}
+
+.location-bar .popover:first-child .popover-trigger {
+  max-width: 220px;
+}
+
+@media (max-width: 900px) {
+  .location-bar .popover:first-child .popover-trigger {
+    max-width: 120px;
+  }
+
+  .location-bar .popover-trigger {
+    max-width: 180px;
+  }
+}
+
+.location-feature {
+  font-weight: 600;
+}
+
+.popover-caret {
+  color: var(--stone-500);
+  font-size: 11px;
+}
+
+.popover-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: 300px;
+  padding: 8px;
+}
+
+.switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.switcher-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.switcher-list a {
+  display: block;
+  padding: 7px 10px;
+  border-radius: var(--radius-s);
+  color: var(--ink);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.switcher-list a:hover {
+  background: var(--dune-100);
+}
+
+.switcher-list a[aria-current='page'] {
+  background: var(--ibad-tint);
+  color: var(--ibad);
+  font-weight: 600;
+}
+
+.switcher-note {
+  margin: 0;
+  padding: 4px 10px;
+  color: var(--stone-500);
+  font-size: 13px;
+}
+
+.switcher-create {
+  display: flex;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dune-200);
+}
+
+.switcher-create input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+}
+
+.switcher-create .pixel-button {
+  white-space: nowrap;
+}
+
+.switcher-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.switcher-footer {
+  padding: 4px 10px;
+  font-size: 13px;
+}

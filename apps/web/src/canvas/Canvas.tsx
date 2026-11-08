@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import {
   Background,
   BackgroundVariant,
-  Controls,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
   type Connection,
   type EdgeChange,
   type NodeChange,
+  type FitViewOptions,
+  type Viewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { StoreApi } from 'zustand/vanilla';
@@ -28,6 +29,11 @@ import { GRID, palette } from '../theme/palette';
 import { Palette } from './Palette';
 import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES } from './paletteTypes';
 import { useOpenFeature } from './useOpenFeature';
+import { getInspectorOpen, getSavedViewport, saveViewport, setInspectorOpen } from '../workspace/session';
+import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
+import { EmptyCanvasGuide } from './EmptyCanvasGuide';
+import { ShortcutsDialog } from './ShortcutsDialog';
+import { ZoomControls } from './ZoomControls';
 import './canvas.css';
 
 const NO_CATALOG: CanvasCatalog = { appId: '', items: {} };
@@ -54,11 +60,21 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
   const { addNode, addRef, moveNode, removeNode, connect, removeEdge } = useGraphStore((s) => s);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
   const openFeature = useOpenFeature();
-  // fitView solo si el lienzo ya trae nodos al montarse: con un lienzo vacío, React Flow
-  // ajustaría el zoom al aparecer el primer nodo y los siguientes caerían en otro lugar.
-  const [fitOnMount] = useState(() => Object.keys(graphNodes).length > 0);
+  // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
+  // solo si el lienzo ya trae nodos: con uno vacío, React Flow ajustaría el zoom al aparecer el primero
+  // y los siguientes caerían en otro lugar.
+  const [savedViewport] = useState(() => (catalog.featureId ? getSavedViewport(catalog.featureId) : null));
+  const [fitOnMount] = useState(() => !savedViewport && Object.keys(graphNodes).length > 0);
+  const [inspectorOpen, setInspectorOpenState] = useState(getInspectorOpen);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const toggleInspector = useCallback(() => {
+    setInspectorOpenState((open) => {
+      setInspectorOpen(!open);
+      return !open;
+    });
+  }, []);
 
   // La selección es estado de UI, no del grafo: vive aquí y no en el store.
   const [selectedNodes, setSelectedNodes] = useState<ReadonlySet<string>>(new Set());
@@ -72,6 +88,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   // Un enlace de solo lectura (spec enlace-solo-lectura, criterio 6) o el modo tour bloquean la edición.
   const readOnly = Boolean(catalog.share);
   const locked = readOnly || playing !== null;
+  const empty = Object.keys(graphNodes).length === 0;
   const flowRef = useRef<HTMLDivElement>(null);
   const [pane, setPane] = useState({ width: 0, height: 0 });
   useEffect(() => {
@@ -83,6 +100,22 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // "Ver todo" deja libres la barra de herramientas y el inspector, que flotan sobre el lienzo.
+  const fitPadding = useMemo(
+    (): FitViewOptions['padding'] => {
+      const docked = inspectorOpen && !catalog.share;
+      // Debajo de 900 px el inspector es un panel inferior (canvas.css): ocupa alto, no ancho.
+      const narrow = pane.width > 0 && pane.width < 900;
+      return {
+        top: '72px',
+        bottom: docked && narrow ? `${Math.round(pane.height * 0.45) + 24}px` : '72px',
+        left: '88px',
+        right: docked && !narrow ? '376px' : '56px',
+      };
+    },
+    [inspectorOpen, catalog.share, pane.width, pane.height],
+  );
 
   const startTour = useCallback((tourId: string) => {
     setSelectedNodes(new Set());
@@ -196,10 +229,57 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     else if (item) addAt((p) => addRef(item, p), event.clientX, event.clientY);
   }
 
+  /** Agrega en el centro visible; cada alta seguida se corre un poco para no apilar cajas. */
   function addAtCenter(create: (position: Position) => string) {
-    const pane = document.querySelector('.canvas-flow')?.getBoundingClientRect();
-    addAt(create, pane ? pane.left + pane.width / 2 : 0, pane ? pane.top + pane.height / 2 : 0);
+    const pane = flowRef.current?.getBoundingClientRect();
+    const step = (Object.keys(graphNodes).length % 6) * GRID * 3;
+    addAt(create, pane ? pane.left + pane.width / 2 - 100 + step : 0, pane ? pane.top + pane.height / 2 - 40 + step : 0);
   }
+
+  // Atajos (spec espacio-de-trabajo, criterio 5): 1–7 agregan, + − 0 zoom, I inspector, ? ayuda.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target) || playing) return;
+      const digit = Number(event.key);
+      if (!readOnly && Number.isInteger(digit) && digit >= 1 && digit <= PALETTE_TYPES.length) {
+        addAtCenter((p) => addNode(PALETTE_TYPES[digit - 1]!, p));
+      } else if (event.key === '+' || event.key === '=') void zoomIn();
+      else if (event.key === '-') void zoomOut();
+      else if (event.key === '0') void fitView({ padding: fitPadding, duration: 200 });
+      else if (!readOnly && event.key.toLowerCase() === 'i') toggleInspector();
+      else if (event.key === '?') setHelpOpen((open) => !open);
+      else return;
+      event.preventDefault();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
+  useEffect(() => {
+    const open = () => setHelpOpen(true);
+    window.addEventListener(OPEN_HELP_EVENT, open);
+    return () => window.removeEventListener(OPEN_HELP_EVENT, open);
+  }, []);
+
+  const onMoveEnd = useCallback(
+    (_: unknown, viewport: Viewport) => {
+      if (catalog.featureId && !readOnly) saveViewport(catalog.featureId, viewport);
+    },
+    [catalog.featureId, readOnly],
+  );
+
+  const selectedNode = panelNodeId ? graphNodes[panelNodeId] : undefined;
+  const hint = playing
+    ? null
+    : readOnly
+      ? 'Solo lectura: desplázate, acerca y recorre los tours.'
+      : selectedNode
+        ? 'Arrastra el punto derecho hasta otra caja para conectarlas · Doble clic edita el título · Supr borra'
+        : panelEdgeId
+          ? 'Edita el tipo, la etiqueta y la condición de la conexión en el inspector · Supr la borra'
+          : empty
+            ? null
+            : 'Clic en una caja para ver sus propiedades · Arrastra el fondo para moverte · ? atajos';
 
   const paletteCatalog = catalog.appId
     ? {
@@ -210,8 +290,16 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     : undefined;
 
   return (
-    <div className={['canvas', readOnly && 'canvas-readonly', playing && 'canvas-touring'].filter(Boolean).join(' ')}>
-      {!readOnly && <Palette onAdd={(type) => addAtCenter((p) => addNode(type, p))} catalog={paletteCatalog} />}
+    <div
+      className={[
+        'canvas',
+        readOnly && 'canvas-readonly',
+        playing && 'canvas-touring',
+        !readOnly && inspectorOpen && 'has-inspector',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div
         ref={flowRef}
         className="canvas-flow"
@@ -250,12 +338,25 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           nodesConnectable={!locked}
           elementsSelectable={!locked}
           fitView={fitOnMount}
-          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          fitViewOptions={{ padding: fitPadding }}
+          defaultViewport={savedViewport ?? { x: 0, y: 0, zoom: 1 }}
+          onMoveEnd={onMoveEnd}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={GRID * 3} color={palette.grid} />
-          <Controls showInteractive={false} />
+          <Background variant={BackgroundVariant.Dots} gap={GRID * 3} size={1.5} color={palette.grid} />
         </ReactFlow>
+        {!readOnly && !playing && (
+          <Palette onAdd={(type) => addAtCenter((p) => addNode(type, p))} catalog={paletteCatalog} />
+        )}
+        {!playing && <ZoomControls fitPadding={fitPadding} />}
+        {!readOnly && !playing && empty && (
+          <EmptyCanvasGuide onAdd={(type) => addAtCenter((p) => addNode(type, p))} onHelp={() => setHelpOpen(true)} />
+        )}
+        {hint && (
+          <p className="canvas-hint" aria-live="polite">
+            {hint}
+          </p>
+        )}
         {playing && (
           <TourPlayer
             tourId={playing.tourId}
@@ -269,13 +370,38 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       </div>
       {readOnly ? (
         <SharedTours onPlay={startTour} />
+      ) : inspectorOpen ? (
+        <div className="inspector floating">
+          <div className="inspector-header">
+            <span className="inspector-title">{panelNodeId || panelEdgeId ? 'Propiedades' : 'Lienzo'}</span>
+            <button
+              type="button"
+              className="pixel-button is-ghost icon-button"
+              aria-label="Ocultar inspector"
+              data-tip="Ocultar · I"
+              onClick={toggleInspector}
+            >
+              ⇥
+            </button>
+          </div>
+          <PropertiesPanel
+            nodeId={panelNodeId}
+            edgeId={panelEdgeId}
+            tours={{ openTourId, onOpen: setOpenTourId, onPlay: startTour }}
+          />
+        </div>
       ) : (
-        <PropertiesPanel
-          nodeId={panelNodeId}
-          edgeId={panelEdgeId}
-          tours={{ openTourId, onOpen: setOpenTourId, onPlay: startTour }}
-        />
+        <button
+          type="button"
+          className="pixel-button inspector-reopen floating"
+          aria-label="Mostrar inspector"
+          onClick={toggleInspector}
+        >
+          ⇤ {panelNodeId || panelEdgeId ? 'Propiedades' : 'Inspector'}
+          {(panelNodeId || panelEdgeId) && <span className="inspector-dot" aria-hidden="true" />}
+        </button>
       )}
+      {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

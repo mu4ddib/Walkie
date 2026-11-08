@@ -13,11 +13,11 @@ const feature = { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', created
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('lista de apps', () => {
+describe('lista de apps (/apps)', () => {
   beforeEach(() => installFakeApi());
 
   it('muestra el estado vacío y crea una app que aparece en la lista', async () => {
-    renderRoute('/');
+    renderRoute('/apps');
 
     expect(await screen.findByText('Aún no hay apps. Crea la primera.')).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Nueva app'), '  Banca móvil  ');
@@ -30,7 +30,7 @@ describe('lista de apps', () => {
 
   it('no envía un nombre vacío', async () => {
     const api = installFakeApi();
-    renderRoute('/');
+    renderRoute('/apps');
     await screen.findByText('Aún no hay apps. Crea la primera.');
 
     await userEvent.type(screen.getByLabelText('Nueva app'), '   ');
@@ -42,7 +42,7 @@ describe('lista de apps', () => {
 
   it('envía el token en cada petición', async () => {
     const api = installFakeApi();
-    renderRoute('/');
+    renderRoute('/apps');
     await screen.findByText('Aún no hay apps. Crea la primera.');
 
     const [, init] = api.fetchMock.mock.calls[0]!;
@@ -83,8 +83,8 @@ describe('lienzo de la feature', () => {
 
     expect(await screen.findByText('lienzo')).toBeInTheDocument();
     const nav = screen.getByRole('navigation', { name: 'Ruta' });
-    expect(within(nav).getByRole('link', { name: 'Banca móvil' })).toHaveAttribute('href', '/apps/app-1');
-    expect(nav).toHaveTextContent('Iniciar sesión');
+    expect(within(nav).getByRole('button', { name: /Banca móvil/ })).toBeInTheDocument();
+    expect(within(nav).getByRole('button', { name: /Iniciar sesión/ })).toBeInTheDocument();
   });
 
   it('avisa si la feature no existe', async () => {

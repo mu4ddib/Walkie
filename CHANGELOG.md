@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Espacio de trabajo, tarea 1: Walkie abre en el lienzo (última app, feature y vista, o una bienvenida que crea la app y la primera feature o carga un ejemplo); barra superior con selectores de app y feature, estado de guardado y acciones; barra de herramientas flotante (teclas 1–7) con el panel "Componentes"; inspector plegable; zoom con porcentaje; guía de lienzo vacío, pista contextual y atajos ("?"). Nuevo sistema visual: arena, piedra y especia, IBM Plex Sans/Mono, foco y selección en azul, sombras suaves. La lista de apps pasa a `/apps`.
 - Skills de diseño en `.claude/skills/`: `frontend-design`, `ui-ux-pro-max` y `canvas-design` (fuentes en `skills-lock.json`), para la mejora de UI/UX.
 - E2E del export a Markdown (export-markdown, tarea 4): documentar una feature (pantalla con imagen e input con regla, API, portal, conexiones y un tour), exportar, leer el `.zip` descargado (`readZip` en `e2e/helpers.ts`) y verificar el `.md` y la imagen; con cambios sin guardar se exporta lo guardado. Cierra la feature.
 - Botón "Exportar" en el editor (export-markdown, tarea 3): baja `<slug>.zip` con el nombre que manda la API (`Content-Disposition`, ahora expuesto por CORS); avisa si había cambios sin guardar (se exporta lo guardado) y si falla.
