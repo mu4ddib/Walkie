@@ -1,6 +1,5 @@
-import { deflateSync } from 'node:zlib';
 import { expect, test, type Page } from '@playwright/test';
-import { connect, dropNode, login, saveStatus } from './helpers';
+import { connect, dropNode, login, png, saveStatus } from './helpers';
 
 /**
  * Feature imagenes-portal (docs/features/imagenes-portal/spec.md), criterios 1, 5, 8 y 12, con API,
@@ -83,40 +82,4 @@ function visibleCanvas(page: Page) {
       .sort(),
     edges: [...document.querySelectorAll('.kind-edge-label')].map((e) => e.textContent).sort(),
   }));
-}
-
-/** PNG RGB válida de `width`×`height` con un degradado (sin datos de nadie). */
-function png(width: number, height: number): Buffer {
-  const rows = Buffer.concat(
-    Array.from({ length: height }, (_, y) =>
-      Buffer.from([0, ...Array.from({ length: width }, (_, x) => [(x * 4) % 256, (y * 6) % 256, 180]).flat()]),
-    ),
-  );
-  const chunk = (type: string, data: Buffer) => {
-    const length = Buffer.alloc(4);
-    length.writeUInt32BE(data.length);
-    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-    const crc = Buffer.alloc(4);
-    crc.writeUInt32BE(crc32(body));
-    return Buffer.concat([length, body, crc]);
-  };
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0);
-  header.writeUInt32BE(height, 4);
-  header.set([8, 2, 0, 0, 0], 8); // 8 bits, RGB
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', header),
-    chunk('IDAT', deflateSync(rows)),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-function crc32(data: Buffer): number {
-  let crc = 0xffffffff;
-  for (const byte of data) {
-    crc ^= byte;
-    for (let k = 0; k < 8; k++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-  }
-  return (crc ^ 0xffffffff) >>> 0;
 }

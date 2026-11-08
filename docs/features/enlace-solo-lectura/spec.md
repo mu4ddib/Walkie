@@ -1,7 +1,7 @@
 # Spec: Enlace de solo lectura
 
 - Issue padre: #73
-- Estado: aprobada (2026-11-08)
+- Estado: implementada (2026-11-08), verificada por `apps/web/e2e/enlace-solo-lectura.spec.ts`
 - Fase 4 ("compartir"), feature 1. Las otras entregas de la fase: export Markdown, deploy en la nube, piloto.
 
 ## Objetivo
@@ -17,24 +17,24 @@ Que quien documenta una feature cree un enlace que deje ver su lienzo y recorrer
 
 **Crear y gestionar enlaces (autor)**
 
-- [ ] 1. Dado el lienzo de una feature, cuando uso "Compartir", entonces se abre un diálogo con el aviso "Quien tenga el enlace verá este lienzo, sus imágenes y sus tours sin iniciar sesión", la duración (7, 30 o 90 días; 30 por defecto) y "Crear enlace".
-- [ ] 2. Dado que creo un enlace, entonces el diálogo muestra la URL completa una sola vez, con "Copiar". Después solo se ve en la lista, sin la URL.
-- [ ] 3. Dado el diálogo, entonces lista los enlaces activos de la feature con fecha de creación, quién lo creó, cuándo caduca y su último acceso ("Nunca abierto" si no tiene), y cada uno con "Revocar".
-- [ ] 4. Dado un enlace, cuando lo revoco, entonces sale de la lista y la URL deja de funcionar en el acto.
+- [x] 1. Dado el lienzo de una feature, cuando uso "Compartir", entonces se abre un diálogo con el aviso "Quien tenga el enlace verá este lienzo, sus imágenes y sus tours sin iniciar sesión", la duración (7, 30 o 90 días; 30 por defecto) y "Crear enlace".
+- [x] 2. Dado que creo un enlace, entonces el diálogo muestra la URL completa una sola vez, con "Copiar". Después solo se ve en la lista, sin la URL.
+- [x] 3. Dado el diálogo, entonces lista los enlaces activos de la feature con fecha de creación, quién lo creó, cuándo caduca y su último acceso ("Nunca abierto" si no tiene), y cada uno con "Revocar".
+- [x] 4. Dado un enlace, cuando lo revoco, entonces sale de la lista y la URL deja de funcionar en el acto.
 
 **Abrir un enlace (lector)**
 
-- [ ] 5. Dado un enlace activo, cuando abro su URL sin sesión, entonces veo el nombre de la app y de la feature, la barra "Solo lectura · disponible hasta el <fecha>" y el lienzo como lo ve el autor: nodos con su contenido, imágenes de las pantallas, elementos del catálogo usados (`ref`) y conexiones.
-- [ ] 6. Dado el lienzo compartido, entonces no se puede editar: sin paleta ni panel de propiedades, sin mover, conectar, renombrar ni borrar, y sin "Guardar". Sí se puede desplazar y hacer zoom.
-- [ ] 7. Dado el lienzo compartido con tours, entonces se ve la lista de tours con "Ver tour", y el modo tour funciona como en el editor (spec modo-tour, criterios 5 a 8 y 10).
-- [ ] 8. Dado un nodo `portal` en el lienzo compartido, entonces muestra su título y no se abre (ni con doble clic, ni con "Ir a <feature>" en el tour): la otra feature no está compartida.
-- [ ] 9. Dado que el autor guarda cambios en el lienzo, cuando el lector recarga, entonces ve la última versión guardada.
-- [ ] 10. Dado un enlace revocado, caducado o que no existe, cuando lo abro, entonces veo "Este enlace ya no está disponible" (sin decir cuál de los tres casos es).
+- [x] 5. Dado un enlace activo, cuando abro su URL sin sesión, entonces veo el nombre de la app y de la feature, la barra "Solo lectura · disponible hasta el <fecha>" y el lienzo como lo ve el autor: nodos con su contenido, imágenes de las pantallas, elementos del catálogo usados (`ref`) y conexiones.
+- [x] 6. Dado el lienzo compartido, entonces no se puede editar: sin paleta ni panel de propiedades, sin mover, conectar, renombrar ni borrar, y sin "Guardar". Sí se puede desplazar y hacer zoom.
+- [x] 7. Dado el lienzo compartido con tours, entonces se ve la lista de tours con "Ver tour", y el modo tour funciona como en el editor (spec modo-tour, criterios 5 a 8 y 10).
+- [x] 8. Dado un nodo `portal` en el lienzo compartido, entonces muestra su título y no se abre (ni con doble clic, ni con "Ir a <feature>" en el tour): la otra feature no está compartida.
+- [x] 9. Dado que el autor guarda cambios en el lienzo, cuando el lector recarga, entonces ve la última versión guardada.
+- [x] 10. Dado un enlace revocado, caducado o que no existe, cuando lo abro, entonces veo "Este enlace ya no está disponible" (sin decir cuál de los tres casos es).
 
 **Seguridad (API)**
 
-- [ ] 11. Dado un enlace activo, entonces sus endpoints públicos solo devuelven esa feature: su grafo, los elementos del catálogo que usa, el nombre de la app y de la feature, y solo las imágenes que sus pantallas usan. Cualquier otra imagen responde 404.
-- [ ] 12. Dado que se crea un enlace, entonces la base guarda solo el hash del token (SHA-256), nunca el token.
+- [x] 11. Dado un enlace activo, entonces sus endpoints públicos solo devuelven esa feature: su grafo, los elementos del catálogo que usa, el nombre de la app y de la feature, y solo las imágenes que sus pantallas usan. Cualquier otra imagen responde 404.
+- [x] 12. Dado que se crea un enlace, entonces la base guarda solo el hash del token (SHA-256), nunca el token.
 
 ## Fuera de alcance
 
