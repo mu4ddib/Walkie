@@ -1,0 +1,298 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Export.Features;
+
+namespace Walkie.IntegrationTests;
+
+/// <summary>
+/// Generador del documento Markdown (spec export-markdown, criterios 3 a 8 y 10). Función pura: sin base ni HTTP.
+/// Datos ficticios.
+/// </summary>
+public sealed class MarkdownExportTests
+{
+    private static readonly Guid Asset = Guid.Parse("0198f0c0-1111-7000-8000-000000000001");
+    private static readonly Guid Item = Guid.Parse("0198f0c0-2222-7000-8000-000000000002");
+    private static readonly Guid Transferir = Guid.Parse("0198f0c0-3333-7000-8000-000000000003");
+    private static readonly DateTimeOffset ExportedAt = new(2026, 11, 8, 15, 4, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void Un_lienzo_completo_da_el_documento_esperado()
+    {
+        var markdown = MarkdownDocument.Render(Input(Graph()));
+
+        Assert.Equal(
+            """
+            # Iniciar sesión
+
+            App: **Banca de prueba** · Versión del lienzo: 3 · Exportado el 2026-11-08 15:04 (UTC) desde Walkie.
+
+            ## Contenido
+
+            - [Diagrama](#diagrama)
+            - [Actores](#actores)
+            - [Pantallas](#pantallas)
+            - [Reglas](#reglas)
+            - [APIs](#apis)
+            - [Portales](#portales)
+            - [Conexiones](#conexiones)
+            - [Tours](#tours)
+
+            ## Diagrama
+
+            ```mermaid
+            flowchart LR
+              n1(("Actor: Cliente"))
+              n2["Pantalla: Login"]
+              n3{{"Regla: Documento válido"}}
+              n4["API: Consultar cliente"]
+              n5[/"Portal: Transferir"/]
+              n1 -->|"usa"| n2
+              n2 -->|"llama: Buscar [200]"| n4
+              n2 -->|"navega"| n5
+            ```
+
+            ## Actores
+
+            ### Cliente
+
+            ## Pantallas
+
+            ### Login
+
+            ![Login](img/login-0198f0c0.png)
+
+            Pide el documento.
+
+            | Input | Tipo | Obligatorio | Opciones | Reglas |
+            | --- | --- | --- | --- | --- |
+            | `documento` | string | Sí |  | Documento válido |
+            | `tipo` | enum | No | CC, CE |  |
+
+            ## Reglas
+
+            ### Documento válido
+
+            ```
+            solo dígitos
+            de 6 a 10
+            ```
+
+            Valida: `documento` (Login).
+
+            ## APIs
+
+            ### Consultar cliente (del catálogo)
+
+            Busca al cliente por documento.
+
+            `GET /clientes/{id}`
+
+            ## Portales
+
+            ### Transferir
+
+            Lleva a **Transferir**.
+
+            ## Conexiones
+
+            - Cliente → Login (usa)
+            - Login → Consultar cliente (llama: Buscar \[200\])
+            - Login → Transferir (navega)
+
+            ## Tours
+
+            ### Primer ingreso
+
+            1. **Login**: Aquí empieza todo.
+            2. **Consultar cliente**
+
+            """.ReplaceLineEndings("\n"),
+            markdown);
+    }
+
+    [Fact]
+    public void El_mismo_grafo_con_otro_orden_de_claves_da_el_mismo_documento()
+    {
+        var graph = Graph();
+        var reversed = new JsonObject();
+        foreach (var (key, value) in graph.AsEnumerable().Reverse())
+        {
+            reversed[key] = value is JsonObject map
+                ? new JsonObject(map.Reverse().Select(p => KeyValuePair.Create(p.Key, p.Value?.DeepClone())))
+                : value?.DeepClone();
+        }
+
+        Assert.Equal(MarkdownDocument.Render(Input(graph)), MarkdownDocument.Render(Input(reversed)));
+    }
+
+    [Fact]
+    public void Solo_cambia_la_fecha_de_exportacion()
+    {
+        var first = MarkdownDocument.Render(Input(Graph()));
+        var later = MarkdownDocument.Render(Input(Graph()) with { ExportedAt = ExportedAt.AddDays(3) });
+
+        Assert.NotEqual(first, later);
+        Assert.Equal(first.Replace("2026-11-08", "2026-11-11", StringComparison.Ordinal), later);
+    }
+
+    [Fact]
+    public void Los_simbolos_de_Markdown_se_escapan_y_no_rompen_tablas_ni_titulos()
+    {
+        var graph = Graph();
+        graph["nodes"]!["s1"]!["title"] = "# Login *nuevo* | <b>";
+        graph["nodes"]!["s1"]!["description"] = "- no es lista\n1. tampoco\n_cursiva_";
+        graph["nodes"]!["s1"]!["inputs"]![1]!["options"] = new JsonArray("A|B", "C");
+
+        var markdown = MarkdownDocument.Render(Input(graph));
+
+        Assert.Contains(@"### \# Login \*nuevo\* \| \<b\>", markdown, StringComparison.Ordinal);
+        Assert.Contains("\\- no es lista  \n1\\. tampoco  \n\\_cursiva\\_", markdown, StringComparison.Ordinal);
+        Assert.Contains(@"| `tipo` | enum | No | A\|B, C |  |", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Comillas_corchetes_y_saltos_de_linea_no_rompen_el_diagrama()
+    {
+        var graph = Graph();
+        graph["nodes"]!["s1"]!["title"] = "Login \"seguro\" [v2] #1\n<nuevo>";
+
+        var markdown = MarkdownDocument.Render(Input(graph));
+
+        Assert.Contains("n2[\"Pantalla: Login #quot;seguro#quot; [v2] #35;1 #lt;nuevo#gt;\"]", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Una_expresion_con_comillas_invertidas_usa_una_cerca_mas_larga()
+    {
+        var graph = Graph();
+        graph["nodes"]!["r1"]!["expression"] = "usa ``` dentro";
+
+        Assert.Contains("````\nusa ``` dentro\n````", MarkdownDocument.Render(Input(graph)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Un_portal_sin_destino_o_a_una_feature_que_no_existe_lo_dice()
+    {
+        var graph = Graph();
+        graph["nodes"]!["p2"] = new JsonObject { ["id"] = "p2", ["type"] = "portal", ["title"] = "Pagos" };
+        graph["nodes"]!["p3"] = new JsonObject
+        {
+            ["id"] = "p3", ["type"] = "portal", ["title"] = "Viejo", ["targetFeatureId"] = Guid.CreateVersion7().ToString(),
+        };
+
+        var markdown = MarkdownDocument.Render(Input(graph));
+
+        Assert.Contains("### Pagos\n\nSin destino.", markdown, StringComparison.Ordinal);
+        Assert.Contains("### Viejo\n\nLleva a **Viejo** (destino no encontrado).", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Un_ref_cuyo_elemento_no_existe_va_en_su_propia_seccion()
+    {
+        var graph = Graph();
+        graph["nodes"]!["c1"]!["catalogId"] = Guid.CreateVersion7().ToString();
+
+        var markdown = MarkdownDocument.Render(Input(graph));
+
+        Assert.Contains("- [Referencias sin elemento](#referencias-sin-elemento)", markdown, StringComparison.Ordinal);
+        Assert.Contains("### Título viejo\n\nEl elemento del catálogo ya no existe.", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("## APIs", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Un_lienzo_vacio_lo_dice()
+    {
+        var empty = new JsonObject
+        {
+            ["schemaVersion"] = 0, ["version"] = 0, ["nodes"] = new JsonObject(), ["edges"] = new JsonObject(), ["layout"] = new JsonObject(),
+        };
+
+        var markdown = MarkdownDocument.Render(Input(empty));
+
+        Assert.EndsWith("desde Walkie.\n\nEste lienzo está vacío.\n", markdown, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Iniciar sesión", "iniciar-sesion")]
+    [InlineData("  Transferir: ¡ahora!  ", "transferir-ahora")]
+    [InlineData("Año 2026 / Pagos_PSE", "ano-2026-pagos-pse")]
+    [InlineData("¿?", "feature")]
+    public void Los_nombres_de_archivo_son_slugs_sin_acentos(string name, string slug)
+    {
+        Assert.Equal(slug, Slugs.From(name));
+    }
+
+    [Fact]
+    public void La_ruta_de_una_imagen_usa_el_titulo_el_id_y_la_extension()
+    {
+        Assert.Equal("img/datos-del-cliente-0198f0c0.webp", Slugs.ImagePath("Datos del cliente", Asset, "image/webp"));
+        Assert.Equal("img/pantalla-0198f0c0.jpg", Slugs.ImagePath("¿?", Asset, "image/jpeg"));
+    }
+
+    private static ExportInput Input(JsonObject graph)
+    {
+        using var doc = JsonDocument.Parse(graph.ToJsonString());
+        return new ExportInput(
+            "Banca de prueba",
+            "Iniciar sesión",
+            doc.RootElement.Clone(),
+            new Dictionary<Guid, CatalogItemResponse>
+            {
+                [Item] = new(Item, Guid.Empty, "api", "Consultar cliente", "Busca al cliente por documento.",
+                    new HttpContract("GET", "/clientes/{id}"), 1),
+            },
+            new Dictionary<Guid, string> { [Transferir] = "Transferir" },
+            new Dictionary<Guid, string> { [Asset] = Slugs.ImagePath("Login", Asset, "image/png") },
+            ExportedAt);
+    }
+
+    /// <summary>Actor, pantalla con imagen e inputs, regla, ref a una API del catálogo, portal, conexiones y un tour.</summary>
+    private static JsonObject Graph() => new()
+    {
+        ["schemaVersion"] = 0,
+        ["version"] = 3,
+        ["nodes"] = new JsonObject
+        {
+            ["a1"] = new JsonObject { ["id"] = "a1", ["type"] = "actor", ["title"] = "Cliente" },
+            ["s1"] = new JsonObject
+            {
+                ["id"] = "s1", ["type"] = "screen", ["title"] = "Login", ["description"] = "Pide el documento.",
+                ["assetId"] = Asset.ToString(),
+                ["inputs"] = new JsonArray(
+                    new JsonObject { ["name"] = "documento", ["type"] = "string", ["required"] = true, ["ruleIds"] = new JsonArray("r1") },
+                    new JsonObject { ["name"] = "tipo", ["type"] = "enum", ["options"] = new JsonArray("CC", "CE") }),
+            },
+            ["r1"] = new JsonObject
+            {
+                ["id"] = "r1", ["type"] = "rule", ["title"] = "Documento válido", ["expression"] = "solo dígitos\nde 6 a 10",
+            },
+            ["c1"] = new JsonObject { ["id"] = "c1", ["type"] = "ref", ["title"] = "Título viejo", ["catalogId"] = Item.ToString() },
+            ["p1"] = new JsonObject
+            {
+                ["id"] = "p1", ["type"] = "portal", ["title"] = "Transferir", ["targetFeatureId"] = Transferir.ToString(),
+            },
+        },
+        ["edges"] = new JsonObject
+        {
+            ["e1"] = new JsonObject { ["id"] = "e1", ["from"] = "a1", ["to"] = "s1", ["kind"] = "uses" },
+            ["e2"] = new JsonObject
+            {
+                ["id"] = "e2", ["from"] = "s1", ["to"] = "c1", ["kind"] = "request", ["label"] = "Buscar", ["when"] = "200",
+            },
+            ["e3"] = new JsonObject { ["id"] = "e3", ["from"] = "s1", ["to"] = "p1", ["kind"] = "navigation" },
+        },
+        ["layout"] = new JsonObject(),
+        ["tours"] = new JsonObject
+        {
+            ["t1"] = new JsonObject
+            {
+                ["id"] = "t1",
+                ["name"] = "Primer ingreso",
+                ["steps"] = new JsonArray(
+                    new JsonObject { ["nodeId"] = "s1", ["note"] = "Aquí empieza todo." },
+                    new JsonObject { ["nodeId"] = "c1" }),
+            },
+        },
+    };
+}

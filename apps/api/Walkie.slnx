@@ -3,6 +3,7 @@
     <Project Path="src/Walkie.Api/Walkie.Api.csproj" />
     <Project Path="src/Walkie.Modules.Apps/Walkie.Modules.Apps.csproj" />
     <Project Path="src/Walkie.Modules.Canvas/Walkie.Modules.Canvas.csproj" />
+    <Project Path="src/Walkie.Modules.Export/Walkie.Modules.Export.csproj" />
     <Project Path="src/Walkie.Modules.Files/Walkie.Modules.Files.csproj" />
     <Project Path="src/Walkie.Modules.Sharing/Walkie.Modules.Sharing.csproj" />
     <Project Path="src/Walkie.Shared/Walkie.Shared.csproj" />

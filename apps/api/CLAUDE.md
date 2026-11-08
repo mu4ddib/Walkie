@@ -13,6 +13,7 @@ apps/api/
     Walkie.Modules.Tours/
     Walkie.Modules.Files/  # imágenes en S3 (RustFS en desarrollo), ADR-0004
     Walkie.Modules.Sharing/ # enlaces de solo lectura (token con hash), ADR-0005
+    Walkie.Modules.Export/ # export a Markdown (.zip), sin tablas
     Walkie.Shared/         # tipos comunes, resultados, errores
   tests/
     Walkie.IntegrationTests/  # xUnit + Testcontainers (Postgres real)
@@ -20,7 +21,7 @@ apps/api/
 
 ## Estado actual
 
-Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared`, `Walkie.Modules.Apps` (apps, features, catálogo con versión), `Walkie.Modules.Canvas` (lienzo `jsonb` + `version`), `Walkie.Modules.Files` (imágenes: datos en `files.assets`, bytes en S3; ADR-0004), `Walkie.Modules.Sharing` (enlaces de solo lectura en `sharing.shares`; ADR-0005) y `Walkie.IntegrationTests` (WebApplicationFactory + Testcontainers). Tours se crea cuando una tarea lo necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
+Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared`, `Walkie.Modules.Apps` (apps, features, catálogo con versión), `Walkie.Modules.Canvas` (lienzo `jsonb` + `version`), `Walkie.Modules.Files` (imágenes: datos en `files.assets`, bytes en S3; ADR-0004), `Walkie.Modules.Sharing` (enlaces de solo lectura en `sharing.shares`; ADR-0005), `Walkie.Modules.Export` (generador del documento Markdown de una feature, sin tablas; el endpoint llega en la tarea 2 de export-markdown) y `Walkie.IntegrationTests` (WebApplicationFactory + Testcontainers). Tours se crea cuando una tarea lo necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
 
 ## Convenciones
 
@@ -67,6 +68,7 @@ Ya costaron tiempo; no las repitas.
 - **Imágenes de Docker**: `minio/minio` ya no existe en Docker Hub y `quay.io` está bloqueado en la nube; usa `rustfs/rustfs:1.0.4`. Docker Hub puede responder 429 sin login: espera y reintenta.
 - **Endpoints públicos (ADR-0005)**: solo bajo `/api/public/` con `.AllowAnonymous()` en el grupo; responden `Cache-Control: no-store` (un enlace se revoca en cualquier momento) y 404 igual para revocado, caducado, inexistente o token malformado. Una imagen se sirve solo si una pantalla del grafo actual la usa.
 - **Tokens de enlaces (ADR-0005)**: 256 bits con `RandomNumberGenerator` en base64url (`System.Buffers.Text.Base64Url`); en la base solo `SHA256.HashData` (`bytea`, índice único). Nunca guardes ni registres el token.
+- **Generador del export (`MarkdownDocument`)**: función pura y determinista (orden por sección, título e id; `\n` como salto de línea; fecha en UTC con `CultureInfo.InvariantCulture`). Todo texto del usuario pasa por `MarkdownText` (`Inline`, `Block`, `Code`, `CodeBlock`, `Mermaid`): sin eso, un `|` rompe una tabla o una comilla rompe el diagrama. Se prueba sin base (`MarkdownExportTests`, sin la colección `ApiTestGroup`).
 - **Tabla nueva**: actualiza la lista de `PersistenceTests.Las_migraciones_crean_las_tablas_de_cada_modulo`.
 - **Endpoints en un módulo**: el `.csproj` necesita `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Validación con `.WithValidation<TRequest>()` (`Walkie.Shared.Validation`); los validadores pueden ser `internal` (se registran con `includeInternalTypes: true`).
 
