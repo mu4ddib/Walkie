@@ -96,6 +96,19 @@ public sealed class ExportEndpointsTests(WalkieApiFactory factory)
     }
 
     [Fact]
+    public async Task La_web_puede_leer_el_nombre_del_archivo_por_CORS()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client, await CreateAppAsync(client), "Transferir");
+        using var request = new HttpRequestMessage(HttpMethod.Get, ExportUri(feature));
+        request.Headers.Add("Origin", "http://localhost:5173");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Contains("Content-Disposition", response.Headers.GetValues("Access-Control-Expose-Headers"));
+    }
+
+    [Fact]
     public async Task El_endpoint_aparece_en_openapi()
     {
         using var client = factory.CreateClient();

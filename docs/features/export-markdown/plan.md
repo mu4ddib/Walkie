@@ -15,7 +15,7 @@ Cada tarea cabe en una sesión y en un PR. La 2 depende de la 1; la 3 de la 2; l
 
 1. [x] (#85) Generador del documento: módulo `Walkie.Modules.Export` con un generador puro (grafo + nombres + catálogo + rutas de imágenes → texto): encabezado y tabla de contenidos, diagrama Mermaid, secciones por tipo (inputs, expresiones, `MÉTODO /ruta`, portales, `ref` del catálogo), conexiones y tours; escapado de Markdown y Mermaid; orden estable; slugs. Pruebas sin base de datos (criterios 3 a 8 y 10).
 2. [x] (#86) Endpoint `GET /api/features/{featureId}/export`: arma el `.zip` (`<slug>.md` + `img/`) con la última versión guardada, con los contratos de Apps, Canvas y Files. Pruebas de integración: 401, 404, contenido del zip, imágenes, `Content-Disposition`, OpenAPI (criterios 2 y 9).
-3. [ ] (#87) Web: "Exportar" en la barra del editor; descarga con `fetch` + token y un `blob:` con `download`; aviso "Se exporta lo guardado" con cambios pendientes; error si falla. Pruebas en Vitest (criterio 1).
+3. [x] (#87) Web: "Exportar" en la barra del editor; descarga con `fetch` + token y un `blob:` con `download`; aviso "Se exporta lo guardado" con cambios pendientes; error si falla. Pruebas en Vitest (criterio 1).
 4. [ ] (#88) E2E: documentar una feature (pantalla con imagen e inputs, regla, API, portal, conexiones y un tour), exportar, abrir el `.zip` y verificar el `.md`; spec implementada y roadmap.
 
 ## Pruebas
@@ -27,4 +27,4 @@ Cada tarea cabe en una sesión y en un PR. La 2 depende de la 1; la 3 de la 2; l
 
 ## Estado
 
-Última actualización: 2026-11-08 — tareas 1 y 2 hechas (generador `MarkdownDocument`; `GET /api/features/{featureId}/export` con el `.zip`). Sigue: tarea 3 (botón "Exportar" en el editor).
+Última actualización: 2026-11-08 — tareas 1 a 3 hechas (generador; endpoint del `.zip`; botón "Exportar" con la descarga y `Content-Disposition` expuesto por CORS). Sigue: tarea 4 (E2E y cierre).

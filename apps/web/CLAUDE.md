@@ -14,7 +14,7 @@ apps/web/src/
   share/         # ShareDialog.tsx ("Compartir": crear, copiar y revocar enlaces de solo lectura), SharedFeaturePage.tsx (vista pública /s/:token), sharedPath.ts, shareFormat.ts (fechas en español), share.css
   api/           # cliente HTTP (client.ts) + hooks de TanStack Query (hooks.ts)
   pages/         # una página por ruta (AppsPage, AppPage, FeaturePage, CatalogPage) + catalogPaths.ts (rutas y tipos del catálogo)
-  ui/            # piezas reutilizables (NameForm, QueryState)
+  ui/            # piezas reutilizables (NameForm, QueryState, download.ts: saveFile)
   routes.tsx     # rutas de react-router: / · /apps/:appId · /apps/:appId/catalog[/:itemId] · /apps/:appId/features/:featureId · /s/:token (pública)
   test/          # helpers de pruebas: fakeApi.ts (API falsa en memoria), render.tsx (renderRoute)
 apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-propiedades.spec.ts, catalogo.spec.ts, imagenes-portal.spec.ts (genera su PNG en memoria), modo-tour.spec.ts, enlace-solo-lectura.spec.ts (lector en otro contexto sin sesión) + helpers.ts (login, dropNode, connect, rename, visibleGraph, png)
@@ -43,6 +43,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 - Imágenes (ADR-0004): `<img src>` no manda el token, así que `useAssetUrl` pide los bytes con `fetch` y devuelve una URL `blob:` (una vez por sesión: un asset no cambia). `useUploadAsset` sube con `FormData`; el panel valida tipo y tamaño antes (`ASSET_TYPES`, `ASSET_MAX_SIZE`).
 - Compartir (ADR-0005): el botón "Compartir" de la barra del editor abre `ShareDialog` (`useShares`, `useCreateShare`, `useRevokeShare`). La API devuelve el `token` solo al crear; la URL la arma `shareUrl(token)` (`origin/s/{token}`) y se muestra una vez, hasta cerrar el diálogo. `installFakeApi({ shares })` responde los enlaces como la API.
 - Vista de un enlace (`/s/:token`, ADR-0005): `App` la monta sin `AuthGate` ni menú de usuario (`useMatch(SHARED_PATH)`). `SharedFeaturePage` carga con `useSharedFeature` (sin token, sin reintentos ni refetch) y monta `<Canvas catalog={{ …, share: { token } }}>`. Con `catalog.share` el lienzo queda de solo lectura: sin paleta ni panel (en su lugar `SharedTours`, la lista con "Ver tour"), nada se arrastra, conecta, selecciona ni borra; el doble clic no hace nada; un portal muestra su título y no se abre (ni "Ir a" en el tour, porque no hay `features`); las imágenes se piden con `useAssetUrl(assetId, shareToken)` al endpoint público. 404 → "Este enlace ya no está disponible". `installFakeApi({ shared: { [token]: vista } })` responde los endpoints públicos.
+- Exportar (spec export-markdown): el botón "Exportar" de la barra del editor usa `useExportFeature` → `exportFeature` (`fetch` + token; el nombre sale de `Content-Disposition` con `fileNameOf`) y `saveFile` (enlace `blob:` con `download`). Se exporta lo guardado: si había cambios pendientes, un aviso lo dice. `installFakeApi` responde el export y `api.next.exportStatus` fuerza un error.
 - Llamadas a la API: siempre por los hooks de `api/hooks.ts` (ponen el token y las `queryKeys`); los errores llegan como `ApiError` con `userMessage` del `ProblemDetails`.
 
 ## Trampas conocidas
@@ -81,6 +82,8 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 - **Componentes del panel que llaman a la API** (`MoveToCatalog`): solo se montan con catálogo en el contexto (`appId`), así las pruebas del panel sin `QueryClientProvider` siguen funcionando.
 - **Portapapeles en Vitest**: `userEvent.setup()` reemplaza `navigator.clipboard` por uno propio; lee lo copiado con `navigator.clipboard.readText()`. `toHaveValue` no acepta `expect.stringMatching`: compara `.value` con `toMatch`.
 - **Nodos de un lienzo de solo lectura en Playwright**: sin selección ni arrastre, React Flow no les da eventos de puntero; un `dblclick()` espera para siempre. Para comprobar que no pasa nada, usa `dblclick({ force: true })`.
+- **Leer encabezados de otra origen** (ej. `Content-Disposition`): el navegador los oculta salvo que la API los exponga en CORS (`WithExposedHeaders` en `Program.cs`).
+- **Descargas en Vitest**: stubea `URL.createObjectURL` y espía `HTMLAnchorElement.prototype.click` (jsdom no descarga). En Playwright, `page.waitForEvent('download')` y `suggestedFilename()`.
 - **Diálogos nativos en Playwright**: `window.confirm` se acepta o cancela con `page.once('dialog', d => d.dismiss())` antes de la acción; en Vitest, `vi.spyOn(window, 'confirm').mockReturnValue(...)`.
 - **Sprites fuera de `apps/web`**: se importan con el alias `@sprites` (`vite.config.ts` + `paths` en `tsconfig.app.json`); en dev, `server.fs.allow` incluye `packages/sprites`, si no Vite responde 403. Para una animación nueva: hoja en `packages/sprites/guia/`, entrada en `manifest.json` e import en `guideSprites.ts`.
 - **Animaciones con temporizadores en Vitest**: `vi.useFakeTimers()` y `act(() => vi.advanceTimersByTime(...))`; `window.matchMedia` no existe en jsdom (mockéalo para `prefers-reduced-motion`).

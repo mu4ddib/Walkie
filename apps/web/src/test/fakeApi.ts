@@ -25,7 +25,7 @@ export function installFakeApi(
   /** Enlaces de solo lectura activos (los revocados salen de la lista, como en la API). */
   const shares = [...(seed.shares ?? [])];
   /** Si se define, el próximo PUT del lienzo responde este estado (ej. 400). */
-  const next_: { putStatus?: number; uploadStatus?: number } = {};
+  const next_: { putStatus?: number; uploadStatus?: number; exportStatus?: number } = {};
   let next = 1;
   const id = () => `00000000-0000-7000-8000-${String(next++).padStart(12, '0')}`;
 
@@ -50,6 +50,24 @@ export function installFakeApi(
       if (parts[4] !== 'assets') return json(200, view);
       const used = Object.values(view.graph.nodes).some((n) => n.type === 'screen' && n.assetId === parts[5]);
       return used ? new Response('imagen', { status: 200, headers: { 'Content-Type': 'image/png' } }) : notFound();
+    }
+
+    // /api/features/{featureId}/export — un zip de mentira con el nombre en Content-Disposition, como la API.
+    if (parts[1] === 'features' && parts[3] === 'export') {
+      const feature = features.find((f) => f.id === parts[2]);
+      if (!feature) return notFound();
+      if (next_.exportStatus) {
+        const status = next_.exportStatus;
+        delete next_.exportStatus;
+        return json(status, { title: 'Error', status });
+      }
+      return new Response('zip', {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename=export.zip; filename*=UTF-8''${encodeURIComponent(feature.name)}.zip`,
+        },
+      });
     }
 
     // /api/features/{featureId}/shares y /api/shares/{shareId} — como la API: 400 por duración, 404, 204 al revocar.
