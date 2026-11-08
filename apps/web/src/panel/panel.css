@@ -177,3 +177,48 @@
   border: 4px solid var(--paper);
   background: var(--paper);
 }
+
+.link-button {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 18px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tours-list {
+  list-style: none;
+  padding: 0;
+}
+
+.tour-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tour-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tour-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 2px solid var(--ink);
+}
+
+.tour-step-actions {
+  display: flex;
+  gap: 4px;
+}
