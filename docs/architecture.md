@@ -11,7 +11,7 @@
 - Módulos de la API: Apps (apps, features, catálogo), Canvas (grafo + versión), Files (imágenes en S3, ADR-0004), Sharing (enlaces de solo lectura, ADR-0005), Export (documento Markdown de una feature), Tours.
 - El grafo de cada feature se guarda como documento `jsonb` con `version` para concurrencia optimista.
 - Una base Postgres con un schema por módulo (`apps`, `canvas`, `files`, `sharing`), cada uno con sus migraciones; sin claves foráneas entre módulos.
-- Los módulos se hablan por interfaces de `Contracts/`: Canvas usa `IFeatureDirectory` e `ICatalogDirectory` de Apps; Apps define `ICatalogUsage` (qué lienzos usan un elemento del catálogo) y Canvas la implementa. Canvas depende de Apps, nunca al revés. Sharing (enlaces, ADR-0005) usa `IFeatureDirectory` e `ICatalogDirectory` de Apps, `ICanvasReader` de Canvas e `IAssetDirectory` de Files; nadie depende de Sharing.
+- Los módulos se hablan por interfaces de `Contracts/`: Canvas usa `IFeatureDirectory` e `ICatalogDirectory` de Apps; Apps define `ICatalogUsage` (qué lienzos usan un elemento del catálogo) y Canvas la implementa. Canvas depende de Apps, nunca al revés. Sharing (enlaces, ADR-0005) y Export (documento Markdown) usan `IFeatureDirectory` e `ICatalogDirectory` de Apps, `ICanvasReader` de Canvas e `IAssetDirectory` de Files; nadie depende de ellos.
 - Contrato del grafo: `packages/schema/walkie-graph.schema.json`.
 
 ## Preparado para colaboración

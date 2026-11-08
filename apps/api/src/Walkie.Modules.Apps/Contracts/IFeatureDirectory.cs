@@ -11,6 +11,9 @@ public interface IFeatureDirectory
     /// <summary>Ids de las features de la app (para validar los <c>portal</c>).</summary>
     Task<IReadOnlySet<Guid>> FeatureIdsOfAppAsync(Guid appId, CancellationToken cancellationToken);
 
+    /// <summary>Nombre de cada feature de la app, por id (Export: destinos de los <c>portal</c>).</summary>
+    Task<IReadOnlyDictionary<Guid, string>> FeatureNamesOfAppAsync(Guid appId, CancellationToken cancellationToken);
+
     /// <summary>La feature con su app y los nombres de ambas (Sharing); <c>null</c> si no existe.</summary>
     Task<FeatureSummary?> DescribeAsync(Guid featureId, CancellationToken cancellationToken);
 }
