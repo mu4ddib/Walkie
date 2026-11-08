@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- E2E intermitentes que agotaban los 60 s esperando la app recién creada (sobre todo la primera prueba de la corrida, con la API en frío): si la lista aún no tenía datos, `invalidateQueries` reutilizaba el `GET` inicial en vuelo, que la API había leído antes del `POST`, y lo creado no aparecía nunca. Las mutaciones que refrescan una lista (apps, features, catálogo, enlaces) ahora cancelan el fetch en curso antes de invalidar.
+
 ### Added
 - E2E del export a Markdown (export-markdown, tarea 4): documentar una feature (pantalla con imagen e input con regla, API, portal, conexiones y un tour), exportar, leer el `.zip` descargado (`readZip` en `e2e/helpers.ts`) y verificar el `.md` y la imagen; con cambios sin guardar se exporta lo guardado. Cierra la feature.
 - Botón "Exportar" en el editor (export-markdown, tarea 3): baja `<slug>.zip` con el nombre que manda la API (`Content-Disposition`, ahora expuesto por CORS); avisa si había cambios sin guardar (se exporta lo guardado) y si falla.

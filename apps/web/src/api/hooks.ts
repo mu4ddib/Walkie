@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query';
 import { useAuth } from 'react-oidc-context';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
@@ -48,6 +48,16 @@ export const queryKeys = {
   sharedAsset: (shareToken: string, assetId: string) => ['shared', shareToken, 'assets', assetId] as const,
 };
 
+/**
+ * Vuelve a pedir una lista después de una mutación. Primero cancela el fetch en curso: si la lista aún no
+ * tenía datos (carga inicial), `invalidateQueries` no lo cancela y reutiliza su promesa, que la API ya
+ * respondió con la lista de antes de la mutación, y lo creado no aparece nunca.
+ */
+async function refetchAfterMutation(queryClient: QueryClient, queryKey: QueryKey, exact = false) {
+  await queryClient.cancelQueries({ queryKey, exact });
+  return queryClient.invalidateQueries({ queryKey, exact });
+}
+
 export function useApps() {
   const token = useToken();
   return useQuery({ queryKey: queryKeys.apps, queryFn: ({ signal }) => listApps(token, signal) });
@@ -71,7 +81,7 @@ export function useCreateApp() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => createApp(token, name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.apps, exact: true }),
+    onSuccess: () => refetchAfterMutation(queryClient, queryKeys.apps, true),
   });
 }
 
@@ -80,7 +90,7 @@ export function useCreateFeature(appId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => createFeature(token, appId, name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) }),
+    onSuccess: () => refetchAfterMutation(queryClient, queryKeys.features(appId)),
   });
 }
 
@@ -148,7 +158,8 @@ export function useCreateCatalogItem(appId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (item: NewCatalogItem) => createCatalogItem(token, appId, item),
-    onSuccess: (created) => {
+    onSuccess: async (created) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.catalog(appId) });
       // Se agrega ya a la lista: el lienzo la usa para dibujar el `ref` recién creado sin esperar el refetch.
       queryClient.setQueryData<CatalogItem[]>(queryKeys.catalog(appId), (items) => items && [...items, created]);
       return queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
@@ -163,7 +174,7 @@ export function useUpdateCatalogItem(appId: string, itemId: string) {
     mutationFn: (changes: CatalogItemChanges) => updateCatalogItem(token, itemId, changes),
     onSuccess: (saved) => {
       queryClient.setQueryData(queryKeys.catalogItem(itemId), saved);
-      return queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+      return refetchAfterMutation(queryClient, queryKeys.catalog(appId));
     },
   });
 }
@@ -175,7 +186,7 @@ export function useDeleteCatalogItem(appId: string, itemId: string) {
     mutationFn: () => deleteCatalogItem(token, itemId),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: queryKeys.catalogItem(itemId) });
-      return queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+      return refetchAfterMutation(queryClient, queryKeys.catalog(appId));
     },
   });
 }
@@ -220,7 +231,7 @@ export function useCreateShare(featureId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (days: ShareDays) => createShare(token, featureId, days),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shares(featureId) }),
+    onSuccess: () => refetchAfterMutation(queryClient, queryKeys.shares(featureId)),
   });
 }
 
@@ -229,7 +240,7 @@ export function useRevokeShare(featureId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (shareId: string) => revokeShare(token, shareId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shares(featureId) }),
+    onSuccess: () => refetchAfterMutation(queryClient, queryKeys.shares(featureId)),
   });
 }
 

@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installFakeApi } from '../test/fakeApi';
@@ -13,6 +13,25 @@ const feature = { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', created
 
 afterEach(() => vi.unstubAllGlobals());
 
+/**
+ * Como la API en frío: el primer `GET path` lee la lista en el acto, pero su respuesta llega recién
+ * cuando se llama a `release` (después del POST). Devuelve `release`.
+ */
+function holdFirstList(path: string) {
+  const inner = globalThis.fetch;
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let held = false;
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    const response = await inner(input, init);
+    if ((init?.method ?? 'GET') !== 'GET' || new URL(String(input)).pathname !== path || held) return response;
+    held = true;
+    await released;
+    return response;
+  });
+  return () => release();
+}
+
 describe('lista de apps', () => {
   beforeEach(() => installFakeApi());
 
@@ -26,6 +45,19 @@ describe('lista de apps', () => {
     const list = await screen.findByRole('list', { name: 'Apps' });
     expect(within(list).getByRole('link', { name: 'Banca móvil' })).toHaveAttribute('href', expect.stringMatching(/^\/apps\//));
     expect(screen.getByLabelText('Nueva app')).toHaveValue('');
+  });
+
+  it('la app creada aparece aunque la primera carga de la lista siga en vuelo', async () => {
+    const release = holdFirstList('/api/apps');
+    renderRoute('/');
+
+    await userEvent.type(screen.getByLabelText('Nueva app'), 'Banca móvil');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear app' }));
+    await waitFor(() => expect(screen.getByLabelText('Nueva app')).toHaveValue(''));
+    release(); // llega la lista vieja, leída antes del POST
+
+    const list = await screen.findByRole('list', { name: 'Apps' });
+    expect(within(list).getByRole('link', { name: 'Banca móvil' })).toBeInTheDocument();
   });
 
   it('no envía un nombre vacío', async () => {
