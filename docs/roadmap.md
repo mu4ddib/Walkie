@@ -8,7 +8,7 @@ Estimado para una persona a medio tiempo (~12 semanas). Plan completo y diagrama
 | 1 Lienzo base ✅ | 3-5 | React Flow, App y Feature, 3 tipos de nodo, guardar/cargar con versión, estilo pixel v1 | Un flujo se guarda y se recarga igual (E2E `apps/web/e2e/lienzo-base.spec.ts` en CI) |
 | 2 Cajas ricas ✅ | 6-8 | 8 tipos de nodo, panel de propiedades, adjuntar imagen, inputs y reglas, catálogo + `ref` + `portal` | Una feature documentada (inputs, reglas, catálogo, imagen y portal) se guarda y se recarga igual (E2E `panel-propiedades`, `catalogo` e `imagenes-portal` en CI) |
 | 3 Modo tour ✅ | 9-10 | Tours por pasos, personaje pixel, resaltar nodo, notas por paso | Una persona nueva entiende el tour sin ayuda (flujo verificado por el E2E `modo-tour` en CI; falta la prueba con alguien del equipo) |
-| 4 Compartir | 11-12 | Enlace de solo lectura, export Markdown, deploy en la nube, piloto | MVP listo: piloto con un equipo |
+| 4 Compartir | 11-12 | Enlace de solo lectura ✅ (E2E `enlace-solo-lectura` en CI), export Markdown, deploy en la nube, piloto | MVP listo: piloto con un equipo |
 
 ## Post-MVP
 

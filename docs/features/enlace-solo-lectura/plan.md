@@ -21,7 +21,7 @@ Cada tarea cabe en una sesión y en un PR. La 2 depende de la 1; la 3 de la 1; l
 2. [x] (#75) Endpoints públicos: schema `walkie-shared-feature`; `ICanvasReader` (Canvas) y lectura de bytes en `IAssetDirectory` (Files); `GET /api/public/shares/{token}` (actualiza el último acceso) y `GET /api/public/shares/{token}/assets/{assetId}` (solo imágenes usadas por las pantallas del grafo); 404 igual para revocado, caducado o inexistente. Pruebas de integración (criterios 9 a 11).
 3. [x] (#76) Web, autor: "Compartir" en el editor; diálogo con aviso, duración, "Crear enlace", URL una sola vez con "Copiar", lista de enlaces activos y "Revocar". Pruebas en Vitest (criterios 1 a 4).
 4. [x] (#77) Web, lector: ruta `/s/:token` fuera de `AuthGate`; barra de solo lectura con la caducidad; lienzo sin edición; imágenes por el endpoint público; portales que no se abren; tours con "Ver tour"; "Este enlace ya no está disponible". Pruebas en Vitest (criterios 5 a 10).
-5. [ ] (#78) E2E: crear un enlace, abrirlo en un contexto sin sesión, ver el lienzo con imagen y recorrer un tour, ver un cambio guardado al recargar, revocar y ver el aviso; spec implementada y roadmap.
+5. [x] (#78) E2E: crear un enlace, abrirlo en un contexto sin sesión, ver el lienzo con imagen y recorrer un tour, ver un cambio guardado al recargar, revocar y ver el aviso; spec implementada y roadmap.
 
 ## Pruebas
 
@@ -31,4 +31,4 @@ Cada tarea cabe en una sesión y en un PR. La 2 depende de la 1; la 3 de la 1; l
 
 ## Estado
 
-Última actualización: 2026-11-08 — tareas 1 a 4 hechas (módulo Sharing; endpoints públicos; diálogo "Compartir"; vista pública `/s/:token` de solo lectura con tours). Sigue: tarea 5 (E2E y cierre).
+Última actualización: 2026-11-08 — tareas 1 a 5 hechas; feature implementada y verificada por `apps/web/e2e/enlace-solo-lectura.spec.ts`. Sigue en la fase 4: export Markdown, deploy en la nube y piloto.
