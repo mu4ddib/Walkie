@@ -10,7 +10,7 @@ apps/web/src/
   edges/         # KindEdge.tsx (tipo, label y [when] + selector de tipo), edgeMeta.ts, edgeTypes.ts
   panel/         # PropertiesPanel.tsx (panel lateral de nodo o conexión), RefPanel.tsx (ref en solo lectura), PortalPanel.tsx (destino y "Abrir"), MoveToCatalog.tsx ("Mover al catálogo"), ScreenImage.tsx (subir, ver, reemplazar y quitar la imagen), ToursSection.tsx (tours del lienzo: lista, crear, editar pasos), InputsSection.tsx (inputs de pantalla + "Usada por" de una regla), TextField.tsx (campo con borrador local y `validate`), panel.css
   store/         # graphStore.ts (estado + acciones), GraphStoreProvider + useGraphStore (contexto para nodos/conexiones)
-  tours/         # modo tour y personaje guía
+  tours/         # Guide.tsx (Walkie animado), guideSprites.ts (hojas + manifest de packages/sprites/guia), usePrefersReducedMotion.ts
   api/           # cliente HTTP (client.ts) + hooks de TanStack Query (hooks.ts)
   pages/         # una página por ruta (AppsPage, AppPage, FeaturePage, CatalogPage) + catalogPaths.ts (rutas y tipos del catálogo)
   ui/            # piezas reutilizables (NameForm, QueryState)
@@ -75,6 +75,8 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 - **`Link` fuera de un router**: la paleta con catálogo y el panel de un `ref` usan `<Link>`; en Vitest envuélvelos en `<MemoryRouter>`.
 - **Componentes del panel que llaman a la API** (`MoveToCatalog`): solo se montan con catálogo en el contexto (`appId`), así las pruebas del panel sin `QueryClientProvider` siguen funcionando.
 - **Diálogos nativos en Playwright**: `window.confirm` se acepta o cancela con `page.once('dialog', d => d.dismiss())` antes de la acción; en Vitest, `vi.spyOn(window, 'confirm').mockReturnValue(...)`.
+- **Sprites fuera de `apps/web`**: se importan con el alias `@sprites` (`vite.config.ts` + `paths` en `tsconfig.app.json`); en dev, `server.fs.allow` incluye `packages/sprites`, si no Vite responde 403. Para una animación nueva: hoja en `packages/sprites/guia/`, entrada en `manifest.json` e import en `guideSprites.ts`.
+- **Animaciones con temporizadores en Vitest**: `vi.useFakeTimers()` y `act(() => vi.advanceTimersByTime(...))`; `window.matchMedia` no existe en jsdom (mockéalo para `prefers-reduced-motion`).
 - **Componentes que usan auth**: mockea `react-oidc-context` con `vi.mock` (ver `src/auth/AuthGate.test.tsx`).
 - **Probar a mano el login**: Keycloak en :8080 (docker-compose), API en :5080, web en :5173; usuario `dev` / `walkie_dev`. Con Playwright: botón "Iniciar sesión" → `#username`, `#password`, `#kc-login`.
 
