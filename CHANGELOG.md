@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Sección "Tours" del panel (modo-tour, tarea 3): con nada seleccionado, lista de tours y "Nuevo tour"; el editor cambia el nombre, agrega pasos eligiendo el nodo, edita notas, sube y baja pasos, los quita y borra el tour; "Ver tour" queda listo para el modo tour.
 - Tours en el store (modo-tour, tarea 2): crear, renombrar y borrar tours; agregar, mover, cambiar de nodo y quitar pasos; notas recortadas a 500; borrar un nodo quita sus pasos; los tours se guardan y recargan con el lienzo.
 - Tours en el schema y la API (modo-tour, tarea 1): nombre de 1 a 60 caracteres, nota de hasta 500, sin campos extra; el lienzo responde 400 si la clave de un tour no es su `id` o un paso apunta a un nodo que no existe.
 - Spec y plan de `modo-tour` (fase 3), con issues por tarea; sprites del guía Walkie en `packages/sprites/guia/` (idle, walk, point, talk, celebrate, think) con su `manifest.json`.

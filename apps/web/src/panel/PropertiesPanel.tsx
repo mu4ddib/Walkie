@@ -18,13 +18,23 @@ import { RefPanel } from './RefPanel';
 import { ScreenImage } from './ScreenImage';
 import { useCanvasCatalog } from '../catalog/catalogContext';
 import { TextField } from './TextField';
+import { ToursSection, type ToursSectionProps } from './ToursSection';
 import './panel.css';
 
 /**
  * Panel lateral de propiedades (spec panel-propiedades, criterios 3 a 7). Con un solo nodo o una sola
  * conexión seleccionados muestra sus propiedades; si no, un texto de ayuda. Cambia el grafo por el store.
  */
-export function PropertiesPanel({ nodeId, edgeId }: { nodeId: string | null; edgeId: string | null }) {
+export function PropertiesPanel({
+  nodeId,
+  edgeId,
+  tours,
+}: {
+  nodeId: string | null;
+  edgeId: string | null;
+  /** Sección "Tours" cuando no hay nada seleccionado (spec modo-tour); sin ella, solo la ayuda. */
+  tours?: ToursSectionProps;
+}) {
   return (
     <aside className="properties-panel" aria-label="Propiedades">
       {nodeId ? (
@@ -32,7 +42,10 @@ export function PropertiesPanel({ nodeId, edgeId }: { nodeId: string | null; edg
       ) : edgeId ? (
         <EdgePanel key={edgeId} id={edgeId} />
       ) : (
-        <p className="panel-help">Selecciona un nodo o una conexión para ver y editar sus propiedades.</p>
+        <>
+          <p className="panel-help">Selecciona un nodo o una conexión para ver y editar sus propiedades.</p>
+          {tours && <ToursSection {...tours} />}
+        </>
       )}
     </aside>
   );

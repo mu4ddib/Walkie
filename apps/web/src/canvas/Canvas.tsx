@@ -34,19 +34,28 @@ const NO_CATALOG: CanvasCatalog = { appId: '', items: {} };
  * Lienzo de una feature. Todo cambio del grafo pasa por las acciones del store. `catalog` es el catálogo
  * de la app: los nodos `ref` lo leen por contexto y la paleta lo ofrece para crear `ref`.
  */
-export function Canvas({ store, catalog = NO_CATALOG }: { store: StoreApi<GraphStore>; catalog?: CanvasCatalog }) {
+export function Canvas({
+  store,
+  catalog = NO_CATALOG,
+  onPlayTour,
+}: {
+  store: StoreApi<GraphStore>;
+  catalog?: CanvasCatalog;
+  /** "Ver tour" en la sección de tours del panel (modo tour). */
+  onPlayTour?: (tourId: string) => void;
+}) {
   return (
     <GraphStoreProvider store={store}>
       <CatalogContext.Provider value={catalog}>
         <ReactFlowProvider>
-          <CanvasInner catalog={catalog} />
+          <CanvasInner catalog={catalog} onPlay={onPlayTour} />
         </ReactFlowProvider>
       </CatalogContext.Provider>
     </GraphStoreProvider>
   );
 }
 
-function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
+function CanvasInner({ catalog, onPlay }: { catalog: CanvasCatalog; onPlay?: (tourId: string) => void }) {
   const graphNodes = useGraphStore((s) => s.nodes);
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
@@ -61,6 +70,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const [selectedNodes, setSelectedNodes] = useState<ReadonlySet<string>>(new Set());
   const [selectedEdges, setSelectedEdges] = useState<ReadonlySet<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [openTourId, setOpenTourId] = useState<string | null>(null);
   // Medidas que reporta React Flow. Si no se devuelven en `measured`, al reconstruir los nodos
   // React Flow los oculta un instante para medirlos otra vez y se pierden clics (ej. doble clic).
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
@@ -104,7 +114,9 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         if (change.type === 'dimensions' && change.dimensions) {
           const { width, height } = change.dimensions;
           setMeasured((m) =>
-            m[change.id]?.width === width && m[change.id]?.height === height ? m : { ...m, [change.id]: { width, height } },
+            m[change.id]?.width === width && m[change.id]?.height === height
+              ? m
+              : { ...m, [change.id]: { width, height } },
           );
         }
       }
@@ -219,7 +231,11 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>
-      <PropertiesPanel nodeId={panelNodeId} edgeId={panelEdgeId} />
+      <PropertiesPanel
+        nodeId={panelNodeId}
+        edgeId={panelEdgeId}
+        tours={{ openTourId, onOpen: setOpenTourId, onPlay }}
+      />
     </div>
   );
 }
