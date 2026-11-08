@@ -1,4 +1,4 @@
-import { deflateSync } from 'node:zlib';
+import { deflateSync, inflateRawSync } from 'node:zlib';
 import { expect, type Page } from '@playwright/test';
 
 /** Usuario de prueba del realm de desarrollo (infra/keycloak/walkie-realm.json). */
@@ -106,4 +106,28 @@ function crc32(data: Buffer): number {
     for (let k = 0; k < 8; k++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
   }
   return (crc ^ 0xffffffff) >>> 0;
+}
+
+/**
+ * Archivos de un .zip (nombre → bytes), leyendo su directorio central. Solo lo que usa el export:
+ * entradas guardadas (0) o comprimidas con deflate (8), sin zip64.
+ */
+export function readZip(zip: Buffer): Map<string, Buffer> {
+  const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  const count = zip.readUInt16LE(end + 10);
+  let at = zip.readUInt32LE(end + 16);
+  const files = new Map<string, Buffer>();
+  for (let i = 0; i < count; i++) {
+    const method = zip.readUInt16LE(at + 10);
+    const size = zip.readUInt32LE(at + 20);
+    const nameLength = zip.readUInt16LE(at + 28);
+    const skip = nameLength + zip.readUInt16LE(at + 30) + zip.readUInt16LE(at + 32);
+    const local = zip.readUInt32LE(at + 42);
+    const name = zip.subarray(at + 46, at + 46 + nameLength).toString('utf8');
+    const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+    const data = zip.subarray(start, start + size);
+    files.set(name, method === 8 ? inflateRawSync(data) : Buffer.from(data));
+    at += 46 + skip;
+  }
+  return files;
 }
