@@ -51,7 +51,7 @@ Que quien documenta una feature cree un enlace que deje ver su lienzo y recorrer
 
 Ninguno en `walkie-graph.schema.json`. Schemas nuevos en `packages/schema`:
 
-- `walkie-share.schema.json`: un enlace (`id`, `featureId`, `createdBy`, `createdAt`, `expiresAt`, `lastAccessedAt` opcional y `url` solo en la respuesta de creación).
+- `walkie-share.schema.json`: un enlace (`id`, `featureId`, `createdByName`, `createdAt`, `expiresAt`, `lastAccessedAt` opcional y `token` solo en la respuesta de creación; la API no conoce el dominio de la web, así que la web arma la URL `/s/{token}`).
 - `walkie-shared-feature.schema.json`: lo que ve el lector (`appName`, `featureName`, `expiresAt`, `graph` con `$ref` a `walkie-graph`, `catalog` con `$ref` a `walkie-catalog-item`).
 
 ## Impacto en la API
@@ -60,7 +60,7 @@ Módulo nuevo `Walkie.Modules.Sharing` (schema `sharing`, tabla `sharing.shares`
 
 Con sesión:
 
-- `POST /api/features/{featureId}/shares` `{ expiresInDays: 7 | 30 | 90 }` → 201 con el enlace y su `url` | 400 | 404.
+- `POST /api/features/{featureId}/shares` `{ expiresInDays: 7 | 30 | 90 }` → 201 con el enlace y su `token` | 400 | 404.
 - `GET /api/features/{featureId}/shares` → los enlaces activos (sin token) | 404.
 - `DELETE /api/shares/{shareId}` → 204 | 404.
 

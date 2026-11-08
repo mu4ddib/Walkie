@@ -5,6 +5,7 @@
     <ProjectReference Include="..\Walkie.Modules.Apps\Walkie.Modules.Apps.csproj" />
     <ProjectReference Include="..\Walkie.Modules.Canvas\Walkie.Modules.Canvas.csproj" />
     <ProjectReference Include="..\Walkie.Modules.Files\Walkie.Modules.Files.csproj" />
+    <ProjectReference Include="..\Walkie.Modules.Sharing\Walkie.Modules.Sharing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Enlaces de solo lectura en la API (enlace-solo-lectura, tarea 1, ADR-0005): módulo Sharing con `sharing.shares`; `POST/GET /api/features/{featureId}/shares` (7, 30 o 90 días; el token de 256 bits solo viaja al crear y la base guarda su hash) y `DELETE /api/shares/{shareId}`; `packages/schema/walkie-share.schema.json`.
 - Spec y plan de `enlace-solo-lectura` (fase 4), con issues por tarea.
 - E2E del modo tour (modo-tour, tarea 6): tour de tres pasos (pantalla, regla y portal) armado en el panel; guardar y recargar idéntico; recorrerlo con ← → y los botones; "Terminar" celebra y vuelve la vista anterior; Esc sale; "Ir a Transferir" abre la feature del portal. Cierra la feature y las entregas de la fase 3.
 - Modo tour (modo-tour, tarea 5): "Ver tour" deja el lienzo de solo lectura, centra y resalta el nodo de cada paso y atenúa el resto; Walkie camina hasta él, lo señala (piensa en las reglas) y cuenta la nota letra a letra; Anterior/Siguiente/Salir y ← → Esc; "Ir a <feature>" en los portales; "Terminar" celebra; al salir vuelve la vista anterior; sin animaciones con `prefers-reduced-motion`.

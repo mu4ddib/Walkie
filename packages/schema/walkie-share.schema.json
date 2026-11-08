@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-share.schema.json",
+  "title": "Walkie share v0",
+  "description": "Enlace de solo lectura a una feature (ADR-0005). El token solo viaja en la respuesta de creación; la web arma la URL /s/{token}.",
+  "type": "object",
+  "required": ["id", "featureId", "createdByName", "createdAt", "expiresAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "featureId": { "type": "string", "format": "uuid" },
+    "createdByName": { "type": "string", "minLength": 1, "maxLength": 255, "description": "Nombre de quien lo creó (claim name del token)" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "lastAccessedAt": { "type": "string", "format": "date-time", "description": "Último acceso con el enlace; ausente si nunca se abrió" },
+    "token": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$",
+      "description": "256 bits en base64url. Solo en la respuesta de creación: la base guarda su hash SHA-256"
+    }
+  }
+}
