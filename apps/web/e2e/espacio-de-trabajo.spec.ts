@@ -40,6 +40,11 @@ test('el lienzo es la pantalla de inicio y recuerda dónde quedé', async ({ pag
   const zoom = page.getByRole('group', { name: 'Zoom' }).getByRole('button', { name: /^Zoom/ });
   await expect(zoom).not.toHaveText('100 %');
   const zoomText = await zoom.textContent();
+  // Espera a que la vista quede guardada (al terminar la animación del zoom) antes de salir.
+  const featureId = new URL(page.url()).pathname.split('/').pop()!;
+  await expect
+    .poll(() => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null')?.zoom ?? 1, `walkie.viewport.${featureId}`))
+    .not.toBe(1);
   await page.goto('/');
   const ruta = page.getByRole('navigation', { name: 'Ruta' });
   await expect(ruta).toContainText(app);

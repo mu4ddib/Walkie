@@ -60,7 +60,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
   const { addNode, addRef, moveNode, removeNode, connect, removeEdge } = useGraphStore((s) => s);
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport } = useReactFlow();
   const openFeature = useOpenFeature();
   // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
   // solo si el lienzo ya trae nodos: con uno vacío, React Flow ajustaría el zoom al aparecer el primero
@@ -260,6 +260,19 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     window.addEventListener(OPEN_HELP_EVENT, open);
     return () => window.removeEventListener(OPEN_HELP_EVENT, open);
   }, []);
+
+  // La vista también se guarda al salir: `onMoveEnd` llega al terminar una animación de zoom, y quien
+  // cierra o recarga la página antes perdería el último movimiento.
+  useEffect(() => {
+    if (!catalog.featureId || readOnly) return;
+    const featureId = catalog.featureId;
+    const save = () => saveViewport(featureId, getViewport());
+    window.addEventListener('pagehide', save);
+    return () => {
+      window.removeEventListener('pagehide', save);
+      save();
+    };
+  }, [catalog.featureId, readOnly, getViewport]);
 
   const onMoveEnd = useCallback(
     (_: unknown, viewport: Viewport) => {
