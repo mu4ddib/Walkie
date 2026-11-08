@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Skills de diseño en `.claude/skills/`: `frontend-design`, `ui-ux-pro-max` y `canvas-design` (fuentes en `skills-lock.json`), para la mejora de UI/UX.
 - E2E del export a Markdown (export-markdown, tarea 4): documentar una feature (pantalla con imagen e input con regla, API, portal, conexiones y un tour), exportar, leer el `.zip` descargado (`readZip` en `e2e/helpers.ts`) y verificar el `.md` y la imagen; con cambios sin guardar se exporta lo guardado. Cierra la feature.
 - Botón "Exportar" en el editor (export-markdown, tarea 3): baja `<slug>.zip` con el nombre que manda la API (`Content-Disposition`, ahora expuesto por CORS); avisa si había cambios sin guardar (se exporta lo guardado) y si falla.
 - Endpoint del export (export-markdown, tarea 2): `GET /api/features/{featureId}/export` devuelve `<slug>.zip` con `<slug>.md` (última versión guardada) e `img/` con las imágenes de las pantallas; 404 si la feature no existe.
