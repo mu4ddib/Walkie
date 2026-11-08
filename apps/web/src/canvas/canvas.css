@@ -217,12 +217,17 @@
 }
 
 /* Modo tour: solo el lienzo, sin paleta ni panel. */
+.canvas.canvas-readonly {
+  grid-template-columns: 1fr 280px;
+}
+
 .canvas.canvas-touring {
   grid-template-columns: 1fr;
 }
 
 .canvas.canvas-touring > .palette,
-.canvas.canvas-touring > .properties-panel {
+.canvas.canvas-touring > .properties-panel,
+.canvas.canvas-touring > .shared-tours {
   display: none;
 }
 

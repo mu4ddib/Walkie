@@ -20,7 +20,7 @@ Cada tarea cabe en una sesión y en un PR. La 2 depende de la 1; la 3 de la 1; l
 1. [x] (#74) Schema `walkie-share`, ADR-0005 y módulo Sharing: tabla `sharing.shares` con migración; `POST/GET /api/features/{featureId}/shares` y `DELETE /api/shares/{shareId}`; token de 256 bits, solo su hash SHA-256 en la base. Pruebas de integración (criterios 1 a 4 y 12 en la API).
 2. [x] (#75) Endpoints públicos: schema `walkie-shared-feature`; `ICanvasReader` (Canvas) y lectura de bytes en `IAssetDirectory` (Files); `GET /api/public/shares/{token}` (actualiza el último acceso) y `GET /api/public/shares/{token}/assets/{assetId}` (solo imágenes usadas por las pantallas del grafo); 404 igual para revocado, caducado o inexistente. Pruebas de integración (criterios 9 a 11).
 3. [x] (#76) Web, autor: "Compartir" en el editor; diálogo con aviso, duración, "Crear enlace", URL una sola vez con "Copiar", lista de enlaces activos y "Revocar". Pruebas en Vitest (criterios 1 a 4).
-4. [ ] (#77) Web, lector: ruta `/s/:token` fuera de `AuthGate`; barra de solo lectura con la caducidad; lienzo sin edición; imágenes por el endpoint público; portales que no se abren; tours con "Ver tour"; "Este enlace ya no está disponible". Pruebas en Vitest (criterios 5 a 10).
+4. [x] (#77) Web, lector: ruta `/s/:token` fuera de `AuthGate`; barra de solo lectura con la caducidad; lienzo sin edición; imágenes por el endpoint público; portales que no se abren; tours con "Ver tour"; "Este enlace ya no está disponible". Pruebas en Vitest (criterios 5 a 10).
 5. [ ] (#78) E2E: crear un enlace, abrirlo en un contexto sin sesión, ver el lienzo con imagen y recorrer un tour, ver un cambio guardado al recargar, revocar y ver el aviso; spec implementada y roadmap.
 
 ## Pruebas
@@ -31,4 +31,4 @@ Cada tarea cabe en una sesión y en un PR. La 2 depende de la 1; la 3 de la 1; l
 
 ## Estado
 
-Última actualización: 2026-11-08 — tareas 1 a 3 hechas (módulo Sharing con crear, listar y revocar; endpoints públicos de la feature y sus imágenes; diálogo "Compartir" en el editor). Sigue: tarea 4 (vista pública `/s/:token`).
+Última actualización: 2026-11-08 — tareas 1 a 4 hechas (módulo Sharing; endpoints públicos; diálogo "Compartir"; vista pública `/s/:token` de solo lectura con tours). Sigue: tarea 5 (E2E y cierre).
