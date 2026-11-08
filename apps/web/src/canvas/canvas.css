@@ -215,3 +215,112 @@
   image-rendering: auto;
   font-size: 16px;
 }
+
+/* Modo tour: solo el lienzo, sin paleta ni panel. */
+.canvas.canvas-touring {
+  grid-template-columns: 1fr;
+}
+
+.canvas.canvas-touring > .palette,
+.canvas.canvas-touring > .properties-panel {
+  display: none;
+}
+
+.canvas-flow {
+  position: relative;
+}
+
+.react-flow__node.tour-dim {
+  opacity: 0.25;
+}
+
+.react-flow__node.tour-current .pixel-node {
+  outline: 4px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.tour-player {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.tour-bar,
+.tour-bubble {
+  pointer-events: all;
+}
+
+.tour-bar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  transform: translateX(-50%);
+  border: 4px solid var(--ink);
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--ink);
+  font-size: 18px;
+}
+
+.tour-bar strong {
+  font-family: var(--font-title);
+  font-size: 10px;
+}
+
+.tour-guide {
+  position: absolute;
+}
+
+.tour-guide-walking {
+  animation: tour-walk-in 800ms linear;
+}
+
+@keyframes tour-walk-in {
+  from {
+    transform: translateX(-160px);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.tour-bubble {
+  position: absolute;
+  width: 320px;
+  padding: 8px 12px;
+  border: 4px solid var(--ink);
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--ink);
+  font-size: 20px;
+  line-height: 22px;
+}
+
+.tour-bubble p {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+
+.tour-bubble-title {
+  font-family: var(--font-title);
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-guide-walking {
+    animation: none;
+  }
+}
