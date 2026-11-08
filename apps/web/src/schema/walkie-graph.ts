@@ -95,11 +95,20 @@ export interface Edge {
    */
   when?: string;
 }
+/**
+ * Recorrido guiado por pasos sobre los nodos del lienzo (modo tour)
+ */
 export interface Tour {
   id: Id;
   name: string;
+  /**
+   * En orden; cada paso centra y resalta su nodo
+   */
   steps: {
     nodeId: Id;
+    /**
+     * Lo que el guía cuenta en el paso
+     */
     note?: string;
   }[];
 }
