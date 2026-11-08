@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Walkie.Shared\Walkie.Shared.csproj" />
+    <ProjectReference Include="..\Walkie.Modules.Apps\Walkie.Modules.Apps.csproj" />
+    <ProjectReference Include="..\Walkie.Modules.Canvas\Walkie.Modules.Canvas.csproj" />
+    <ProjectReference Include="..\Walkie.Modules.Files\Walkie.Modules.Files.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Walkie.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

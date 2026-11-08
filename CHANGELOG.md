@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Generador del documento Markdown (export-markdown, tarea 1): módulo `Walkie.Modules.Export` con encabezado, índice, diagrama Mermaid, secciones por tipo (inputs, expresiones, `MÉTODO /ruta`, portales, elementos del catálogo), conexiones y tours; textos escapados para Markdown y Mermaid, orden estable y nombres de archivo como slugs.
 - Spec y plan de `export-markdown` (fase 4, feature 2), con issues por tarea.
 - E2E del enlace de solo lectura (enlace-solo-lectura, tarea 5): crear el enlace, abrirlo en un navegador sin sesión, ver el lienzo con imagen sin poder editarlo, recorrer el tour sin abrir el portal, ver el último acceso y un cambio guardado al recargar, revocar y ver "Este enlace ya no está disponible". El generador de PNG de prueba pasa a `e2e/helpers.ts`. Cierra la feature.
 - Vista pública de un enlace (enlace-solo-lectura, tarea 4): `/s/:token` sin iniciar sesión, con el nombre de la app y la feature y "Solo lectura · disponible hasta el …"; lienzo sin edición (sin paleta ni panel, nada se mueve ni se borra), imágenes por el endpoint del enlace, portales que no se abren y la lista de tours con "Ver tour"; "Este enlace ya no está disponible" si está revocado, caducado o no existe.
