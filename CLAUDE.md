@@ -56,6 +56,11 @@ Si `dotnet` no existe, Docker no responde, una imagen no baja o el push da 403, 
 
 - `nueva-feature` — crear spec + plan + issue de una funcionalidad.
 - `escribir-adr` — registrar una decisión de arquitectura.
+- Diseño (instaladas con `npx skills add`, fuentes y versiones en `skills-lock.json`; no se editan a mano):
+  - `frontend-design` (anthropics/skills) — dirección visual al crear o rehacer UI.
+  - `ui-ux-pro-max` (nextlevelbuilder/ui-ux-pro-max-skill) — reglas de UX/accesibilidad y búsqueda local de estilos, paletas y tipografías. Su `SKILL.md` usa `${CLAUDE_PLUGIN_ROOT}`, que aquí no existe: corre el buscador desde la raíz con `python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<consulta>" --domain <ux|style|color|typography>`.
+  - `canvas-design` (anthropics/skills) — piezas visuales estáticas (PNG/PDF), ej. pósters o material del piloto.
+  - Al aplicarlas, la estética pixel de Walkie (`apps/web/CLAUDE.md`: grilla de 8 px, Press Start 2P + VT323, sin sombras difusas ni gradientes) manda sobre sus sugerencias genéricas.
 
 ## Para ahorrar contexto
 
