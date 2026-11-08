@@ -426,6 +426,114 @@ describe('updateEdge', () => {
   });
 });
 
+describe('tours', () => {
+  function setup() {
+    const login = s().addNode('screen', { x: 0, y: 0 });
+    const rule = s().addNode('rule', { x: 0, y: 0 });
+    const api = s().addNode('api', { x: 0, y: 0 });
+    const tour = s().addTour('  Iniciar sesión  ')!;
+    return { login, rule, api, tour };
+  }
+
+  it('addTour crea un tour vacío con el nombre recortado; vacío no crea nada', () => {
+    const { tour } = setup();
+
+    expect(s().tours[tour]).toEqual({ id: tour, name: 'Iniciar sesión', steps: [] });
+    expect(s().addTour('   ')).toBeNull();
+    expect(s().addTour('x'.repeat(80))).not.toBeNull();
+    expect(Object.values(s().tours).map((t) => t.name.length)).toContain(60);
+  });
+
+  it('addStep agrega al final, con nota opcional, solo a nodos que existen', () => {
+    const { login, rule, tour } = setup();
+
+    expect(s().addStep(tour, login, ' Aquí empieza ')).toBe(0);
+    expect(s().addStep(tour, rule)).toBe(1);
+    expect(s().addStep(tour, 'nada')).toBeNull();
+    expect(s().addStep('nada', login)).toBeNull();
+
+    expect(s().tours[tour]?.steps).toEqual([{ nodeId: login, note: 'Aquí empieza' }, { nodeId: rule }]);
+  });
+
+  it('edita la nota (vacía la quita y respeta el límite) y cambia el nodo de un paso', () => {
+    const { login, api, tour } = setup();
+    s().addStep(tour, login, 'Hola');
+
+    s().updateStepNote(tour, 0, 'x'.repeat(600));
+    expect(s().tours[tour]?.steps[0]?.note).toHaveLength(500);
+    s().updateStepNote(tour, 0, '  ');
+    expect(s().tours[tour]?.steps[0]).toEqual({ nodeId: login });
+
+    s().setStepNode(tour, 0, api);
+    expect(s().tours[tour]?.steps[0]).toEqual({ nodeId: api });
+  });
+
+  it('moveStep sube y baja pasos; fuera de rango no hace nada', () => {
+    const { login, rule, api, tour } = setup();
+    s().addStep(tour, login);
+    s().addStep(tour, rule);
+    s().addStep(tour, api);
+
+    s().moveStep(tour, 2, -1);
+    expect(s().tours[tour]?.steps.map((x) => x.nodeId)).toEqual([login, api, rule]);
+    s().moveStep(tour, 0, -1);
+    s().moveStep(tour, 2, 1);
+    expect(s().tours[tour]?.steps.map((x) => x.nodeId)).toEqual([login, api, rule]);
+  });
+
+  it('renombra, quita pasos y borra el tour', () => {
+    const { login, tour } = setup();
+    s().addStep(tour, login);
+
+    s().renameTour(tour, 'Login');
+    s().removeStep(tour, 0);
+    expect(s().tours[tour]).toEqual({ id: tour, name: 'Login', steps: [] });
+
+    s().removeTour(tour);
+    expect(s().tours).toEqual({});
+  });
+
+  it('las acciones marcan cambios y las que no cambian nada no', () => {
+    const { login, tour } = setup();
+    s().addStep(tour, login, 'Hola');
+    s().markSaved(1);
+
+    s().renameTour(tour, 'Iniciar sesión');
+    s().updateStepNote(tour, 0, 'Hola');
+    s().moveStep(tour, 0, 1);
+    expect(s().dirty).toBe(false);
+
+    s().updateStepNote(tour, 0, 'Chao');
+    expect(s().dirty).toBe(true);
+  });
+
+  it('borrar un nodo quita sus pasos de todos los tours (criterio 4)', () => {
+    const { login, rule, tour } = setup();
+    const other = s().addTour('Otro')!;
+    s().addStep(tour, login);
+    s().addStep(tour, rule);
+    s().addStep(other, rule);
+
+    s().removeNode(rule);
+
+    expect(s().tours[tour]?.steps).toEqual([{ nodeId: login }]);
+    expect(s().tours[other]?.steps).toEqual([]);
+  });
+
+  it('toGraph lleva los tours solo si hay; loadGraph los recupera', () => {
+    expect(toGraph(s())).not.toHaveProperty('tours');
+    const { login, tour } = setup();
+    s().addStep(tour, login, 'Hola');
+
+    const graph = toGraph(s());
+    const other = createGraphStore();
+    other.getState().loadGraph(graph);
+
+    expect(other.getState().tours).toEqual(s().tours);
+    expect(toGraph(other.getState())).toEqual(graph);
+  });
+});
+
 describe('loadGraph, markSaved y toGraph', () => {
   const graph: WalkieCanvasGraphV0 = {
     schemaVersion: 0,

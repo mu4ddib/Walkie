@@ -49,6 +49,7 @@ El contenedor de la nube no es el devcontainer. Usa el entorno de nube **Walkie*
 | Testcontainers: `Failed to connect to Docker endpoint` | El daemon no arranca solo y se pierde al reiniciar la sesión: `dockerd > /tmp/dockerd.log 2>&1 &` y espera a que `docker info` responda. |
 | `docker pull quay.io/...` → Forbidden | Usa la imagen de Docker Hub (`keycloak/keycloak:26.4`, ya así en `infra/docker-compose.yml`). |
 | `minio/minio` → "repository does not exist" | MinIO ya no publica imágenes: el almacenamiento S3 es `rustfs/rustfs:1.0.4` (ADR-0004). |
+| `dockerd` sale con "process with PID … is still running" | Quedó `/var/run/docker.pid` de una sesión anterior: `rm -f /var/run/docker.pid` y vuelve a arrancar `dockerd`. |
 | `docker pull` → 429 Too Many Requests | Límite de Docker Hub sin login: espera unos minutos; las imágenes ya bajadas siguen en caché. |
 | `git push` → 403 "Claude doesn't have GitHub access" | Reconectar GitHub en claude.ai e instalar la Claude GitHub App en el repo. Reintentar no sirve. |
 | `ERR_PNPM_BAD_PM_VERSION` | El `package.json` de la raíz y el de `apps/web` deben tener el mismo `packageManager`. |
