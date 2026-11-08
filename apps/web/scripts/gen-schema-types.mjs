@@ -10,6 +10,7 @@ const targets = [
   { schema: 'walkie-graph.schema.json', out: 'walkie-graph.ts', name: 'WalkieGraph' },
   { schema: 'walkie-catalog-item.schema.json', out: 'walkie-catalog-item.ts', name: 'WalkieCatalogItem' },
   { schema: 'walkie-asset.schema.json', out: 'walkie-asset.ts', name: 'WalkieAsset' },
+  { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },
 ];
 
 const check = process.argv.includes('--check');
