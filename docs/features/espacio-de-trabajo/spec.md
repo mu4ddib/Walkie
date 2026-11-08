@@ -36,9 +36,9 @@ Que Walkie abra directo en el lienzo, que crear, conectar, documentar y reutiliz
 
 **2. Apps y features (tarea 2)**
 
-- [ ] 7. Dada una app, entonces sus features se ven como tarjetas con nombre, descripción, miniatura real del lienzo guardado y fecha de actualización; con búsqueda y orden; "Nueva feature" está separada de las existentes.
-- [ ] 8. Dada una feature, puedo renombrarla y editar su descripción. Las apps se ven como tarjetas con su cantidad de features.
-- [ ] 9. Dada una app o lista vacía, entonces el estado vacío explica qué es y ofrece la acción principal (y el ejemplo).
+- [x] 7. Dada una app, entonces sus features se ven como tarjetas con nombre, descripción, miniatura real del lienzo guardado y fecha de actualización; con búsqueda y orden; "Nueva feature" está separada de las existentes.
+- [x] 8. Dada una feature, puedo renombrarla y editar su descripción. Las apps se ven como tarjetas con su cantidad de features.
+- [x] 9. Dada una app o lista vacía, entonces el estado vacío explica qué es y ofrece la acción principal (y el ejemplo).
 
 **3. Catálogo (tarea 3)**
 

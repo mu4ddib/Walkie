@@ -12,7 +12,7 @@ vi.mock('react-oidc-context', () => ({ useAuth: () => ({ user: { access_token: '
 
 afterEach(() => vi.unstubAllGlobals());
 
-const app = { id: 'app-1', name: 'Banca móvil', createdAt: '2026-01-01T00:00:00Z' };
+const app = { id: 'app-1', name: 'Banca móvil', createdAt: '2026-01-01T00:00:00Z', featureCount: 1 };
 
 function renderPanel(setup: (s: GraphStore) => string, appId = 'app-1') {
   const store = createGraphStore();

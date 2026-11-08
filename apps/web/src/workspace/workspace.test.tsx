@@ -18,9 +18,9 @@ vi.mock('../canvas/Canvas', () => ({
   ),
 }));
 
-const app = { id: 'app-1', name: 'Banca móvil', createdAt: '2026-01-01T00:00:00Z' };
-const login = { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z' };
-const transferir = { id: 'feat-2', appId: 'app-1', name: 'Transferir', createdAt: '2026-01-01T00:00:00Z' };
+const app = { id: 'app-1', name: 'Banca móvil', createdAt: '2026-01-01T00:00:00Z', featureCount: 1 };
+const login = { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' };
+const transferir = { id: 'feat-2', appId: 'app-1', name: 'Transferir', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' };
 
 afterEach(() => {
   vi.unstubAllGlobals();

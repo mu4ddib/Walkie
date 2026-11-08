@@ -20,8 +20,20 @@ internal static class AppsEndpoints
         apps.MapPost("/{appId:guid}/features", CreateFeature).WithName("CreateFeature").WithValidation<CreateFeatureRequest>();
         apps.MapGet("/{appId:guid}/features", ListFeatures).WithName("ListFeatures");
 
+        routes.MapGroup("/api/features").WithTags("Apps")
+            .MapPut("/{featureId:guid}", UpdateFeature)
+            .WithName("UpdateFeature")
+            .WithSummary("Renombra la feature y cambia su descripción.")
+            .WithValidation<UpdateFeatureRequest>();
+
         return routes;
     }
+
+    private static async Task<Results<Ok<FeatureResponse>, NotFound>> UpdateFeature(
+        Guid featureId, UpdateFeatureRequest request, AppsHandlers handlers, CancellationToken ct) =>
+        await handlers.UpdateFeatureAsync(featureId, request, ct).ConfigureAwait(false) is { } feature
+            ? TypedResults.Ok(feature)
+            : TypedResults.NotFound();
 
     private static async Task<Created<AppResponse>> CreateApp(
         CreateAppRequest request, ClaimsPrincipal user, AppsHandlers handlers, CancellationToken ct)

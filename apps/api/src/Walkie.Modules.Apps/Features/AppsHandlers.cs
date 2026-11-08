@@ -20,13 +20,13 @@ internal sealed class AppsHandlers(AppsDbContext db, TimeProvider clock)
     public async Task<IReadOnlyList<AppResponse>> ListAppsAsync(CancellationToken ct) =>
         await db.Apps.AsNoTracking()
             .OrderBy(a => a.Name).ThenBy(a => a.Id)
-            .Select(a => new AppResponse(a.Id, a.Name, a.CreatedAt))
+            .Select(a => new AppResponse(a.Id, a.Name, a.CreatedAt, a.Features.Count))
             .ToListAsync(ct).ConfigureAwait(false);
 
     public async Task<AppResponse?> GetAppAsync(Guid appId, CancellationToken ct) =>
         await db.Apps.AsNoTracking()
             .Where(a => a.Id == appId)
-            .Select(a => new AppResponse(a.Id, a.Name, a.CreatedAt))
+            .Select(a => new AppResponse(a.Id, a.Name, a.CreatedAt, a.Features.Count))
             .SingleOrDefaultAsync(ct).ConfigureAwait(false);
 
     /// <summary>Crea la feature; <c>null</c> si la app no existe.</summary>
@@ -38,10 +38,35 @@ internal sealed class AppsHandlers(AppsDbContext db, TimeProvider clock)
             return null;
         }
 
-        var feature = new Feature { AppId = appId, Name = request.Name.Trim(), CreatedBy = userId, CreatedAt = clock.GetUtcNowForDb() };
+        var now = clock.GetUtcNowForDb();
+        var feature = new Feature
+        {
+            AppId = appId,
+            Name = request.Name.Trim(),
+            Description = request.Description?.Trim() ?? "",
+            CreatedBy = userId,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
         db.Features.Add(feature);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        return new FeatureResponse(feature.Id, feature.AppId, feature.Name, feature.CreatedAt);
+        return ToResponse(feature);
+    }
+
+    /// <summary>Renombra la feature y cambia su descripción; <c>null</c> si no existe.</summary>
+    public async Task<FeatureResponse?> UpdateFeatureAsync(Guid featureId, UpdateFeatureRequest request, CancellationToken ct)
+    {
+        var feature = await db.Features.SingleOrDefaultAsync(f => f.Id == featureId, ct).ConfigureAwait(false);
+        if (feature is null)
+        {
+            return null;
+        }
+
+        feature.Name = request.Name.Trim();
+        feature.Description = request.Description?.Trim() ?? "";
+        feature.UpdatedAt = clock.GetUtcNowForDb();
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return ToResponse(feature);
     }
 
     /// <summary>Features de la app; <c>null</c> si la app no existe.</summary>
@@ -55,12 +80,14 @@ internal sealed class AppsHandlers(AppsDbContext db, TimeProvider clock)
         return await db.Features.AsNoTracking()
             .Where(f => f.AppId == appId)
             .OrderBy(f => f.Name).ThenBy(f => f.Id)
-            .Select(f => new FeatureResponse(f.Id, f.AppId, f.Name, f.CreatedAt))
+            .Select(f => new FeatureResponse(f.Id, f.AppId, f.Name, f.Description, f.CreatedAt, f.UpdatedAt))
             .ToListAsync(ct).ConfigureAwait(false);
     }
 
     private Task<bool> AppExistsAsync(Guid appId, CancellationToken ct) =>
         db.Apps.AnyAsync(a => a.Id == appId, ct);
 
-    private static AppResponse ToResponse(App app) => new(app.Id, app.Name, app.CreatedAt);
+    private static AppResponse ToResponse(App app) => new(app.Id, app.Name, app.CreatedAt, app.Features.Count);
+
+    private static FeatureResponse ToResponse(Feature f) => new(f.Id, f.AppId, f.Name, f.Description, f.CreatedAt, f.UpdatedAt);
 }

@@ -15,8 +15,8 @@ vi.mock('@xyflow/react', async (importOriginal) => ({
 }));
 
 const features = [
-  { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z' },
-  { id: 'feat-2', appId: 'app-1', name: 'Transferir', createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' },
+  { id: 'feat-2', appId: 'app-1', name: 'Transferir', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' },
 ];
 
 function mockReducedMotion(reduced: boolean) {
