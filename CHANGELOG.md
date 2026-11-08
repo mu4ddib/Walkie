@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- E2E del modo tour (modo-tour, tarea 6): tour de tres pasos (pantalla, regla y portal) armado en el panel; guardar y recargar idéntico; recorrerlo con ← → y los botones; "Terminar" celebra y vuelve la vista anterior; Esc sale; "Ir a Transferir" abre la feature del portal. Cierra la feature y las entregas de la fase 3.
 - Modo tour (modo-tour, tarea 5): "Ver tour" deja el lienzo de solo lectura, centra y resalta el nodo de cada paso y atenúa el resto; Walkie camina hasta él, lo señala (piensa en las reglas) y cuenta la nota letra a letra; Anterior/Siguiente/Salir y ← → Esc; "Ir a <feature>" en los portales; "Terminar" celebra; al salir vuelve la vista anterior; sin animaciones con `prefers-reduced-motion`.
 - Guía animado (modo-tour, tarea 4): `tours/Guide.tsx` reproduce las hojas de Walkie a sus fps (en bucle o una vez, avisando al terminar), se refleja al mirar al oeste, escala ×2 pixelado y sin animar con `prefers-reduced-motion`.
 - Sección "Tours" del panel (modo-tour, tarea 3): con nada seleccionado, lista de tours y "Nuevo tour"; el editor cambia el nombre, agrega pasos eligiendo el nodo, edita notas, sube y baja pasos, los quita y borra el tour; "Ver tour" queda listo para el modo tour.
