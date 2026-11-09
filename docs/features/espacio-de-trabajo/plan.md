@@ -14,7 +14,7 @@ Basado en `spec.md` (2026-11-08). Issue padre: #94.
 Cada tarea cabe en un PR. El orden sigue las prioridades del autor.
 
 1. [x] (#95) Sistema visual y lienzo primero: tokens arena/piedra, fuentes legibles, botones y campos con estados; `/` abre la última app/feature/vista o la bienvenida (con ejemplo); barra superior con selectores de app y feature, estado de guardado y acciones; barra de herramientas flotante con teclas 1–7; panel derecho plegable; guía de lienzo vacío, pista contextual y atajos ("?"). Criterios 1 a 6.
-2. [ ] (#96) Apps y features: descripción y `updatedAt` en features (migración), renombrar, vistas previas del lienzo (endpoint en Canvas), galería con tarjetas, miniaturas, búsqueda y estados vacíos. Criterios 7 a 9.
+2. [x] (#96) Apps y features: descripción y `updatedAt` en features (migración), renombrar, vistas previas del lienzo (endpoint en Canvas), galería con tarjetas, miniaturas, búsqueda y estados vacíos. Criterios 7 a 9.
 3. [ ] (#97) Catálogo en el editor: panel "Componentes" (buscar, filtrar, arrastrar, crear), guardar como componente, copia independiente, definición compartida vs. uso, alcance antes de guardar. Criterios 10 a 12.
 4. [ ] (#98) Inspector técnico: schema de `http`, `database`, notas y detalle de conexiones; catálogo con contrato `jsonb`; inspector por tipo con secciones; resumen en el nodo. Criterios 13 a 17.
 5. [ ] (#99) Grupos de infraestructura: schema, store, nodo grupo, mover con hijos, plegar. Criterios 18 a 20.
@@ -34,4 +34,4 @@ Cada tarea cabe en un PR. El orden sigue las prioridades del autor.
 
 ## Estado
 
-Última actualización: 2026-11-08 — tarea 1 hecha (sistema visual, lienzo como inicio con sesión recordada, bienvenida y ejemplo, barra superior con selectores, barra de herramientas, inspector plegable, zoom, atajos y guía). Sigue: tarea 2 (galería de apps y features con miniaturas).
+Última actualización: 2026-11-08 — tareas 1 y 2 hechas. Tarea 2: features con descripción y `updatedAt` (migración `FeatureDescriptionAndUpdatedAt`), `PUT /api/features/{featureId}` para renombrar, `featureCount` en las apps y `GET /api/apps/{appId}/canvas-previews` (Canvas); galerías de apps y features con tarjetas, miniatura real del lienzo, búsqueda, orden y estados vacíos. Sigue: tarea 3 (catálogo en el editor).

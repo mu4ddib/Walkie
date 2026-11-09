@@ -8,8 +8,8 @@ vi.mock('react-oidc-context', () => ({ useAuth: () => ({ user: { access_token: '
 // El lienzo (React Flow) no hace falta para probar la navegación.
 vi.mock('../canvas/Canvas', () => ({ Canvas: () => <div>lienzo</div> }));
 
-const app = { id: 'app-1', name: 'Banca móvil', createdAt: '2026-01-01T00:00:00Z' };
-const feature = { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z' };
+const app = { id: 'app-1', name: 'Banca móvil', createdAt: '2026-01-01T00:00:00Z', featureCount: 1 };
+const feature = { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' };
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -19,7 +19,7 @@ describe('lista de apps (/apps)', () => {
   it('muestra el estado vacío y crea una app que aparece en la lista', async () => {
     renderRoute('/apps');
 
-    expect(await screen.findByText('Aún no hay apps. Crea la primera.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Aún no hay apps' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Nueva app'), '  Banca móvil  ');
     await userEvent.click(screen.getByRole('button', { name: 'Crear app' }));
 
@@ -31,7 +31,7 @@ describe('lista de apps (/apps)', () => {
   it('no envía un nombre vacío', async () => {
     const api = installFakeApi();
     renderRoute('/apps');
-    await screen.findByText('Aún no hay apps. Crea la primera.');
+    await screen.findByRole('heading', { name: 'Aún no hay apps' });
 
     await userEvent.type(screen.getByLabelText('Nueva app'), '   ');
     await userEvent.click(screen.getByRole('button', { name: 'Crear app' }));
@@ -43,7 +43,7 @@ describe('lista de apps (/apps)', () => {
   it('envía el token en cada petición', async () => {
     const api = installFakeApi();
     renderRoute('/apps');
-    await screen.findByText('Aún no hay apps. Crea la primera.');
+    await screen.findByRole('heading', { name: 'Aún no hay apps' });
 
     const [, init] = api.fetchMock.mock.calls[0]!;
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer token-de-prueba' });

@@ -10,8 +10,8 @@ vi.mock('react-oidc-context', () => ({ useAuth: () => ({ user: { access_token: '
 // El diálogo no depende del lienzo: uno vacío alcanza (React Flow no corre bien en jsdom).
 vi.mock('../canvas/Canvas', () => ({ Canvas: () => <div aria-label="lienzo" /> }));
 
-const app = { id: 'app-1', name: 'Banca de prueba', createdAt: '2026-01-01T00:00:00Z' };
-const feature = { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z' };
+const app = { id: 'app-1', name: 'Banca de prueba', createdAt: '2026-01-01T00:00:00Z', featureCount: 1 };
+const feature = { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' };
 
 afterEach(() => vi.unstubAllGlobals());
 

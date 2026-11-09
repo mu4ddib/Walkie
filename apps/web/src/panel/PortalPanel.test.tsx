@@ -11,9 +11,9 @@ import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { PropertiesPanel } from './PropertiesPanel';
 
 const features = [
-  { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z' },
-  { id: 'feat-2', appId: 'app-1', name: 'Transferir', createdAt: '2026-01-01T00:00:00Z' },
-  { id: 'feat-3', appId: 'app-1', name: 'Pagar', createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'feat-1', appId: 'app-1', name: 'Iniciar sesión', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' },
+  { id: 'feat-2', appId: 'app-1', name: 'Transferir', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' },
+  { id: 'feat-3', appId: 'app-1', name: 'Pagar', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' },
 ];
 const context = toCanvasCatalog('app-1', [], features, 'feat-1');
 

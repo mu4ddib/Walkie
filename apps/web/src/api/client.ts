@@ -21,13 +21,33 @@ export interface App {
   id: string;
   name: string;
   createdAt: string;
+  /** Cantidad de features (tarjetas de la galería). */
+  featureCount: number;
 }
 
 export interface Feature {
   id: string;
   appId: string;
   name: string;
+  /** Para qué sirve; vacía si no se ha escrito. */
+  description: string;
   createdAt: string;
+  /** Último cambio de nombre o descripción (el del lienzo viene en su vista previa). */
+  updatedAt: string;
+}
+
+/** Lo que se envía al renombrar una feature. */
+export interface FeatureChanges {
+  name: string;
+  description: string;
+}
+
+/** Vista previa del último lienzo guardado (`GET /api/apps/{appId}/canvas-previews`); un `ref` trae el tipo de su elemento. */
+export interface CanvasPreview {
+  featureId: string;
+  updatedAt: string;
+  nodes: { id: string; type: string; x: number; y: number; w?: number | null; h?: number | null }[];
+  edges: { from: string; to: string }[];
 }
 
 /** Elemento del catálogo (`packages/schema/walkie-catalog-item.schema.json`). */
@@ -137,6 +157,18 @@ export function createFeature(token: string, appId: string, name: string): Promi
     method: 'POST',
     body: JSON.stringify({ name }),
   });
+}
+
+export function updateFeature(token: string, featureId: string, changes: FeatureChanges): Promise<Feature> {
+  return request(`/api/features/${encodeURIComponent(featureId)}`, {
+    token,
+    method: 'PUT',
+    body: JSON.stringify(changes),
+  });
+}
+
+export function listCanvasPreviews(token: string, appId: string, signal?: AbortSignal): Promise<CanvasPreview[]> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/canvas-previews`, { token, signal });
 }
 
 export function getCanvas(token: string, featureId: string, signal?: AbortSignal): Promise<WalkieCanvasGraphV0> {

@@ -20,7 +20,7 @@ export function installFakeApi(
   const apps = [...(seed.apps ?? [])];
   const catalog = [...(seed.catalog ?? [])];
   const assets = new Map<string, { asset: Asset; file: File }>();
-  const features = [...(seed.features ?? [])];
+  const features = (seed.features ?? []).map((f) => ({ ...f }));
   const canvases: Record<string, WalkieCanvasGraphV0> = { ...seed.canvases };
   /** Enlaces de solo lectura activos (los revocados salen de la lista, como en la API). */
   const shares = [...(seed.shares ?? [])];
@@ -105,6 +105,21 @@ export function installFakeApi(
       return new Response(null, { status: 204 });
     }
 
+    // /api/features/{featureId} — renombrar: 400 sin nombre, 404, la feature con su nueva fecha.
+    if (parts[1] === 'features' && parts.length === 3 && method === 'PUT') {
+      const feature = features.find((f) => f.id === parts[2]);
+      if (!feature) return notFound();
+      const changes = body as { name?: string; description?: string | null };
+      const error = invalidName(changes.name);
+      if (error) return error;
+      Object.assign(feature, {
+        name: changes.name!.trim(),
+        description: changes.description?.trim() ?? '',
+        updatedAt: new Date(Date.UTC(2026, 10, 8)).toISOString(),
+      });
+      return json(200, feature);
+    }
+
     // /api/features/{featureId}/canvas — como la API: 404, grafo vacío v0, 409 por versión, version + 1.
     if (parts[1] === 'features' && parts[3] === 'canvas') {
       const featureId = parts[2]!;
@@ -161,11 +176,13 @@ export function installFakeApi(
     if (parts[0] !== 'api' || parts[1] !== 'apps') return notFound();
     const appId = parts[2];
 
+    const withCount = (a: App) => ({ ...a, featureCount: features.filter((f) => f.appId === a.id).length });
+
     if (!appId) {
-      if (method === 'GET') return json(200, apps);
+      if (method === 'GET') return json(200, apps.map(withCount));
       const error = invalidName(body.name);
       if (error) return error;
-      const app: App = { id: id(), name: body.name!.trim(), createdAt: new Date(0).toISOString() };
+      const app: App = { id: id(), name: body.name!.trim(), createdAt: new Date(0).toISOString(), featureCount: 0 };
       apps.push(app);
       return json(201, app);
     }
@@ -207,7 +224,30 @@ export function installFakeApi(
       catalog.push(item);
       return json(201, item);
     }
-    if (parts[3] !== 'features') return json(200, app);
+    // /api/apps/{appId}/canvas-previews — los lienzos guardados de la app, con los ref resueltos al tipo del catálogo.
+    if (parts[3] === 'canvas-previews') {
+      return json(
+        200,
+        features
+          .filter((f) => f.appId === appId && canvases[f.id])
+          .map((f) => {
+            const graph = canvases[f.id]!;
+            return {
+              featureId: f.id,
+              updatedAt: new Date(Date.UTC(2026, 10, 8)).toISOString(),
+              nodes: Object.values(graph.nodes)
+                .filter((n) => graph.layout[n.id])
+                .map((n) => ({
+                  id: n.id,
+                  type: n.type === 'ref' ? (catalog.find((i) => i.id === n.catalogId)?.type ?? 'ref') : n.type,
+                  ...graph.layout[n.id]!,
+                })),
+              edges: Object.values(graph.edges).map((e) => ({ from: e.from, to: e.to })),
+            };
+          }),
+      );
+    }
+    if (parts[3] !== 'features') return json(200, withCount(app));
     if (method === 'GET')
       return json(
         200,
@@ -215,7 +255,9 @@ export function installFakeApi(
       );
     const error = invalidName(body.name);
     if (error) return error;
-    const feature: Feature = { id: id(), appId, name: body.name!.trim(), createdAt: new Date(0).toISOString() };
+    const now = new Date(0).toISOString();
+    const description = (body as { description?: string | null }).description?.trim() ?? '';
+    const feature: Feature = { id: id(), appId, name: body.name!.trim(), description, createdAt: now, updatedAt: now };
     features.push(feature);
     return json(201, feature);
   });

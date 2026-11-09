@@ -11,8 +11,20 @@ internal sealed class CreateAppRequestValidator : AbstractValidator<CreateAppReq
 
 internal sealed class CreateFeatureRequestValidator : AbstractValidator<CreateFeatureRequest>
 {
-    public CreateFeatureRequestValidator() =>
+    public CreateFeatureRequestValidator()
+    {
         RuleFor(r => r.Name).ValidName(Feature.NameMaxLength);
+        RuleFor(r => r.Description).ValidDescription(Feature.DescriptionMaxLength);
+    }
+}
+
+internal sealed class UpdateFeatureRequestValidator : AbstractValidator<UpdateFeatureRequest>
+{
+    public UpdateFeatureRequestValidator()
+    {
+        RuleFor(r => r.Name).ValidName(Feature.NameMaxLength);
+        RuleFor(r => r.Description).ValidDescription(Feature.DescriptionMaxLength);
+    }
 }
 
 internal static class NameRules
@@ -23,4 +35,10 @@ internal static class NameRules
             .Must(name => !string.IsNullOrWhiteSpace(name)).WithMessage("El nombre es obligatorio.")
             .Must(name => name is null || name.Trim().Length <= maxLength)
             .WithMessage($"El nombre no puede tener más de {maxLength} caracteres.");
+
+    /// <summary>Descripción opcional con largo máximo tras recortar.</summary>
+    public static IRuleBuilderOptions<T, string?> ValidDescription<T>(this IRuleBuilder<T, string?> rule, int maxLength) =>
+        rule
+            .Must(text => text is null || text.Trim().Length <= maxLength)
+            .WithMessage($"La descripción no puede tener más de {maxLength} caracteres.");
 }

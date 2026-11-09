@@ -16,6 +16,7 @@ public static class CanvasModule
         services.AddDbContext<CanvasDbContext>(options => options.UseNpgsql(connectionString, ConfigureNpgsql));
         services.AddSingleton<GraphValidator>();
         services.AddScoped<CanvasHandlers>();
+        services.AddScoped<CanvasPreviews>();
         services.AddScoped<Apps.Contracts.ICatalogUsage, CatalogUsage>();
         services.AddScoped<Contracts.ICanvasReader, CanvasReader>();
         services.TryAddSingleton(TimeProvider.System);

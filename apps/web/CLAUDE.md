@@ -5,6 +5,7 @@
 ```
 apps/web/src/
   canvas/        # FeatureEditor.tsx (barra superior, guardado, 409/400), Canvas.tsx (React Flow ↔ store, atajos, vista recordada, inspector plegable), Palette.tsx (barra de herramientas flotante + panel "Componentes"), ZoomControls.tsx, EmptyCanvasGuide.tsx, ShortcutsDialog.tsx + canvasShortcuts.ts, useOpenFeature.ts (abrir otra feature con confirmación), canvas.css
+  gallery/       # CanvasThumbnail.tsx (miniatura SVG desde /canvas-previews), FeatureCard.tsx (tarjeta + renombrar), GalleryTools.tsx + search.ts (buscar y ordenar), dates.ts, gallery.css; las usan pages/AppsPage y AppPage
   workspace/     # HomePage.tsx (`/`: última feature o bienvenida), Welcome.tsx + useStartWorkspace.ts (primer ingreso y ejemplo), sampleFlow.ts, LocationBar.tsx + Popover.tsx (selectores de app y feature), session.ts (localStorage), paths.ts, workspace.css
   nodes/         # PixelNode.tsx (caja común + resumen del contenido), NodeImage.tsx (miniatura de una pantalla), nodeContent.ts (límites y textos del resumen), nodeMeta.ts (etiqueta/glifo por tipo), nodeTypes.ts (registro)
   catalog/       # catalogContext.ts: catálogo y features de la app vistos desde el lienzo (contexto, refTarget, effectiveType, portalTarget)
@@ -50,6 +51,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 
 ## Trampas conocidas
 
+- **`installFakeApi` copia las features sembradas**: renombrar una feature la muta; si se siembra la misma constante en varias pruebas sin copiarla, una prueba contamina a la siguiente.
 - **Versiones fijadas a propósito**: TypeScript 5.9, ESLint 9, Vite 7, Vitest 4, `@vitejs/plugin-react` 5, react-router 7 (la 8 es muy nueva). Las majors más nuevas (TS 7, ESLint 10, Vite 8) aún no son compatibles entre sí ni con `typescript-eslint`. No las subas sin correr lint + test + build.
 - **pnpm 10.28.0** fijado en `packageManager` de `apps/web/package.json` **y** del `package.json` de la raíz (que existe solo para eso). Si falta el de la raíz, con corepack activo `pnpm --dir apps/web …` baja otra versión y falla con `ERR_PNPM_BAD_PM_VERSION`. Si cambias la versión, cámbiala en los dos. En CI se usa `pnpm/action-setup` con `package_json_file: apps/web/package.json`.
 - **`tsconfig.app.json` no incluye tipos de Node**: las pruebas en `src/` no pueden usar `node:fs`. La coherencia con el schema la verifica `pnpm check:schema`, no una prueba.

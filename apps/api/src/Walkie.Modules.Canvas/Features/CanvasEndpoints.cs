@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
+using Walkie.Modules.Canvas.Contracts;
 
 namespace Walkie.Modules.Canvas.Features;
 
@@ -23,8 +24,19 @@ internal static class CanvasEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        routes.MapGet("/api/apps/{appId:guid}/canvas-previews", GetPreviews)
+            .WithTags("Canvas")
+            .WithName("GetCanvasPreviews")
+            .WithSummary("Vista previa del último lienzo guardado de cada feature de la app (miniaturas de la galería).");
+
         return routes;
     }
+
+    private static async Task<Results<Ok<IReadOnlyList<CanvasPreview>>, NotFound>> GetPreviews(
+        Guid appId, CanvasPreviews previews, CancellationToken ct) =>
+        await previews.OfAppAsync(appId, ct).ConfigureAwait(false) is { } list
+            ? TypedResults.Ok(list)
+            : TypedResults.NotFound();
 
     private static async Task<Results<Ok<JsonElement>, NotFound>> GetCanvas(
         Guid featureId, CanvasHandlers handlers, CancellationToken ct) =>

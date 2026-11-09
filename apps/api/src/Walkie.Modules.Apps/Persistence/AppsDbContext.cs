@@ -35,7 +35,9 @@ internal sealed class AppsDbContext(DbContextOptions<AppsDbContext> options) : D
             feature.Property(f => f.AppId).HasColumnName("app_id");
             feature.Property(f => f.Name).HasColumnName("name").HasMaxLength(Feature.NameMaxLength);
             feature.Property(f => f.CreatedBy).HasColumnName("created_by").HasMaxLength(255);
+            feature.Property(f => f.Description).HasColumnName("description").HasMaxLength(Feature.DescriptionMaxLength).HasDefaultValue("");
             feature.Property(f => f.CreatedAt).HasColumnName("created_at");
+            feature.Property(f => f.UpdatedAt).HasColumnName("updated_at");
             feature.HasIndex(f => f.AppId).HasDatabaseName("ix_features_app_id");
         });
 

@@ -1,0 +1,258 @@
+/* Galerías de apps y features (spec espacio-de-trabajo, criterios 7 a 9). Tokens en theme/global.css. */
+
+.gallery-page {
+  max-width: 1120px;
+}
+
+.gallery-head h2 {
+  margin-bottom: 4px;
+}
+
+.gallery-lead {
+  max-width: 64ch;
+  margin: 0;
+  color: var(--stone-700);
+}
+
+.gallery-create {
+  margin: 16px 0 24px;
+  padding: 4px 16px;
+  border: 1px dashed var(--dune-300);
+  border-radius: var(--radius-m);
+}
+
+.gallery-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: var(--stone-700);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.gallery-tools input {
+  flex: 1 1 240px;
+  max-width: 360px;
+  min-height: 34px;
+}
+
+.gallery-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.gallery-tools select {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  color: var(--ink);
+  font: inherit;
+}
+
+.gallery-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 24px;
+  border-radius: var(--radius-m);
+  background: var(--dune-100);
+}
+
+.gallery-empty h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.gallery-empty p {
+  max-width: 64ch;
+  margin: 0;
+  color: var(--stone-700);
+}
+
+.gallery-empty [role='alert'],
+.feature-card-form [role='alert'] {
+  color: var(--danger);
+}
+
+.gallery-note {
+  color: var(--stone-700);
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+/* Tarjetas: el enlace del título cubre la tarjeta entera (::after); "Editar" queda por encima. */
+.app-card,
+.feature-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand-raised);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+.app-card:hover,
+.feature-card:hover {
+  border-color: var(--dune-300);
+  box-shadow: var(--shadow-float);
+}
+
+.app-card:focus-within,
+.feature-card:focus-within {
+  border-color: var(--ibad);
+  box-shadow: 0 0 0 3px var(--ibad-tint);
+}
+
+.app-card {
+  gap: 4px;
+  padding: 16px;
+}
+
+.app-card-title,
+.feature-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.app-card-title a,
+.feature-card-title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.app-card-title a:focus-visible,
+.feature-card-title a:focus-visible {
+  outline: none;
+}
+
+.app-card-title a::after,
+.feature-card-title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.app-card-meta {
+  margin: 0;
+  color: var(--stone-700);
+  font-size: 13px;
+}
+
+.thumbnail {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-bottom: 1px solid var(--dune-200);
+  background-color: var(--sand);
+  background-image: radial-gradient(var(--dune-300) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.thumbnail.is-empty {
+  display: grid;
+  place-items: center;
+  color: var(--stone-500);
+  font-size: 13px;
+}
+
+.thumbnail.is-empty span {
+  padding: 2px 8px;
+  border-radius: var(--radius-s);
+  background: var(--sand);
+}
+
+.thumbnail-node {
+  fill: #fffaf1;
+  stroke-width: 6;
+}
+
+.thumbnail-edge {
+  stroke: var(--stone-500);
+  stroke-width: 4;
+  opacity: 0.7;
+}
+
+.feature-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.feature-card-description {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--stone-700);
+  font-size: 13.5px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.feature-card-description.is-empty {
+  color: var(--stone-500);
+  font-style: italic;
+}
+
+.feature-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  color: var(--stone-500);
+  font-size: 12.5px;
+}
+
+.feature-card-edit {
+  position: relative;
+  z-index: 1;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.feature-card-form {
+  position: relative;
+  z-index: 1;
+}
+
+.feature-card-form label {
+  color: var(--stone-700);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.feature-card-form textarea {
+  resize: vertical;
+  font: inherit;
+}
+
+.feature-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}

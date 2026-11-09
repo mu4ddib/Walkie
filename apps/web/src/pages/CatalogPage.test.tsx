@@ -7,8 +7,8 @@ import { renderRoute } from '../test/render';
 
 vi.mock('react-oidc-context', () => ({ useAuth: () => ({ user: { access_token: 'token-de-prueba' } }) }));
 
-const app = { id: 'app-1', name: 'Banca móvil', createdAt: '2026-01-01T00:00:00Z' };
-const transferir = { id: 'feat-1', appId: 'app-1', name: 'Transferir', createdAt: '2026-01-01T00:00:00Z' };
+const app = { id: 'app-1', name: 'Banca móvil', createdAt: '2026-01-01T00:00:00Z', featureCount: 1 };
+const transferir = { id: 'feat-1', appId: 'app-1', name: 'Transferir', createdAt: '2026-01-01T00:00:00Z', description: '', updatedAt: '2026-01-01T00:00:00Z' };
 const consultar: CatalogItem = {
   id: 'item-1',
   appId: 'app-1',

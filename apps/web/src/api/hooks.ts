@@ -23,7 +23,10 @@ import {
   listFeatures,
   saveCanvas,
   updateCatalogItem,
+  updateFeature,
+  listCanvasPreviews,
   type CatalogItem,
+  type FeatureChanges,
   type CatalogItemChanges,
   type NewCatalogItem,
   type ShareDays,
@@ -38,6 +41,8 @@ export const queryKeys = {
   apps: ['apps'] as const,
   app: (appId: string) => ['apps', appId] as const,
   features: (appId: string) => ['apps', appId, 'features'] as const,
+  /** Bajo `canvas` para que guardar un lienzo las marque viejas (ver `useSaveCanvas`). */
+  previews: (appId: string) => ['canvas', 'previews', appId] as const,
   canvas: (featureId: string) => ['canvas', featureId] as const,
   catalog: (appId: string) => ['apps', appId, 'catalog'] as const,
   catalogItem: (itemId: string) => ['catalog', itemId] as const,
@@ -84,6 +89,24 @@ export function useCreateFeature(appId: string) {
   });
 }
 
+export function useUpdateFeature(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ featureId, changes }: { featureId: string; changes: FeatureChanges }) =>
+      updateFeature(token, featureId, changes),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) }),
+  });
+}
+
+export function useCanvasPreviews(appId: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.previews(appId),
+    queryFn: ({ signal }) => listCanvasPreviews(token, appId, signal),
+  });
+}
+
 /**
  * Grafo guardado de la feature. Solo se usa para la carga inicial: después manda el store,
  * así que no se refresca solo (un refetch no debe pisar cambios sin guardar).
@@ -116,7 +139,11 @@ export function useSaveCanvas(featureId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (graph: WalkieCanvasGraphV0) => saveCanvas(token, featureId, graph),
-    onSuccess: (saved) => queryClient.setQueryData(queryKeys.canvas(featureId), saved),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(queryKeys.canvas(featureId), saved);
+      // Las miniaturas de la galería cambian con el lienzo.
+      void queryClient.invalidateQueries({ queryKey: ['canvas', 'previews'] });
+    },
   });
 }
 
