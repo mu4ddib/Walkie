@@ -263,6 +263,36 @@ describe('Palette con catálogo (Componentes)', () => {
   });
 });
 
+describe('resumen técnico en la caja', () => {
+  it('una API muestra autenticación, parámetros y respuestas en una línea', () => {
+    const store = createGraphStore();
+    const id = store.getState().addNode('api', { x: 0, y: 0 });
+    store.getState().setHttp(id, {
+      method: 'GET',
+      path: '/c/{id}',
+      auth: { type: 'bearer' },
+      params: [{ name: 'id', in: 'path' }],
+      responses: [{ status: 200 }, { status: 404 }],
+    });
+    const props = {
+      id,
+      data: { node: store.getState().nodes[id]!, editing: false, onEditDone: vi.fn() },
+      selected: false,
+    } as unknown as NodeProps<WalkieFlowNode>;
+    render(
+      <GraphStoreProvider store={store}>
+        <ReactFlowProvider>
+          <PixelNode {...props} />
+        </ReactFlowProvider>
+      </GraphStoreProvider>,
+    );
+
+    expect(document.querySelector('.pixel-node-detail')).toHaveTextContent(
+      'Bearer (token) · 1 parámetro · 2 respuestas (1 error)',
+    );
+  });
+});
+
 describe('PixelNode de un ref', () => {
   function renderRef(catalogId: string) {
     const store = createGraphStore();

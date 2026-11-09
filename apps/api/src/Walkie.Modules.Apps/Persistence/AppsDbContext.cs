@@ -50,8 +50,8 @@ internal sealed class AppsDbContext(DbContextOptions<AppsDbContext> options) : D
             item.Property(i => i.Type).HasColumnName("type").HasMaxLength(16);
             item.Property(i => i.Title).HasColumnName("title").HasMaxLength(CatalogItem.TitleMaxLength);
             item.Property(i => i.Description).HasColumnName("description").HasMaxLength(CatalogItem.TextMaxLength);
-            item.Property(i => i.HttpMethod).HasColumnName("http_method").HasMaxLength(8);
-            item.Property(i => i.HttpPath).HasColumnName("http_path").HasMaxLength(CatalogItem.TextMaxLength);
+            item.Property(i => i.Http).HasColumnName("http").HasColumnType("jsonb");
+            item.Property(i => i.Database).HasColumnName("database").HasColumnType("jsonb");
             item.Property(i => i.Version).HasColumnName("version").IsConcurrencyToken();
             item.Property(i => i.CreatedBy).HasColumnName("created_by").HasMaxLength(255);
             item.Property(i => i.CreatedAt).HasColumnName("created_at");

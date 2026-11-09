@@ -341,8 +341,8 @@ internal static class MarkdownDocument
                 Section = item.Type,
                 Title = item.Title,
                 Description = item.Description,
-                Method = item.Http?.Method,
-                Path = item.Http?.Path,
+                Method = item.HttpMethod,
+                Path = item.HttpPath,
                 FromCatalog = true,
             }
             : node;

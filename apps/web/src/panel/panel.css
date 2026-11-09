@@ -291,3 +291,161 @@
 .panel-link {
   font-size: 13px;
 }
+
+/* Detalle técnico: contrato de API, estructura de BD, detalle de conexiones (spec espacio-de-trabajo, 13 a 15). */
+.contract {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contract-section,
+.contract-table {
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand);
+}
+
+.contract-section > summary,
+.contract-table > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.contract-count {
+  margin-left: auto;
+  color: var(--stone-500);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.contract-body,
+.contract-table > :not(summary) {
+  margin: 0 10px;
+}
+
+.contract-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.contract-table {
+  padding-bottom: 8px;
+  background: var(--sand-raised);
+}
+
+.contract-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+  align-items: end;
+}
+
+.contract-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.contract-field.is-wide {
+  grid-column: 1 / -1;
+}
+
+.contract-field label,
+.contract-check {
+  color: var(--stone-700);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.contract-field input,
+.contract-field select,
+.contract-field textarea {
+  min-width: 0;
+  font-size: 13px;
+}
+
+.contract-field .mono,
+.contract-field textarea {
+  font-family: var(--font-mono);
+}
+
+.contract-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+}
+
+.contract-row,
+.contract-response {
+  position: relative;
+  margin: 0;
+  padding: 8px 32px 8px 8px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+}
+
+.contract-response {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 8px;
+  border-left: 3px solid var(--ok);
+}
+
+.contract-response[data-error] {
+  border-left-color: var(--danger);
+}
+
+.contract-response legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.contract-status {
+  font-family: var(--font-mono);
+}
+
+.contract-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  font-size: 12px;
+}
+
+.contract-add {
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.contract-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contract-subtitle {
+  margin: 10px 10px 4px;
+  color: var(--stone-700);
+  font-size: 12px;
+  font-weight: 600;
+}

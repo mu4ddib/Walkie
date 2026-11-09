@@ -5,10 +5,13 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />
+    <PackageReference Include="JsonSchema.Net" Version="9.5.0" />
   </ItemGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- Fuente de verdad del grafo: se embebe el mismo archivo que usa la web (WalkieSchemas). -->
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-graph.schema.json" LogicalName="walkie-graph.schema.json" />
   </ItemGroup>
 
 </Project>

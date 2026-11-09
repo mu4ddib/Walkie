@@ -70,20 +70,18 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("created_by");
 
+                    b.Property<string>("Database")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("database");
+
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("description");
 
-                    b.Property<string>("HttpMethod")
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)")
-                        .HasColumnName("http_method");
-
-                    b.Property<string>("HttpPath")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasColumnName("http_path");
+                    b.Property<string>("Http")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("http");
 
                     b.Property<string>("Title")
                         .IsRequired()

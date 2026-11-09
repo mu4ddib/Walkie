@@ -101,6 +101,21 @@ describe('inspector de un componente', () => {
     expect(store.getState().dirty).toBe(false);
   });
 
+  it('la definición compartida incluye el contrato completo y lo guarda en el catálogo', async () => {
+    const { api } = renderRefPanel('item-1');
+    const shared = screen.getByRole('region', { name: 'Definición compartida' });
+
+    await userEvent.selectOptions(within(shared).getByLabelText('Tipo de autenticación'), 'oauth2');
+    await userEvent.click(within(shared).getByRole('button', { name: 'Guardar definición' }));
+
+    await vi.waitFor(() =>
+      expect(api.catalog[0]).toMatchObject({
+        http: { method: 'GET', path: '/clientes/{id}', auth: { type: 'oauth2' } },
+        version: 2,
+      }),
+    );
+  });
+
   it('"Crear copia independiente" lo vuelve un nodo propio con los datos actuales', async () => {
     const { store, id } = renderRefPanel('item-1');
 

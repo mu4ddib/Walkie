@@ -185,7 +185,7 @@ public sealed class ExportEndpointsTests(WalkieApiFactory factory)
     {
         var response = await client.PostAsJsonAsync(
             new Uri($"/api/apps/{appId}/catalog", UriKind.Relative),
-            new CreateCatalogItemRequest("api", "Consultar cliente", null, new HttpContract("GET", "/clientes/{id}")));
+            new CreateCatalogItemRequest("api", "Consultar cliente", null, TestJson.Http("GET", "/clientes/{id}")));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<CatalogItemResponse>())!.Id;
     }

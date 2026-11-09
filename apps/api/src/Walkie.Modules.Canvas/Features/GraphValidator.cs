@@ -1,50 +1,21 @@
-using System.Reflection;
 using System.Text.Json;
-using Json.Schema;
+using Walkie.Shared.Schemas;
 
 namespace Walkie.Modules.Canvas.Features;
 
 /// <summary>
-/// Valida un grafo contra <c>packages/schema/walkie-graph.schema.json</c> (embebido en el ensamblado)
+/// Valida un grafo contra <c>packages/schema/walkie-graph.schema.json</c> (<see cref="WalkieSchemas"/>)
 /// y luego la integridad que el schema no puede expresar (claves = ids, conexiones, layout y pasos de tours apuntan a nodos, inputs y reglas).
 /// </summary>
 internal sealed class GraphValidator
 {
-    private readonly JsonSchema _schema = LoadSchema();
+    private readonly Json.Schema.JsonSchema _schema = WalkieSchemas.Graph;
 
     /// <summary>Errores por ruta JSON (ej. <c>/nodes/n1/type</c>); vacío si el grafo es válido.</summary>
     public Dictionary<string, string[]> Validate(JsonElement graph)
     {
-        var results = _schema.Evaluate(graph, new EvaluationOptions { OutputFormat = OutputFormat.List });
-        if (!results.IsValid)
-        {
-            return SchemaErrors(results);
-        }
-
-        return IntegrityErrors(graph);
-    }
-
-    private static Dictionary<string, string[]> SchemaErrors(EvaluationResults results)
-    {
-        var errors = new Dictionary<string, List<string>>();
-        foreach (var detail in (results.Details ?? []).Where(d => d.Errors is { Count: > 0 }))
-        {
-            var path = detail.InstanceLocation.ToString();
-            var key = path.Length == 0 ? "/" : path;
-            if (!errors.TryGetValue(key, out var list))
-            {
-                errors[key] = list = [];
-            }
-
-            list.AddRange(detail.Errors!.Values.Where(m => !list.Contains(m)));
-        }
-
-        if (errors.Count == 0)
-        {
-            errors["/"] = ["El grafo no cumple el schema."];
-        }
-
-        return errors.ToDictionary(e => e.Key, e => e.Value.ToArray());
+        var errors = WalkieSchemas.Errors(_schema, graph);
+        return errors.Count > 0 ? errors : IntegrityErrors(graph);
     }
 
     private static Dictionary<string, string[]> IntegrityErrors(JsonElement graph)
@@ -68,6 +39,8 @@ internal sealed class GraphValidator
             InputErrors(node, nodeIds, ruleIds, errors);
             OnlyOn(node, "assetId", "screen", "Solo las pantallas tienen imagen.", errors);
             OnlyOn(node, "targetFeatureId", "portal", "Solo los portales tienen feature destino.", errors);
+            OnlyOn(node, "http", "api", "Solo las API tienen contrato.", errors);
+            OnlyOn(node, "database", "database", "Solo las bases de datos tienen estructura.", errors);
         }
 
         foreach (var edge in graph.GetProperty("edges").EnumerateObject())
@@ -177,13 +150,5 @@ internal sealed class GraphValidator
 
             i++;
         }
-    }
-
-    private static JsonSchema LoadSchema()
-    {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("walkie-graph.schema.json")
-            ?? throw new InvalidOperationException("Falta el recurso embebido walkie-graph.schema.json.");
-        using var reader = new StreamReader(stream);
-        return JsonSchema.FromText(reader.ReadToEnd());
     }
 }

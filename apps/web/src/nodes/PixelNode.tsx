@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Handle, Position, type NodeProps, type Node as FlowNode } from '@xyflow/react';
 import { portalTarget, refTarget, useCanvasCatalog } from '../catalog/catalogContext';
+import { databaseSummary, httpSummary } from '../contracts/contracts';
 import type { Node } from '../schema/walkie-graph';
 import { TITLE_MAX_LENGTH } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
@@ -33,7 +34,14 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
   // Un `ref` se ve como su elemento del catálogo, con los datos actuales (spec catalogo, criterio 7).
   const target = refTarget(node, items);
   const shown: Node = target
-    ? { ...node, type: target.type, title: target.title, description: target.description, http: target.http }
+    ? {
+        ...node,
+        type: target.type,
+        title: target.title,
+        description: target.description,
+        http: target.http,
+        database: target.database,
+      }
     : node;
   // Un `portal` muestra el nombre actual de su feature destino (spec imagenes-portal, criterio 7).
   const destination = portalTarget(node, features);
@@ -93,9 +101,12 @@ function NodeContent({ node }: { node: Node }) {
   const inputs = preview(node.inputs ?? [], MAX_VISIBLE_INPUTS);
   const lines = preview(expressionLines(node.expression), MAX_VISIBLE_EXPRESSION_LINES);
 
+  const detail = node.type === 'api' ? httpSummary(node.http) : node.type === 'database' ? databaseSummary(node.database) : '';
+
   return (
     <>
       {http && <div className="pixel-node-http">{http}</div>}
+      {detail && <div className="pixel-node-detail">{detail}</div>}
       {node.description && <p className="pixel-node-description">{node.description}</p>}
       {inputs.shown.length > 0 && (
         <ul className="pixel-node-list" aria-label="Inputs">

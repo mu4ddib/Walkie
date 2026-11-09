@@ -10,7 +10,6 @@ internal sealed class CatalogItem
     public const int TextMaxLength = 2000;
 
     public static readonly string[] Types = ["api", "service", "database"];
-    public static readonly string[] HttpMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
     public Guid Id { get; init; } = Guid.CreateVersion7();
     public Guid AppId { get; init; }
@@ -18,11 +17,11 @@ internal sealed class CatalogItem
     public required string Title { get; set; }
     public string? Description { get; set; }
 
-    /// <summary>Solo en <c>api</c>.</summary>
-    public string? HttpMethod { get; set; }
+    /// <summary>Contrato (<c>$defs/http</c> del grafo) como <c>jsonb</c>. Solo en <c>api</c>.</summary>
+    public string? Http { get; set; }
 
-    /// <summary>Solo en <c>api</c>.</summary>
-    public string? HttpPath { get; set; }
+    /// <summary>Estructura (<c>$defs/database</c> del grafo) como <c>jsonb</c>. Solo en <c>database</c>.</summary>
+    public string? Database { get; set; }
 
     /// <summary>Concurrencia optimista: un guardado con versión vieja responde 409.</summary>
     public int Version { get; set; } = 1;

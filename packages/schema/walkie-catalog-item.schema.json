@@ -12,15 +12,8 @@
     "type": { "enum": ["api", "service", "database"] },
     "title": { "type": "string", "minLength": 1, "maxLength": 120 },
     "description": { "type": "string", "maxLength": 2000 },
-    "http": {
-      "type": "object",
-      "description": "Contrato básico (solo type api)",
-      "additionalProperties": false,
-      "properties": {
-        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
-        "path": { "type": "string", "maxLength": 2000 }
-      }
-    },
+    "http": { "$ref": "walkie-graph.schema.json#/$defs/http", "description": "Contrato (solo type api)" },
+    "database": { "$ref": "walkie-graph.schema.json#/$defs/database", "description": "Estructura (solo type database)" },
     "version": { "type": "integer", "minimum": 1, "description": "Versión para concurrencia optimista" }
   }
 }

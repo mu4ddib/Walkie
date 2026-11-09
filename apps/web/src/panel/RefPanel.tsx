@@ -8,6 +8,9 @@ import { NODE_LABELS } from '../nodes/nodeMeta';
 import { catalogPath } from '../pages/catalogPaths';
 import type { Node } from '../schema/walkie-graph';
 import { HTTP_METHODS, TEXT_MAX_LENGTH, TITLE_MAX_LENGTH, type HttpMethod } from '../store/graphStore';
+import { normalizeDatabase, normalizeHttp } from '../contracts/contracts';
+import { ApiContractEditor } from './contract/ApiContractEditor';
+import { DatabaseEditor } from './contract/DatabaseEditor';
 import { useGraphStore } from '../store/useGraphStore';
 
 /**
@@ -81,13 +84,18 @@ function DefinitionForm({
   const [description, setDescription] = useState(item.description ?? '');
   const [method, setMethod] = useState<HttpMethod | ''>(item.http?.method ?? '');
   const [path, setPath] = useState(item.http?.path ?? '');
+  // Auth, parámetros, request y respuestas (el método y la ruta van arriba, en sus campos).
+  const [contract, setContract] = useState(item.http);
+  const [database, setDatabase] = useState(item.database);
   const [localError, setLocalError] = useState<string | null>(null);
   const ids = { title: useId(), description: useId(), method: useId(), path: useId() };
   const changed =
     title.trim() !== item.title ||
     description.trim() !== (item.description ?? '') ||
     method !== (item.http?.method ?? '') ||
-    path.trim() !== (item.http?.path ?? '');
+    path.trim() !== (item.http?.path ?? '') ||
+    JSON.stringify(normalizeHttp(httpOf(contract, method, path))) !== JSON.stringify(normalizeHttp(item.http)) ||
+    JSON.stringify(normalizeDatabase(database)) !== JSON.stringify(normalizeDatabase(item.database));
 
   function save(event: FormEvent) {
     event.preventDefault();
@@ -96,11 +104,13 @@ function DefinitionForm({
       return;
     }
     setLocalError(null);
-    const http =
-      item.type === 'api' && (method || path.trim())
-        ? { method: method || undefined, path: path.trim() || undefined }
-        : undefined;
-    update.mutate({ title: title.trim(), description: description.trim() || undefined, http, version: item.version });
+    update.mutate({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      http: item.type === 'api' ? normalizeHttp(httpOf(contract, method, path)) : undefined,
+      database: item.type === 'database' ? normalizeDatabase(database) : undefined,
+      version: item.version,
+    });
   }
 
   const apiError = update.error instanceof ApiError ? update.error : null;
@@ -150,6 +160,8 @@ function DefinitionForm({
           </div>
         </>
       )}
+      {item.type === 'api' && <ApiContractEditor value={contract} onChange={setContract} />}
+      {item.type === 'database' && <DatabaseEditor value={database} onChange={setDatabase} />}
       <Usages itemId={item.id} />
       <div className="definition-actions">
         <button type="submit" className="pixel-button is-primary" disabled={!changed || update.isPending}>
@@ -175,6 +187,11 @@ function DefinitionForm({
       )}
     </form>
   );
+}
+
+/** El contrato del editor con el método y la ruta de sus campos. */
+function httpOf(contract: CatalogItem['http'], method: HttpMethod | '', path: string): CatalogItem['http'] {
+  return { ...contract, method: method || undefined, path };
 }
 
 /** "Se usa en N lienzos", con la lista, antes de guardar (criterio 12). Cuenta lo guardado de cada lienzo. */
@@ -252,6 +269,7 @@ function InThisCanvas({ appId, node, item }: { appId: string; node: Node; item: 
                 title: item.title,
                 description: item.description,
                 http: item.http,
+                database: item.database,
               })
             }
           >

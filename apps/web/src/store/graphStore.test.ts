@@ -104,6 +104,68 @@ describe('convertToLocal', () => {
   });
 });
 
+describe('detalle técnico', () => {
+  it('setHttp guarda el contrato normalizado solo en una API y lo quita si queda vacío', () => {
+    const api = s().addNode('api', { x: 0, y: 0 });
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+    s().markSaved(1);
+
+    s().setHttp(api, { method: 'GET', params: [{ name: ' id ', in: 'path' }], responses: [{ status: 200 }] });
+    s().setHttp(screen, { method: 'GET' });
+
+    expect(s().nodes[api]?.http).toEqual({ method: 'GET', params: [{ name: 'id', in: 'path' }], responses: [{ status: 200 }] });
+    expect(s().nodes[screen]?.http).toBeUndefined();
+    expect(s().dirty).toBe(true);
+    s().setHttp(api, { params: [] });
+    expect(s().nodes[api]).not.toHaveProperty('http');
+  });
+
+  it('updateNode con método y ruta conserva el resto del contrato', () => {
+    const api = s().addNode('api', { x: 0, y: 0 });
+    s().setHttp(api, { auth: { type: 'bearer' }, responses: [{ status: 200 }] });
+
+    s().updateNode(api, { http: { method: 'POST', path: '/x' } });
+
+    expect(s().nodes[api]?.http).toEqual({ auth: { type: 'bearer' }, responses: [{ status: 200 }], method: 'POST', path: '/x' });
+  });
+
+  it('setDatabase solo en bases de datos; notas en cualquier nodo propio', () => {
+    const db = s().addNode('database', { x: 0, y: 0 });
+    const actor = s().addNode('actor', { x: 0, y: 0 });
+
+    s().setDatabase(db, { engine: 'Oracle', tables: [{ name: 'cuentas' }] });
+    s().setDatabase(actor, { engine: 'Oracle' });
+    s().updateNode(actor, { notes: '  Inicia la transferencia ' });
+
+    expect(s().nodes[db]?.database).toEqual({ engine: 'Oracle', tables: [{ name: 'cuentas' }] });
+    expect(s().nodes[actor]).toEqual({ id: actor, type: 'actor', title: 'Actor', notes: 'Inicia la transferencia' });
+  });
+
+  it('updateEdge guarda notas, ejemplo y acceso a datos; vacíos los quita', () => {
+    const api = s().addNode('api', { x: 0, y: 0 });
+    const db = s().addNode('database', { x: 0, y: 0 });
+    const edge = s().connect(api, db)!;
+
+    s().updateEdge(edge, { notes: 'En una transacción', example: '{ "id": 1 }', data: { operation: 'write', entities: ['cuentas', ' '] } });
+    expect(s().edges[edge]).toMatchObject({
+      notes: 'En una transacción',
+      example: '{ "id": 1 }',
+      data: { operation: 'write', entities: ['cuentas'] },
+    });
+
+    s().updateEdge(edge, { notes: '', example: '', data: null });
+    expect(s().edges[edge]).toEqual({ id: edge, from: api, to: db, kind: s().edges[edge]!.kind });
+  });
+
+  it('convertToLocal copia el contrato o la estructura del elemento', () => {
+    const ref = s().addRef({ id: 'item-1', title: 'Core' }, { x: 0, y: 0 });
+
+    s().convertToLocal(ref, { type: 'database', title: 'Core', database: { engine: 'PostgreSQL' } });
+
+    expect(s().nodes[ref]).toEqual({ id: ref, type: 'database', title: 'Core', database: { engine: 'PostgreSQL' } });
+  });
+});
+
 describe('moveNode', () => {
   it('ajusta la posición a múltiplos de 8', () => {
     const id = s().addNode('screen', { x: 0, y: 0 });
