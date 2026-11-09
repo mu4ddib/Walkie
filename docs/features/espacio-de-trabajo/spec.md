@@ -56,9 +56,9 @@ Que Walkie abra directo en el lienzo, que crear, conectar, documentar y reutiliz
 
 **5. Grupos de infraestructura (tarea 5)**
 
-- [ ] 18. Puedo crear un grupo (frontend, backend, externos, datos, red, entorno, cloud o libre) con nombre y límite visual; arrastrar un nodo dentro lo incluye; mover el grupo mueve sus nodos.
-- [ ] 19. Un grupo plegado se ve como una caja compacta con su nombre y número de nodos; las conexiones de sus nodos llegan a la caja.
-- [ ] 20. Los grupos se guardan con el lienzo y no se confunden con apps ni features.
+- [x] 18. Puedo crear un grupo (frontend, backend, externos, datos, red, entorno, cloud o libre) con nombre y límite visual; arrastrar un nodo dentro lo incluye; mover el grupo mueve sus nodos.
+- [x] 19. Un grupo plegado se ve como una caja compacta con su nombre y número de nodos; las conexiones de sus nodos llegan a la caja.
+- [x] 20. Los grupos se guardan con el lienzo y no se confunden con apps ni features.
 
 **6. Conexiones con movimiento y tours (tarea 6)**
 

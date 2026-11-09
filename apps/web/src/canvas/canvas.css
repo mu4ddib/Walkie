@@ -822,3 +822,107 @@ div.pixel-node-image {
     display: none;
   }
 }
+
+/* Grupos de infraestructura (spec espacio-de-trabajo, criterios 18 y 19). El cuerpo deja pasar los clics al lienzo
+   y a las cajas: el grupo se toma por su encabezado. */
+.react-flow__node-infraGroup {
+  pointer-events: none;
+}
+
+.react-flow__node-infraGroup .group-node-header,
+.react-flow__node-infraGroup .react-flow__resize-control {
+  pointer-events: all;
+}
+
+.group-node {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed color-mix(in srgb, var(--group-color) 55%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--group-color) 6%, transparent);
+}
+
+.group-node[data-selected] {
+  border-style: solid;
+  border-color: var(--ibad);
+}
+
+.group-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 8px 6px 10px;
+  color: var(--ink);
+  cursor: grab;
+}
+
+.group-node-kind {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--group-color);
+  color: #fffaf1;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.group-node-title {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-node-count {
+  flex-shrink: 0;
+  color: var(--stone-700);
+  font-size: 12px;
+}
+
+.group-node-toggle {
+  flex-shrink: 0;
+  min-width: 24px;
+  min-height: 24px;
+  margin-left: auto;
+  border: 1px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* Plegado: una caja compacta y sólida, como un nodo más. */
+.group-node[data-collapsed] {
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--group-color);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-pixel);
+}
+
+.group-node[data-collapsed] .group-node-header {
+  flex-wrap: wrap;
+  row-gap: 2px;
+  height: 100%;
+}
+
+.react-flow__node-infraGroup.react-flow__node-infraGroup:has([data-collapsed]) {
+  pointer-events: all;
+}
+
+.group-node .react-flow__handle {
+  opacity: 0;
+}
+
+.toolbar-group .toolbar-glyph {
+  color: var(--stone-700);
+}
+
+.group-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}

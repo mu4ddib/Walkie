@@ -5,7 +5,7 @@ namespace Walkie.Modules.Canvas.Features;
 
 /// <summary>
 /// Valida un grafo contra <c>packages/schema/walkie-graph.schema.json</c> (<see cref="WalkieSchemas"/>)
-/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones, layout y pasos de tours apuntan a nodos, inputs y reglas).
+/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones, layout y pasos de tours apuntan a nodos o grupos, inputs y reglas).
 /// </summary>
 internal sealed class GraphValidator
 {
@@ -24,6 +24,10 @@ internal sealed class GraphValidator
         var nodes = graph.GetProperty("nodes");
         var nodeIds = nodes.EnumerateObject().Select(n => n.Name).ToHashSet(StringComparer.Ordinal);
 
+        var groupIds = graph.TryGetProperty("groups", out var groups)
+            ? groups.EnumerateObject().Select(g => g.Name).ToHashSet(StringComparer.Ordinal)
+            : [];
+
         var ruleIds = nodes.EnumerateObject()
             .Where(n => n.Value.GetProperty("type").GetString() == "rule")
             .Select(n => n.Name)
@@ -41,6 +45,26 @@ internal sealed class GraphValidator
             OnlyOn(node, "targetFeatureId", "portal", "Solo los portales tienen feature destino.", errors);
             OnlyOn(node, "http", "api", "Solo las API tienen contrato.", errors);
             OnlyOn(node, "database", "database", "Solo las bases de datos tienen estructura.", errors);
+            if (node.Value.TryGetProperty("groupId", out var groupId) && !groupIds.Contains(groupId.GetString()!))
+            {
+                errors[$"/nodes/{node.Name}/groupId"] = ["El nodo está en un grupo que no existe."];
+            }
+        }
+
+        if (graph.TryGetProperty("groups", out var groupMap))
+        {
+            foreach (var group in groupMap.EnumerateObject())
+            {
+                if (group.Value.GetProperty("id").GetString() != group.Name)
+                {
+                    errors[$"/groups/{group.Name}/id"] = ["El id del grupo debe coincidir con su clave."];
+                }
+
+                if (nodeIds.Contains(group.Name))
+                {
+                    errors[$"/groups/{group.Name}"] = ["Un grupo no puede tener el id de un nodo."];
+                }
+            }
         }
 
         foreach (var edge in graph.GetProperty("edges").EnumerateObject())
@@ -66,9 +90,16 @@ internal sealed class GraphValidator
 
         foreach (var position in graph.GetProperty("layout").EnumerateObject())
         {
-            if (!nodeIds.Contains(position.Name))
+            if (groupIds.Contains(position.Name))
             {
-                errors[$"/layout/{position.Name}"] = ["La posición es de un nodo que no existe."];
+                if (!position.Value.TryGetProperty("w", out _) || !position.Value.TryGetProperty("h", out _))
+                {
+                    errors[$"/layout/{position.Name}"] = ["La caja de un grupo necesita ancho y alto."];
+                }
+            }
+            else if (!nodeIds.Contains(position.Name))
+            {
+                errors[$"/layout/{position.Name}"] = ["La posición es de un nodo o grupo que no existe."];
             }
         }
 

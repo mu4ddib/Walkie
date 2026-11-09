@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import { v7 as uuidv7 } from 'uuid';
-import type { Edge, Node, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
+import type { Edge, Group, Node, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import { GRID } from '../theme/palette';
 import { normalizeDatabase, normalizeEdgeData, normalizeHttp } from '../contracts/contracts';
 
@@ -44,6 +44,27 @@ export interface NodePatch {
   /** Feature destino de un `portal`; `null` la quita. Se ignora en otros tipos. */
   targetFeatureId?: string | null;
 }
+
+export type GroupKind = Group['kind'];
+/** Caja de un grupo en el lienzo. */
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+/** Tamaño mínimo de un grupo desplegado. */
+export const GROUP_MIN = { w: 240, h: 160 } as const;
+export const GROUP_KINDS: readonly GroupKind[] = [
+  'frontend',
+  'backend',
+  'external',
+  'data',
+  'network',
+  'environment',
+  'cloud',
+  'custom',
+];
 
 /** Cambios de un input. `options` solo aplica a `enum`; `ruleIds` solo a nodos `rule` existentes. */
 export type InputPatch = Partial<Input>;
@@ -92,6 +113,22 @@ export function defaultEdgeKind(from: NodeType, to: NodeType): EdgeKind {
 }
 
 /** Redondea al múltiplo de la grilla (8 px) más cercano. */
+function withoutGroup(node: Node): Node {
+  const copy = { ...node };
+  delete copy.groupId;
+  return copy;
+}
+
+/** Caja de grupo en la grilla y con el tamaño mínimo. */
+function snapBox(box: Box): Box {
+  return {
+    x: snap(box.x),
+    y: snap(box.y),
+    w: Math.max(GROUP_MIN.w, snap(box.w)),
+    h: Math.max(GROUP_MIN.h, snap(box.h)),
+  };
+}
+
 export function snap(value: number): number {
   // `+ 0` convierte -0 en 0 (Math.round(-0.4) es -0).
   return Math.round(value / GRID) * GRID + 0;
@@ -158,6 +195,8 @@ export interface GraphState {
   layout: WalkieCanvasGraphV0['layout'];
   /** Tours del lienzo (modo tour), por id. */
   tours: Record<string, Tour>;
+  /** Grupos de infraestructura, por id; su caja (x, y, w, h) está en `layout` con el mismo id. */
+  groups: Record<string, Group>;
   /** Versión guardada en el servidor (concurrencia optimista). */
   version: number;
   /** Hay cambios sin guardar. */
@@ -182,6 +221,21 @@ export interface GraphActions {
     id: string,
     item: { type: NodeType; title: string; description?: string; http?: Node['http']; database?: Node['database'] },
   ): void;
+  /**
+   * Grupo de infraestructura (spec espacio-de-trabajo, criterio 18) con su caja; los `members` pasan a estar en él.
+   * Devuelve su id.
+   */
+  addGroup(box: Box, init?: { title?: string; kind?: GroupKind; members?: string[] }): string;
+  /** Título, tipo o plegado; un título vacío no se aplica. */
+  updateGroup(id: string, patch: { title?: string; kind?: GroupKind; collapsed?: boolean }): void;
+  /** Mueve el grupo y sus nodos lo mismo (criterio 18). */
+  moveGroup(id: string, position: Position): void;
+  /** Cambia la caja del grupo (al redimensionar); sus nodos no se mueven. */
+  resizeGroup(id: string, box: Box): void;
+  /** Mete el nodo en el grupo o lo saca (`null`). */
+  setNodeGroup(nodeId: string, groupId: string | null): void;
+  /** Borra el grupo; sus nodos quedan en el lienzo, sin grupo. */
+  removeGroup(id: string): void;
   /** Contrato completo de una API (`undefined` lo quita); se normaliza como el resto de textos. Solo `api`. */
   setHttp(id: string, http: Node['http'] | undefined): void;
   /** Estructura de una base de datos (`undefined` la quita). Solo `database`. */
@@ -230,6 +284,7 @@ const emptyState: GraphState = {
   edges: {},
   layout: {},
   tours: {},
+  groups: {},
   version: 0,
   dirty: false,
 };
@@ -281,6 +336,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           edges: graph.edges,
           layout: graph.layout,
           tours: graph.tours ?? {},
+          groups: graph.groups ?? {},
           version: graph.version,
           dirty: false,
         }),
@@ -328,6 +384,82 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         const database = item.type === 'database' ? normalizeDatabase(item.database) : undefined;
         if (database) next.database = database;
         set((s) => ({ nodes: { ...s.nodes, [id]: next }, dirty: true }));
+      },
+
+      addGroup: (box, init = {}) => {
+        const id = newId();
+        const title = init.title?.trim().slice(0, TITLE_MAX_LENGTH) || 'Grupo';
+        const members = (init.members ?? []).filter((m) => get().nodes[m]);
+        set((s) => ({
+          groups: { ...s.groups, [id]: { id, title, kind: init.kind ?? 'custom' } },
+          layout: { ...s.layout, [id]: snapBox(box) },
+          nodes: members.length
+            ? { ...s.nodes, ...Object.fromEntries(members.map((m) => [m, { ...s.nodes[m]!, groupId: id }])) }
+            : s.nodes,
+          dirty: true,
+        }));
+        return id;
+      },
+
+      updateGroup: (id, patch) => {
+        const group = get().groups[id];
+        if (!group) return;
+        const next: Group = { ...group };
+        const title = patch.title?.trim().slice(0, TITLE_MAX_LENGTH);
+        if (title) next.title = title;
+        if (patch.kind) next.kind = patch.kind;
+        if (patch.collapsed !== undefined) {
+          if (patch.collapsed) next.collapsed = true;
+          else delete next.collapsed;
+        }
+        if (sameJson(group, next)) return;
+        set((s) => ({ groups: { ...s.groups, [id]: next }, dirty: true }));
+      },
+
+      moveGroup: (id, position) => {
+        const box = get().layout[id];
+        if (!get().groups[id] || !box) return;
+        const dx = snap(position.x) - box.x;
+        const dy = snap(position.y) - box.y;
+        if (dx === 0 && dy === 0) return;
+        set((s) => {
+          const layout = { ...s.layout, [id]: { ...box, x: box.x + dx, y: box.y + dy } };
+          for (const node of Object.values(s.nodes)) {
+            const at = s.layout[node.id];
+            if (node.groupId === id && at) layout[node.id] = { ...at, x: at.x + dx, y: at.y + dy };
+          }
+          return { layout, dirty: true };
+        });
+      },
+
+      resizeGroup: (id, box) => {
+        const current = get().layout[id];
+        if (!get().groups[id] || !current) return;
+        const next = snapBox(box);
+        if (sameJson(current, next)) return;
+        set((s) => ({ layout: { ...s.layout, [id]: next }, dirty: true }));
+      },
+
+      setNodeGroup: (nodeId, groupId) => {
+        const node = get().nodes[nodeId];
+        if (!node || (groupId && !get().groups[groupId])) return;
+        if ((node.groupId ?? null) === groupId) return;
+        const next = { ...node };
+        if (groupId) next.groupId = groupId;
+        else delete next.groupId;
+        set((s) => ({ nodes: { ...s.nodes, [nodeId]: next }, dirty: true }));
+      },
+
+      removeGroup: (id) => {
+        if (!get().groups[id]) return;
+        set((s) => ({
+          groups: omit(s.groups, id),
+          layout: omit(s.layout, id),
+          nodes: Object.fromEntries(
+            Object.entries(s.nodes).map(([key, node]) => [key, node.groupId === id ? withoutGroup(node) : node]),
+          ),
+          dirty: true,
+        }));
       },
 
       setHttp: (id, http) => {
@@ -576,7 +708,11 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         const s = get();
         const unchanged =
           !sent ||
-          (s.nodes === sent.nodes && s.edges === sent.edges && s.layout === sent.layout && s.tours === sent.tours);
+          (s.nodes === sent.nodes &&
+            s.edges === sent.edges &&
+            s.layout === sent.layout &&
+            s.tours === sent.tours &&
+            s.groups === sent.groups);
         set({ version, dirty: unchanged ? false : s.dirty });
       },
     };
@@ -594,6 +730,7 @@ export function toGraph(state: GraphState): WalkieCanvasGraphV0 {
   };
   // Sin tours, el grafo no lleva el campo (así un lienzo sin tours recarga idéntico).
   if (Object.keys(state.tours).length > 0) graph.tours = state.tours;
+  if (Object.keys(state.groups).length > 0) graph.groups = state.groups;
   return graph;
 }
 

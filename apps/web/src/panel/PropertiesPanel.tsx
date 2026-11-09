@@ -23,6 +23,7 @@ import { ApiContractEditor } from './contract/ApiContractEditor';
 import { DatabaseEditor } from './contract/DatabaseEditor';
 import { EdgeDetail } from './contract/EdgeDetail';
 import { NotesField } from './contract/NotesField';
+import { GroupPanel } from './GroupPanel';
 import './panel.css';
 
 /**
@@ -32,10 +33,13 @@ import './panel.css';
 export function PropertiesPanel({
   nodeId,
   edgeId,
+  groupId = null,
   tours,
 }: {
   nodeId: string | null;
   edgeId: string | null;
+  /** Grupo de infraestructura seleccionado (spec espacio-de-trabajo, criterio 18). */
+  groupId?: string | null;
   /** Sección "Tours" cuando no hay nada seleccionado (spec modo-tour); sin ella, solo la ayuda. */
   tours?: ToursSectionProps;
 }) {
@@ -45,6 +49,8 @@ export function PropertiesPanel({
         <NodePanel key={nodeId} id={nodeId} />
       ) : edgeId ? (
         <EdgePanel key={edgeId} id={edgeId} />
+      ) : groupId ? (
+        <GroupPanel key={groupId} id={groupId} />
       ) : (
         <>
           <p className="panel-help">Selecciona un nodo o una conexión para ver y editar sus propiedades.</p>

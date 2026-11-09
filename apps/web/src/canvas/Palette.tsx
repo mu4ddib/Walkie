@@ -9,6 +9,8 @@ import { nodeColors } from '../theme/palette';
 
 interface PaletteProps {
   onAdd: (type: NodeType) => void;
+  /** "Grupo" (tecla G): rodea las cajas seleccionadas o crea uno vacío. */
+  onAddGroup?: () => void;
   /** Panel "Componentes" (catálogo de la app); sin él la barra solo trae los tipos. */
   catalog?: {
     appId: string;
@@ -24,7 +26,7 @@ interface PaletteProps {
  * (clic lo pone en el centro, arrastre donde lo sueltes, teclas 1–7) y el panel "Componentes" con
  * el catálogo compartido de la app.
  */
-export function Palette({ onAdd, catalog }: PaletteProps) {
+export function Palette({ onAdd, onAddGroup, catalog }: PaletteProps) {
   const [componentsOpen, setComponentsOpen] = useState(false);
   const panelId = useId();
 
@@ -57,6 +59,23 @@ export function Palette({ onAdd, catalog }: PaletteProps) {
             </span>
           </button>
         ))}
+        {onAddGroup && (
+          <button
+            type="button"
+            className="toolbar-tool toolbar-group"
+            aria-label="Grupo"
+            aria-keyshortcuts="G"
+            data-tip="Grupo (rodea lo seleccionado) · G"
+            onClick={onAddGroup}
+          >
+            <span className="toolbar-glyph" aria-hidden="true">
+              ⬚
+            </span>
+            <span className="toolbar-key" aria-hidden="true">
+              G
+            </span>
+          </button>
+        )}
         {catalog && (
           <>
             <span className="toolbar-separator" aria-hidden="true" />
