@@ -42,9 +42,9 @@ Que Walkie abra directo en el lienzo, que crear, conectar, documentar y reutiliz
 
 **3. Catálogo (tarea 3)**
 
-- [ ] 10. Dado el editor, entonces un panel "Componentes" explica el catálogo, permite buscar, filtrar por tipo, arrastrar al lienzo y crear un componente nuevo sin salir.
-- [ ] 11. Dado un nodo api/service/database local, puedo "Guardar como componente"; dado un nodo del catálogo, puedo "Crear copia independiente" (vuelve a ser local con los datos actuales).
-- [ ] 12. Dado un componente, el lienzo lo distingue de un nodo local; al editarlo, el inspector separa "Definición compartida" (con "Se usa en N lienzos" y la lista antes de guardar) de "En este lienzo" (lo propio del uso).
+- [x] 10. Dado el editor, entonces un panel "Componentes" explica el catálogo, permite buscar, filtrar por tipo, arrastrar al lienzo y crear un componente nuevo sin salir.
+- [x] 11. Dado un nodo api/service/database local, puedo "Guardar como componente"; dado un nodo del catálogo, puedo "Crear copia independiente" (vuelve a ser local con los datos actuales).
+- [x] 12. Dado un componente, el lienzo lo distingue de un nodo local; al editarlo, el inspector separa "Definición compartida" (con "Se usa en N lienzos" y la lista antes de guardar) de "En este lienzo" (lo propio del uso).
 
 **4. Inspector técnico (tarea 4)**
 

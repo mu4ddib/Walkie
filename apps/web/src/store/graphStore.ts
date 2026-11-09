@@ -161,6 +161,14 @@ export interface GraphActions {
    * con el mismo id, posición y conexiones. Solo para `api`, `service` y `database`.
    */
   convertToRef(id: string, catalogId: string): void;
+  /**
+   * "Crear copia independiente" (spec espacio-de-trabajo, criterio 11): un `ref` vuelve a ser un nodo propio
+   * del tipo del elemento, con sus datos actuales y el mismo id, posición, conexiones y pasos de tour.
+   */
+  convertToLocal(
+    id: string,
+    item: { type: NodeType; title: string; description?: string; http?: Node['http'] },
+  ): void;
   moveNode(id: string, position: Position): void;
   renameNode(id: string, title: string): void;
   /** Título, descripción, expresión y `http` (método y ruta). */
@@ -291,6 +299,19 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         const node = get().nodes[id];
         if (!node || !CATALOG_NODE_TYPES.includes(node.type)) return;
         set((s) => ({ nodes: { ...s.nodes, [id]: { id, type: 'ref', title: node.title, catalogId } }, dirty: true }));
+      },
+
+      convertToLocal: (id, item) => {
+        const node = get().nodes[id];
+        if (!node || node.type !== 'ref' || !CATALOG_NODE_TYPES.includes(item.type)) return;
+        let next: Node = { id, type: item.type, title: item.title.trim().slice(0, TITLE_MAX_LENGTH) || node.title };
+        next = withText(next, 'description', item.description, TEXT_MAX_LENGTH);
+        if (item.type === 'api' && item.http) {
+          let http: NonNullable<Node['http']> = item.http.method ? { method: item.http.method } : {};
+          http = withText(http, 'path', item.http.path, TEXT_MAX_LENGTH);
+          if (Object.keys(http).length > 0) next.http = http;
+        }
+        set((s) => ({ nodes: { ...s.nodes, [id]: next }, dirty: true }));
       },
 
       moveNode: (id, position) => {

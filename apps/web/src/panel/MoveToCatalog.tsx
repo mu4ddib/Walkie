@@ -4,8 +4,9 @@ import type { Node } from '../schema/walkie-graph';
 import { useGraphStore } from '../store/useGraphStore';
 
 /**
- * "Mover al catálogo" (spec catalogo, criterio 10b): crea el elemento con los datos del nodo y lo
- * convierte en un `ref` con el mismo id, posición y conexiones. El lienzo queda "Sin guardar".
+ * "Guardar como componente" (spec espacio-de-trabajo, criterio 11; antes "Mover al catálogo"): crea el
+ * elemento con los datos del nodo y lo convierte en un `ref` con el mismo id, posición y conexiones.
+ * El lienzo queda "Sin guardar".
  */
 export function MoveToCatalog({ appId, node }: { appId: string; node: Node }) {
   const create = useCreateCatalogItem(appId);
@@ -30,11 +31,13 @@ export function MoveToCatalog({ appId, node }: { appId: string; node: Node }) {
   }
 
   return (
-    <section className="panel-section" aria-label="Catálogo">
+    <section className="panel-section" aria-label="Componente">
       <button type="button" className="pixel-button" disabled={create.isPending} onClick={() => void move()}>
-        Mover al catálogo
+        Guardar como componente
       </button>
-      <p className="panel-help">Lo podrás usar en otros lienzos de la app; se editará en el catálogo.</p>
+      <p className="panel-help">
+        Pasa al catálogo de la app: lo podrás usar en otros lienzos y su definición se compartirá entre todos.
+      </p>
       {create.error && (
         <p role="alert" className="panel-error">
           {create.error instanceof ApiError ? create.error.userMessage : 'No se pudo crear en el catálogo.'}

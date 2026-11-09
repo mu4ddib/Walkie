@@ -210,6 +210,47 @@ describe('Palette con catálogo (Componentes)', () => {
     expect(onAddRef).toHaveBeenCalledWith(consultar);
   });
 
+  it('filtra por tipo', async () => {
+    const otro: CatalogItem = { id: 'item-2', appId: 'app-1', type: 'database', title: 'Clientes', version: 1 };
+    render(
+      <MemoryRouter>
+        <Palette onAdd={vi.fn()} catalog={{ appId: 'app-1', items: [consultar, otro], onAddRef: vi.fn() }} />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Componentes' }));
+    const filter = screen.getByRole('group', { name: 'Filtrar por tipo' });
+
+    await userEvent.click(within(filter).getByRole('button', { name: 'Base de datos' }));
+    expect(within(filter).getByRole('button', { name: 'Base de datos' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /Consultar cliente/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Clientes/ })).toBeInTheDocument();
+
+    await userEvent.click(within(filter).getByRole('button', { name: 'Todos' }));
+    expect(screen.getByRole('button', { name: /Consultar cliente/ })).toBeInTheDocument();
+  });
+
+  it('crea un componente nuevo sin salir del lienzo', async () => {
+    const onCreate = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <Palette onAdd={vi.fn()} catalog={{ appId: 'app-1', items: [], onAddRef: vi.fn(), onCreate }} />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Componentes' }));
+    const form = screen.getByRole('form', { name: 'Nuevo componente' });
+
+    await userEvent.click(within(form).getByRole('button', { name: 'Crear y agregar' }));
+    expect(within(form).getByRole('alert')).toHaveTextContent('El título es obligatorio.');
+    expect(onCreate).not.toHaveBeenCalled();
+
+    await userEvent.selectOptions(within(form).getByLabelText('Tipo de componente'), 'service');
+    await userEvent.type(within(form).getByLabelText('Título del componente'), 'Motor de pagos');
+    await userEvent.click(within(form).getByRole('button', { name: 'Crear y agregar' }));
+
+    expect(onCreate).toHaveBeenCalledWith({ type: 'service', title: 'Motor de pagos' });
+    expect(within(form).getByLabelText('Título del componente')).toHaveValue('');
+  });
+
   it('con el catálogo vacío enlaza a la página del catálogo', async () => {
     render(
       <MemoryRouter>
@@ -218,7 +259,7 @@ describe('Palette con catálogo (Componentes)', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Componentes' }));
-    expect(screen.getByRole('link', { name: /Crea APIs/ })).toHaveAttribute('href', '/apps/app-1/catalog');
+    expect(screen.getByRole('link', { name: /crea APIs/i })).toHaveAttribute('href', '/apps/app-1/catalog');
   });
 });
 
@@ -243,10 +284,10 @@ describe('PixelNode de un ref', () => {
     );
   }
 
-  it('se ve como su elemento, con los datos actuales y la marca de catálogo', () => {
+  it('se ve como su elemento, con los datos actuales y la marca de componente', () => {
     renderRef('item-1');
 
-    expect(document.querySelector('.pixel-node-kind')).toHaveTextContent('</> APIcatálogo');
+    expect(document.querySelector('.pixel-node-kind')).toHaveTextContent('</> APIcomponente');
     expect(document.querySelector('.pixel-node-title')).toHaveTextContent('Consultar cliente');
     expect(screen.getByText('GET /clientes/{id}')).toBeInTheDocument();
   });

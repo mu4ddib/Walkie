@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router';
 import { useEffect, useMemo } from 'react';
-import { useApp, useCanvas, useCatalog, useFeatures } from '../api/hooks';
+import { useApp, useCanvas, useCatalog, useCreateCatalogItem, useFeatures } from '../api/hooks';
 import { toCanvasCatalog } from '../catalog/catalogContext';
 import { FeatureEditor } from '../canvas/FeatureEditor';
 import { QueryState } from '../ui/QueryState';
@@ -18,10 +18,13 @@ export function FeaturePage() {
   const feature = features.data?.find((f) => f.id === featureId);
   const canvas = useCanvas(featureId);
   const catalogQuery = useCatalog(appId);
+  const { mutateAsync: createItem } = useCreateCatalogItem(appId);
   const catalog = useMemo(
     () =>
-      catalogQuery.data ? toCanvasCatalog(appId, catalogQuery.data, features.data ?? [], featureId) : undefined,
-    [appId, catalogQuery.data, features.data, featureId],
+      catalogQuery.data
+        ? { ...toCanvasCatalog(appId, catalogQuery.data, features.data ?? [], featureId), createItem }
+        : undefined,
+    [appId, catalogQuery.data, features.data, featureId, createItem],
   );
   const missing = features.data !== undefined && !feature;
 

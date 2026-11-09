@@ -1,8 +1,8 @@
-import { useId, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
+import { useId, useMemo, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import type { CatalogItem } from '../api/client';
+import { ApiError, type CatalogItem, type CatalogItemType, type NewCatalogItem } from '../api/client';
 import { NODE_LABELS } from '../nodes/nodeMeta';
-import { catalogPath } from '../pages/catalogPaths';
+import { CATALOG_TYPES, catalogPath } from '../pages/catalogPaths';
 import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES } from './paletteTypes';
 import type { NodeType } from '../store/graphStore';
 import { nodeColors } from '../theme/palette';
@@ -10,7 +10,13 @@ import { nodeColors } from '../theme/palette';
 interface PaletteProps {
   onAdd: (type: NodeType) => void;
   /** Panel "Componentes" (catálogo de la app); sin él la barra solo trae los tipos. */
-  catalog?: { appId: string; items: CatalogItem[]; onAddRef: (item: CatalogItem) => void };
+  catalog?: {
+    appId: string;
+    items: CatalogItem[];
+    onAddRef: (item: CatalogItem) => void;
+    /** Crea el componente y lo pone en el lienzo; sin él, el panel no ofrece crear. */
+    onCreate?: (item: NewCatalogItem) => Promise<void>;
+  };
 }
 
 /**
@@ -94,11 +100,12 @@ function ComponentsPanel({
   onDragStart: (event: DragEvent, item: CatalogItem) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [type, setType] = useState<CatalogItemType | null>(null);
   const searchId = useId();
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? catalog.items.filter((i) => i.title.toLowerCase().includes(q)) : catalog.items;
-  }, [catalog.items, query]);
+    return catalog.items.filter((i) => (!type || i.type === type) && (!q || i.title.toLowerCase().includes(q)));
+  }, [catalog.items, query, type]);
 
   return (
     <section id={id} className="components-panel floating" aria-label="Catálogo">
@@ -109,7 +116,8 @@ function ComponentsPanel({
         </button>
       </header>
       <p className="components-help">
-        APIs, servicios y bases de datos compartidos por todos los lienzos de la app. Arrástralos o haz clic para usarlos.
+        APIs, servicios y bases de datos compartidos por todos los lienzos de la app: si cambias su definición, cambia
+        en todos. Arrástralos o haz clic para usarlos.
       </p>
       {catalog.items.length > 0 && (
         <>
@@ -123,11 +131,29 @@ function ComponentsPanel({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          <div className="components-filter" role="group" aria-label="Filtrar por tipo">
+            <button type="button" aria-pressed={type === null} onClick={() => setType(null)}>
+              Todos
+            </button>
+            {CATALOG_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={type === t}
+                onClick={() => setType(type === t ? null : t)}
+                style={{ '--node-color': nodeColors[t] } as CSSProperties}
+              >
+                {NODE_LABELS[t].label}
+              </button>
+            ))}
+          </div>
         </>
       )}
       {catalog.items.length === 0 ? (
         <p className="components-empty">
-          Aún no hay componentes. <Link to={catalogPath(catalog.appId)}>Crea APIs, servicios y BD en el catálogo</Link>.
+          Aún no hay componentes.{' '}
+          {catalog.onCreate ? 'Crea el primero aquí abajo o ' : ''}
+          <Link to={catalogPath(catalog.appId)}>crea APIs, servicios y BD en el catálogo</Link>.
         </p>
       ) : (
         <div className="components-list">
@@ -147,12 +173,78 @@ function ComponentsPanel({
               <span className="component-title">{item.title}</span>
             </button>
           ))}
-          {shown.length === 0 && <p className="components-empty">Nada coincide con “{query}”.</p>}
+          {shown.length === 0 && <p className="components-empty">Nada coincide con el filtro.</p>}
         </div>
       )}
+      {catalog.onCreate && <NewComponent onCreate={catalog.onCreate} />}
       <Link className="components-link" to={catalogPath(catalog.appId)}>
         Abrir el catálogo
       </Link>
     </section>
+  );
+}
+
+/** "Nuevo componente" sin salir del lienzo (spec espacio-de-trabajo, criterio 10): se crea y queda en el lienzo. */
+function NewComponent({ onCreate }: { onCreate: (item: NewCatalogItem) => Promise<void> }) {
+  const [type, setType] = useState<CatalogItemType>('api');
+  const [title, setTitle] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const typeId = useId();
+  const titleId = useId();
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!title.trim()) {
+      setError('El título es obligatorio.');
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      await onCreate({ type, title: title.trim() });
+      setTitle('');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.userMessage : 'No se pudo crear el componente.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <form className="components-new" aria-label="Nuevo componente" onSubmit={(e) => void submit(e)}>
+      <h4>Nuevo componente</h4>
+      <div className="components-new-row">
+        <label className="sr-only" htmlFor={typeId}>
+          Tipo de componente
+        </label>
+        <select id={typeId} value={type} onChange={(e) => setType(e.target.value as CatalogItemType)} disabled={pending}>
+          {CATALOG_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {NODE_LABELS[t].label}
+            </option>
+          ))}
+        </select>
+        <label className="sr-only" htmlFor={titleId}>
+          Título del componente
+        </label>
+        <input
+          id={titleId}
+          value={title}
+          maxLength={120}
+          placeholder="Título"
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={pending}
+        />
+      </div>
+      <button type="submit" className="pixel-button" disabled={pending}>
+        Crear y agregar
+      </button>
+      {error && (
+        <p role="alert" className="components-error">
+          {error}
+        </p>
+      )}
+    </form>
   );
 }

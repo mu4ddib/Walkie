@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { StoreApi } from 'zustand/vanilla';
-import type { CatalogItem } from '../api/client';
+import type { CatalogItem, NewCatalogItem } from '../api/client';
 import { CatalogContext, effectiveType, portalTarget, type CanvasCatalog } from '../catalog/catalogContext';
 import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
@@ -286,19 +286,27 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     ? null
     : readOnly
       ? 'Solo lectura: desplázate, acerca y recorre los tours.'
-      : selectedNode
-        ? 'Arrastra el punto derecho hasta otra caja para conectarlas · Doble clic edita el título · Supr borra'
-        : panelEdgeId
-          ? 'Edita el tipo, la etiqueta y la condición de la conexión en el inspector · Supr la borra'
-          : empty
-            ? null
-            : 'Clic en una caja para ver sus propiedades · Arrastra el fondo para moverte · ? atajos';
+      : selectedNode?.type === 'ref'
+        ? 'Componente: su definición se edita en el inspector y cambia en todos los lienzos · Supr lo quita de aquí'
+        : selectedNode
+          ? 'Arrastra el punto derecho hasta otra caja para conectarlas · Doble clic edita el título · Supr borra'
+          : panelEdgeId
+            ? 'Edita el tipo, la etiqueta y la condición de la conexión en el inspector · Supr la borra'
+            : empty
+              ? null
+              : 'Clic en una caja para ver sus propiedades · Arrastra el fondo para moverte · ? atajos';
 
   const paletteCatalog = catalog.appId
     ? {
         appId: catalog.appId,
         items: Object.values(catalog.items),
         onAddRef: (item: CatalogItem) => addAtCenter((p) => addRef(item, p)),
+        onCreate: catalog.createItem
+          ? async (item: NewCatalogItem) => {
+              const created = await catalog.createItem!(item);
+              addAtCenter((p) => addRef(created, p));
+            }
+          : undefined,
       }
     : undefined;
 
