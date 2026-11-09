@@ -18,7 +18,7 @@ Cada tarea cabe en un PR. El orden sigue las prioridades del autor.
 3. [x] (#97) Catálogo en el editor: panel "Componentes" (buscar, filtrar, arrastrar, crear), guardar como componente, copia independiente, definición compartida vs. uso, alcance antes de guardar. Criterios 10 a 12.
 4. [x] (#98) Inspector técnico: schema de `http`, `database`, notas y detalle de conexiones; catálogo con contrato `jsonb`; inspector por tipo con secciones; resumen en el nodo. Criterios 13 a 17.
 5. [x] (#99) Grupos de infraestructura: schema, store, nodo grupo, mover con hijos, plegar. Criterios 18 a 20.
-6. [ ] (#100) Conexiones con movimiento y tours: animación direccional, interruptor, estilos por tipo, etiquetas sin superposición, tours que resaltan conexiones. Criterios 21 a 23.
+6. [x] (#100) Conexiones con movimiento y tours: animación direccional, interruptor, estilos por tipo, etiquetas sin superposición, tours que resaltan conexiones. Criterios 21 a 23.
 7. [ ] (#101) E2E del recorrido completo y capturas en tres anchos. Criterio 24.
 
 ## Pruebas
@@ -34,4 +34,4 @@ Cada tarea cabe en un PR. El orden sigue las prioridades del autor.
 
 ## Estado
 
-Última actualización: 2026-11-09 — tareas 1 a 5 hechas. Tarea 5: `groups` en el grafo (id, título, tipo, plegado), `node.groupId` y la caja del grupo en `layout`; la API valida la integridad (grupo existente, caja con ancho y alto, clave = id). En el lienzo: "Grupo" (tecla G) rodea lo seleccionado; mover el grupo por su nombre mueve sus cajas; soltar una caja dentro la incluye; se redimensiona; plegado es una caja compacta a la que llegan las conexiones; inspector con nombre, tipo, plegado, nodos y "Desagrupar". Sigue: tarea 6 (conexiones con movimiento y tours).
+Última actualización: 2026-11-09 — tareas 1 a 6 hechas. Tarea 6: trazo y punta por tipo de conexión (nuevo tipo `event`, "emite"), etiquetas que se reparten cuando varias conexiones unen el mismo par, animación del sentido al seleccionar, pasar por encima o en un tour (interruptor recordado y tecla M; sin animación con movimiento reducido), y en un tour las conexiones del paso se resaltan y se anima la que lleva al siguiente. Sigue: tarea 7 (E2E del recorrido completo y capturas).

@@ -12,6 +12,7 @@ import { MemoryRouter } from 'react-router';
 import type { CatalogItem } from '../api/client';
 import { CatalogContext, toCanvasCatalog } from '../catalog/catalogContext';
 import { Palette } from './Palette';
+import { ZoomControls } from './ZoomControls';
 
 // `EdgeLabelRenderer` hace un portal al contenedor de <ReactFlow>, que aquí no existe: se renderiza en línea.
 vi.mock('@xyflow/react', async (importOriginal) => ({
@@ -174,6 +175,64 @@ describe('KindEdge', () => {
     );
 
     expect(document.querySelector('.kind-edge-label')?.textContent).toBe('responde · Cliente [404]');
+  });
+
+  function renderEdge(kind: string, selected: boolean, labelOffset?: number) {
+    const props = {
+      id: 'e1',
+      data: { kind, labelOffset },
+      selected,
+      sourceX: 0,
+      sourceY: 0,
+      targetX: 100,
+      targetY: 0,
+      sourcePosition: 'right',
+      targetPosition: 'left',
+    } as unknown as EdgeProps<WalkieFlowEdge>;
+    render(
+      <GraphStoreProvider store={createGraphStore()}>
+        <ReactFlowProvider>
+          <svg>
+            <KindEdge {...props} />
+          </svg>
+        </ReactFlowProvider>
+      </GraphStoreProvider>,
+    );
+  }
+
+  it('cada tipo tiene su trazo y su punta; seleccionada, la punta cambia de color', () => {
+    renderEdge('event', true);
+
+    const edge = document.querySelector('.kind-edge');
+    expect(edge).toHaveClass('kind-event');
+    expect(edge).toHaveAttribute('marker-end', 'url(#walkie-arrow-closed-selected)');
+    // La línea que anima el sentido sigue el mismo camino.
+    expect(document.querySelector('.kind-edge-flow')?.getAttribute('d')).toBe(edge?.getAttribute('d'));
+    expect(document.querySelector('.kind-edge-label')).toHaveAttribute('title', expect.stringContaining('raya y punto'));
+  });
+
+  it('"usa" no lleva punta y la etiqueta se corre si hay varias conexiones entre el mismo par', () => {
+    renderEdge('uses', false, 26);
+
+    expect(document.querySelector('.kind-edge')).not.toHaveAttribute('marker-end');
+    expect((document.querySelector('.kind-edge-label') as HTMLElement).style.transform).toContain('26px');
+  });
+});
+
+describe('ZoomControls', () => {
+  it('el interruptor de animación dice qué hace y refleja su estado', async () => {
+    const onToggle = vi.fn();
+    render(
+      <ReactFlowProvider>
+        <ZoomControls fitPadding={0} motion={{ on: true, onToggle }} />
+      </ReactFlowProvider>,
+    );
+
+    const toggle = screen.getByRole('button', { name: 'Animar el sentido de las conexiones' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveAttribute('data-tip', expect.stringContaining('no tráfico real'));
+    await userEvent.click(toggle);
+    expect(onToggle).toHaveBeenCalled();
   });
 });
 

@@ -31,7 +31,15 @@ import { GRID, palette } from '../theme/palette';
 import { Palette } from './Palette';
 import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES } from './paletteTypes';
 import { useOpenFeature } from './useOpenFeature';
-import { getInspectorOpen, getSavedViewport, saveViewport, setInspectorOpen } from '../workspace/session';
+import {
+  getEdgeMotion,
+  getInspectorOpen,
+  getSavedViewport,
+  saveViewport,
+  setEdgeMotion,
+  setInspectorOpen,
+} from '../workspace/session';
+import { EdgeMarkers } from '../edges/EdgeMarkers';
 import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
 import { EmptyCanvasGuide } from './EmptyCanvasGuide';
 import { ShortcutsDialog } from './ShortcutsDialog';
@@ -75,6 +83,14 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const [fitOnMount] = useState(() => !savedViewport && Object.keys(graphNodes).length > 0);
   const [inspectorOpen, setInspectorOpenState] = useState(getInspectorOpen);
   const [helpOpen, setHelpOpen] = useState(false);
+  // Animación del sentido de las conexiones (criterio 21): se recuerda; con movimiento reducido no anima (CSS).
+  const [edgeMotion, setEdgeMotionState] = useState(getEdgeMotion);
+  const toggleEdgeMotion = useCallback(() => {
+    setEdgeMotionState((on) => {
+      setEdgeMotion(!on);
+      return !on;
+    });
+  }, []);
   const toggleInspector = useCallback(() => {
     setInspectorOpenState((open) => {
       setInspectorOpen(!open);
@@ -91,6 +107,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const [playing, setPlaying] = useState<{ tourId: string; step: number } | null>(null);
   const tours = useGraphStore((s) => s.tours);
   const tourNodeId = playing ? tours[playing.tourId]?.steps[playing.step]?.nodeId : undefined;
+  const nextTourNodeId = playing ? tours[playing.tourId]?.steps[playing.step + 1]?.nodeId : undefined;
   // Un enlace de solo lectura (spec enlace-solo-lectura, criterio 6) o el modo tour bloquean la edición.
   const readOnly = Boolean(catalog.share);
   const locked = readOnly || playing !== null;
@@ -198,17 +215,37 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       const group = graphNodes[id]?.groupId;
       return group && collapsedGroups.has(group) ? group : id;
     };
-    return Object.values(graphEdges)
-      .map((edge) => ({
+    // En un tour (criterio 23): resaltar las conexiones del paso y animar la que lleva al siguiente.
+    const tourClass = (from: string, to: string) => {
+      if (!playing || !tourNodeId) return undefined;
+      const touches = from === tourNodeId || to === tourNodeId;
+      if (!touches) return 'tour-edge-dim';
+      const next = nextTourNodeId && (from === nextTourNodeId || to === nextTourNodeId);
+      return next ? 'tour-edge tour-edge-next' : 'tour-edge';
+    };
+    const visible = Object.values(graphEdges)
+      .map((edge) => ({ edge, source: end(edge.from), target: end(edge.to) }))
+      .filter(({ source, target }) => source !== target);
+    // Etiquetas de conexiones que unen el mismo par: se reparten en vertical para que no se tapen (criterio 22).
+    const pairs: Record<string, number> = {};
+    const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+    for (const { source, target } of visible) pairs[pairKey(source, target)] = (pairs[pairKey(source, target)] ?? 0) + 1;
+    const seen: Record<string, number> = {};
+    return visible.map(({ edge, source, target }) => {
+      const key = pairKey(source, target);
+      const index = (seen[key] = (seen[key] ?? -1) + 1);
+      const labelOffset = (index - ((pairs[key] ?? 1) - 1) / 2) * 26;
+      return {
         id: edge.id,
-        source: end(edge.from),
-        target: end(edge.to),
+        source,
+        target,
         type: 'kind',
-        data: { kind: edge.kind, label: edge.label, when: edge.when },
+        data: { kind: edge.kind, label: edge.label, when: edge.when, labelOffset },
         selected: selectedEdges.has(edge.id),
-      }))
-      .filter((edge) => edge.source !== edge.target);
-  }, [graphEdges, graphNodes, collapsedGroups, selectedEdges]);
+        className: tourClass(edge.from, edge.to),
+      };
+    });
+  }, [graphEdges, graphNodes, collapsedGroups, selectedEdges, playing, tourNodeId, nextTourNodeId]);
 
   /** Grupo desplegado que contiene el punto (el más chico si hay varios), para incluir un nodo al soltarlo. */
   const groupAt = useCallback(
@@ -391,6 +428,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       else if (event.key === '0') void fitView({ padding: fitPadding, duration: 200 });
       else if (!readOnly && event.key.toLowerCase() === 'i') toggleInspector();
       else if (!readOnly && event.key.toLowerCase() === 'g') createGroup();
+      else if (event.key.toLowerCase() === 'm') toggleEdgeMotion();
       else if (event.key === '?') setHelpOpen((open) => !open);
       else return;
       event.preventDefault();
@@ -437,7 +475,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         : selectedNode
           ? 'Arrastra el punto derecho hasta otra caja para conectarlas · Doble clic edita el título · Supr borra'
           : panelEdgeId
-            ? 'Edita el tipo, la etiqueta y la condición de la conexión en el inspector · Supr la borra'
+            ? 'La animación muestra el sentido del flujo documentado, no tráfico real · Edita el detalle en el inspector · Supr la borra'
             : empty
               ? null
               : 'Clic en una caja para ver sus propiedades · Arrastra el fondo para moverte · ? atajos';
@@ -462,6 +500,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         'canvas',
         readOnly && 'canvas-readonly',
         playing && 'canvas-touring',
+        edgeMotion && 'edge-motion',
         !readOnly && inspectorOpen && 'has-inspector',
       ]
         .filter(Boolean)
@@ -522,7 +561,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             catalog={paletteCatalog}
           />
         )}
-        {!playing && <ZoomControls fitPadding={fitPadding} />}
+        <EdgeMarkers />
+        {!playing && <ZoomControls fitPadding={fitPadding} motion={{ on: edgeMotion, onToggle: toggleEdgeMotion }} />}
         {!readOnly && !playing && empty && (
           <EmptyCanvasGuide onAdd={(type) => addAtCenter((p) => addNode(type, p))} onHelp={() => setHelpOpen(true)} />
         )}

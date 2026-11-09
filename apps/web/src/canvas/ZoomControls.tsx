@@ -1,7 +1,14 @@
 import { useReactFlow, useViewport, type FitViewOptions } from '@xyflow/react';
 
 /** Zoom abajo a la izquierda (spec espacio-de-trabajo, criterio 5): alejar, porcentaje (vuelve al 100 %), acercar y ajustar. */
-export function ZoomControls({ fitPadding }: { fitPadding: FitViewOptions['padding'] }) {
+export function ZoomControls({
+  fitPadding,
+  motion,
+}: {
+  fitPadding: FitViewOptions['padding'];
+  /** Interruptor de la animación de las conexiones (spec espacio-de-trabajo, criterio 21). */
+  motion?: { on: boolean; onToggle: () => void };
+}) {
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
   const { zoom } = useViewport();
 
@@ -31,6 +38,18 @@ export function ZoomControls({ fitPadding }: { fitPadding: FitViewOptions['paddi
       >
         ⤢
       </button>
+      {motion && (
+        <button
+          type="button"
+          className="zoom-button motion-toggle"
+          aria-pressed={motion.on}
+          aria-label="Animar el sentido de las conexiones"
+          data-tip="Animar el sentido de las conexiones · M (flujo documentado, no tráfico real)"
+          onClick={motion.onToggle}
+        >
+          ⇢
+        </button>
+      )}
     </div>
   );
 }

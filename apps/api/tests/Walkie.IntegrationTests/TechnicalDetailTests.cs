@@ -98,6 +98,25 @@ public sealed class TechnicalDetailTests(WalkieApiFactory factory)
     }
 
     [Fact]
+    public async Task Una_conexion_de_tipo_evento_se_guarda()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var featureId = await CreateFeatureAsync(client, await CreateAppAsync(client));
+        const string graph = """
+            {
+              "schemaVersion": 0, "version": 0,
+              "nodes": { "a": { "id": "a", "type": "service", "title": "Pagos" }, "b": { "id": "b", "type": "service", "title": "Avisos" } },
+              "edges": { "e1": { "id": "e1", "from": "a", "to": "b", "kind": "event", "label": "pago.aprobado" } },
+              "layout": {}
+            }
+            """;
+
+        var response = await PutRawAsync(client, CanvasUri(featureId), graph);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Una_operacion_de_datos_desconocida_en_la_conexion_responde_400()
     {
         using var client = factory.CreateAuthenticatedClient();
