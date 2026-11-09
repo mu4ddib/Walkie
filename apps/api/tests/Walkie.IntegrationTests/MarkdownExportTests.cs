@@ -224,6 +224,116 @@ public sealed class MarkdownExportTests
     }
 
     [Fact]
+    public void El_detalle_tecnico_y_los_grupos_salen_en_el_documento()
+    {
+        var markdown = MarkdownDocument.Render(Input(TechnicalGraph()));
+
+        Assert.Equal(
+            """
+            # Iniciar sesión
+
+            App: **Banca de prueba** · Versión del lienzo: 2 · Exportado el 2026-11-08 15:04 (UTC) desde Walkie.
+
+            ## Contenido
+
+            - [Diagrama](#diagrama)
+            - [Actores](#actores)
+            - [APIs](#apis)
+            - [Bases de datos](#bases-de-datos)
+            - [Grupos](#grupos)
+            - [Conexiones](#conexiones)
+
+            ## Diagrama
+
+            ```mermaid
+            flowchart LR
+              n1(("Actor: Cliente"))
+              n2["API: Crear transferencia"]
+              n3[("Base de datos: Core")]
+              subgraph g1["Backend: Core bancario"]
+                n2
+                n3
+              end
+              n2 -->|"escribe"| n3
+            ```
+
+            ## Actores
+
+            ### Cliente
+
+            **Responsabilidades:**  
+            Inicia la transferencia.
+
+            ## APIs
+
+            ### Crear transferencia
+
+            `POST /transferencias`
+
+            **Autenticación:** Bearer (token). Token del canal
+
+            **Parámetros**
+
+            | Parámetro | Dónde | Tipo | Obligatorio | Descripción | Ejemplo |
+            | --- | --- | --- | --- | --- | --- |
+            | `X-Canal` | header | string | Sí |  | `a\|b` |
+
+            **Request** · `application/json`
+
+            | Campo | Tipo | Obligatorio | Descripción | Ejemplo |
+            | --- | --- | --- | --- | --- |
+            | `monto` | number | Sí | En pesos \| sin decimales |  |
+
+            ```
+            { "monto": 1000 }
+            ```
+
+            **201** — Creada
+
+            | Campo | Tipo | Obligatorio | Descripción | Ejemplo |
+            | --- | --- | --- | --- | --- |
+            | `id` | uuid | No |  |  |
+
+            **422** (error) — Saldo insuficiente
+
+            ## Bases de datos
+
+            ### Core
+
+            Motor: PostgreSQL · Base: `core` · Schemas: `pagos`
+
+            **Tabla** `pagos.transferencias`
+
+            | Campo | Tipo | Clave | Nulo | Descripción |
+            | --- | --- | --- | --- | --- |
+            | `id` | uuid | PK | No |  |
+            | `cuenta_id` | uuid | FK | Sí |  |
+
+            - `cuenta_id` → `cuentas.id`
+
+            ## Grupos
+
+            ### Core bancario (Backend)
+
+            - Crear transferencia (API)
+            - Core (Base de datos)
+
+            ## Conexiones
+
+            - Crear transferencia → Core (escribe)
+              - Datos: escribe `transferencias`
+              - Notas: En una transacción.
+              - Ejemplo:
+
+                ```
+                INSERT INTO transferencias …
+                ```
+
+            """.ReplaceLineEndings("\n"),
+            markdown);
+    }
+
+    [Fact]
     public void La_ruta_de_una_imagen_usa_el_titulo_el_id_y_la_extension()
     {
         Assert.Equal("img/datos-del-cliente-0198f0c0.webp", Slugs.ImagePath("Datos del cliente", Asset, "image/webp"));
@@ -246,6 +356,71 @@ public sealed class MarkdownExportTests
             new Dictionary<Guid, string> { [Asset] = Slugs.ImagePath("Login", Asset, "image/png") },
             ExportedAt);
     }
+
+    /// <summary>
+    /// Actor con responsabilidades, API con contrato completo, base con estructura, conexión con datos, notas y
+    /// ejemplo, y un grupo de backend con la API y la base (datos ficticios).
+    /// </summary>
+    private static JsonObject TechnicalGraph() => new()
+    {
+        ["schemaVersion"] = 0,
+        ["version"] = 2,
+        ["nodes"] = new JsonObject
+        {
+            ["a1"] = new JsonObject { ["id"] = "a1", ["type"] = "actor", ["title"] = "Cliente", ["notes"] = "Inicia la transferencia." },
+            ["p1"] = new JsonObject
+            {
+                ["id"] = "p1", ["type"] = "api", ["title"] = "Crear transferencia", ["groupId"] = "g1",
+                ["http"] = JsonNode.Parse("""
+                    {
+                      "method": "POST", "path": "/transferencias",
+                      "auth": { "type": "bearer", "description": "Token del canal" },
+                      "params": [{ "name": "X-Canal", "in": "header", "type": "string", "required": true, "example": "a|b" }],
+                      "request": {
+                        "contentType": "application/json",
+                        "fields": [{ "name": "monto", "type": "number", "required": true, "description": "En pesos | sin decimales" }],
+                        "example": "{ \"monto\": 1000 }"
+                      },
+                      "responses": [
+                        { "status": 201, "description": "Creada", "fields": [{ "name": "id", "type": "uuid" }] },
+                        { "status": 422, "description": "Saldo insuficiente" }
+                      ]
+                    }
+                    """),
+            },
+            ["d1"] = new JsonObject
+            {
+                ["id"] = "d1", ["type"] = "database", ["title"] = "Core", ["groupId"] = "g1",
+                ["database"] = JsonNode.Parse("""
+                    {
+                      "engine": "PostgreSQL", "name": "core", "schemas": ["pagos"],
+                      "tables": [{
+                        "name": "transferencias", "schema": "pagos", "kind": "table",
+                        "fields": [
+                          { "name": "id", "type": "uuid", "key": "primary" },
+                          { "name": "cuenta_id", "type": "uuid", "key": "foreign", "nullable": true }
+                        ],
+                        "relations": [{ "field": "cuenta_id", "references": "cuentas.id" }]
+                      }]
+                    }
+                    """),
+            },
+        },
+        ["edges"] = new JsonObject
+        {
+            ["e1"] = new JsonObject
+            {
+                ["id"] = "e1", ["from"] = "p1", ["to"] = "d1", ["kind"] = "writes", ["notes"] = "En una transacción.",
+                ["data"] = JsonNode.Parse("""{ "operation": "write", "entities": ["transferencias"] }"""),
+                ["example"] = "INSERT INTO transferencias …",
+            },
+        },
+        ["layout"] = new JsonObject(),
+        ["groups"] = new JsonObject
+        {
+            ["g1"] = new JsonObject { ["id"] = "g1", ["title"] = "Core bancario", ["kind"] = "backend", ["collapsed"] = true },
+        },
+    };
 
     /// <summary>Actor, pantalla con imagen e inputs, regla, ref a una API del catálogo, portal, conexiones y un tour.</summary>
     private static JsonObject Graph() => new()
