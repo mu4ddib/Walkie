@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   forgetLastWorkspace,
+  getEdgeMotion,
   getInspectorOpen,
   getLastWorkspace,
   getSavedViewport,
   saveViewport,
+  setEdgeMotion,
   setInspectorOpen,
   setLastWorkspace,
 } from './session';
@@ -37,6 +39,12 @@ describe('sesión del espacio de trabajo', () => {
     expect(getInspectorOpen()).toBe(true);
     setInspectorOpen(false);
     expect(getInspectorOpen()).toBe(false);
+  });
+
+  it('la animación de las conexiones empieza encendida y recuerda si se apagó', () => {
+    expect(getEdgeMotion()).toBe(true);
+    setEdgeMotion(false);
+    expect(getEdgeMotion()).toBe(false);
   });
 
   it('sin almacenamiento disponible no falla', () => {

@@ -40,6 +40,7 @@ internal static class MarkdownDocument
         ["navigation"] = "navega",
         ["request"] = "llama",
         ["response"] = "responde",
+        ["event"] = "emite",
         ["uses"] = "usa",
         ["reads"] = "lee",
         ["writes"] = "escribe",

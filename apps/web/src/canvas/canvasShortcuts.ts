@@ -10,6 +10,7 @@ export const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ['+', '−'], label: 'Acercar y alejar (o la rueda del ratón)' },
   { keys: ['0'], label: 'Ver todo el lienzo' },
   { keys: ['I'], label: 'Mostrar u ocultar el inspector' },
+  { keys: ['M'], label: 'Animar o no el sentido de las conexiones (flujo documentado, no tráfico real)' },
   { keys: ['Ctrl', 'S'], label: 'Guardar' },
   { keys: ['?'], label: 'Mostrar estos atajos' },
 ];

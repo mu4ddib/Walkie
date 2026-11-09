@@ -208,7 +208,10 @@ export interface Edge {
   id: Id;
   from: Id;
   to: Id;
-  kind: 'navigation' | 'request' | 'response' | 'uses' | 'reads' | 'writes';
+  /**
+   * event: mensaje o evento asíncrono (cola, webhook)
+   */
+  kind: 'navigation' | 'request' | 'response' | 'event' | 'uses' | 'reads' | 'writes';
   label?: string;
   /**
    * Condición, ej. código de respuesta 200 o 404

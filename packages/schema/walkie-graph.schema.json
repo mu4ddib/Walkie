@@ -94,7 +94,7 @@
         "id": { "$ref": "#/$defs/id" },
         "from": { "$ref": "#/$defs/id" },
         "to": { "$ref": "#/$defs/id" },
-        "kind": { "enum": ["navigation", "request", "response", "uses", "reads", "writes"] },
+        "kind": { "enum": ["navigation", "request", "response", "event", "uses", "reads", "writes"], "description": "event: mensaje o evento asíncrono (cola, webhook)" },
         "label": { "type": "string", "maxLength": 60 },
         "when": { "type": "string", "maxLength": 60, "description": "Condición, ej. código de respuesta 200 o 404" },
         "notes": { "type": "string", "maxLength": 2000 },

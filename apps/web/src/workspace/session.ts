@@ -17,6 +17,7 @@ export interface SavedViewport {
 const LAST = 'walkie.lastWorkspace';
 const viewportKey = (featureId: string) => `walkie.viewport.${featureId}`;
 const INSPECTOR = 'walkie.inspectorOpen';
+const EDGE_MOTION = 'walkie.edgeMotion';
 
 function read<T>(key: string, valid: (value: unknown) => value is T): T | null {
   try {
@@ -66,3 +67,8 @@ export const saveViewport = (featureId: string, viewport: SavedViewport) => writ
 export const getInspectorOpen = () => read(INSPECTOR, (v): v is boolean => typeof v === 'boolean') ?? true;
 
 export const setInspectorOpen = (open: boolean) => write(INSPECTOR, open);
+
+/** Animación del sentido de las conexiones (spec espacio-de-trabajo, criterio 21); encendida por defecto. */
+export const getEdgeMotion = () => read(EDGE_MOTION, (v): v is boolean => typeof v === 'boolean') ?? true;
+
+export const setEdgeMotion = (on: boolean) => write(EDGE_MOTION, on);

@@ -62,9 +62,9 @@ Que Walkie abra directo en el lienzo, que crear, conectar, documentar y reutiliz
 
 **6. Conexiones con movimiento y tours (tarea 6)**
 
-- [ ] 21. Al seleccionar o pasar por una conexión, una animación direccional sutil muestra el sentido; un interruptor la desactiva; con `prefers-reduced-motion` no se anima. El texto de ayuda deja claro que es un flujo documentado, no tráfico real.
-- [ ] 22. Solicitudes, respuestas, eventos y accesos a datos se distinguen por trazo y marca, con etiquetas legibles que no se tapan.
-- [ ] 23. En un tour, el paso resalta su nodo y las conexiones que llegan o salen de él, animando la que lleva al siguiente paso.
+- [x] 21. Al seleccionar o pasar por una conexión, una animación direccional sutil muestra el sentido; un interruptor la desactiva; con `prefers-reduced-motion` no se anima. El texto de ayuda deja claro que es un flujo documentado, no tráfico real.
+- [x] 22. Solicitudes, respuestas, eventos y accesos a datos se distinguen por trazo y marca, con etiquetas legibles que no se tapan.
+- [x] 23. En un tour, el paso resalta su nodo y las conexiones que llegan o salen de él, animando la que lleva al siguiente paso.
 
 **7. Validación (tarea 7)**
 
