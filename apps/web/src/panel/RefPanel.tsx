@@ -2,7 +2,7 @@ import { useId, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError, type CatalogItem } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys, useCatalogUsages, useUpdateCatalogItem } from '../api/hooks';
+import { queryKeys, refreshAfterWrite, useCatalogUsages, useUpdateCatalogItem } from '../api/hooks';
 import { refTarget, useCanvasCatalog } from '../catalog/catalogContext';
 import { NODE_LABELS } from '../nodes/nodeMeta';
 import { catalogPath } from '../pages/catalogPaths';
@@ -61,7 +61,7 @@ function SharedDefinition({ appId, item }: { appId: string; item: CatalogItem })
   const queryClient = useQueryClient();
   const reload = () => {
     update.reset();
-    void queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+    void refreshAfterWrite(queryClient, { queryKey: queryKeys.catalog(appId) });
   };
   return (
     <section className="panel-section shared-definition" aria-label="Definición compartida">

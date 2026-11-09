@@ -1,4 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InvalidateQueryFilters,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { useAuth } from 'react-oidc-context';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
@@ -31,6 +37,17 @@ import {
   type NewCatalogItem,
   type ShareDays,
 } from './client';
+
+/**
+ * Vuelve a pedir lo que cambió una escritura. `invalidateQueries` solo no basta: si la query aún no tiene datos
+ * (su primera carga sigue en curso), TanStack Query reutiliza ese fetch en vez de cancelarlo, y su respuesta
+ * puede ser de antes de la escritura; al llegar borra la marca de invalidada y la lista queda vieja hasta el
+ * próximo refetch. Por eso se cancela primero (vuelve al estado previo) y luego se invalida, que pide de nuevo.
+ */
+export async function refreshAfterWrite(queryClient: QueryClient, filters: InvalidateQueryFilters) {
+  await queryClient.cancelQueries(filters);
+  return queryClient.invalidateQueries(filters);
+}
 
 /** Access token de la sesión actual. `AuthGate` garantiza que existe dentro de la app. */
 export function useToken(): string {
@@ -76,7 +93,7 @@ export function useCreateApp() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => createApp(token, name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.apps, exact: true }),
+    onSuccess: () => refreshAfterWrite(queryClient, { queryKey: queryKeys.apps, exact: true }),
   });
 }
 
@@ -85,7 +102,7 @@ export function useCreateFeature(appId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => createFeature(token, appId, name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) }),
+    onSuccess: () => refreshAfterWrite(queryClient, { queryKey: queryKeys.features(appId) }),
   });
 }
 
@@ -95,7 +112,7 @@ export function useUpdateFeature(appId: string) {
   return useMutation({
     mutationFn: ({ featureId, changes }: { featureId: string; changes: FeatureChanges }) =>
       updateFeature(token, featureId, changes),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) }),
+    onSuccess: () => refreshAfterWrite(queryClient, { queryKey: queryKeys.features(appId) }),
   });
 }
 
@@ -142,8 +159,8 @@ export function useSaveCanvas(featureId: string) {
     onSuccess: (saved) => {
       queryClient.setQueryData(queryKeys.canvas(featureId), saved);
       // Las miniaturas de la galería y el "Se usa en" de los componentes cambian con el lienzo.
-      void queryClient.invalidateQueries({ queryKey: ['canvas', 'previews'] });
-      void queryClient.invalidateQueries({
+      void refreshAfterWrite(queryClient, { queryKey: ['canvas', 'previews'] });
+      void refreshAfterWrite(queryClient, {
         predicate: (q) => q.queryKey[0] === 'catalog' && q.queryKey[2] === 'usages',
       });
     },
@@ -178,7 +195,9 @@ export function useCreateCatalogItem(appId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (item: NewCatalogItem) => createCatalogItem(token, appId, item),
-    onSuccess: (created) => {
+    onSuccess: async (created) => {
+      // Se cancela antes (ver `refreshAfterWrite`): cancelar después desharía lo agregado a mano.
+      await queryClient.cancelQueries({ queryKey: queryKeys.catalog(appId) });
       // Se agrega ya a la lista: el lienzo la usa para dibujar el `ref` recién creado sin esperar el refetch.
       queryClient.setQueryData<CatalogItem[]>(queryKeys.catalog(appId), (items) => items && [...items, created]);
       return queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
@@ -193,7 +212,7 @@ export function useUpdateCatalogItem(appId: string, itemId: string) {
     mutationFn: (changes: CatalogItemChanges) => updateCatalogItem(token, itemId, changes),
     onSuccess: (saved) => {
       queryClient.setQueryData(queryKeys.catalogItem(itemId), saved);
-      return queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+      return refreshAfterWrite(queryClient, { queryKey: queryKeys.catalog(appId) });
     },
   });
 }
@@ -205,7 +224,7 @@ export function useDeleteCatalogItem(appId: string, itemId: string) {
     mutationFn: () => deleteCatalogItem(token, itemId),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: queryKeys.catalogItem(itemId) });
-      return queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+      return refreshAfterWrite(queryClient, { queryKey: queryKeys.catalog(appId) });
     },
   });
 }
@@ -250,7 +269,7 @@ export function useCreateShare(featureId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (days: ShareDays) => createShare(token, featureId, days),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shares(featureId) }),
+    onSuccess: () => refreshAfterWrite(queryClient, { queryKey: queryKeys.shares(featureId) }),
   });
 }
 
@@ -259,7 +278,7 @@ export function useRevokeShare(featureId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (shareId: string) => revokeShare(token, shareId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shares(featureId) }),
+    onSuccess: () => refreshAfterWrite(queryClient, { queryKey: queryKeys.shares(featureId) }),
   });
 }
 

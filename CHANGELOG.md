@@ -66,6 +66,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Estructura inicial del repo: documentación, ADR-0001 (stack), ADR-0002 (lienzos por feature), schema del grafo v0, devcontainer, docker-compose, CI y plantillas de GitHub.
 
 ### Fixed
+- E2E intermitentes que agotaban los 60 s esperando el enlace de la app recién creada (`catalogo.spec.ts` en CI, `export-markdown.spec.ts` en local). Causa: si la lista aún no tenía datos y su primera carga seguía en curso, `invalidateQueries` de TanStack Query reutilizaba ese fetch, que podía haber leído la base antes del POST; la lista quedaba sin la app y nada la volvía a pedir. Afectaba también a usuarios reales con la API lenta. `refreshAfterWrite` (`api/hooks.ts`) cancela la carga en curso y vuelve a pedir; lo usan todas las mutaciones. Regresión en `refreshAfterWrite.test.ts` y `e2e/lista-tras-crear.spec.ts` (fuerza ese orden con `page.route`).
 - La pista del lienzo ya no queda debajo del zoom (1024 px), el zoom ya no tapa la barra de herramientas con el inspector abajo (768 px) y la flecha del selector de app ya no pisa la barra "/".
 - `infra/docker-compose.yml` usaba `minio/minio:latest`, que ya no existe en Docker Hub: el almacenamiento S3 de desarrollo es `rustfs/rustfs:1.0.4`.
 - Al borrar un nodo o una conexión seleccionados, su id quedaba en la selección y el panel mostraba la ayuda al seleccionar otro elemento.

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { createApp, createFeature, saveCanvas } from '../api/client';
-import { queryKeys, useToken } from '../api/hooks';
+import { queryKeys, refreshAfterWrite, useToken } from '../api/hooks';
 import { featurePath } from './paths';
 import { SAMPLE_APP_NAME, SAMPLE_FEATURES, sampleFlow } from './sampleFlow';
 
@@ -21,7 +21,7 @@ export function useStartWorkspace() {
       return { appId: app.id, featureId: feature.id };
     },
     onSuccess: async (target) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.apps });
+      await refreshAfterWrite(queryClient, { queryKey: queryKeys.apps });
       void navigate(featurePath(target.appId, target.featureId));
     },
   });
@@ -34,7 +34,7 @@ export function useStartWorkspace() {
       return { appId: app.id, featureId: login!.id };
     },
     onSuccess: async (target) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.apps });
+      await refreshAfterWrite(queryClient, { queryKey: queryKeys.apps });
       void navigate(featurePath(target.appId, target.featureId));
     },
   });
