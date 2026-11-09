@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { connect, dropNode, login, saveStatus } from './helpers';
 
 /**
- * Feature catalogo (docs/features/catalogo/spec.md), criterios 5, 7, 10b y 11, con API, Keycloak y
+ * Feature catalogo (docs/features/catalogo/spec.md), criterios 5, 7, 10b y 11 (y "Guardar como componente" de espacio-de-trabajo), con API, Keycloak y
  * Postgres reales: un elemento del catálogo usado con `ref` en dos features, editado una vez y visto
  * cambiado en ambas; "Mover al catálogo"; guardar y recargar idéntico; borrado bloqueado por uso.
  */
@@ -44,14 +44,14 @@ test('catálogo compartido entre dos lienzos con ref, Mover al catálogo y borra
     await expect(saveStatus(page)).toHaveText('Guardado');
   }
 
-  // "Mover al catálogo" en Pagar: el nodo pasa a ref con su posición y conexión (criterio 10b).
+  // "Guardar como componente" (antes "Mover al catálogo") en Pagar: el nodo pasa a ref con su posición y conexión (criterio 10b).
   await dropNode(page, 'Base de datos', 400, 360);
   await field(page, 'Título').fill('Pagos');
   await connect(page, 1, 2);
   await page.locator('.react-flow__node').nth(2).click();
-  await page.getByRole('button', { name: 'Mover al catálogo' }).click();
+  await page.getByRole('button', { name: 'Guardar como componente' }).click();
   await expect(page.locator('.react-flow__node').nth(2).locator('.pixel-node')).toHaveAttribute('data-ref', 'ok');
-  await expect(page.getByRole('link', { name: 'Editar en el catálogo' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Abrir en el catálogo' })).toBeVisible();
   await expect(saveStatus(page)).toHaveText('Sin guardar');
 
   // Guardar y recargar idéntico (criterio 11).
@@ -65,7 +65,7 @@ test('catálogo compartido entre dos lienzos con ref, Mover al catálogo y borra
 
   // Editar en el catálogo se ve en los dos lienzos (criterio 7).
   await page.locator('.pixel-node', { hasText: 'Consultar cliente' }).click();
-  await page.getByRole('link', { name: 'Editar en el catálogo' }).click();
+  await page.getByRole('link', { name: 'Abrir en el catálogo' }).click();
   await detail.getByLabel('Título').fill('Buscar cliente');
   await detail.getByRole('button', { name: 'Guardar' }).click();
   await expect(detail.getByText('Guardado')).toBeVisible();

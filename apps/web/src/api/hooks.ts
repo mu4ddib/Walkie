@@ -141,8 +141,11 @@ export function useSaveCanvas(featureId: string) {
     mutationFn: (graph: WalkieCanvasGraphV0) => saveCanvas(token, featureId, graph),
     onSuccess: (saved) => {
       queryClient.setQueryData(queryKeys.canvas(featureId), saved);
-      // Las miniaturas de la galería cambian con el lienzo.
+      // Las miniaturas de la galería y el "Se usa en" de los componentes cambian con el lienzo.
       void queryClient.invalidateQueries({ queryKey: ['canvas', 'previews'] });
+      void queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === 'catalog' && q.queryKey[2] === 'usages',
+      });
     },
   });
 }

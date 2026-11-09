@@ -66,6 +66,44 @@ describe('convertToRef', () => {
   });
 });
 
+describe('convertToLocal', () => {
+  it('convierte un ref en un nodo propio con los datos del elemento, sin perder conexiones', () => {
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+    const ref = s().addRef({ id: 'item-1', title: 'Viejo' }, { x: 240, y: 0 });
+    const edge = s().connect(screen, ref)!;
+    s().markSaved(1);
+
+    s().convertToLocal(ref, {
+      type: 'api',
+      title: ' Consultar cliente ',
+      description: 'Por documento',
+      http: { method: 'GET', path: '/clientes/{id}' },
+    });
+
+    expect(s().nodes[ref]).toEqual({
+      id: ref,
+      type: 'api',
+      title: 'Consultar cliente',
+      description: 'Por documento',
+      http: { method: 'GET', path: '/clientes/{id}' },
+    });
+    expect(s().layout[ref]).toEqual({ x: 240, y: 0 });
+    expect(s().edges[edge]).toMatchObject({ from: screen, to: ref });
+    expect(s().dirty).toBe(true);
+  });
+
+  it('no deja http en un servicio ni convierte lo que no es ref', () => {
+    const ref = s().addRef({ id: 'item-1', title: 'Pagos' }, { x: 0, y: 0 });
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+
+    s().convertToLocal(ref, { type: 'service', title: 'Pagos', http: { path: '/x' } });
+    s().convertToLocal(screen, { type: 'api', title: 'Otra' });
+
+    expect(s().nodes[ref]).toEqual({ id: ref, type: 'service', title: 'Pagos' });
+    expect(s().nodes[screen]?.type).toBe('screen');
+  });
+});
+
 describe('moveNode', () => {
   it('ajusta la posición a múltiplos de 8', () => {
     const id = s().addNode('screen', { x: 0, y: 0 });

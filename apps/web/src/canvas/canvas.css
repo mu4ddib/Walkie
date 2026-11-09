@@ -214,6 +214,66 @@
   font-size: 13px;
 }
 
+.components-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.components-filter button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--dune-300);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--stone-700);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.components-filter button[aria-pressed='true'] {
+  border-color: var(--node-color, var(--ink));
+  background: var(--sand-raised);
+  color: var(--node-color, var(--ink));
+  font-weight: 600;
+}
+
+.components-new {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dune-200);
+}
+
+.components-new h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.components-new-row {
+  display: flex;
+  gap: 6px;
+}
+
+.components-new-row select {
+  flex: 0 0 auto;
+  max-width: 120px;
+}
+
+.components-new-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.components-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
 /* Zoom */
 .zoom-controls {
   position: absolute;
@@ -527,6 +587,12 @@
   font-family: var(--font-body);
   font-size: 10.5px;
   font-weight: 600;
+}
+
+/* Un componente del catálogo se distingue de un nodo local por el borde doble (criterio 12). */
+.pixel-node[data-type='ref'][data-ref='ok'] {
+  border-width: 4px;
+  border-style: double;
 }
 
 .pixel-node[data-ref='missing'] {

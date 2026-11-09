@@ -30,7 +30,7 @@ function renderPanel(setup: (s: GraphStore) => string, appId = 'app-1') {
   return { store, nodeId };
 }
 
-describe('Mover al catálogo', () => {
+describe('Guardar como componente', () => {
   it('crea el elemento con los datos del nodo y lo convierte en ref', async () => {
     const api = installFakeApi({ apps: [app] });
     const { store, nodeId } = renderPanel((s) => {
@@ -43,7 +43,7 @@ describe('Mover al catálogo', () => {
       return id;
     });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Mover al catálogo' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar como componente' }));
 
     await vi.waitFor(() => expect(store.getState().nodes[nodeId]?.type).toBe('ref'));
     expect(api.catalog).toEqual([
@@ -70,7 +70,7 @@ describe('Mover al catálogo', () => {
     installFakeApi({ apps: [] });
     const { store, nodeId } = renderPanel((s) => s.addNode('database', { x: 0, y: 0 }));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Mover al catálogo' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar como componente' }));
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(store.getState().nodes[nodeId]?.type).toBe('database');
@@ -79,12 +79,12 @@ describe('Mover al catálogo', () => {
   it('no aparece en pantallas ni sin catálogo', () => {
     installFakeApi({ apps: [app] });
     renderPanel((s) => s.addNode('screen', { x: 0, y: 0 }));
-    expect(screen.queryByRole('button', { name: 'Mover al catálogo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Guardar como componente' })).not.toBeInTheDocument();
   });
 
   it('no aparece si el lienzo no tiene catálogo', () => {
     installFakeApi({ apps: [app] });
     renderPanel((s) => s.addNode('service', { x: 0, y: 0 }), '');
-    expect(screen.queryByRole('button', { name: 'Mover al catálogo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Guardar como componente' })).not.toBeInTheDocument();
   });
 });

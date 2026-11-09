@@ -244,3 +244,50 @@
   min-height: 28px;
   padding: 0 8px;
 }
+
+/* Inspector de un componente: definición compartida y uso en este lienzo. */
+.shared-definition {
+  border-left: 3px solid var(--spice);
+  padding-left: 10px;
+}
+
+.definition-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.definition-usages {
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: var(--dune-100);
+  font-size: 13px;
+}
+
+.definition-usages p {
+  margin: 0;
+}
+
+.definition-usages ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.definition-current {
+  color: var(--stone-500);
+}
+
+.definition-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.definition-status {
+  color: var(--ok);
+  font-size: 13px;
+}
+
+.panel-link {
+  font-size: 13px;
+}

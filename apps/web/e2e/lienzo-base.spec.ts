@@ -65,7 +65,7 @@ test('borrar un nodo se lleva sus conexiones y persiste', async ({ page }) => {
   await expect(page.locator('.pixel-node')).toHaveCount(2);
   await expect(page.locator('.react-flow__edge')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: /^Guardar(?! como)/ }).click();
   await expect(saveStatus(page)).toHaveText('Guardado');
   await page.reload();
   await expect(page.locator('.pixel-node-title')).toHaveText(['Pantalla', 'Base de datos']);
@@ -77,7 +77,7 @@ test('conflicto: si otra pestaña guardó antes, la API responde 409 y se puede 
   await openNewFeature(page);
   await dropNode(page, 'Pantalla', 120, 160);
   await dropNode(page, 'API', 480, 160);
-  await page.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: /^Guardar(?! como)/ }).click();
   await expect(saveStatus(page)).toHaveText('Guardado');
 
   // Segunda pestaña: mismo lienzo (la sesión de Keycloak se reutiliza), cambia y guarda primero.
@@ -85,12 +85,12 @@ test('conflicto: si otra pestaña guardó antes, la API responde 409 y se puede 
   await login(other, new URL(page.url()).pathname);
   await expect(other.locator('.pixel-node')).toHaveCount(2);
   await rename(other, 1, 'API de la otra pestaña');
-  await other.getByRole('button', { name: 'Guardar' }).click();
+  await other.getByRole('button', { name: /^Guardar(?! como)/ }).click();
   await expect(saveStatus(other)).toHaveText('Guardado');
 
   // Criterio 9: la primera pestaña tiene una versión vieja.
   await rename(page, 0, 'Cambio que choca');
-  await page.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: /^Guardar(?! como)/ }).click();
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toContainText('Alguien guardó este lienzo antes que tú (versión 2)');
   await expect(saveStatus(page)).toHaveText('Sin guardar');

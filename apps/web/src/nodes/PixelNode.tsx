@@ -63,7 +63,7 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
       <div className="pixel-node-kind">
         <span aria-hidden="true">{meta.glyph}</span>{' '}
         {missing ? (node.type === 'portal' ? 'Destino no encontrado' : 'Elemento no encontrado') : meta.label}
-        {target && <span className="pixel-node-badge">catálogo</span>}
+        {target && <span className="pixel-node-badge" title="Componente compartido del catálogo">componente</span>}
       </div>
       {editing ? (
         <TitleInput id={id} title={node.title} onDone={onEditDone} />
