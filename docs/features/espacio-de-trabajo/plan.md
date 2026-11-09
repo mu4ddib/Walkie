@@ -19,7 +19,7 @@ Cada tarea cabe en un PR. El orden sigue las prioridades del autor.
 4. [x] (#98) Inspector técnico: schema de `http`, `database`, notas y detalle de conexiones; catálogo con contrato `jsonb`; inspector por tipo con secciones; resumen en el nodo. Criterios 13 a 17.
 5. [x] (#99) Grupos de infraestructura: schema, store, nodo grupo, mover con hijos, plegar. Criterios 18 a 20.
 6. [x] (#100) Conexiones con movimiento y tours: animación direccional, interruptor, estilos por tipo, etiquetas sin superposición, tours que resaltan conexiones. Criterios 21 a 23.
-7. [ ] (#101) E2E del recorrido completo y capturas en tres anchos. Criterio 24.
+7. [x] (#101) E2E del recorrido completo y capturas en tres anchos. Criterio 24.
 
 ## Pruebas
 
@@ -34,4 +34,4 @@ Cada tarea cabe en un PR. El orden sigue las prioridades del autor.
 
 ## Estado
 
-Última actualización: 2026-11-09 — tareas 1 a 6 hechas. Tarea 6: trazo y punta por tipo de conexión (nuevo tipo `event`, "emite"), etiquetas que se reparten cuando varias conexiones unen el mismo par, animación del sentido al seleccionar, pasar por encima o en un tour (interruptor recordado y tecla M; sin animación con movimiento reducido), y en un tour las conexiones del paso se resaltan y se anima la que lleva al siguiente. Sigue: tarea 7 (E2E del recorrido completo y capturas).
+Última actualización: 2026-11-09 — feature completa (tareas 1 a 7). Tarea 7: `e2e/recorrido-completo.spec.ts` recorre primer ingreso → app y feature → nodos → conexiones → documentación técnica → componente compartido → grupo → recargar idéntico, y en 1440, 1024 y 768 px comprueba que no haya desborde horizontal ni paneles que se tapen; las capturas están en `capturas/`. Se corrigieron la pista que quedaba bajo el zoom (1024 px), el zoom sobre la barra de herramientas (768 px) y la flecha del selector de app sobre la barra "/". Pendiente fuera del alcance: los recursos gráficos de arriba.

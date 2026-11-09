@@ -20,7 +20,7 @@ apps/web/src/
   ui/            # piezas reutilizables (NameForm, QueryState, download.ts: saveFile)
   routes.tsx     # rutas de react-router: / (lienzo o bienvenida) · /apps · /apps/:appId · /apps/:appId/catalog[/:itemId] · /apps/:appId/features/:featureId · /s/:token (pública)
   test/          # helpers de pruebas: fakeApi.ts (API falsa en memoria), render.tsx (renderRoute)
-apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-propiedades.spec.ts, catalogo.spec.ts, imagenes-portal.spec.ts (genera su PNG en memoria), modo-tour.spec.ts, enlace-solo-lectura.spec.ts (lector en otro contexto sin sesión), export-markdown.spec.ts (lee el .zip descargado), espacio-de-trabajo.spec.ts (inicio, teclado, sesión, selectores), galeria.spec.ts, componentes.spec.ts, detalle-tecnico.spec.ts, grupos.spec.ts, conexiones.spec.ts + helpers.ts (login, dropNode, connect, rename, visibleGraph, png, readZip)
+apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-propiedades.spec.ts, catalogo.spec.ts, imagenes-portal.spec.ts (genera su PNG en memoria), modo-tour.spec.ts, enlace-solo-lectura.spec.ts (lector en otro contexto sin sesión), export-markdown.spec.ts (lee el .zip descargado), espacio-de-trabajo.spec.ts (inicio, teclado, sesión, selectores), galeria.spec.ts, componentes.spec.ts, detalle-tecnico.spec.ts, grupos.spec.ts, conexiones.spec.ts, recorrido-completo.spec.ts (criterio 24: recorrido entero + capturas en 3 anchos; `WALKIE_CAPTURES=<carpeta>` las guarda ahí) + helpers.ts (login, dropNode, connect, rename, visibleGraph, png, readZip)
   theme/         # paleta pixel, fuentes, sprites
   schema/        # tipos generados desde packages/schema (no editar a mano)
 ```
@@ -54,6 +54,8 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 
 ## Trampas conocidas
 
+- **Primer ingreso en E2E**: la base de pruebas ya tiene apps, así que para ver la bienvenida `recorrido-completo.spec.ts` responde `GET /api/apps` vacío con `page.route` hasta crear la app (el POST va a la API real) y luego `unroute`.
+- **Paneles flotantes a distintos anchos**: la pista vive entre el zoom y el inspector (`left`/`right` + `width: fit-content`), no centrada con `translateX`; debajo de 900 px el zoom pasa a la derecha sobre el inspector inferior. `recorrido-completo.spec.ts` falla si dos paneles se tapan.
 - **Multiselección**: `multiSelectionKeyCode` incluye `Shift`; en Playwright, `click({ modifiers: ['Shift'] })` suma una caja a la selección (Ctrl también sirve).
 - **Editores de estructuras** (contrato, base de datos, entidades): usan `useDraft` (borrador local, entrega lo normalizado) en vez de atar los inputs al store; si no, una fila sin nombre desaparece mientras se escribe. Los `<details>` toman `open` solo al montarse (`useState`): si `open` depende del contenido, la sección se pliega al escribir.
 - **Botones que empiezan igual**: "Guardar" (lienzo) y "Guardar como componente" o "Guardar definición" (inspector) chocan con `getByRole('button', { name: 'Guardar' })`; el de la barra tiene además el `data-tip` en su nombre, así que `exact` tampoco sirve. Usa `/^Guardar(?! como)/` o busca dentro de su región. Lo mismo con "Componentes" y una app llamada "… componentes …": `exact: true`.
