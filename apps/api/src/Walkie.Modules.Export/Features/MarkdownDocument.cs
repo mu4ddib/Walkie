@@ -46,12 +46,57 @@ internal static class MarkdownDocument
         ["writes"] = "escribe",
     };
 
+    private static readonly Dictionary<string, string> AuthTypes = new(StringComparer.Ordinal)
+    {
+        ["none"] = "Sin autenticación",
+        ["bearer"] = "Bearer (token)",
+        ["apiKey"] = "API key",
+        ["basic"] = "Básica",
+        ["oauth2"] = "OAuth 2",
+        ["mtls"] = "mTLS",
+        ["other"] = "Otra",
+    };
+
+    private static readonly Dictionary<string, string> ParamPlaces = new(StringComparer.Ordinal)
+    {
+        ["path"] = "ruta",
+        ["query"] = "query",
+        ["header"] = "header",
+    };
+
+    private static readonly Dictionary<string, string> TableKinds = new(StringComparer.Ordinal)
+    {
+        ["table"] = "Tabla",
+        ["collection"] = "Colección",
+        ["view"] = "Vista",
+    };
+
+    private static readonly Dictionary<string, string> Keys = new(StringComparer.Ordinal)
+    {
+        ["primary"] = "PK",
+        ["foreign"] = "FK",
+        ["unique"] = "Única",
+    };
+
+    private static readonly Dictionary<string, string> GroupKinds = new(StringComparer.Ordinal)
+    {
+        ["frontend"] = "Frontend",
+        ["backend"] = "Backend",
+        ["external"] = "Externos",
+        ["data"] = "Datos",
+        ["network"] = "Red",
+        ["environment"] = "Entorno",
+        ["cloud"] = "Cloud",
+        ["custom"] = "Libre",
+    };
+
     public static string Render(ExportInput input)
     {
         var nodes = ReadNodes(input);
         var byId = nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
         var edges = ReadEdges(input.Graph, byId);
         var tours = ReadTours(input.Graph, byId);
+        var groups = ReadGroups(input.Graph, nodes);
         var md = new Md();
 
         md.Line($"# {MarkdownText.Inline(input.FeatureName)}");
@@ -75,6 +120,11 @@ internal static class MarkdownDocument
             md.Line($"- [{section.Heading}](#{Anchor(section.Heading)})");
         }
 
+        if (groups.Count > 0)
+        {
+            md.Line("- [Grupos](#grupos)");
+        }
+
         if (edges.Count > 0)
         {
             md.Line("- [Conexiones](#conexiones)");
@@ -86,7 +136,7 @@ internal static class MarkdownDocument
         }
 
         md.Blank();
-        WriteDiagram(md, nodes, edges);
+        WriteDiagram(md, nodes, edges, groups);
 
         foreach (var section in present)
         {
@@ -98,6 +148,11 @@ internal static class MarkdownDocument
             }
         }
 
+        if (groups.Count > 0)
+        {
+            WriteGroups(md, groups);
+        }
+
         if (edges.Count > 0)
         {
             md.Line("## Conexiones");
@@ -105,6 +160,7 @@ internal static class MarkdownDocument
             foreach (var edge in edges)
             {
                 md.Line($"- {EdgeText(edge, MarkdownText.Inline)}");
+                WriteEdgeDetail(md, edge);
             }
 
             md.Blank();
@@ -143,7 +199,7 @@ internal static class MarkdownDocument
         return md.ToString();
     }
 
-    private static void WriteDiagram(Md md, List<ExportNode> nodes, List<ExportEdge> edges)
+    private static void WriteDiagram(Md md, List<ExportNode> nodes, List<ExportEdge> edges, List<ExportGroup> groups)
     {
         md.Line("## Diagrama");
         md.Blank();
@@ -153,6 +209,18 @@ internal static class MarkdownDocument
         {
             var label = MarkdownText.Mermaid($"{SectionLabel(node.Section)}: {node.Title}");
             md.Line($"  {node.Key}{Shape(node.Section, label)}");
+        }
+
+        // Cada grupo es un subgraph con sus nodos (Mermaid los mueve adentro).
+        foreach (var group in groups)
+        {
+            md.Line($"  subgraph {group.Key}[\"{MarkdownText.Mermaid($"{GroupLabel(group)}: {group.Title}")}\"]");
+            foreach (var member in group.Members)
+            {
+                md.Line($"    {member.Key}");
+            }
+
+            md.Line("  end");
         }
 
         foreach (var edge in edges)
@@ -194,9 +262,26 @@ internal static class MarkdownDocument
             md.Blank();
         }
 
+        if (node.Http is { ValueKind: JsonValueKind.Object } http)
+        {
+            WriteContract(md, http);
+        }
+
+        if (node.Database is { ValueKind: JsonValueKind.Object } database)
+        {
+            WriteDatabase(md, database);
+        }
+
         if (node.Section == "portal")
         {
             md.Line(PortalText(node, input));
+            md.Blank();
+        }
+
+        if (node.String("notes") is { Length: > 0 } notes)
+        {
+            md.Line($"**{(node.Section is "actor" or "service" ? "Responsabilidades" : "Notas")}:**  ");
+            md.Line(MarkdownText.Block(notes));
             md.Blank();
         }
 
@@ -250,6 +335,231 @@ internal static class MarkdownDocument
 
         md.Blank();
     }
+
+    /// <summary>Contrato de una API: autenticación, parámetros, request y respuestas (spec espacio-de-trabajo, 13).</summary>
+    private static void WriteContract(Md md, JsonElement http)
+    {
+        if (http.TryGetProperty("auth", out var auth))
+        {
+            var type = Text(auth, "type") ?? "other";
+            var line = $"**Autenticación:** {AuthTypes.GetValueOrDefault(type, type)}";
+            if (Text(auth, "description") is { Length: > 0 } detail)
+            {
+                line += $". {MarkdownText.Inline(detail)}";
+            }
+
+            md.Line(line);
+            md.Blank();
+        }
+
+        var parameters = Items(http, "params");
+        if (parameters.Count > 0)
+        {
+            md.Line("**Parámetros**");
+            md.Blank();
+            md.Line("| Parámetro | Dónde | Tipo | Obligatorio | Descripción | Ejemplo |");
+            md.Line("| --- | --- | --- | --- | --- | --- |");
+            foreach (var p in parameters)
+            {
+                var place = Text(p, "in") ?? string.Empty;
+                md.Line(
+                    $"| {CodeCell(Text(p, "name"))} | {ParamPlaces.GetValueOrDefault(place, place)} | " +
+                    $"{Cell(Text(p, "type"))} | {YesNo(p, "required")} | {Cell(Text(p, "description"))} | {CodeCell(Text(p, "example"))} |");
+            }
+
+            md.Blank();
+        }
+
+        if (http.TryGetProperty("request", out var request))
+        {
+            WriteBody(md, "**Request**", request);
+        }
+
+        foreach (var response in Items(http, "responses"))
+        {
+            var status = response.TryGetProperty("status", out var s) && s.TryGetInt32(out var code) ? code : 0;
+            var title = string.Create(CultureInfo.InvariantCulture, $"**{status}**{(status >= 400 ? " (error)" : string.Empty)}");
+            if (Text(response, "description") is { Length: > 0 } meaning)
+            {
+                title += $" — {MarkdownText.Inline(meaning)}";
+            }
+
+            WriteBody(md, title, response);
+        }
+    }
+
+    /// <summary>Request o respuesta: título, content type, campos y ejemplo.</summary>
+    private static void WriteBody(Md md, string title, JsonElement body)
+    {
+        md.Line(Text(body, "contentType") is { Length: > 0 } contentType
+            ? $"{title} · {MarkdownText.Code(contentType)}"
+            : title);
+        md.Blank();
+        var fields = Items(body, "fields");
+        if (fields.Count > 0)
+        {
+            md.Line("| Campo | Tipo | Obligatorio | Descripción | Ejemplo |");
+            md.Line("| --- | --- | --- | --- | --- |");
+            foreach (var f in fields)
+            {
+                md.Line(
+                    $"| {CodeCell(Text(f, "name"))} | {Cell(Text(f, "type"))} | {YesNo(f, "required")} | " +
+                    $"{Cell(Text(f, "description"))} | {CodeCell(Text(f, "example"))} |");
+            }
+
+            md.Blank();
+        }
+
+        if (Text(body, "example") is { Length: > 0 } example)
+        {
+            md.Line(MarkdownText.CodeBlock(example));
+            md.Blank();
+        }
+    }
+
+    /// <summary>Estructura de una base: motor, base, schemas y tablas con campos y relaciones (criterio 14).</summary>
+    private static void WriteDatabase(Md md, JsonElement database)
+    {
+        var facts = new List<string>();
+        if (Text(database, "engine") is { Length: > 0 } engine)
+        {
+            facts.Add($"Motor: {MarkdownText.Inline(engine)}");
+        }
+
+        if (Text(database, "name") is { Length: > 0 } name)
+        {
+            facts.Add($"Base: {MarkdownText.Code(name)}");
+        }
+
+        var schemas = Strings(database, "schemas");
+        if (schemas.Count > 0)
+        {
+            facts.Add("Schemas: " + string.Join(", ", schemas.Select(MarkdownText.Code)));
+        }
+
+        if (facts.Count > 0)
+        {
+            md.Line(string.Join(" · ", facts));
+            md.Blank();
+        }
+
+        foreach (var table in Items(database, "tables"))
+        {
+            var tableName = Text(table, "name") ?? string.Empty;
+            var fullName = Text(table, "schema") is { Length: > 0 } schema ? $"{schema}.{tableName}" : tableName;
+            var kind = Text(table, "kind") ?? "table";
+            var title = $"**{TableKinds.GetValueOrDefault(kind, kind)}** {MarkdownText.Code(fullName)}";
+            if (Text(table, "description") is { Length: > 0 } description)
+            {
+                title += $" — {MarkdownText.Inline(description)}";
+            }
+
+            md.Line(title);
+            md.Blank();
+            var fields = Items(table, "fields");
+            if (fields.Count > 0)
+            {
+                md.Line("| Campo | Tipo | Clave | Nulo | Descripción |");
+                md.Line("| --- | --- | --- | --- | --- |");
+                foreach (var f in fields)
+                {
+                    var key = Text(f, "key");
+                    md.Line(
+                        $"| {CodeCell(Text(f, "name"))} | {Cell(Text(f, "type"))} | " +
+                        $"{(key is null ? string.Empty : Keys.GetValueOrDefault(key, key))} | {YesNo(f, "nullable")} | " +
+                        $"{Cell(Text(f, "description"))} |");
+                }
+
+                md.Blank();
+            }
+
+            var relations = Items(table, "relations");
+            foreach (var r in relations)
+            {
+                var line = $"- {MarkdownText.Code(Text(r, "field") ?? string.Empty)} → {MarkdownText.Code(Text(r, "references") ?? string.Empty)}";
+                if (Text(r, "description") is { Length: > 0 } relationNote)
+                {
+                    line += $": {MarkdownText.Inline(relationNote)}";
+                }
+
+                md.Line(line);
+            }
+
+            if (relations.Count > 0)
+            {
+                md.Blank();
+            }
+        }
+    }
+
+    /// <summary>Notas, acceso a datos y ejemplo de una conexión, debajo de su línea (criterio 15).</summary>
+    private static void WriteEdgeDetail(Md md, ExportEdge edge)
+    {
+        var json = edge.Json;
+        if (json.TryGetProperty("data", out var data))
+        {
+            var operation = Text(data, "operation") switch
+            {
+                "read" => "lee",
+                "write" => "escribe",
+                _ => "accede a",
+            };
+            var entities = Strings(data, "entities");
+            md.Line(entities.Count > 0
+                ? $"  - Datos: {operation} {string.Join(", ", entities.Select(MarkdownText.Code))}"
+                : $"  - Datos: {operation}");
+        }
+
+        if (Text(json, "notes") is { Length: > 0 } notes)
+        {
+            md.Line($"  - Notas: {MarkdownText.Indent(MarkdownText.Block(notes), 4)}");
+        }
+
+        if (Text(json, "example") is { Length: > 0 } example)
+        {
+            md.Line("  - Ejemplo:");
+            md.Blank();
+            md.Line("    " + MarkdownText.Indent(MarkdownText.CodeBlock(example), 4));
+            md.Blank();
+        }
+    }
+
+    /// <summary>Grupos de infraestructura con sus nodos (criterios 18 a 20).</summary>
+    private static void WriteGroups(Md md, List<ExportGroup> groups)
+    {
+        md.Line("## Grupos");
+        md.Blank();
+        foreach (var group in groups)
+        {
+            md.Line($"### {MarkdownText.Inline(group.Title)} ({GroupLabel(group)})");
+            md.Blank();
+            if (group.Members.Count == 0)
+            {
+                md.Line("Sin nodos.");
+            }
+
+            foreach (var member in group.Members)
+            {
+                md.Line($"- {MarkdownText.Inline(member.Title)} ({SectionLabel(member.Section)})");
+            }
+
+            md.Blank();
+        }
+    }
+
+    private static string GroupLabel(ExportGroup group) => GroupKinds.GetValueOrDefault(group.Kind, group.Kind);
+
+    private static string Cell(string? text) => text is null ? string.Empty : MarkdownText.Inline(text);
+
+    /// <summary>Código dentro de una celda: en GitHub un <c>|</c> corta la tabla aunque esté entre comillas invertidas.</summary>
+    private static string CodeCell(string? text) =>
+        string.IsNullOrEmpty(text) ? string.Empty : MarkdownText.Code(text).Replace("|", "\\|", StringComparison.Ordinal);
+
+    private static string YesNo(JsonElement json, string property) =>
+        json.TryGetProperty(property, out var v) && v.ValueKind == JsonValueKind.True ? "Sí" : "No";
+
+    private static List<JsonElement> Items(JsonElement json, string property) =>
+        json.TryGetProperty(property, out var list) && list.ValueKind == JsonValueKind.Array ? [.. list.EnumerateArray()] : [];
 
     private static string PortalText(ExportNode node, ExportInput input)
     {
@@ -329,7 +639,11 @@ internal static class MarkdownDocument
             json.GetProperty("id").GetString()!, type, title, title, Text(json, "description"),
             http.ValueKind == JsonValueKind.Object ? Text(http, "method") : null,
             http.ValueKind == JsonValueKind.Object ? Text(http, "path") : null,
-            FromCatalog: false, json, Key: string.Empty);
+            FromCatalog: false, json, Key: string.Empty)
+        {
+            Http = http.ValueKind == JsonValueKind.Object ? http : null,
+            Database = json.TryGetProperty("database", out var d) && d.ValueKind == JsonValueKind.Object ? d : null,
+        };
 
         if (type != "ref")
         {
@@ -344,6 +658,8 @@ internal static class MarkdownDocument
                 Description = item.Description,
                 Method = item.HttpMethod,
                 Path = item.HttpPath,
+                Http = item.Http,
+                Database = item.Database,
                 FromCatalog = true,
             }
             : node;
@@ -359,7 +675,8 @@ internal static class MarkdownDocument
                 e.GetProperty("kind").GetString()!,
                 Text(e, "label"),
                 Text(e, "when"),
-                e.GetProperty("id").GetString()!))
+                e.GetProperty("id").GetString()!,
+                e))
             .OrderBy(e => e.From.Key.Length).ThenBy(e => e.From.Key, StringComparer.Ordinal)
             .ThenBy(e => e.To.Key.Length).ThenBy(e => e.To.Key, StringComparer.Ordinal)
             .ThenBy(e => e.Id, StringComparer.Ordinal)
@@ -384,6 +701,29 @@ internal static class MarkdownDocument
             .ThenBy(t => t.Name, StringComparer.Ordinal)
             .ThenBy(t => t.Id, StringComparer.Ordinal)
             .ToList();
+    }
+
+    /// <summary>Grupos por título e id; sus nodos en el orden del documento.</summary>
+    private static List<ExportGroup> ReadGroups(JsonElement graph, List<ExportNode> nodes)
+    {
+        if (!graph.TryGetProperty("groups", out var groups))
+        {
+            return [];
+        }
+
+        var list = groups.EnumerateObject()
+            .Select(p => p.Value)
+            .Select(g => new ExportGroup(
+                g.GetProperty("id").GetString()!,
+                g.GetProperty("title").GetString()!,
+                g.GetProperty("kind").GetString()!,
+                [.. nodes.Where(n => n.String("groupId") == g.GetProperty("id").GetString())],
+                Key: string.Empty))
+            .OrderBy(g => g.Title, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(g => g.Title, StringComparer.Ordinal)
+            .ThenBy(g => g.Id, StringComparer.Ordinal)
+            .ToList();
+        return [.. list.Select((g, i) => g with { Key = string.Create(CultureInfo.InvariantCulture, $"g{i + 1}") })];
     }
 
     private static List<ExportInputField> Inputs(ExportNode screen) =>
@@ -414,10 +754,19 @@ internal static class MarkdownDocument
         JsonElement Json,
         string Key)
     {
+        /// <summary>Contrato (del nodo o de su elemento del catálogo).</summary>
+        public JsonElement? Http { get; init; }
+
+        /// <summary>Estructura (del nodo o de su elemento del catálogo).</summary>
+        public JsonElement? Database { get; init; }
+
         public string? String(string property) => Text(Json, property);
     }
 
-    private sealed record ExportEdge(ExportNode From, ExportNode To, string Kind, string? Label, string? When, string Id);
+    private sealed record ExportEdge(
+        ExportNode From, ExportNode To, string Kind, string? Label, string? When, string Id, JsonElement Json);
+
+    private sealed record ExportGroup(string Id, string Title, string Kind, List<ExportNode> Members, string Key);
 
     private sealed record ExportTour(string Id, string Name, List<(ExportNode Node, string? Note)> Steps);
 

@@ -39,6 +39,11 @@ Que quien documenta una feature la baje como un `.zip` con un documento Markdown
 - [x] 9. Dado `GET /api/features/{featureId}/export`, entonces responde 200 con `application/zip` y `Content-Disposition: attachment; filename="<slug>.zip"`; 404 si la feature no existe; 401 sin sesión.
 - [x] 10. Dado el mismo lienzo guardado, entonces el `.md` sale igual byte a byte salvo la fecha de exportación (orden estable: por tipo y título, y luego por id).
 
+**Ampliación (2026-11-09, tras espacio-de-trabajo)**
+
+- [x] 11. Dado un lienzo con detalle técnico, entonces el documento lo incluye: en cada API, autenticación, tabla de parámetros, request y respuestas (código, significado, campos y ejemplo; los errores marcados); en cada base, motor, base, schemas y tablas con campos (tipo, clave, nulo) y relaciones; las responsabilidades o notas de cada caja; y bajo cada conexión, acceso a datos, notas y ejemplo. Un componente del catálogo usa su definición compartida.
+- [x] 12. Dado un lienzo con grupos, entonces hay una sección "Grupos" (título, tipo y sus nodos) y el diagrama los dibuja como `subgraph`. Un lienzo sin detalle técnico ni grupos sale igual que antes.
+
 ## Fuera de alcance
 
 - Exportar una app completa (varias features y el catálogo) en un solo documento.
