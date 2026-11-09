@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Espacio de trabajo, tarea 7: E2E del recorrido completo (primer ingreso → app y feature → nodos → conexión → documentación técnica → componente compartido → grupo → recargar idéntico) con capturas en 1440, 1024 y 768 px (`docs/features/espacio-de-trabajo/capturas/`) y comprobación de que no haya desborde ni paneles que se tapen. Cierra la feature.
 - Espacio de trabajo, tarea 6: conexiones con movimiento. Cada tipo se distingue por trazo y punta (navega, llama, responde, emite —nuevo tipo `event`—, lee, escribe, usa); las etiquetas de conexiones entre el mismo par no se tapan. Al seleccionar o pasar por una conexión, una animación sutil muestra el sentido del flujo documentado (no tráfico real); un interruptor junto al zoom (o la tecla M) la apaga y se recuerda, y con movimiento reducido no se anima. En un tour, el paso resalta las conexiones de su nodo y anima la que lleva al siguiente.
 - Espacio de trabajo, tarea 5: grupos de infraestructura (frontend, backend, externos, datos, red, entorno, cloud o libre). "Grupo" o la tecla G rodea las cajas seleccionadas (Mayús + clic suma a la selección); arrastrar el grupo por su nombre mueve sus cajas; soltar una caja dentro la incluye; se redimensiona; plegado se ve como una caja con su nombre y número de nodos, y las conexiones de sus nodos llegan a ella. Se guardan con el lienzo (`groups`, `node.groupId`, caja en `layout`) y la API valida su integridad.
 - Espacio de trabajo, tarea 4: inspector técnico. Una API documenta autenticación, parámetros (ruta, query, header), request y respuestas con códigos, errores, campos (tipo, obligatorio, descripción, ejemplo) y ejemplo; una base de datos, motor, base, schemas y tablas con campos (tipo, clave, nulo) y relaciones; una conexión, notas, acceso a datos (lee/escribe y entidades) y un ejemplo propio; actor, pantalla, regla, servicio y portal, sus responsabilidades o notas. La caja muestra solo un resumen. El catálogo guarda el mismo contrato o estructura (columna `jsonb`, migración) y la API lo valida con el schema (400 con la ruta del error).
@@ -65,6 +66,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Estructura inicial del repo: documentación, ADR-0001 (stack), ADR-0002 (lienzos por feature), schema del grafo v0, devcontainer, docker-compose, CI y plantillas de GitHub.
 
 ### Fixed
+- La pista del lienzo ya no queda debajo del zoom (1024 px), el zoom ya no tapa la barra de herramientas con el inspector abajo (768 px) y la flecha del selector de app ya no pisa la barra "/".
 - `infra/docker-compose.yml` usaba `minio/minio:latest`, que ya no existe en Docker Hub: el almacenamiento S3 de desarrollo es `rustfs/rustfs:1.0.4`.
 - Al borrar un nodo o una conexión seleccionados, su id quedaba en la selección y el panel mostraba la ayuda al seleccionar otro elemento.
 - Tras iniciar sesión se volvía siempre al inicio; ahora se vuelve a la página que se estaba abriendo.

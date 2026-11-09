@@ -313,13 +313,16 @@
 }
 
 /* Pista contextual */
+/* Entre el zoom (izquierda) y el inspector (derecha): centrada en ese hueco, nunca encima de ellos. */
 .canvas-hint {
   position: absolute;
-  left: 50%;
+  left: 224px;
+  right: 16px;
   bottom: 18px;
   z-index: 4;
-  max-width: min(640px, 60%);
-  margin: 0;
+  width: fit-content;
+  max-width: 640px;
+  margin: 0 auto;
   padding: 4px 12px;
   border-radius: 999px;
   background: rgb(246 239 227 / 92%);
@@ -327,7 +330,6 @@
   font-size: 12.5px;
   text-align: center;
   pointer-events: none;
-  transform: translateX(-50%);
 }
 
 /* Lienzo vacío */
@@ -873,13 +875,15 @@ div.pixel-node-image {
 
 /* Con el inspector abierto, la pista se centra en el espacio libre del lienzo. */
 .canvas.has-inspector .canvas-hint {
-  left: calc((100% - 352px) / 2);
-  max-width: min(560px, calc(100% - 520px));
+  right: 368px;
 }
 
 @media (max-width: 900px) {
+  /* El inspector es un panel inferior: el zoom sube sobre él, a la derecha (a la izquierda está la barra). */
   .canvas.has-inspector .zoom-controls {
+    right: 12px;
     bottom: calc(45% + 24px);
+    left: auto;
   }
 
   .inspector {

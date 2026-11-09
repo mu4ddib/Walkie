@@ -87,6 +87,12 @@
   min-width: 0;
 }
 
+/* El selector no se encoge por debajo de su botón (que ya se trunca con max-width): si no, el botón se sale
+   de su caja y la flecha queda encima de la barra "/". */
+.location-bar .popover {
+  flex-shrink: 0;
+}
+
 .location-sep {
   color: var(--dune-300);
   font-size: 16px;
@@ -120,6 +126,7 @@
 }
 
 .popover-trigger > span:first-child {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -135,11 +142,11 @@
 
 @media (max-width: 900px) {
   .location-bar .popover:first-child .popover-trigger {
-    max-width: 120px;
+    max-width: 104px;
   }
 
   .location-bar .popover-trigger {
-    max-width: 180px;
+    max-width: 160px;
   }
 }
 
@@ -148,6 +155,7 @@
 }
 
 .popover-caret {
+  flex-shrink: 0;
   color: var(--stone-500);
   font-size: 11px;
 }

@@ -68,7 +68,7 @@ Que Walkie abra directo en el lienzo, que crear, conectar, documentar y reutiliz
 
 **7. Validación (tarea 7)**
 
-- [ ] 24. E2E del recorrido completo: primer ingreso → app y feature → nodos → conexión → documentación técnica → componente compartido → grupo → recargar idéntico; capturas en 1440, 1024 y 768 px de ancho.
+- [x] 24. E2E del recorrido completo: primer ingreso → app y feature → nodos → conexión → documentación técnica → componente compartido → grupo → recargar idéntico; capturas en 1440, 1024 y 768 px de ancho.
 
 ## Fuera de alcance
 
