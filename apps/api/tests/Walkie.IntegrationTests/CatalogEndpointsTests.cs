@@ -38,7 +38,7 @@ public sealed class CatalogEndpointsTests(WalkieApiFactory factory)
 
         var response = await client.PostAsJsonAsync(
             CatalogUri(appId),
-            new CreateCatalogItemRequest("api", "  Consultar cliente ", "  ", new HttpContract("GET", " /clientes/{id} ")));
+            new CreateCatalogItemRequest("api", "  Consultar cliente ", "  ", TestJson.Http("GET", "/clientes/{id}")));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -88,7 +88,7 @@ public sealed class CatalogEndpointsTests(WalkieApiFactory factory)
     [InlineData("""{"type":"screen","title":"x"}""", "Type")]
     [InlineData("""{"type":"api","title":"  "}""", "Title")]
     [InlineData("""{"type":"service","title":"x","http":{"method":"GET"}}""", "Http")]
-    [InlineData("""{"type":"api","title":"x","http":{"method":"FETCH"}}""", "Http.Method")]
+    [InlineData("""{"type":"api","title":"x","http":{"method":"FETCH"}}""", "Http/method")]
     public async Task Crear_con_datos_invalidos_responde_400(string body, string field)
     {
         using var client = factory.CreateAuthenticatedClient();
@@ -120,18 +120,15 @@ public sealed class CatalogEndpointsTests(WalkieApiFactory factory)
 
         var response = await client.PutAsJsonAsync(
             ItemUri(item.Id),
-            new UpdateCatalogItemRequest("Buscar cliente", "Por documento", new HttpContract("POST", "/clientes/buscar"), 1));
+            new UpdateCatalogItemRequest("Buscar cliente", "Por documento", TestJson.Http("POST", "/clientes/buscar"), 1));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var expected = item with
-        {
-            Title = "Buscar cliente",
-            Description = "Por documento",
-            Http = new HttpContract("POST", "/clientes/buscar"),
-            Version = 2,
-        };
-        Assert.Equal(expected, await response.Content.ReadFromJsonAsync<CatalogItemResponse>());
-        Assert.Equal(expected, await client.GetFromJsonAsync<CatalogItemResponse>(ItemUri(item.Id)));
+        var expected = $$"""
+            {"id":"{{item.Id}}","appId":"{{appId}}","type":"api","title":"Buscar cliente","description":"Por documento",
+             "http":{"method":"POST","path":"/clientes/buscar"},"version":2}
+            """;
+        AssertSameJson(expected, await response.Content.ReadFromJsonAsync<JsonElement>());
+        AssertSameJson(expected, await client.GetFromJsonAsync<JsonElement>(ItemUri(item.Id)));
     }
 
     [Fact]
@@ -173,7 +170,7 @@ public sealed class CatalogEndpointsTests(WalkieApiFactory factory)
         var item = await CreateItemAsync(client, appId, "database", "Clientes");
 
         var response = await client.PutAsJsonAsync(
-            ItemUri(item.Id), new UpdateCatalogItemRequest("Clientes", null, new HttpContract("GET", "/x"), 1));
+            ItemUri(item.Id), new UpdateCatalogItemRequest("Clientes", null, TestJson.Http("GET", "/x"), 1));
 
         await AssertValidationErrorAsync(response, "Http");
     }

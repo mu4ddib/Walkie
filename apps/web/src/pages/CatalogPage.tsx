@@ -12,6 +12,10 @@ import {
 } from '../api/hooks';
 import { NODE_LABELS } from '../nodes/nodeMeta';
 import { HTTP_METHODS, TEXT_MAX_LENGTH, TITLE_MAX_LENGTH, type HttpMethod } from '../store/graphStore';
+import { normalizeDatabase, normalizeHttp } from '../contracts/contracts';
+import { ApiContractEditor } from '../panel/contract/ApiContractEditor';
+import { DatabaseEditor } from '../panel/contract/DatabaseEditor';
+import '../panel/panel.css';
 import { QueryState } from '../ui/QueryState';
 import { CATALOG_TYPES, catalogPath } from './catalogPaths';
 
@@ -184,16 +188,20 @@ function ItemEditor({
   const [description, setDescription] = useState(item.description ?? '');
   const [method, setMethod] = useState<HttpMethod | ''>(item.http?.method ?? '');
   const [path, setPath] = useState(item.http?.path ?? '');
+  const [contract, setContract] = useState(item.http);
+  const [database, setDatabase] = useState(item.database);
   const meta = NODE_LABELS[item.type];
   const conflict = update.error instanceof ApiError && update.error.status === 409;
 
   function save(event: FormEvent) {
     event.preventDefault();
-    const http =
-      item.type === 'api' && (method || path.trim())
-        ? { method: method || undefined, path: path.trim() || undefined }
-        : undefined;
-    update.mutate({ title: title.trim(), description: description.trim() || undefined, http, version: item.version });
+    update.mutate({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      http: item.type === 'api' ? normalizeHttp({ ...contract, method: method || undefined, path }) : undefined,
+      database: item.type === 'database' ? normalizeDatabase(database) : undefined,
+      version: item.version,
+    });
   }
 
   return (
@@ -238,6 +246,8 @@ function ItemEditor({
           </label>
         </>
       )}
+      {item.type === 'api' && <ApiContractEditor value={contract} onChange={setContract} />}
+      {item.type === 'database' && <DatabaseEditor value={database} onChange={setDatabase} />}
       <div className="catalog-actions">
         <button type="submit" className="pixel-button" disabled={update.isPending}>
           Guardar

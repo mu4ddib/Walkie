@@ -3,6 +3,7 @@ import { useStore } from 'zustand';
 import { v7 as uuidv7 } from 'uuid';
 import type { Edge, Node, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import { GRID } from '../theme/palette';
+import { normalizeDatabase, normalizeEdgeData, normalizeHttp } from '../contracts/contracts';
 
 export type NodeType = Node['type'];
 export type EdgeKind = Edge['kind'];
@@ -34,6 +35,8 @@ export const HTTP_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH
 export interface NodePatch {
   title?: string;
   description?: string;
+  /** Responsabilidades o notas (actor, pantalla, regla, servicio, portal). */
+  notes?: string;
   expression?: string;
   http?: { method?: HttpMethod | null; path?: string };
   /** Imagen de una pantalla (ADR-0004); `null` la quita. Se ignora en otros tipos. */
@@ -50,7 +53,17 @@ export interface EdgePatch {
   kind?: EdgeKind;
   label?: string;
   when?: string;
+  notes?: string;
+  /** Ejemplo de payload de esta interacción. */
+  example?: string;
+  /** Acceso a datos (operación y entidades); `null` lo quita. */
+  data?: Edge['data'] | null;
 }
+
+/** Límite de las notas de un nodo (schema). */
+export const NOTES_MAX_LENGTH = 4000;
+/** Límite del ejemplo de una conexión (schema). */
+export const EXAMPLE_MAX_LENGTH = 10000;
 
 /** Títulos por defecto al crear un nodo desde la paleta. */
 export const DEFAULT_TITLES: Record<NodeType, string> = {
@@ -167,8 +180,12 @@ export interface GraphActions {
    */
   convertToLocal(
     id: string,
-    item: { type: NodeType; title: string; description?: string; http?: Node['http'] },
+    item: { type: NodeType; title: string; description?: string; http?: Node['http']; database?: Node['database'] },
   ): void;
+  /** Contrato completo de una API (`undefined` lo quita); se normaliza como el resto de textos. Solo `api`. */
+  setHttp(id: string, http: Node['http'] | undefined): void;
+  /** Estructura de una base de datos (`undefined` la quita). Solo `database`. */
+  setDatabase(id: string, database: Node['database'] | undefined): void;
   moveNode(id: string, position: Position): void;
   renameNode(id: string, title: string): void;
   /** Título, descripción, expresión y `http` (método y ruta). */
@@ -306,12 +323,31 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         if (!node || node.type !== 'ref' || !CATALOG_NODE_TYPES.includes(item.type)) return;
         let next: Node = { id, type: item.type, title: item.title.trim().slice(0, TITLE_MAX_LENGTH) || node.title };
         next = withText(next, 'description', item.description, TEXT_MAX_LENGTH);
-        if (item.type === 'api' && item.http) {
-          let http: NonNullable<Node['http']> = item.http.method ? { method: item.http.method } : {};
-          http = withText(http, 'path', item.http.path, TEXT_MAX_LENGTH);
-          if (Object.keys(http).length > 0) next.http = http;
-        }
+        const http = item.type === 'api' ? normalizeHttp(item.http) : undefined;
+        if (http) next.http = http;
+        const database = item.type === 'database' ? normalizeDatabase(item.database) : undefined;
+        if (database) next.database = database;
         set((s) => ({ nodes: { ...s.nodes, [id]: next }, dirty: true }));
+      },
+
+      setHttp: (id, http) => {
+        const node = get().nodes[id];
+        if (!node || node.type !== 'api') return;
+        const clean = normalizeHttp(http);
+        const next = { ...node };
+        if (clean) next.http = clean;
+        else delete next.http;
+        putNode(next);
+      },
+
+      setDatabase: (id, database) => {
+        const node = get().nodes[id];
+        if (!node || node.type !== 'database') return;
+        const clean = normalizeDatabase(database);
+        const next = { ...node };
+        if (clean) next.database = clean;
+        else delete next.database;
+        putNode(next);
       },
 
       moveNode: (id, position) => {
@@ -343,6 +379,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         const title = patch.title?.trim().slice(0, TITLE_MAX_LENGTH);
         if (title) next.title = title;
         next = withText(next, 'description', patch.description, TEXT_MAX_LENGTH);
+        if (node.type !== 'ref') next = withText(next, 'notes', patch.notes, NOTES_MAX_LENGTH);
         next = withText(next, 'expression', patch.expression, TEXT_MAX_LENGTH);
         if (patch.http) {
           let http = { ...next.http };
@@ -461,6 +498,13 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         let next: Edge = { ...edge, kind: patch.kind ?? edge.kind };
         next = withText(next, 'label', patch.label, EDGE_TEXT_MAX_LENGTH);
         next = withText(next, 'when', patch.when, EDGE_TEXT_MAX_LENGTH);
+        next = withText(next, 'notes', patch.notes, TEXT_MAX_LENGTH);
+        next = withText(next, 'example', patch.example, EXAMPLE_MAX_LENGTH);
+        if (patch.data !== undefined) {
+          const data = normalizeEdgeData(patch.data ?? undefined);
+          if (data) next.data = data;
+          else delete next.data;
+        }
         if (sameJson(edge, next)) return;
         set((s) => ({ edges: { ...s.edges, [id]: next }, dirty: true }));
       },

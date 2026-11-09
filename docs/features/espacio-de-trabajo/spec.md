@@ -48,11 +48,11 @@ Que Walkie abra directo en el lienzo, que crear, conectar, documentar y reutiliz
 
 **4. Inspector técnico (tarea 4)**
 
-- [ ] 13. Dada una API (local o del catálogo), el inspector documenta método, ruta, descripción, autenticación, parámetros (ruta, query, header), request y responses (campos con tipo, obligatorio, descripción y ejemplo JSON) con códigos y errores; el nodo muestra solo un resumen.
-- [ ] 14. Dada una base de datos, el inspector documenta motor, base, schemas y tablas/colecciones con campos (tipo, clave, nulo) y relaciones.
-- [ ] 15. Dada una conexión, el inspector documenta la interacción: tipo, etiqueta, condición, notas, operación de datos (lee/escribe) y entidades, y un ejemplo de payload propio; el contrato reutilizable queda en la API, no se duplica.
-- [ ] 16. Dado actor, pantalla, regla, servicio o portal, el inspector solo muestra sus campos (responsabilidades, reglas, referencias…).
-- [ ] 17. Todo lo anterior se guarda y vuelve igual al recargar; la API valida los nuevos campos (400 si no cumplen el schema).
+- [x] 13. Dada una API (local o del catálogo), el inspector documenta método, ruta, descripción, autenticación, parámetros (ruta, query, header), request y responses (campos con tipo, obligatorio, descripción y ejemplo JSON) con códigos y errores; el nodo muestra solo un resumen.
+- [x] 14. Dada una base de datos, el inspector documenta motor, base, schemas y tablas/colecciones con campos (tipo, clave, nulo) y relaciones.
+- [x] 15. Dada una conexión, el inspector documenta la interacción: tipo, etiqueta, condición, notas, operación de datos (lee/escribe) y entidades, y un ejemplo de payload propio; el contrato reutilizable queda en la API, no se duplica.
+- [x] 16. Dado actor, pantalla, regla, servicio o portal, el inspector solo muestra sus campos (responsabilidades, reglas, referencias…).
+- [x] 17. Todo lo anterior se guarda y vuelve igual al recargar; la API valida los nuevos campos (400 si no cumplen el schema).
 
 **5. Grupos de infraestructura (tarea 5)**
 

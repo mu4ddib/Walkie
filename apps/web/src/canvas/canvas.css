@@ -510,6 +510,13 @@
   cursor: text;
 }
 
+.pixel-node-detail {
+  margin: 4px 10px 0;
+  color: var(--stone-700);
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
 .pixel-node-http {
   margin: 6px 10px 0;
   font-family: var(--font-mono);

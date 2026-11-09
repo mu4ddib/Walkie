@@ -54,9 +54,9 @@ export interface CanvasPreview {
 export type CatalogItem = WalkieCatalogItemV0;
 export type CatalogItemType = CatalogItem['type'];
 /** Lo que se envía al crear: sin id, app ni versión. */
-export type NewCatalogItem = Pick<CatalogItem, 'type' | 'title' | 'description' | 'http'>;
+export type NewCatalogItem = Pick<CatalogItem, 'type' | 'title' | 'description' | 'http' | 'database'>;
 /** Lo que se envía al editar: el tipo no cambia; `version` es la que se cargó. */
-export type CatalogItemChanges = Pick<CatalogItem, 'title' | 'description' | 'http' | 'version'>;
+export type CatalogItemChanges = Pick<CatalogItem, 'title' | 'description' | 'http' | 'database' | 'version'>;
 
 /** Imagen subida a una app (`packages/schema/walkie-asset.schema.json`, ADR-0004). */
 export type Asset = WalkieAssetV0;

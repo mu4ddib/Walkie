@@ -6,6 +6,7 @@ import type { Node } from '../schema/walkie-graph';
 import { TEXT_MAX_LENGTH } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { TextField } from './TextField';
+import { NotesField } from './contract/NotesField';
 
 /**
  * Panel de un `portal` (spec imagenes-portal, criterios 7 a 9): feature destino (de la misma app, sin la
@@ -58,6 +59,7 @@ export function PortalPanel({ node }: { node: Node }) {
         maxLength={TEXT_MAX_LENGTH}
         onChange={(description) => updateNode(node.id, { description })}
       />
+      <NotesField node={node} />
     </>
   );
 }

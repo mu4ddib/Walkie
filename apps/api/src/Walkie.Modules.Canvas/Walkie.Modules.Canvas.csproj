@@ -7,7 +7,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="JsonSchema.Net" Version="9.5.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
 
@@ -20,8 +19,6 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <!-- Fuente de verdad del grafo: se embebe el mismo archivo que usa la web. -->
-    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-graph.schema.json" LogicalName="walkie-graph.schema.json" />
   </ItemGroup>
 
 </Project>

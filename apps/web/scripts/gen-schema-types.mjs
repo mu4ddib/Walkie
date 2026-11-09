@@ -8,7 +8,13 @@ import { compile } from 'json-schema-to-typescript';
 /** Un schema de packages/schema -> un archivo de src/schema, con el nombre del tipo raíz. */
 const targets = [
   { schema: 'walkie-graph.schema.json', out: 'walkie-graph.ts', name: 'WalkieGraph' },
-  { schema: 'walkie-catalog-item.schema.json', out: 'walkie-catalog-item.ts', name: 'WalkieCatalogItem' },
+  // `http` y `database` son los del grafo (`$ref`): la definición compartida es la misma estructura.
+  {
+    schema: 'walkie-catalog-item.schema.json',
+    out: 'walkie-catalog-item.ts',
+    name: 'WalkieCatalogItem',
+    imports: ["import type { Database, Http } from './walkie-graph';"],
+  },
   { schema: 'walkie-asset.schema.json', out: 'walkie-asset.ts', name: 'WalkieAsset' },
   { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },
   // Usa `$ref` a otros schemas: sus tipos se importan de su propio archivo en vez de repetirse.

@@ -240,7 +240,7 @@ public sealed class MarkdownExportTests
             new Dictionary<Guid, CatalogItemResponse>
             {
                 [Item] = new(Item, Guid.Empty, "api", "Consultar cliente", "Busca al cliente por documento.",
-                    new HttpContract("GET", "/clientes/{id}"), 1),
+                    TestJson.Http("GET", "/clientes/{id}"), 1),
             },
             new Dictionary<Guid, string> { [Transferir] = "Transferir" },
             new Dictionary<Guid, string> { [Asset] = Slugs.ImagePath("Login", Asset, "image/png") },

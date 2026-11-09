@@ -13,16 +13,14 @@ export function MoveToCatalog({ appId, node }: { appId: string; node: Node }) {
   const convertToRef = useGraphStore((s) => s.convertToRef);
 
   async function move() {
-    const http =
-      node.type === 'api' && (node.http?.method || node.http?.path)
-        ? { method: node.http.method, path: node.http.path }
-        : undefined;
     try {
+      // El contrato o la estructura pasan tal cual: la definición compartida es la misma estructura.
       const item = await create.mutateAsync({
         type: node.type as CatalogItemType,
         title: node.title,
         description: node.description,
-        http,
+        http: node.type === 'api' ? node.http : undefined,
+        database: node.type === 'database' ? node.database : undefined,
       });
       convertToRef(node.id, item.id);
     } catch {

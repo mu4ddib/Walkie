@@ -19,6 +19,10 @@ import { ScreenImage } from './ScreenImage';
 import { useCanvasCatalog } from '../catalog/catalogContext';
 import { TextField } from './TextField';
 import { ToursSection, type ToursSectionProps } from './ToursSection';
+import { ApiContractEditor } from './contract/ApiContractEditor';
+import { DatabaseEditor } from './contract/DatabaseEditor';
+import { EdgeDetail } from './contract/EdgeDetail';
+import { NotesField } from './contract/NotesField';
 import './panel.css';
 
 /**
@@ -54,6 +58,8 @@ export function PropertiesPanel({
 function NodePanel({ id }: { id: string }) {
   const node = useGraphStore((s) => s.nodes[id]);
   const updateNode = useGraphStore((s) => s.updateNode);
+  const setHttp = useGraphStore((s) => s.setHttp);
+  const setDatabase = useGraphStore((s) => s.setDatabase);
   const methodId = useId();
   const { appId } = useCanvasCatalog();
   if (!node) return null;
@@ -120,6 +126,11 @@ function NodePanel({ id }: { id: string }) {
           />
         </>
       )}
+      {node.type === 'api' && <ApiContractEditor value={node.http} onChange={(http) => setHttp(id, http)} />}
+      {node.type === 'database' && (
+        <DatabaseEditor value={node.database} onChange={(database) => setDatabase(id, database)} />
+      )}
+      <NotesField node={node} />
       {/* Solo con catálogo (lienzo de una app): el botón llama a la API. */}
       {appId && CATALOG_NODE_TYPES.includes(node.type) && <MoveToCatalog appId={appId} node={node} />}
     </>
@@ -159,6 +170,7 @@ function EdgePanel({ id }: { id: string }) {
         maxLength={EDGE_TEXT_MAX_LENGTH}
         onChange={(when) => updateEdge(id, { when })}
       />
+      <EdgeDetail edge={edge} />
     </>
   );
 }

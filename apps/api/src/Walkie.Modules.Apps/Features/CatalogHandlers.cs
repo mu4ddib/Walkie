@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Walkie.Modules.Apps.Contracts;
 using Walkie.Modules.Apps.Domain;
@@ -44,7 +45,7 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
             UpdatedBy = userId,
             UpdatedAt = now,
         };
-        Apply(item, request.Description, request.Http);
+        Apply(item, request.Description, request.Http, request.Database);
         db.CatalogItems.Add(item);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return ToResponse(item);
@@ -65,11 +66,16 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
             return new UpdateResult.NotFound();
         }
 
-        if (request.Http is not null && item.Type != "api")
+        if (!CatalogRules.IsEmpty(request.Http) && item.Type != "api")
+        {
+            return new UpdateResult.Invalid(new Dictionary<string, string[]> { ["Http"] = [CatalogRules.HttpOnlyOnApi] });
+        }
+
+        if (!CatalogRules.IsEmpty(request.Database) && item.Type != "database")
         {
             return new UpdateResult.Invalid(new Dictionary<string, string[]>
             {
-                ["Http"] = ["Solo los elementos api tienen método y ruta."],
+                ["Database"] = [CatalogRules.DatabaseOnlyOnDatabase],
             });
         }
 
@@ -79,7 +85,7 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
         }
 
         item.Title = request.Title.Trim();
-        Apply(item, request.Description, request.Http);
+        Apply(item, request.Description, request.Http, request.Database);
         item.Version++;
         item.UpdatedBy = userId;
         item.UpdatedAt = clock.GetUtcNowForDb();
@@ -140,12 +146,12 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
             .ToListAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>Textos recortados; vacío = sin valor (así la respuesta no trae campos vacíos).</summary>
-    private static void Apply(CatalogItem item, string? description, HttpContract? http)
+    /// <summary>Textos recortados; vacío = sin valor (así la respuesta no trae campos vacíos). El contrato ya cumple el schema.</summary>
+    private static void Apply(CatalogItem item, string? description, JsonElement? http, JsonElement? database)
     {
         item.Description = Clean(description);
-        item.HttpMethod = http?.Method;
-        item.HttpPath = Clean(http?.Path);
+        item.Http = CatalogRules.IsEmpty(http) ? null : http!.Value.GetRawText();
+        item.Database = CatalogRules.IsEmpty(database) ? null : database!.Value.GetRawText();
     }
 
     private static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
@@ -156,8 +162,20 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
         item.Type,
         item.Title,
         item.Description,
-        item.HttpMethod is null && item.HttpPath is null ? null : new HttpContract(item.HttpMethod, item.HttpPath),
-        item.Version);
+        Parse(item.Http),
+        item.Version,
+        Parse(item.Database));
+
+    private static JsonElement? Parse(string? json)
+    {
+        if (json is null)
+        {
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
+    }
 }
 
 internal abstract record DeleteResult
