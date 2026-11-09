@@ -21,7 +21,7 @@
     },
     "layout": {
       "type": "object",
-      "description": "Mapa id de nodo -> posición (separado del contenido)",
+      "description": "Mapa id de nodo o grupo -> posición (separado del contenido)",
       "additionalProperties": {
         "type": "object",
         "required": ["x", "y"],
@@ -37,6 +37,11 @@
     "tours": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/tour" }
+    },
+    "groups": {
+      "type": "object",
+      "description": "Mapa id -> grupo de infraestructura; su caja (x, y, w, h) va en layout con el mismo id",
+      "additionalProperties": { "$ref": "#/$defs/group" }
     }
   },
   "$defs": {
@@ -75,7 +80,8 @@
         "http": { "$ref": "#/$defs/http" },
         "database": { "$ref": "#/$defs/database" },
         "catalogId": { "type": "string", "minLength": 1, "description": "Elemento del catálogo de la app (ref)" },
-        "targetFeatureId": { "type": "string", "format": "uuid", "description": "Feature destino de la misma app (portal); en un portal, title guarda su último nombre conocido" }
+        "targetFeatureId": { "type": "string", "format": "uuid", "description": "Feature destino de la misma app (portal); en un portal, title guarda su último nombre conocido" },
+        "groupId": { "$ref": "#/$defs/id", "description": "Grupo de infraestructura que lo contiene" }
       },
       "if": { "properties": { "type": { "const": "ref" } } },
       "then": { "required": ["catalogId"], "description": "En un ref, title guarda el último título conocido del elemento" }
@@ -256,6 +262,18 @@
             }
           }
         }
+      }
+    },
+    "group": {
+      "type": "object",
+      "description": "Grupo de infraestructura del lienzo (frontend, backend…); no es una app ni una feature",
+      "required": ["id", "title", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "kind": { "enum": ["frontend", "backend", "external", "data", "network", "environment", "cloud", "custom"] },
+        "collapsed": { "type": "boolean" }
       }
     },
     "tour": {

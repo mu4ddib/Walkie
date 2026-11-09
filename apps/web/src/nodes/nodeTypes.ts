@@ -1,4 +1,5 @@
 import type { NodeTypes } from '@xyflow/react';
+import { GroupNode } from './GroupNode';
 import { PixelNode } from './PixelNode';
 
 /**
@@ -14,4 +15,6 @@ export const nodeTypes: NodeTypes = {
   service: PixelNode,
   ref: PixelNode,
   portal: PixelNode,
+  // Grupos de infraestructura (no son nodos del grafo: viven en `groups`).
+  infraGroup: GroupNode,
 };

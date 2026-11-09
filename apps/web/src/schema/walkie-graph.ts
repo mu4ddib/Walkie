@@ -27,7 +27,7 @@ export interface WalkieCanvasGraphV0 {
     [k: string]: Edge;
   };
   /**
-   * Mapa id de nodo -> posición (separado del contenido)
+   * Mapa id de nodo o grupo -> posición (separado del contenido)
    */
   layout: {
     [k: string]: {
@@ -39,6 +39,12 @@ export interface WalkieCanvasGraphV0 {
   };
   tours?: {
     [k: string]: Tour;
+  };
+  /**
+   * Mapa id -> grupo de infraestructura; su caja (x, y, w, h) va en layout con el mismo id
+   */
+  groups?: {
+    [k: string]: Group;
   };
 }
 export interface Node {
@@ -78,6 +84,10 @@ export interface Node {
    * Feature destino de la misma app (portal); en un portal, title guarda su último nombre conocido
    */
   targetFeatureId?: string;
+  /**
+   * UUID v7 generado en el cliente
+   */
+  groupId?: string;
 }
 /**
  * Contrato de una API (nodo api o elemento del catálogo)
@@ -236,4 +246,13 @@ export interface Tour {
      */
     note?: string;
   }[];
+}
+/**
+ * Grupo de infraestructura del lienzo (frontend, backend…); no es una app ni una feature
+ */
+export interface Group {
+  id: Id;
+  title: string;
+  kind: 'frontend' | 'backend' | 'external' | 'data' | 'network' | 'environment' | 'cloud' | 'custom';
+  collapsed?: boolean;
 }

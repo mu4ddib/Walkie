@@ -17,7 +17,7 @@ Cada tarea cabe en un PR. El orden sigue las prioridades del autor.
 2. [x] (#96) Apps y features: descripción y `updatedAt` en features (migración), renombrar, vistas previas del lienzo (endpoint en Canvas), galería con tarjetas, miniaturas, búsqueda y estados vacíos. Criterios 7 a 9.
 3. [x] (#97) Catálogo en el editor: panel "Componentes" (buscar, filtrar, arrastrar, crear), guardar como componente, copia independiente, definición compartida vs. uso, alcance antes de guardar. Criterios 10 a 12.
 4. [x] (#98) Inspector técnico: schema de `http`, `database`, notas y detalle de conexiones; catálogo con contrato `jsonb`; inspector por tipo con secciones; resumen en el nodo. Criterios 13 a 17.
-5. [ ] (#99) Grupos de infraestructura: schema, store, nodo grupo, mover con hijos, plegar. Criterios 18 a 20.
+5. [x] (#99) Grupos de infraestructura: schema, store, nodo grupo, mover con hijos, plegar. Criterios 18 a 20.
 6. [ ] (#100) Conexiones con movimiento y tours: animación direccional, interruptor, estilos por tipo, etiquetas sin superposición, tours que resaltan conexiones. Criterios 21 a 23.
 7. [ ] (#101) E2E del recorrido completo y capturas en tres anchos. Criterio 24.
 
@@ -34,4 +34,4 @@ Cada tarea cabe en un PR. El orden sigue las prioridades del autor.
 
 ## Estado
 
-Última actualización: 2026-11-09 — tareas 1 a 4 hechas. Tarea 4: schema con `$defs/http` (autenticación, parámetros, request y respuestas con campos y ejemplo) y `$defs/database` (motor, base, schemas, tablas con campos, claves y relaciones), `node.notes` y `edge.notes`/`data`/`example`; el catálogo los referencia y la API los guarda en `jsonb` (migración `CatalogContractJsonb`, que pasa método y ruta al contrato) y los valida con el mismo schema (`WalkieSchemas` en `Walkie.Shared`). Inspector por tipo con secciones plegables, resumen en la caja, y la definición compartida y la página del catálogo con los mismos editores. Sigue: tarea 5 (grupos de infraestructura).
+Última actualización: 2026-11-09 — tareas 1 a 5 hechas. Tarea 5: `groups` en el grafo (id, título, tipo, plegado), `node.groupId` y la caja del grupo en `layout`; la API valida la integridad (grupo existente, caja con ancho y alto, clave = id). En el lienzo: "Grupo" (tecla G) rodea lo seleccionado; mover el grupo por su nombre mueve sus cajas; soltar una caja dentro la incluye; se redimensiona; plegado es una caja compacta a la que llegan las conexiones; inspector con nombre, tipo, plegado, nodos y "Desagrupar". Sigue: tarea 6 (conexiones con movimiento y tours).

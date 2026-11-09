@@ -166,6 +166,71 @@ describe('detalle técnico', () => {
   });
 });
 
+describe('grupos de infraestructura', () => {
+  it('addGroup crea el grupo con su caja en la grilla y mete a sus miembros', () => {
+    const api = s().addNode('api', { x: 40, y: 40 });
+    s().markSaved(1);
+
+    const g = s().addGroup({ x: 3, y: 5, w: 100, h: 90 }, { title: ' Backend ', kind: 'backend', members: [api, 'nada'] });
+
+    expect(s().groups[g]).toEqual({ id: g, title: 'Backend', kind: 'backend' });
+    expect(s().layout[g]).toEqual({ x: 0, y: 8, w: 240, h: 160 });
+    expect(s().nodes[api]?.groupId).toBe(g);
+    expect(toGraph(s()).groups).toEqual({ [g]: s().groups[g] });
+    expect(s().dirty).toBe(true);
+  });
+
+  it('moveGroup mueve también sus nodos; resizeGroup no', () => {
+    const inside = s().addNode('api', { x: 40, y: 40 });
+    const outside = s().addNode('screen', { x: 600, y: 40 });
+    const g = s().addGroup({ x: 0, y: 0, w: 400, h: 240 }, { members: [inside] });
+
+    s().moveGroup(g, { x: 80, y: 16 });
+    expect(s().layout[g]).toMatchObject({ x: 80, y: 16 });
+    expect(s().layout[inside]).toEqual({ x: 120, y: 56 });
+    expect(s().layout[outside]).toEqual({ x: 600, y: 40 });
+
+    s().resizeGroup(g, { x: 80, y: 16, w: 600, h: 320 });
+    expect(s().layout[g]).toEqual({ x: 80, y: 16, w: 600, h: 320 });
+    expect(s().layout[inside]).toEqual({ x: 120, y: 56 });
+  });
+
+  it('setNodeGroup mete y saca; updateGroup pliega; removeGroup deja los nodos', () => {
+    const api = s().addNode('api', { x: 40, y: 40 });
+    const g = s().addGroup({ x: 0, y: 0, w: 400, h: 240 });
+
+    s().setNodeGroup(api, g);
+    s().updateGroup(g, { collapsed: true, title: '  ' });
+    expect(s().nodes[api]?.groupId).toBe(g);
+    expect(s().groups[g]).toEqual({ id: g, title: 'Grupo', kind: 'custom', collapsed: true });
+
+    s().setNodeGroup(api, null);
+    expect(s().nodes[api]).not.toHaveProperty('groupId');
+    s().setNodeGroup(api, g);
+
+    s().removeGroup(g);
+    expect(s().groups).toEqual({});
+    expect(s().layout[g]).toBeUndefined();
+    expect(s().nodes[api]).toEqual({ id: api, type: 'api', title: 'API' });
+  });
+
+  it('loadGraph y toGraph conservan los grupos; sin grupos no hay campo', () => {
+    const graph: WalkieCanvasGraphV0 = {
+      schemaVersion: 0,
+      version: 3,
+      nodes: { a: { id: 'a', type: 'api', title: 'A', groupId: 'g' } },
+      edges: {},
+      layout: { a: { x: 0, y: 0 }, g: { x: 0, y: 0, w: 400, h: 240 } },
+      groups: { g: { id: 'g', title: 'Backend', kind: 'backend', collapsed: true } },
+    };
+    s().loadGraph(graph);
+    expect(toGraph(s())).toEqual(graph);
+
+    s().loadGraph({ ...graph, nodes: {}, layout: {}, groups: undefined });
+    expect(toGraph(s())).not.toHaveProperty('groups');
+  });
+});
+
 describe('moveNode', () => {
   it('ajusta la posición a múltiplos de 8', () => {
     const id = s().addNode('screen', { x: 0, y: 0 });

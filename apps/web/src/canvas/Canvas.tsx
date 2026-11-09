@@ -22,7 +22,9 @@ import { PropertiesPanel } from '../panel/PropertiesPanel';
 import { SharedTours } from '../tours/SharedTours';
 import { TourPlayer } from '../tours/TourPlayer';
 import type { WalkieFlowNode } from '../nodes/PixelNode';
-import { defaultEdgeKind, type GraphStore, type NodeType, type Position } from '../store/graphStore';
+import type { GroupFlowNode } from '../nodes/GroupNode';
+import { COLLAPSED_GROUP } from '../nodes/groupMeta';
+import { GROUP_MIN, defaultEdgeKind, type Box, type GraphStore, type NodeType, type Position } from '../store/graphStore';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { useGraphStore } from '../store/useGraphStore';
 import { GRID, palette } from '../theme/palette';
@@ -37,6 +39,8 @@ import { ZoomControls } from './ZoomControls';
 import './canvas.css';
 
 const NO_CATALOG: CanvasCatalog = { appId: '', items: {} };
+/** Tamaño de una caja sin medir (el mínimo de `.pixel-node`). */
+const NODE_SIZE = { width: 184, height: 72 } as const;
 
 /**
  * Lienzo de una feature. Todo cambio del grafo pasa por las acciones del store. `catalog` es el catálogo
@@ -59,7 +63,9 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const graphNodes = useGraphStore((s) => s.nodes);
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
+  const groups = useGraphStore((s) => s.groups);
   const { addNode, addRef, moveNode, removeNode, connect, removeEdge } = useGraphStore((s) => s);
+  const { addGroup, moveGroup, resizeGroup, setNodeGroup, removeGroup, updateGroup } = useGraphStore((s) => s);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport } = useReactFlow();
   const openFeature = useOpenFeature();
   // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
@@ -128,39 +134,129 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
   const stopEditing = useCallback(() => setEditingId(null), []);
 
-  const nodes = useMemo<WalkieFlowNode[]>(
-    () =>
-      Object.values(graphNodes).map((node) => ({
-        id: node.id,
-        type: node.type,
-        position: layout[node.id] ?? { x: 0, y: 0 },
-        data: { node, editing: editingId === node.id, onEditDone: stopEditing },
-        selected: selectedNodes.has(node.id),
-        measured: measured[node.id],
-        className: playing ? (node.id === tourNodeId ? 'tour-current' : 'tour-dim') : undefined,
-      })),
-    [graphNodes, layout, selectedNodes, editingId, stopEditing, measured, playing, tourNodeId],
+  // Grupos plegados (spec espacio-de-trabajo, criterio 19): sus nodos se ocultan y sus conexiones llegan a la caja.
+  // En un tour todo se ve desplegado: el paso puede estar dentro de un grupo.
+  const collapsedGroups = useMemo(
+    () => new Set(playing ? [] : Object.values(groups).filter((g) => g.collapsed).map((g) => g.id)),
+    [groups, playing],
   );
 
-  const edges = useMemo<WalkieFlowEdge[]>(
-    () =>
-      Object.values(graphEdges).map((edge) => ({
+  const nodes = useMemo<(WalkieFlowNode | GroupFlowNode)[]>(() => {
+    const counts: Record<string, number> = {};
+    for (const node of Object.values(graphNodes)) if (node.groupId) counts[node.groupId] = (counts[node.groupId] ?? 0) + 1;
+    // Los grupos van primero y detrás (zIndex −1): React Flow dibuja en orden.
+    const groupNodes: GroupFlowNode[] = Object.values(groups).map((group) => {
+      const box = layout[group.id] ?? { x: 0, y: 0, w: GROUP_MIN.w, h: GROUP_MIN.h };
+      const collapsed = collapsedGroups.has(group.id);
+      return {
+        id: group.id,
+        type: 'infraGroup',
+        position: { x: box.x, y: box.y },
+        width: collapsed ? COLLAPSED_GROUP.width : (box.w ?? GROUP_MIN.w),
+        height: collapsed ? COLLAPSED_GROUP.height : (box.h ?? GROUP_MIN.h),
+        zIndex: collapsed ? 0 : -1,
+        dragHandle: '.group-node-header',
+        data: {
+          group: { ...group, collapsed: collapsed || undefined },
+          count: counts[group.id] ?? 0,
+          onToggle: locked ? undefined : () => updateGroup(group.id, { collapsed: !group.collapsed }),
+          resizable: !locked,
+        },
+        selected: selectedNodes.has(group.id),
+        className: playing ? 'tour-dim' : undefined,
+      };
+    });
+    const graphFlowNodes: WalkieFlowNode[] = Object.values(graphNodes).map((node) => ({
+      id: node.id,
+      type: node.type,
+      position: layout[node.id] ?? { x: 0, y: 0 },
+      data: { node, editing: editingId === node.id, onEditDone: stopEditing },
+      selected: selectedNodes.has(node.id),
+      measured: measured[node.id],
+      hidden: !!node.groupId && collapsedGroups.has(node.groupId),
+      className: playing ? (node.id === tourNodeId ? 'tour-current' : 'tour-dim') : undefined,
+    }));
+    return [...groupNodes, ...graphFlowNodes];
+  }, [
+    graphNodes,
+    groups,
+    collapsedGroups,
+    layout,
+    selectedNodes,
+    editingId,
+    stopEditing,
+    measured,
+    playing,
+    tourNodeId,
+    locked,
+    updateGroup,
+  ]);
+
+  const edges = useMemo<WalkieFlowEdge[]>(() => {
+    // Un extremo dentro de un grupo plegado llega a la caja del grupo.
+    const end = (id: string) => {
+      const group = graphNodes[id]?.groupId;
+      return group && collapsedGroups.has(group) ? group : id;
+    };
+    return Object.values(graphEdges)
+      .map((edge) => ({
         id: edge.id,
-        source: edge.from,
-        target: edge.to,
+        source: end(edge.from),
+        target: end(edge.to),
         type: 'kind',
         data: { kind: edge.kind, label: edge.label, when: edge.when },
         selected: selectedEdges.has(edge.id),
-      })),
-    [graphEdges, selectedEdges],
+      }))
+      .filter((edge) => edge.source !== edge.target);
+  }, [graphEdges, graphNodes, collapsedGroups, selectedEdges]);
+
+  /** Grupo desplegado que contiene el punto (el más chico si hay varios), para incluir un nodo al soltarlo. */
+  const groupAt = useCallback(
+    (point: Position) => {
+      let found: { id: string; area: number } | null = null;
+      for (const group of Object.values(groups)) {
+        const box = layout[group.id];
+        if (!box?.w || !box.h || group.collapsed) continue;
+        const inside = point.x >= box.x && point.x <= box.x + box.w && point.y >= box.y && point.y <= box.y + box.h;
+        if (inside && (!found || box.w * box.h < found.area)) found = { id: group.id, area: box.w * box.h };
+      }
+      return found?.id ?? null;
+    },
+    [groups, layout],
+  );
+
+  /** Centro de un nodo del grafo (con su tamaño medido, o el mínimo de una caja). */
+  const centerOf = useCallback(
+    (id: string): Position | null => {
+      const at = layout[id];
+      if (!at) return null;
+      const size = measured[id] ?? { width: NODE_SIZE.width, height: NODE_SIZE.height };
+      return { x: at.x + size.width / 2, y: at.y + size.height / 2 };
+    },
+    [layout, measured],
   );
 
   const onNodesChange = useCallback(
-    (changes: NodeChange<WalkieFlowNode>[]) => {
+    (changes: NodeChange<WalkieFlowNode | GroupFlowNode>[]) => {
       for (const change of changes) {
-        if (change.type === 'position' && change.position) moveNode(change.id, change.position);
+        const isGroup = change.type !== 'add' && change.id in groups;
+        if (change.type === 'position' && change.position) {
+          if (!isGroup) moveNode(change.id, change.position);
+          // Arrastrar un grupo mueve sus nodos; redimensionarlo desde arriba o la izquierda solo mueve la caja.
+          else if (change.dragging) moveGroup(change.id, change.position);
+          else {
+            const box = layout[change.id];
+            if (box?.w && box.h) resizeGroup(change.id, { x: change.position.x, y: change.position.y, w: box.w, h: box.h });
+          }
+        }
+        if (change.type === 'dimensions' && isGroup && change.resizing && change.dimensions) {
+          const box = layout[change.id];
+          if (box) resizeGroup(change.id, { x: box.x, y: box.y, w: change.dimensions.width, h: change.dimensions.height });
+          continue;
+        }
         if (change.type === 'remove') {
-          removeNode(change.id);
+          if (isGroup) removeGroup(change.id);
+          else removeNode(change.id);
           setSelectedNodes((s) => toggle(s, change.id, false));
         }
         if (change.type === 'select') setSelectedNodes((s) => toggle(s, change.id, change.selected));
@@ -174,7 +270,19 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         }
       }
     },
-    [moveNode, removeNode],
+    [moveNode, removeNode, groups, layout, moveGroup, resizeGroup, removeGroup],
+  );
+
+  // Soltar un nodo dentro de un grupo lo incluye; soltarlo fuera lo saca (criterio 18).
+  const onNodeDragStop = useCallback(
+    (_: unknown, __: unknown, dragged: { id: string }[]) => {
+      for (const { id } of dragged) {
+        if (id in groups) continue;
+        const center = centerOf(id);
+        if (center) setNodeGroup(id, groupAt(center));
+      }
+    },
+    [groups, centerOf, groupAt, setNodeGroup],
   );
 
   const onEdgesChange = useCallback(
@@ -193,10 +301,13 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   // Panel de propiedades: solo con un único elemento seleccionado (nodo o conexión). Se filtra por lo
   // que existe: React Flow no deselecciona lo que se borra (ni las conexiones que caen en cascada).
   const liveNodes = [...selectedNodes].filter((id) => graphNodes[id]);
+  const liveGroups = [...selectedNodes].filter((id) => groups[id]);
   const liveEdges = [...selectedEdges].filter((id) => graphEdges[id]);
-  const single = liveNodes.length + liveEdges.length === 1;
+  const single = liveNodes.length + liveGroups.length + liveEdges.length === 1;
   const panelNodeId = single ? (liveNodes[0] ?? null) : null;
+  const panelGroupId = single ? (liveGroups[0] ?? null) : null;
   const panelEdgeId = single ? (liveEdges[0] ?? null) : null;
+  const panelSelected = Boolean(panelNodeId || panelEdgeId || panelGroupId);
 
   // Un `ref` conecta como su elemento del catálogo (spec catalogo, criterio 9).
   const onConnect = useCallback(
@@ -214,11 +325,43 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
 
   const addAt = useCallback(
     (create: (position: Position) => string, clientX: number, clientY: number) => {
-      const id = create(screenToFlowPosition({ x: clientX, y: clientY }));
+      const position = screenToFlowPosition({ x: clientX, y: clientY });
+      const id = create(position);
+      // Un nodo que cae dentro de un grupo queda en él.
+      const group = groupAt({ x: position.x + NODE_SIZE.width / 2, y: position.y + NODE_SIZE.height / 2 });
+      if (group) setNodeGroup(id, group);
       setSelectedNodes(new Set([id]));
     },
-    [screenToFlowPosition],
+    [screenToFlowPosition, groupAt, setNodeGroup],
   );
+
+  /**
+   * "Grupo" (criterio 18): con cajas seleccionadas, las rodea y las incluye; si no, uno vacío en el centro.
+   */
+  function createGroup() {
+    const members = [...selectedNodes].filter((id) => graphNodes[id] && layout[id]);
+    let box: Box;
+    if (members.length > 0) {
+      const rects = members.map((id) => {
+        const at = layout[id]!;
+        const size = measured[id] ?? NODE_SIZE;
+        return { x: at.x, y: at.y, r: at.x + size.width, b: at.y + size.height };
+      });
+      const x = Math.min(...rects.map((r) => r.x)) - GRID * 4;
+      const y = Math.min(...rects.map((r) => r.y)) - GRID * 7;
+      box = { x, y, w: Math.max(...rects.map((r) => r.r)) + GRID * 4 - x, h: Math.max(...rects.map((r) => r.b)) + GRID * 4 - y };
+    } else {
+      const rect = flowRef.current?.getBoundingClientRect();
+      const center = screenToFlowPosition({
+        x: rect ? rect.left + rect.width / 2 : 0,
+        y: rect ? rect.top + rect.height / 2 : 0,
+      });
+      box = { x: center.x - 240, y: center.y - 160, w: 480, h: 320 };
+    }
+    const id = addGroup(box, { members });
+    setSelectedNodes(new Set([id]));
+    setSelectedEdges(new Set());
+  }
 
   function onDrop(event: DragEvent) {
     event.preventDefault();
@@ -247,6 +390,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       else if (event.key === '-') void zoomOut();
       else if (event.key === '0') void fitView({ padding: fitPadding, duration: 200 });
       else if (!readOnly && event.key.toLowerCase() === 'i') toggleInspector();
+      else if (!readOnly && event.key.toLowerCase() === 'g') createGroup();
       else if (event.key === '?') setHelpOpen((open) => !open);
       else return;
       event.preventDefault();
@@ -286,7 +430,9 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     ? null
     : readOnly
       ? 'Solo lectura: desplázate, acerca y recorre los tours.'
-      : selectedNode?.type === 'ref'
+      : panelGroupId
+        ? 'Grupo: arrástralo por su nombre para mover sus cajas · Suelta una caja dentro para incluirla · Supr lo quita'
+        : selectedNode?.type === 'ref'
         ? 'Componente: su definición se edita en el inspector y cambia en todos los lienzos · Supr lo quita de aquí'
         : selectedNode
           ? 'Arrastra el punto derecho hasta otra caja para conectarlas · Doble clic edita el título · Supr borra'
@@ -338,6 +484,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeDragStop={onNodeDragStop}
           // El título de un `ref` se edita en el catálogo; el doble clic en un `portal` abre su destino.
           onNodeDoubleClick={(_, flowNode) => {
             if (locked) return;
@@ -351,6 +498,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             setEditingId(node.id);
           }}
           zoomOnDoubleClick={false}
+          // Mayús, Ctrl o Cmd + clic suman cajas a la selección (para agruparlas con G).
+          multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
           connectOnClick={false}
           snapToGrid
           snapGrid={[GRID, GRID]}
@@ -367,7 +516,11 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           <Background variant={BackgroundVariant.Dots} gap={GRID * 3} size={1.5} color={palette.grid} />
         </ReactFlow>
         {!readOnly && !playing && (
-          <Palette onAdd={(type) => addAtCenter((p) => addNode(type, p))} catalog={paletteCatalog} />
+          <Palette
+            onAdd={(type) => addAtCenter((p) => addNode(type, p))}
+            onAddGroup={createGroup}
+            catalog={paletteCatalog}
+          />
         )}
         {!playing && <ZoomControls fitPadding={fitPadding} />}
         {!readOnly && !playing && empty && (
@@ -394,7 +547,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       ) : inspectorOpen ? (
         <div className="inspector floating">
           <div className="inspector-header">
-            <span className="inspector-title">{panelNodeId || panelEdgeId ? 'Propiedades' : 'Lienzo'}</span>
+            <span className="inspector-title">{panelSelected ? 'Propiedades' : 'Lienzo'}</span>
             <button
               type="button"
               className="pixel-button is-ghost icon-button"
@@ -408,6 +561,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           <PropertiesPanel
             nodeId={panelNodeId}
             edgeId={panelEdgeId}
+            groupId={panelGroupId}
             tours={{ openTourId, onOpen: setOpenTourId, onPlay: startTour }}
           />
         </div>
@@ -418,8 +572,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           aria-label="Mostrar inspector"
           onClick={toggleInspector}
         >
-          ⇤ {panelNodeId || panelEdgeId ? 'Propiedades' : 'Inspector'}
-          {(panelNodeId || panelEdgeId) && <span className="inspector-dot" aria-hidden="true" />}
+          ⇤ {panelSelected ? 'Propiedades' : 'Inspector'}
+          {panelSelected && <span className="inspector-dot" aria-hidden="true" />}
         </button>
       )}
       {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
