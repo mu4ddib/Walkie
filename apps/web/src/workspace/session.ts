@@ -79,3 +79,13 @@ const AUTOSAVE = 'walkie.autosave';
 export const getAutosave = () => read(AUTOSAVE, (v): v is boolean => typeof v === 'boolean') ?? false;
 
 export const setAutosave = (on: boolean) => write(AUTOSAVE, on);
+
+const FLOW_SPEED = 'walkie.flowSpeed';
+/** Velocidades de reproducción de un recorrido. */
+export const FLOW_SPEEDS = [0.5, 1, 1.5, 2] as const;
+
+/** Velocidad de reproducción de un recorrido (preferencia de este navegador); 1× por defecto. */
+export const getFlowSpeed = () =>
+  read(FLOW_SPEED, (v): v is number => typeof v === 'number' && (FLOW_SPEEDS as readonly number[]).includes(v)) ?? 1;
+
+export const setFlowSpeed = (speed: number) => write(FLOW_SPEED, speed);

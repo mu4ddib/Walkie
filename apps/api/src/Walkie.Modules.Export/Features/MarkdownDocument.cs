@@ -199,9 +199,9 @@ internal static class MarkdownDocument
 
                 for (var i = 0; i < tour.Steps.Count; i++)
                 {
-                    var (node, note) = tour.Steps[i];
+                    var (title, note) = tour.Steps[i];
                     var number = string.Create(CultureInfo.InvariantCulture, $"{i + 1}. ");
-                    var text = $"**{MarkdownText.Inline(node.Title)}**";
+                    var text = $"**{MarkdownText.Inline(title)}**";
                     if (!string.IsNullOrWhiteSpace(note))
                     {
                         text += ": " + MarkdownText.Indent(MarkdownText.Block(note), number.Length);
@@ -565,6 +565,13 @@ internal static class MarkdownDocument
         {
             md.Line($"### {MarkdownText.Inline(group.Title)} ({GroupLabel(group)})");
             md.Blank();
+            var parent = group.ParentId is null ? null : groups.Find(g => g.Id == group.ParentId);
+            if (parent is not null)
+            {
+                md.Line($"Dentro de **{MarkdownText.Inline(parent.Title)}**.");
+                md.Blank();
+            }
+
             if (group.Members.Count == 0)
             {
                 md.Line("Sin nodos.");
@@ -761,11 +768,40 @@ internal static class MarkdownDocument
                 .Select(t => t!)]
             : [];
 
+    /// <summary>
+    /// Tours y recorridos: un paso de nodo se lee por su título; uno de conexión, como «Origen → Destino (llama)» en su
+    /// sentido real; uno cuya conexión se eliminó, marcado como tal. Pasos a nodos que no existen no salen.
+    /// </summary>
     private static List<ExportTour> ReadTours(JsonElement graph, Dictionary<string, ExportNode> nodes)
     {
         if (!graph.TryGetProperty("tours", out var tours))
         {
             return [];
+        }
+
+        var edges = graph.GetProperty("edges");
+        string Title(string? id) => id is not null && nodes.TryGetValue(id, out var node) ? node.Title : "(eliminado)";
+        string Route(JsonElement edge)
+        {
+            var kind = edge.GetProperty("kind").GetString()!;
+            var label = Text(edge, "label");
+            var verb = EdgeKinds.GetValueOrDefault(kind, kind) + (label is null ? string.Empty : $" · {label}");
+            return $"{Title(edge.GetProperty("from").GetString())} → {Title(edge.GetProperty("to").GetString())} ({verb})";
+        }
+
+        string? StepTitle(JsonElement step)
+        {
+            if (step.TryGetProperty("nodeId", out var nodeId))
+            {
+                return nodes.TryGetValue(nodeId.GetString()!, out var node) ? node.Title : null;
+            }
+
+            if (step.TryGetProperty("edgeId", out var edgeId))
+            {
+                return edges.TryGetProperty(edgeId.GetString()!, out var edge) ? Route(edge) : null;
+            }
+
+            return step.TryGetProperty("removedEdge", out var removed) ? "Conexión eliminada: " + Route(removed) : null;
         }
 
         return tours.EnumerateObject()
@@ -774,8 +810,9 @@ internal static class MarkdownDocument
                 t.GetProperty("id").GetString()!,
                 t.GetProperty("name").GetString()!,
                 [.. t.GetProperty("steps").EnumerateArray()
-                    .Where(s => nodes.ContainsKey(s.GetProperty("nodeId").GetString()!))
-                    .Select(s => (nodes[s.GetProperty("nodeId").GetString()!], Text(s, "note")))]))
+                    .Select(s => (Title: StepTitle(s), Note: Text(s, "note")))
+                    .Where(s => s.Title is not null)
+                    .Select(s => (s.Title!, s.Note))]))
             .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(t => t.Name, StringComparer.Ordinal)
             .ThenBy(t => t.Id, StringComparer.Ordinal)
@@ -797,7 +834,8 @@ internal static class MarkdownDocument
                 g.GetProperty("title").GetString()!,
                 g.GetProperty("kind").GetString()!,
                 [.. nodes.Where(n => n.String("groupId") == g.GetProperty("id").GetString())],
-                Key: string.Empty))
+                Key: string.Empty,
+                ParentId: Text(g, "parentId")))
             .OrderBy(g => g.Title, StringComparer.OrdinalIgnoreCase)
             .ThenBy(g => g.Title, StringComparer.Ordinal)
             .ThenBy(g => g.Id, StringComparer.Ordinal)
@@ -845,9 +883,10 @@ internal static class MarkdownDocument
     private sealed record ExportEdge(
         ExportNode From, ExportNode To, string Kind, string? Label, string? When, string Id, JsonElement Json);
 
-    private sealed record ExportGroup(string Id, string Title, string Kind, List<ExportNode> Members, string Key);
+    private sealed record ExportGroup(
+        string Id, string Title, string Kind, List<ExportNode> Members, string Key, string? ParentId = null);
 
-    private sealed record ExportTour(string Id, string Name, List<(ExportNode Node, string? Note)> Steps);
+    private sealed record ExportTour(string Id, string Name, List<(string Title, string? Note)> Steps);
 
     private sealed record ExportInputField(string Name, string Type, bool Required, List<string> Options, List<string> RuleIds);
 

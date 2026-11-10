@@ -37,6 +37,7 @@ export function PropertiesPanel({
   tours,
   onSelect,
   preview,
+  flows,
 }: {
   nodeId: string | null;
   edgeId: string | null;
@@ -52,7 +53,7 @@ export function PropertiesPanel({
       {nodeId ? (
         <NodePanel key={nodeId} id={nodeId} />
       ) : edgeId ? (
-        <EdgePanel key={edgeId} id={edgeId} onSelect={onSelect} preview={preview} />
+        <EdgePanel key={edgeId} id={edgeId} onSelect={onSelect} preview={preview} flows={flows} />
       ) : groupId ? (
         <GroupPanel key={groupId} id={groupId} />
       ) : noteId ? (

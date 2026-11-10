@@ -52,6 +52,10 @@ export interface WalkieCanvasGraphV0 {
   stickyNotes?: {
     [k: string]: StickyNote;
   };
+  /**
+   * Los grupos guardan su grupo padre en parentId y las notas su grupo en groupId. Sin este campo (lienzos anteriores) la jerarquía se infiere por contención al abrir el lienzo
+   */
+  groupNesting?: 'explicit';
 }
 export interface Node {
   id: Id;
@@ -286,30 +290,58 @@ export interface Edge {
   example?: string;
 }
 /**
- * Recorrido guiado por pasos sobre los nodos del lienzo (modo tour)
+ * Recorrido guiado por pasos: sobre nodos (modo tour) o sobre conexiones (recorrido de un flujo)
  */
 export interface Tour {
   id: Id;
   name: string;
   /**
-   * En orden; cada paso centra y resalta su nodo
+   * En orden; un paso centra y resalta su nodo, o recorre su conexión (origen, conexión, destino). Una conexión puede repetirse (reintento)
    */
-  steps: {
-    nodeId: Id;
+  steps: ({
+    [k: string]: unknown;
+  } & {
     /**
-     * Lo que el guía cuenta en el paso
+     * UUID v7 generado en el cliente
+     */
+    nodeId?: string;
+    /**
+     * UUID v7 generado en el cliente
+     */
+    edgeId?: string;
+    /**
+     * Paso cuya conexión se eliminó: lo que se sabía de ella, para reemplazarla o quitar el paso
+     */
+    removedEdge?: {
+      from: Id;
+      to: Id;
+      /**
+       * event: mensaje o evento asíncrono (cola, webhook)
+       */
+      kind: 'navigation' | 'request' | 'response' | 'event' | 'uses' | 'reads' | 'writes';
+      label?: string;
+    };
+    /**
+     * Lo que el guía cuenta en el paso (descripción del paso)
      */
     note?: string;
-  }[];
+  })[];
 }
 /**
- * Grupo de infraestructura del lienzo (frontend, backend…); no es una app ni una feature
+ * Grupo de infraestructura del lienzo (frontend, backend…); no es una app ni una feature. Puede estar dentro de otro grupo (parentId)
  */
 export interface Group {
   id: Id;
   title: string;
   kind: 'frontend' | 'backend' | 'external' | 'data' | 'network' | 'environment' | 'cloud' | 'custom';
+  /**
+   * Plegado; se conserva aunque un grupo padre se pliegue y despliegue
+   */
   collapsed?: boolean;
+  /**
+   * UUID v7 generado en el cliente
+   */
+  parentId?: string;
 }
 /**
  * Nota adhesiva: texto libre sobre el lienzo, sin conexiones
@@ -317,4 +349,8 @@ export interface Group {
 export interface StickyNote {
   id: Id;
   text: string;
+  /**
+   * UUID v7 generado en el cliente
+   */
+  groupId?: string;
 }

@@ -46,6 +46,59 @@ public sealed class GroupsTests(WalkieApiFactory factory)
         }
     }
 
+    [Fact]
+    public async Task Grupos_anidados_y_notas_en_grupos_se_guardan_y_vuelven_iguales()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var featureId = await CreateFeatureAsync(client);
+
+        var put = await PutAsync(client, featureId, Nested);
+
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var saved = await client.GetFromJsonAsync<JsonElement>(CanvasUri(featureId));
+        var expected = TestJson.Parse(Nested);
+        foreach (var part in new[] { "groups", "stickyNotes", "groupNesting" })
+        {
+            Assert.True(JsonElement.DeepEquals(expected.GetProperty(part), saved.GetProperty(part)), part);
+        }
+    }
+
+    [Theory]
+    [InlineData("\"parentId\": \"g1\"", "\"parentId\": \"nada\"", "/groups/g2/parentId")]
+    [InlineData("\"title\": \"AWS\", \"kind\": \"cloud\"", "\"title\": \"AWS\", \"kind\": \"cloud\", \"parentId\": \"g2\"", "/groups/g1/parentId")]
+    [InlineData("\"title\": \"AWS\", \"kind\": \"cloud\"", "\"title\": \"AWS\", \"kind\": \"cloud\", \"parentId\": \"g1\"", "/groups/g1/parentId")]
+    [InlineData("\"text\": \"Escala sola\", \"groupId\": \"g2\"", "\"text\": \"Escala sola\", \"groupId\": \"nada\"", "/stickyNotes/k1/groupId")]
+    public async Task Una_jerarquia_invalida_o_con_ciclos_responde_400(string from, string to, string path)
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var featureId = await CreateFeatureAsync(client);
+
+        var response = await PutAsync(client, featureId, Nested.Replace(from, to, StringComparison.Ordinal));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.Contains(path, problem!.Errors.Keys);
+    }
+
+    /// <summary>AWS ⊃ microservicio usuarios (plegado) ⊃ una API, con una nota en el grupo interno.</summary>
+    private const string Nested = """
+        {
+          "schemaVersion": 0, "version": 0,
+          "nodes": { "a": { "id": "a", "type": "api", "title": "Crear usuario", "groupId": "g2" } },
+          "edges": {},
+          "layout": {
+            "a": { "x": 80, "y": 160 }, "k1": { "x": 400, "y": 160 },
+            "g1": { "x": 0, "y": 0, "w": 1000, "h": 800 }, "g2": { "x": 40, "y": 80, "w": 600, "h": 400 }
+          },
+          "groups": {
+            "g1": { "id": "g1", "title": "AWS", "kind": "cloud" },
+            "g2": { "id": "g2", "title": "microservicio usuarios", "kind": "backend", "parentId": "g1", "collapsed": true }
+          },
+          "stickyNotes": { "k1": { "id": "k1", "text": "Escala sola", "groupId": "g2" } },
+          "groupNesting": "explicit"
+        }
+        """;
+
     [Theory]
     [InlineData("\"groupId\": \"g1\"", "\"groupId\": \"nada\"", "/nodes/a/groupId")]
     [InlineData("\"g1\": { \"x\": 0, \"y\": 0, \"w\": 400, \"h\": 240 }", "\"g1\": { \"x\": 0, \"y\": 0 }", "/layout/g1")]

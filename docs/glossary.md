@@ -14,6 +14,8 @@
 | **Regla** | Validación o lógica de negocio (ej. `cc` de 6 a 10 dígitos). En modo **decisión** (`mode: decision`) es una bifurcación con salidas (`branches`); cada rama es una conexión con `branch`. |
 | **Nota adhesiva** | Anotación libre sobre el lienzo (`stickyNotes`): no es un nodo, no se conecta ni entra en tours. |
 | **Tour** | Secuencia de pasos sobre nodos de una feature, con notas; puede continuar por un portal. |
+| **Recorrido** | Tour cuyos pasos recorren conexiones (origen → destino, en su sentido real): ej. Pantalla → API → Servicio → BD → Servicio → API → Pantalla. Cada escenario de una decisión es un recorrido distinto. |
+| **Grupo anidado** | Grupo dentro de otro (`parentId`). Plegar un grupo oculta todo lo de dentro; sus conexiones llegan al grupo plegado visible más externo. |
 | **Layout** | Posición `x, y` de cada nodo, guardada aparte del contenido. |
 
 ## Regla de corte

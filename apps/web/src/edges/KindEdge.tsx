@@ -11,6 +11,9 @@ import {
 } from './edgeMeta';
 import { useChangeEdgeKind } from './useChangeEdgeKind';
 
+/** Ancho (px) del área invisible que recibe los clics alrededor del trazo. */
+const EDGE_HIT_WIDTH = 28;
+
 export type WalkieFlowEdge = FlowEdge<{
   kind: EdgeKind;
   label?: string;
@@ -28,8 +31,8 @@ export type WalkieFlowEdge = FlowEdge<{
   backward?: { sourceX: number; targetX: number };
   /** x en la que dobla el trazo (ramas de una decisión: cada una en la suya). */
   bendX?: number;
-  /** Paso en una previsualización (1 = ida, 2 = vuelta…). */
-  step?: number;
+  /** Paso en una previsualización (1 = ida, 2 = vuelta…) o pasos de un recorrido que la usan ("2·5"). */
+  step?: string;
 }>;
 
 /**
@@ -71,6 +74,8 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
         path={path}
         className={`kind-edge kind-${kind}${display.branch ? ' is-branch' : ''}`}
         markerEnd={display.marker === 'none' ? undefined : `url(#walkie-arrow-${display.marker}${selected ? '-selected' : ''})`}
+        // Área cómoda para tocar el trazo (también con Mayús + clic, al sumar conexiones a un recorrido).
+        interactionWidth={EDGE_HIT_WIDTH}
       />
       {/* Pulso direccional: `pathLength` normaliza el largo para que el pulso recorra del origen al destino. */}
       <path d={path} pathLength={100} className="kind-edge-flow-halo" fill="none" aria-hidden="true" />

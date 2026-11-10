@@ -4,6 +4,10 @@ import { v7 as uuidv7 } from 'uuid';
 import type { Edge, Group, Node, StickyNote, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import { GRID } from '../theme/palette';
 import { normalizeDatabase, normalizeEdgeData, normalizeEdgeRequest, normalizeHttp } from '../contracts/contracts';
+import { canNest, descendantsOf, inferHierarchy, isInside, ownerOf } from './hierarchy';
+
+/** Paso de un tour: un nodo (`nodeId`), una conexión (`edgeId`) o una conexión eliminada (`removedEdge`). */
+export type TourStep = Tour['steps'][number];
 
 export type NodeType = Node['type'];
 export type EdgeKind = Edge['kind'];
@@ -136,13 +140,6 @@ export function defaultEdgeKind(from: NodeType, to: NodeType): EdgeKind {
   return 'uses';
 }
 
-/** Redondea al múltiplo de la grilla (8 px) más cercano. */
-function withoutGroup(node: Node): Node {
-  const copy = { ...node };
-  delete copy.groupId;
-  return copy;
-}
-
 /** Caja de grupo en la grilla y con el tamaño mínimo. */
 function snapBox(box: Box): Box {
   return {
@@ -153,6 +150,7 @@ function snapBox(box: Box): Box {
   };
 }
 
+/** Redondea al múltiplo de la grilla (8 px) más cercano. */
 export function snap(value: number): number {
   // `+ 0` convierte -0 en 0 (Math.round(-0.4) es -0).
   return Math.round(value / GRID) * GRID + 0;
@@ -168,10 +166,46 @@ function withText<T extends object>(obj: T, key: keyof T & string, value: string
   return copy as T;
 }
 
+/** Lo que señala un paso, sin su nota. */
+function stepTarget(step: TourStep): TourStep {
+  if (step.edgeId) return { edgeId: step.edgeId };
+  if (step.removedEdge) return { removedEdge: step.removedEdge };
+  return { nodeId: step.nodeId };
+}
+
 /** Paso con la nota recortada al límite; vacía o ausente, sin `note`. */
-function withNote(step: Tour['steps'][number], note: string | undefined): Tour['steps'][number] {
+function withNote(step: TourStep, note: string | undefined): TourStep {
   const clean = note?.trim().slice(0, STEP_NOTE_MAX_LENGTH);
-  return clean ? { ...step, note: clean } : { nodeId: step.nodeId };
+  return clean ? { ...stepTarget(step), note: clean } : stepTarget(step);
+}
+
+/** Lo que se sabe de una conexión borrada, para el paso que la usaba. */
+function removedFrom(edge: Edge): NonNullable<TourStep['removedEdge']> {
+  const removed: NonNullable<TourStep['removedEdge']> = { from: edge.from, to: edge.to, kind: edge.kind };
+  if (edge.label) removed.label = edge.label;
+  return removed;
+}
+
+/**
+ * Tours sin las conexiones `gone`: cada paso que las recorría queda como `removedEdge` (con su nota) para que se
+ * pueda reemplazar o quitar (spec recorridos-y-grupos, parte 6). Devuelve los mismos tours si ninguno las usaba.
+ */
+function withRemovedEdges(tours: Record<string, Tour>, gone: Record<string, Edge>): Record<string, Tour> {
+  const touches = (t: Tour) => t.steps.some((step) => step.edgeId && gone[step.edgeId]);
+  if (!Object.values(tours).some(touches)) return tours;
+  return Object.fromEntries(
+    Object.entries(tours).map(([key, t]) => {
+      if (!touches(t)) return [key, t];
+      const steps = t.steps.map((step) => {
+        const edge = step.edgeId ? gone[step.edgeId] : undefined;
+        if (!edge) return step;
+        const next: TourStep = { removedEdge: removedFrom(edge) };
+        if (step.note) next.note = step.note;
+        return next;
+      });
+      return [key, { ...t, steps }];
+    }),
+  );
 }
 
 /** Igualdad superficial de valores JSON (suficiente para detectar parches sin efecto). */
@@ -275,19 +309,24 @@ export interface GraphActions {
     item: { type: NodeType; title: string; description?: string; http?: Node['http']; database?: Node['database'] },
   ): void;
   /**
-   * Grupo de infraestructura (spec espacio-de-trabajo, criterio 18) con su caja; los `members` pasan a estar en él.
-   * Devuelve su id.
+   * Grupo de infraestructura (spec espacio-de-trabajo, criterio 18) con su caja; los `members` (nodos, notas u otros
+   * grupos) pasan a estar en él y él queda dentro de `parentId` (si no crea un ciclo). Devuelve su id.
    */
-  addGroup(box: Box, init?: { title?: string; kind?: GroupKind; members?: string[] }): string;
-  /** Título, tipo o plegado; un título vacío no se aplica. */
+  addGroup(box: Box, init?: { title?: string; kind?: GroupKind; members?: string[]; parentId?: string | null }): string;
+  /** Título, tipo o plegado; un título vacío no se aplica. Plegar no toca el plegado de los grupos de dentro. */
   updateGroup(id: string, patch: { title?: string; kind?: GroupKind; collapsed?: boolean }): void;
-  /** Mueve el grupo y sus nodos lo mismo (criterio 18). */
+  /** Mueve el grupo y todo lo que contiene, a cualquier profundidad y aunque esté oculto (criterio 18, parte 1). */
   moveGroup(id: string, position: Position): void;
-  /** Cambia la caja del grupo (al redimensionar); sus nodos no se mueven. */
+  /** Cambia la caja del grupo (al redimensionar); lo de dentro no se mueve. */
   resizeGroup(id: string, box: Box): void;
-  /** Mete el nodo en el grupo o lo saca (`null`). */
+  /**
+   * Mete un nodo, una nota o un grupo en `groupId` o lo saca al lienzo (`null`). Devuelve `false` si no se aplicó:
+   * no existe, ya estaba ahí o crearía un ciclo (un grupo dentro de sí mismo o de un descendiente).
+   */
+  setParent(id: string, groupId: string | null): boolean;
+  /** Mete el nodo en el grupo o lo saca (`null`). Igual que `setParent` para un nodo. */
   setNodeGroup(nodeId: string, groupId: string | null): void;
-  /** Borra el grupo; sus nodos quedan en el lienzo, sin grupo. */
+  /** Borra el grupo; lo que contenía (nodos, notas, grupos) pasa a su grupo padre o queda suelto. */
   removeGroup(id: string): void;
   /** Contrato completo de una API (`undefined` lo quita); se normaliza como el resto de textos. Solo `api`. */
   setHttp(id: string, http: Node['http'] | undefined): void;
@@ -341,8 +380,19 @@ export interface GraphActions {
   removeTour(id: string): void;
   /** Agrega un paso al final; devuelve su índice o `null` si el tour o el nodo no existen. */
   addStep(tourId: string, nodeId: string, note?: string): number | null;
+  /**
+   * Agrega un paso que recorre la conexión `edgeId` (spec recorridos-y-grupos, parte 3); la misma conexión puede
+   * repetirse (reintento). Devuelve su índice o `null` si el tour o la conexión no existen.
+   */
+  addEdgeStep(tourId: string, edgeId: string, note?: string): number | null;
+  /** Recorrido nuevo con un paso por cada conexión, en ese orden; `null` si el nombre queda vacío. */
+  addFlowTour(name: string, edgeIds: readonly string[]): string | null;
   /** Cambia el nodo de un paso (debe existir). */
   setStepNode(tourId: string, index: number, nodeId: string): void;
+  /** El paso pasa a recorrer `edgeId` (también para reemplazar una conexión eliminada); conserva la nota. */
+  setStepEdge(tourId: string, index: number, edgeId: string): void;
+  /** Reordena los pasos: `order` es una permutación de sus índices. Otra cosa no se aplica. */
+  reorderSteps(tourId: string, order: readonly number[]): void;
   /** Nota del paso; vacía la quita. */
   updateStepNote(tourId: string, index: number, note: string): void;
   /** Sube (-1) o baja (+1) un paso; fuera de rango no hace nada. */
@@ -409,7 +459,9 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
     return {
       ...emptyState,
 
-      loadGraph: (graph) =>
+      loadGraph: (loaded) => {
+        // Lienzos anteriores a la jerarquía explícita: se infiere por contención (sin marcar cambios).
+        const graph = inferHierarchy(loaded);
         set({
           nodes: graph.nodes,
           edges: graph.edges,
@@ -419,7 +471,8 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           stickyNotes: graph.stickyNotes ?? {},
           version: graph.version,
           dirty: false,
-        }),
+        });
+      },
 
       addNode: (type, position) => {
         const id = newId();
@@ -468,14 +521,23 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
 
       addGroup: (box, init = {}) => {
         const id = newId();
+        const s = get();
         const title = init.title?.trim().slice(0, TITLE_MAX_LENGTH) || 'Grupo';
-        const members = (init.members ?? []).filter((m) => get().nodes[m]);
-        set((s) => ({
-          groups: { ...s.groups, [id]: { id, title, kind: init.kind ?? 'custom' } },
-          layout: { ...s.layout, [id]: snapBox(box) },
-          nodes: members.length
-            ? { ...s.nodes, ...Object.fromEntries(members.map((m) => [m, { ...s.nodes[m]!, groupId: id }])) }
-            : s.nodes,
+        const members = (init.members ?? []).filter((m) => s.nodes[m] || s.stickyNotes[m] || s.groups[m]);
+        // El padre no puede ser uno de los miembros ni estar dentro de ellos: eso sería un ciclo.
+        const parentId =
+          init.parentId && s.groups[init.parentId] && !members.some((m) => m === init.parentId || isInside(s, init.parentId!, m))
+            ? init.parentId
+            : null;
+        const group: Group = { id, title, kind: init.kind ?? 'custom' };
+        if (parentId) group.parentId = parentId;
+        const pick = <T,>(record: Record<string, T>, key: 'groupId' | 'parentId') =>
+          Object.fromEntries(members.filter((m) => record[m]).map((m) => [m, { ...record[m]!, [key]: id }]));
+        set((st) => ({
+          groups: { ...st.groups, ...pick(st.groups, 'parentId'), [id]: group },
+          layout: { ...st.layout, [id]: snapBox(box) },
+          nodes: { ...st.nodes, ...pick(st.nodes, 'groupId') },
+          stickyNotes: { ...st.stickyNotes, ...pick(st.stickyNotes, 'groupId') },
           dirty: true,
         }));
         return id;
@@ -504,9 +566,11 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         if (dx === 0 && dy === 0) return;
         set((s) => {
           const layout = { ...s.layout, [id]: { ...box, x: box.x + dx, y: box.y + dy } };
-          for (const node of Object.values(s.nodes)) {
-            const at = s.layout[node.id];
-            if (node.groupId === id && at) layout[node.id] = { ...at, x: at.x + dx, y: at.y + dy };
+          // Todo lo de dentro, a cualquier profundidad (también lo oculto en un grupo plegado), se mueve igual.
+          const inside = descendantsOf(s, id);
+          for (const item of [...inside.groups, ...inside.nodes, ...inside.notes]) {
+            const at = s.layout[item];
+            if (at) layout[item] = { ...at, x: at.x + dx, y: at.y + dy };
           }
           return { layout, dirty: true };
         });
@@ -520,24 +584,46 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         set((s) => ({ layout: { ...s.layout, [id]: next }, dirty: true }));
       },
 
+      setParent: (id, groupId) => {
+        const s = get();
+        if (!(s.nodes[id] || s.stickyNotes[id] || s.groups[id])) return false;
+        if (ownerOf(s, id) === groupId || !canNest(s, id, groupId)) return false;
+        const assign = <T extends { groupId?: string; parentId?: string }>(item: T, key: 'groupId' | 'parentId'): T => {
+          const next = { ...item };
+          if (groupId) next[key] = groupId;
+          else delete next[key];
+          return next;
+        };
+        if (s.nodes[id]) set((st) => ({ nodes: { ...st.nodes, [id]: assign(st.nodes[id]!, 'groupId') }, dirty: true }));
+        else if (s.stickyNotes[id]) {
+          set((st) => ({ stickyNotes: { ...st.stickyNotes, [id]: assign(st.stickyNotes[id]!, 'groupId') }, dirty: true }));
+        } else set((st) => ({ groups: { ...st.groups, [id]: assign(st.groups[id]!, 'parentId') }, dirty: true }));
+        return true;
+      },
+
       setNodeGroup: (nodeId, groupId) => {
-        const node = get().nodes[nodeId];
-        if (!node || (groupId && !get().groups[groupId])) return;
-        if ((node.groupId ?? null) === groupId) return;
-        const next = { ...node };
-        if (groupId) next.groupId = groupId;
-        else delete next.groupId;
-        set((s) => ({ nodes: { ...s.nodes, [nodeId]: next }, dirty: true }));
+        if (get().nodes[nodeId]) get().setParent(nodeId, groupId);
       },
 
       removeGroup: (id) => {
-        if (!get().groups[id]) return;
+        const group = get().groups[id];
+        if (!group) return;
+        // Lo que contenía sube un nivel: al grupo padre o, si no hay, al lienzo.
+        const parent = group.parentId && get().groups[group.parentId] ? group.parentId : undefined;
+        const lift = <T extends { groupId?: string; parentId?: string }>(item: T, key: 'groupId' | 'parentId'): T => {
+          if (item[key] !== id) return item;
+          const next = { ...item };
+          if (parent) next[key] = parent;
+          else delete next[key];
+          return next;
+        };
+        const map = <T extends { groupId?: string; parentId?: string }>(record: Record<string, T>, key: 'groupId' | 'parentId') =>
+          Object.fromEntries(Object.entries(record).map(([k, v]) => [k, lift(v, key)]));
         set((s) => ({
-          groups: omit(s.groups, id),
+          groups: map(omit(s.groups, id), 'parentId'),
           layout: omit(s.layout, id),
-          nodes: Object.fromEntries(
-            Object.entries(s.nodes).map(([key, node]) => [key, node.groupId === id ? withoutGroup(node) : node]),
-          ),
+          nodes: map(s.nodes, 'groupId'),
+          stickyNotes: map(s.stickyNotes, 'groupId'),
           dirty: true,
         }));
       },
@@ -667,16 +753,19 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           const edges = withoutDanglingReplies(
             Object.fromEntries(Object.entries(s.edges).filter(([, e]) => e.from !== id && e.to !== id)),
           );
-          // Los pasos de tours sobre el nodo desaparecen (spec modo-tour, criterio 4).
+          const gone = Object.fromEntries(Object.entries(s.edges).filter(([, e]) => e.from === id || e.to === id));
+          // Los pasos de tours sobre el nodo desaparecen (spec modo-tour, criterio 4); los que recorrían una de sus
+          // conexiones quedan marcados para reemplazarlos o quitarlos.
           const usedInTours = Object.values(s.tours).some((t) => t.steps.some((step) => step.nodeId === id));
+          const base = withRemovedEdges(s.tours, gone);
           const tours = usedInTours
             ? Object.fromEntries(
-                Object.entries(s.tours).map(([key, t]) => [
+                Object.entries(base).map(([key, t]) => [
                   key,
                   { ...t, steps: t.steps.filter((x) => x.nodeId !== id) },
                 ]),
               )
-            : s.tours;
+            : base;
           return { nodes, layout, edges, tours, dirty: true };
         });
       },
@@ -780,7 +869,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         const note = get().stickyNotes[id];
         const clean = text.trim().slice(0, STICKY_TEXT_MAX_LENGTH);
         if (!note || note.text === clean) return;
-        set((s) => ({ stickyNotes: { ...s.stickyNotes, [id]: { id, text: clean } }, dirty: true }));
+        set((s) => ({ stickyNotes: { ...s.stickyNotes, [id]: { ...note, text: clean } }, dirty: true }));
       },
 
       moveStickyNote: (id, position) => {
@@ -801,7 +890,10 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         const note = get().stickyNotes[id];
         if (!note) return null;
         const at = get().layout[id] ?? { x: 0, y: 0 };
-        return get().addStickyNote({ x: at.x + DUPLICATE_OFFSET, y: at.y + DUPLICATE_OFFSET }, note.text);
+        const copy = get().addStickyNote({ x: at.x + DUPLICATE_OFFSET, y: at.y + DUPLICATE_OFFSET }, note.text);
+        // La copia queda en el mismo grupo que el original.
+        if (note.groupId) get().setParent(copy, note.groupId);
+        return copy;
       },
 
       connect: (from, to, kind, init) => {
@@ -883,8 +975,13 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
       },
 
       removeEdge: (id) => {
-        if (!get().edges[id]) return;
-        set((s) => ({ edges: withoutDanglingReplies(omit(s.edges, id)), dirty: true }));
+        const edge = get().edges[id];
+        if (!edge) return;
+        set((s) => ({
+          edges: withoutDanglingReplies(omit(s.edges, id)),
+          tours: withRemovedEdges(s.tours, { [id]: edge }),
+          dirty: true,
+        }));
       },
 
       addTour: (name) => {
@@ -914,18 +1011,48 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         return tour.steps.length;
       },
 
+      addEdgeStep: (tourId, edgeId, note) => {
+        const tour = get().tours[tourId];
+        if (!tour || !get().edges[edgeId]) return null;
+        putTour({ ...tour, steps: [...tour.steps, withNote({ edgeId }, note)] });
+        return tour.steps.length;
+      },
+
+      addFlowTour: (name, edgeIds) => {
+        const id = get().addTour(name);
+        if (!id) return null;
+        const steps = edgeIds.filter((e) => get().edges[e]).map((edgeId) => ({ edgeId }));
+        if (steps.length) putTour({ ...get().tours[id]!, steps });
+        return id;
+      },
+
       setStepNode: (tourId, index, nodeId) => {
         const tour = get().tours[tourId];
         const step = tour?.steps[index];
         if (!tour || !step || !get().nodes[nodeId] || step.nodeId === nodeId) return;
-        putTour({ ...tour, steps: tour.steps.map((x, i) => (i === index ? { ...x, nodeId } : x)) });
+        putTour({ ...tour, steps: tour.steps.map((x, i) => (i === index ? withNote({ nodeId }, x.note) : x)) });
+      },
+
+      setStepEdge: (tourId, index, edgeId) => {
+        const tour = get().tours[tourId];
+        const step = tour?.steps[index];
+        if (!tour || !step || !get().edges[edgeId] || step.edgeId === edgeId) return;
+        putTour({ ...tour, steps: tour.steps.map((x, i) => (i === index ? withNote({ edgeId }, x.note) : x)) });
+      },
+
+      reorderSteps: (tourId, order) => {
+        const tour = get().tours[tourId];
+        if (!tour || order.length !== tour.steps.length) return;
+        if (new Set(order).size !== order.length || order.some((i) => !tour.steps[i])) return;
+        if (order.every((i, at) => i === at)) return;
+        putTour({ ...tour, steps: order.map((i) => tour.steps[i]!) });
       },
 
       updateStepNote: (tourId, index, note) => {
         const tour = get().tours[tourId];
         const step = tour?.steps[index];
         if (!tour || !step) return;
-        const next = withNote({ nodeId: step.nodeId }, note);
+        const next = withNote(step, note);
         if (next.note === step.note) return;
         putTour({ ...tour, steps: tour.steps.map((x, i) => (i === index ? next : x)) });
       },
@@ -972,7 +1099,11 @@ export function toGraph(state: GraphState): WalkieCanvasGraphV0 {
   };
   // Sin tours, el grafo no lleva el campo (así un lienzo sin tours recarga idéntico).
   if (Object.keys(state.tours).length > 0) graph.tours = state.tours;
-  if (Object.keys(state.groups).length > 0) graph.groups = state.groups;
+  if (Object.keys(state.groups).length > 0) {
+    graph.groups = state.groups;
+    // La jerarquía va en `parentId`/`groupId`: al recargar no se vuelve a inferir por contención.
+    graph.groupNesting = 'explicit';
+  }
   if (Object.keys(state.stickyNotes).length > 0) graph.stickyNotes = state.stickyNotes;
   return graph;
 }

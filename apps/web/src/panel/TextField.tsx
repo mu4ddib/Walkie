@@ -10,13 +10,15 @@ interface TextFieldProps {
   onChange: (value: string) => void;
   /** Motivo por el que el borrador no sirve (se muestra y no se llama a `onChange`); `null` si sirve. */
   validate?: (value: string) => string | null;
+  /** Enfoca y selecciona el texto al montarse (ej. el nombre de un recorrido recién creado). */
+  autoFocus?: boolean;
 }
 
 /**
  * Campo de texto con borrador local: el store recorta espacios, así que el campo guarda lo que
  * se escribe (con el espacio final) y solo se reemplaza si el valor del store cambia por otra vía.
  */
-export function TextField({ label, value, maxLength, multiline, placeholder, onChange, validate }: TextFieldProps) {
+export function TextField({ label, value, maxLength, multiline, placeholder, onChange, validate, autoFocus }: TextFieldProps) {
   const id = useId();
   const [draft, setDraft] = useState(value);
   const [seen, setSeen] = useState(value);
@@ -39,6 +41,8 @@ export function TextField({ label, value, maxLength, multiline, placeholder, onC
     },
     // Si el store rechazó el borrador (ej. título vacío), al salir se muestra el valor real.
     onBlur: () => setDraft(value),
+    autoFocus,
+    onFocus: autoFocus ? (e: { target: { select: () => void } }) => e.target.select() : undefined,
   };
 
   return (

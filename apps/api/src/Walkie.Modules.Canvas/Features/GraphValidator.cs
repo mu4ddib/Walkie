@@ -5,7 +5,7 @@ namespace Walkie.Modules.Canvas.Features;
 
 /// <summary>
 /// Valida un grafo contra <c>packages/schema/walkie-graph.schema.json</c> (<see cref="WalkieSchemas"/>)
-/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones, layout y pasos de tours apuntan a nodos, grupos o notas, inputs y reglas, salidas de una decisión y solicitud de una respuesta).
+/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones, layout y pasos de tours apuntan a nodos, conexiones, grupos o notas, jerarquía de grupos sin ciclos, inputs y reglas, salidas de una decisión y solicitud de una respuesta).
 /// </summary>
 internal sealed class GraphValidator
 {
@@ -67,6 +67,8 @@ internal sealed class GraphValidator
                     errors[$"/groups/{group.Name}"] = ["Un grupo no puede tener el id de un nodo."];
                 }
             }
+
+            ParentErrors(groupMap, groupIds, errors);
         }
 
         var stickyIds = new HashSet<string>(StringComparer.Ordinal);
@@ -83,6 +85,11 @@ internal sealed class GraphValidator
                 if (nodeIds.Contains(note.Name) || groupIds.Contains(note.Name))
                 {
                     errors[$"/stickyNotes/{note.Name}"] = ["Una nota no puede tener el id de un nodo o de un grupo."];
+                }
+
+                if (note.Value.TryGetProperty("groupId", out var noteGroup) && !groupIds.Contains(noteGroup.GetString()!))
+                {
+                    errors[$"/stickyNotes/{note.Name}/groupId"] = ["La nota está en un grupo que no existe."];
                 }
             }
         }
@@ -108,7 +115,8 @@ internal sealed class GraphValidator
 
         if (graph.TryGetProperty("tours", out var tours))
         {
-            TourErrors(tours, nodeIds, errors);
+            var edgeIds = edges.EnumerateObject().Select(e => e.Name).ToHashSet(StringComparer.Ordinal);
+            TourErrors(tours, nodeIds, edgeIds, errors);
         }
 
         foreach (var position in graph.GetProperty("layout").EnumerateObject())
@@ -129,8 +137,58 @@ internal sealed class GraphValidator
         return errors;
     }
 
-    /// <summary>Tours: clave = <c>id</c> y cada paso apunta a un nodo existente (spec modo-tour, criterio 12).</summary>
-    private static void TourErrors(JsonElement tours, HashSet<string> nodeIds, Dictionary<string, string[]> errors)
+    /// <summary>
+    /// Jerarquía de grupos (spec recorridos-y-grupos, parte 1): <c>parentId</c> es otro grupo existente y no hay ciclos
+    /// (un grupo no está dentro de sí mismo a ninguna profundidad).
+    /// </summary>
+    private static void ParentErrors(JsonElement groups, HashSet<string> groupIds, Dictionary<string, string[]> errors)
+    {
+        var parents = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var group in groups.EnumerateObject())
+        {
+            if (!group.Value.TryGetProperty("parentId", out var parent))
+            {
+                continue;
+            }
+
+            var id = parent.GetString()!;
+            if (!groupIds.Contains(id))
+            {
+                errors[$"/groups/{group.Name}/parentId"] = ["El grupo está dentro de un grupo que no existe."];
+            }
+            else
+            {
+                parents[group.Name] = id;
+            }
+        }
+
+        foreach (var start in parents.Keys)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal) { start };
+            var current = start;
+            while (parents.TryGetValue(current, out var next))
+            {
+                if (!seen.Add(next))
+                {
+                    if (next == start)
+                    {
+                        errors[$"/groups/{start}/parentId"] = ["Un grupo no puede estar dentro de sí mismo ni de uno de sus grupos."];
+                    }
+
+                    break;
+                }
+
+                current = next;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tours: clave = <c>id</c> y cada paso apunta a un nodo existente (spec modo-tour, criterio 12) o a una conexión
+    /// existente (spec recorridos-y-grupos, parte 3). Un paso <c>removedEdge</c> guarda una conexión ya eliminada.
+    /// </summary>
+    private static void TourErrors(
+        JsonElement tours, HashSet<string> nodeIds, HashSet<string> edgeIds, Dictionary<string, string[]> errors)
     {
         foreach (var tour in tours.EnumerateObject())
         {
@@ -142,9 +200,14 @@ internal sealed class GraphValidator
             var i = 0;
             foreach (var step in tour.Value.GetProperty("steps").EnumerateArray())
             {
-                if (!nodeIds.Contains(step.GetProperty("nodeId").GetString()!))
+                if (step.TryGetProperty("nodeId", out var nodeId) && !nodeIds.Contains(nodeId.GetString()!))
                 {
                     errors[$"/tours/{tour.Name}/steps/{i}/nodeId"] = ["El paso apunta a un nodo que no existe."];
+                }
+
+                if (step.TryGetProperty("edgeId", out var edgeId) && !edgeIds.Contains(edgeId.GetString()!))
+                {
+                    errors[$"/tours/{tour.Name}/steps/{i}/edgeId"] = ["El paso apunta a una conexión que no existe."];
                 }
 
                 i++;

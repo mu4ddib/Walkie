@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -26,6 +26,21 @@ import type { GroupFlowNode } from '../nodes/GroupNode';
 import type { StickyFlowNode } from '../nodes/StickyNoteNode';
 import { COLLAPSED_GROUP } from '../nodes/groupMeta';
 import { GROUP_MIN, defaultEdgeKind, type Box, type GraphStore, type NodeType, type Position } from '../store/graphStore';
+import {
+  ancestorsOf,
+  canNest,
+  commonOwner,
+  descendantsOf,
+  depthOf,
+  isHidden,
+  isInside,
+  ownerOf,
+  visibleEnd,
+  type Hierarchy,
+} from '../store/hierarchy';
+import { FlowPlayer, type Rect } from '../tours/FlowPlayer';
+import { FLOW_TIMING, firstPhase, type Playing } from '../tours/flowPlayback';
+import { isFlowTour, lastEnd, suggestOrder, tourNodes } from '../tours/flows';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { useGraphStore } from '../store/useGraphStore';
 import { GRID, palette } from '../theme/palette';
@@ -34,6 +49,7 @@ import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES } from './paletteTypes';
 import { useOpenFeature } from './useOpenFeature';
 import {
   getEdgeMotion,
+  getFlowSpeed,
   getInspectorOpen,
   getSavedViewport,
   saveViewport,
@@ -58,6 +74,10 @@ const LANE_GAP = 24;
 const PREVIEW_STEP_MS = 1800;
 /** Hueco mínimo para que una conexión hacia la izquierda salga por el lado izquierdo en vez de rodear las cajas. */
 const BACKWARD_GAP = 16;
+/** Cuánto se ve el aviso de lo que pasó (al soltar en un grupo, al borrar una conexión usada). */
+const NOTICE_MS = 4000;
+/** Punto de un grupo que decide dónde cae al soltarlo: su asa (el encabezado), por donde se arrastra. */
+const GROUP_GRIP = { x: 24, y: 16 } as const;
 type CanvasFlowNode = WalkieFlowNode | GroupFlowNode | StickyFlowNode;
 
 /**
@@ -85,7 +105,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const stickyNotes = useGraphStore((s) => s.stickyNotes);
   const { addNode, addRef, moveNode, removeNode, connect, removeEdge, duplicateNode } = useGraphStore((s) => s);
   const { addStickyNote, moveStickyNote, removeStickyNote, duplicateStickyNote } = useGraphStore((s) => s);
-  const { addGroup, moveGroup, resizeGroup, setNodeGroup, removeGroup, updateGroup } = useGraphStore((s) => s);
+  const { addGroup, moveGroup, resizeGroup, setParent, removeGroup, updateGroup } = useGraphStore((s) => s);
+  const { addFlowTour, addEdgeStep } = useGraphStore((s) => s);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport } = useReactFlow();
   const openFeature = useOpenFeature();
   // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
@@ -120,11 +141,30 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   // "Previsualizar interacción": las conexiones del intercambio, en orden (ida y vueltas), y la que se recorre ahora.
   const [preview, setPreview] = useState<{ ids: string[]; index: number } | null>(null);
   const previewId = preview?.ids[preview.index] ?? null;
-  // Modo tour (spec modo-tour): qué tour y en qué paso; el lienzo queda de solo lectura.
-  const [playing, setPlaying] = useState<{ tourId: string; step: number } | null>(null);
+  // Modo tour (spec modo-tour) o reproducción de un recorrido: qué tour, en qué paso y fase; el lienzo queda de solo
+  // lectura. Es estado de visualización: el store (y el autoguardado) no lo ven.
+  const [playing, setPlaying] = useState<Playing | null>(null);
+  const [flowSpeed, setFlowSpeedState] = useState(getFlowSpeed);
   const tours = useGraphStore((s) => s.tours);
-  const tourNodeId = playing ? tours[playing.tourId]?.steps[playing.step]?.nodeId : undefined;
-  const nextTourNodeId = playing ? tours[playing.tourId]?.steps[playing.step + 1]?.nodeId : undefined;
+  const playingTour = playing ? tours[playing.tourId] : undefined;
+  const flowPlaying = !!playing && isFlowTour(playingTour);
+  const currentStep = playing ? playingTour?.steps[playing.step] : undefined;
+  const currentEdge = currentStep?.edgeId ? graphEdges[currentStep.edgeId] : undefined;
+  const tourNodeId = currentStep?.nodeId;
+  const nextTourNodeId = playing ? playingTour?.steps[playing.step + 1]?.nodeId : undefined;
+  // Recorrido al que se le agregan pasos tocando conexiones en el lienzo (parte 3).
+  const [pickingTourId, setPickingTourId] = useState<string | null>(null);
+  const pickingTour = pickingTourId ? tours[pickingTourId] : undefined;
+  // Recién creado desde la selección: el editor enfoca su nombre.
+  const [createdTourId, setCreatedTourId] = useState<string | null>(null);
+  // Arrastre: a qué grupo iría lo que se arrastra (indicación de la pertenencia resultante) y aviso al soltar.
+  const [dropHint, setDropHint] = useState<{ groupId: string | null; text: string } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
   // Un enlace de solo lectura (spec enlace-solo-lectura, criterio 6) o el modo tour bloquean la edición.
   const readOnly = Boolean(catalog.share);
   const locked = readOnly || playing !== null;
@@ -175,63 +215,139 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     return () => clearTimeout(timer);
   }, [preview]);
 
-  const startTour = useCallback((tourId: string) => {
-    setPreview(null);
-    setSelectedNodes(new Set());
-    setSelectedEdges(new Set());
-    setEditingId(null);
-    setPlaying({ tourId, step: 0 });
-  }, []);
+  const startTour = useCallback(
+    (tourId: string) => {
+      setPreview(null);
+      setPickingTourId(null);
+      setSelectedNodes(new Set());
+      setSelectedEdges(new Set());
+      setEditingId(null);
+      setPlaying({ tourId, step: 0, phase: firstPhase(tours[tourId], 0), mode: 'play' });
+    },
+    [tours],
+  );
   // Medidas que reporta React Flow. Si no se devuelven en `measured`, al reconstruir los nodos
   // React Flow los oculta un instante para medirlos otra vez y se pierden clics (ej. doble clic).
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
   const stopEditing = useCallback(() => setEditingId(null), []);
 
-  // Grupos plegados (spec espacio-de-trabajo, criterio 19): sus nodos se ocultan y sus conexiones llegan a la caja.
-  // En un tour todo se ve desplegado: el paso puede estar dentro de un grupo.
-  const collapsedGroups = useMemo(
-    () => new Set(playing ? [] : Object.values(groups).filter((g) => g.collapsed).map((g) => g.id)),
-    [groups, playing],
+  const hierarchy = useMemo<Hierarchy>(
+    () => ({ nodes: graphNodes, groups, stickyNotes }),
+    [graphNodes, groups, stickyNotes],
   );
+  // Durante un tour o un recorrido, los grupos que contienen el paso activo se despliegan solo en la vista (no en el
+  // grafo); al cambiar de paso o al detener, vuelven a verse como estaban.
+  const activeIds = currentEdge ? [currentEdge.from, currentEdge.to] : tourNodeId ? [tourNodeId] : [];
+  const activeKey = activeIds.join('|');
+  const tempExpanded = useMemo(
+    () => new Set(activeKey ? activeKey.split('|').flatMap((id) => ancestorsOf(hierarchy, id)) : []),
+    [activeKey, hierarchy],
+  );
+  // Grupos plegados (spec espacio-de-trabajo, criterio 19; spec recorridos-y-grupos, parte 1): todo lo de dentro se
+  // oculta, a cualquier profundidad, y sus conexiones llegan a la caja visible más externa.
+  const collapsedGroups = useMemo(
+    () => new Set(Object.values(groups).filter((g) => g.collapsed && !tempExpanded.has(g.id)).map((g) => g.id)),
+    [groups, tempExpanded],
+  );
+
+  /** Caja con la que se dibuja `id` (nodo medido, nota, grupo desplegado o plegado). */
+  const boxOf = useCallback(
+    (id: string): Rect | null => {
+      const at = layout[id];
+      if (!at) return null;
+      if (groups[id]) {
+        return collapsedGroups.has(id)
+          ? { x: at.x, y: at.y, w: COLLAPSED_GROUP.width, h: COLLAPSED_GROUP.height }
+          : { x: at.x, y: at.y, w: at.w ?? GROUP_MIN.w, h: at.h ?? GROUP_MIN.h };
+      }
+      const size = measured[id] ?? NODE_SIZE;
+      return { x: at.x, y: at.y, w: size.width, h: size.height };
+    },
+    [layout, groups, collapsedGroups, measured],
+  );
+
+  // Pasos del recorrido que se muestra (el que se reproduce, o el abierto en el editor): número de paso por conexión.
+  const shownFlow = flowPlaying
+    ? playingTour
+    : !playing && openTourId && isFlowTour(tours[openTourId]) && inspectorOpen
+      ? tours[openTourId]
+      : undefined;
+  const flowSteps = useMemo(() => {
+    const map = new Map<string, number[]>();
+    shownFlow?.steps.forEach((step, i) => {
+      if (step.edgeId) map.set(step.edgeId, [...(map.get(step.edgeId) ?? []), i]);
+    });
+    return map;
+  }, [shownFlow]);
+  const participants = useMemo(() => tourNodes(playingTour, graphEdges), [playingTour, graphEdges]);
+  // Al elegir pasos desde el lienzo, se destacan las conexiones que continúan desde donde quedó el recorrido.
+  const pickFrom = pickingTour ? lastEnd(pickingTour, graphEdges) : null;
 
   const nodes = useMemo<CanvasFlowNode[]>(() => {
     // En una previsualización se destacan los extremos del intercambio.
     const previewEdges = (preview?.ids ?? []).map((id) => graphEdges[id]).filter((e) => !!e);
     const previewNodes = new Set(previewEdges.flatMap((e) => [e.from, e.to]));
+    /** Reproducción de un recorrido: origen del paso, destino al terminar, participantes y el resto atenuado. */
+    const flowClass = (id: string) => {
+      if (currentEdge) {
+        if (id === currentEdge.from && playing!.phase !== 'target') return 'flow-source';
+        if (id === currentEdge.to && playing!.phase === 'target') return 'flow-target';
+        if (id === currentEdge.to) return 'flow-next';
+      } else if (id === tourNodeId) return 'flow-target';
+      return participants.has(id) ? 'flow-member' : 'flow-dim';
+    };
     const stateClass = (id: string) =>
-      playing
-        ? id === tourNodeId
-          ? 'tour-current'
-          : 'tour-dim'
-        : preview
-          ? previewNodes.has(id)
-            ? 'preview-node'
-            : 'preview-dim'
-          : undefined;
-    const counts: Record<string, number> = {};
-    for (const node of Object.values(graphNodes)) if (node.groupId) counts[node.groupId] = (counts[node.groupId] ?? 0) + 1;
-    // Los grupos van primero y detrás (zIndex −1): React Flow dibuja en orden.
-    const groupNodes: GroupFlowNode[] = Object.values(groups).map((group) => {
-      const box = layout[group.id] ?? { x: 0, y: 0, w: GROUP_MIN.w, h: GROUP_MIN.h };
-      const collapsed = collapsedGroups.has(group.id);
-      return {
-        id: group.id,
-        type: 'infraGroup',
-        position: { x: box.x, y: box.y },
-        width: collapsed ? COLLAPSED_GROUP.width : (box.w ?? GROUP_MIN.w),
-        height: collapsed ? COLLAPSED_GROUP.height : (box.h ?? GROUP_MIN.h),
-        zIndex: collapsed ? 0 : -1,
-        dragHandle: '.group-node-header',
-        data: {
-          group: { ...group, collapsed: collapsed || undefined },
-          count: counts[group.id] ?? 0,
-          onToggle: locked ? undefined : () => updateGroup(group.id, { collapsed: !group.collapsed }),
-          resizable: !locked,
-        },
-        selected: selectedNodes.has(group.id),
-        className: playing ? 'tour-dim' : preview ? 'preview-dim' : undefined,
-      };
-    });
+      flowPlaying
+        ? flowClass(id)
+        : playing
+          ? id === tourNodeId
+            ? 'tour-current'
+            : 'tour-dim'
+          : preview
+            ? previewNodes.has(id)
+              ? 'preview-node'
+              : 'preview-dim'
+            : undefined;
+    /** Un grupo no se atenúa si contiene algo del paso o del recorrido. */
+    const groupClass = (id: string) => {
+      if (flowPlaying) return [...participants].some((p) => isInside(hierarchy, p, id)) ? 'flow-member' : 'flow-dim';
+      if (playing) return tourNodeId && isInside(hierarchy, tourNodeId, id) ? undefined : 'tour-dim';
+      if (preview) return [...previewNodes].some((p) => isInside(hierarchy, p, id)) ? undefined : 'preview-dim';
+      return undefined;
+    };
+    const area = (id: string) => (layout[id]?.w ?? 0) * (layout[id]?.h ?? 0);
+    const dimClass = flowPlaying ? 'flow-dim' : playing ? 'tour-dim' : preview ? 'preview-dim' : undefined;
+    // Los grupos van primero y detrás, los de fuera antes que los de dentro: React Flow dibuja en orden y cada nivel
+    // queda sobre el que lo contiene.
+    const groupNodes: GroupFlowNode[] = Object.values(groups)
+      .map((group) => ({ group, depth: depthOf(hierarchy, group.id) }))
+      // A igual profundidad, los grandes primero: uno chico que se les superpone queda encima.
+      .sort((a, b) => a.depth - b.depth || area(b.group.id) - area(a.group.id))
+      .map(({ group, depth }) => {
+        const box = layout[group.id] ?? { x: 0, y: 0, w: GROUP_MIN.w, h: GROUP_MIN.h };
+        const collapsed = collapsedGroups.has(group.id);
+        const inside = descendantsOf(hierarchy, group.id);
+        return {
+          id: group.id,
+          type: 'infraGroup',
+          position: { x: box.x, y: box.y },
+          width: collapsed ? COLLAPSED_GROUP.width : (box.w ?? GROUP_MIN.w),
+          height: collapsed ? COLLAPSED_GROUP.height : (box.h ?? GROUP_MIN.h),
+          zIndex: collapsed ? 0 : -20 + Math.min(depth, 18),
+          hidden: isHidden(hierarchy, group.id, collapsedGroups),
+          dragHandle: '.group-node-header',
+          data: {
+            group: { ...group, collapsed: collapsed || undefined },
+            count: inside.nodes.length,
+            subgroups: inside.groups.length,
+            dropTarget: dropHint?.groupId === group.id,
+            onToggle: locked ? undefined : () => updateGroup(group.id, { collapsed: !group.collapsed }),
+            resizable: !locked,
+          },
+          selected: selectedNodes.has(group.id),
+          className: groupClass(group.id),
+        };
+      });
     // Notas adhesivas: anotaciones sin conexiones, por encima de los grupos y debajo de las cajas.
     const noteNodes: StickyFlowNode[] = Object.values(stickyNotes).map((note) => ({
       id: note.id,
@@ -241,7 +357,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       selected: selectedNodes.has(note.id),
       measured: measured[note.id],
       connectable: false,
-      className: playing ? 'tour-dim' : preview ? 'preview-dim' : undefined,
+      hidden: isHidden(hierarchy, note.id, collapsedGroups),
+      className: dimClass,
     }));
     const graphFlowNodes: WalkieFlowNode[] = Object.values(graphNodes).map((node) => ({
       id: node.id,
@@ -250,7 +367,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       data: { node, editing: editingId === node.id, onEditDone: stopEditing },
       selected: selectedNodes.has(node.id),
       measured: measured[node.id],
-      hidden: !!node.groupId && collapsedGroups.has(node.groupId),
+      hidden: isHidden(hierarchy, node.id, collapsedGroups),
       className: stateClass(node.id),
     }));
     return [...groupNodes, ...noteNodes, ...graphFlowNodes];
@@ -270,14 +387,16 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     tourNodeId,
     locked,
     updateGroup,
+    hierarchy,
+    flowPlaying,
+    currentEdge,
+    participants,
+    dropHint,
   ]);
 
   const edges = useMemo<WalkieFlowEdge[]>(() => {
-    // Un extremo dentro de un grupo plegado llega a la caja del grupo.
-    const end = (id: string) => {
-      const group = graphNodes[id]?.groupId;
-      return group && collapsedGroups.has(group) ? group : id;
-    };
+    // Un extremo oculto (a cualquier profundidad) llega a la caja del grupo plegado visible que lo contiene.
+    const end = (id: string) => visibleEnd(hierarchy, id, collapsedGroups);
     // En un tour (criterio 23): resaltar las conexiones del paso y animar la que lleva al siguiente.
     const tourClass = (from: string, to: string) => {
       if (!playing || !tourNodeId) return undefined;
@@ -286,13 +405,16 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       const next = nextTourNodeId && (from === nextTourNodeId || to === nextTourNodeId);
       return next ? 'tour-edge tour-edge-next' : 'tour-edge';
     };
-    /** Caja con la que se dibuja un extremo: el nodo (medido) o su grupo plegado. */
-    const boxOf = (id: string) => {
-      const at = layout[id];
-      if (!at) return null;
-      if (groups[id]) return { x: at.x, y: at.y, w: COLLAPSED_GROUP.width, h: COLLAPSED_GROUP.height };
-      const size = measured[id] ?? NODE_SIZE;
-      return { x: at.x, y: at.y, w: size.width, h: size.height };
+    /** Recorrido: la conexión del paso activo se anima; las ya recorridas y las del recorrido se ven; el resto, tenue. */
+    const flowClass = (id: string) => {
+      const steps = flowSteps.get(id);
+      if (flowPlaying) {
+        if (id === currentEdge?.id) return `flow-edge flow-edge-active flow-phase-${playing!.phase}`;
+        if (steps?.some((i) => i < playing!.step)) return 'flow-edge flow-edge-done';
+        return steps ? 'flow-edge' : 'flow-edge-dim';
+      }
+      const candidate = pickFrom !== null && graphEdges[id]?.from === pickFrom ? ' flow-candidate' : '';
+      return steps ? `flow-edge${candidate}` : candidate.trim() || undefined;
     };
     const all = Object.values(graphEdges);
     const position = new Map(all.map((edge, i) => [edge.id, i]));
@@ -349,6 +471,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         targetHttp: targetNode && (refTarget(targetNode, catalog.items)?.http ?? targetNode.http),
       });
       const step = preview ? preview.ids.indexOf(edge.id) : -1;
+      const flowBadge = flowSteps.get(edge.id)?.map((i) => i + 1).join('·');
       return {
         id: edge.id,
         source,
@@ -366,7 +489,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           laneOffset: lane * gap,
           backward,
           bendX: count === 1 ? bends.get(edge.id) : undefined,
-          step: step >= 0 && preview!.ids.length > 1 ? step + 1 : undefined,
+          step: step >= 0 && preview!.ids.length > 1 ? String(step + 1) : flowBadge,
         },
         selected: selectedEdges.has(edge.id),
         className: preview
@@ -375,15 +498,20 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             : edge.id === previewId
               ? 'edge-preview edge-preview-active'
               : 'edge-preview'
-          : tourClass(edge.from, edge.to),
+          : playing && !flowPlaying
+            ? tourClass(edge.from, edge.to)
+            : flowClass(edge.id),
       };
     });
   }, [
     graphEdges,
     graphNodes,
-    groups,
-    layout,
-    measured,
+    boxOf,
+    hierarchy,
+    flowSteps,
+    flowPlaying,
+    currentEdge,
+    pickFrom,
     catalog.items,
     collapsedGroups,
     selectedEdges,
@@ -394,19 +522,33 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     previewId,
   ]);
 
-  /** Grupo desplegado que contiene el punto (el más chico si hay varios), para incluir un nodo al soltarlo. */
+  /**
+   * Grupo visible y desplegado que contiene el punto (el más chico si hay varios), para incluir algo al soltarlo.
+   * Con `movingId`, descarta los grupos donde no puede entrar: él mismo y sus descendientes (sin ciclos).
+   */
   const groupAt = useCallback(
-    (point: Position) => {
+    (point: Position, movingId?: string) => {
       let found: { id: string; area: number } | null = null;
       for (const group of Object.values(groups)) {
         const box = layout[group.id];
-        if (!box?.w || !box.h || group.collapsed) continue;
+        if (!box?.w || !box.h || collapsedGroups.has(group.id) || isHidden(hierarchy, group.id, collapsedGroups)) continue;
+        if (movingId && !canNest(hierarchy, movingId, group.id)) continue;
         const inside = point.x >= box.x && point.x <= box.x + box.w && point.y >= box.y && point.y <= box.y + box.h;
         if (inside && (!found || box.w * box.h < found.area)) found = { id: group.id, area: box.w * box.h };
       }
       return found?.id ?? null;
     },
-    [groups, layout],
+    [groups, layout, collapsedGroups, hierarchy],
+  );
+
+  /** Ruta de un grupo para leer la pertenencia: «AWS › microservicio usuarios». */
+  const groupPath = useCallback(
+    (id: string) => [...ancestorsOf(hierarchy, id).reverse(), id].map((g) => `«${groups[g]?.title ?? ''}»`).join(' › '),
+    [hierarchy, groups],
+  );
+  const itemTitle = useCallback(
+    (id: string) => groups[id]?.title ?? graphNodes[id]?.title ?? (stickyNotes[id] ? 'La nota' : ''),
+    [groups, graphNodes, stickyNotes],
   );
 
   /** Centro de un nodo del grafo (con su tamaño medido, o el mínimo de una caja). */
@@ -422,10 +564,13 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
 
   const onNodesChange = useCallback(
     (changes: NodeChange<CanvasFlowNode>[]) => {
+      // Si se arrastran a la vez un grupo y algo de dentro, lo de dentro ya lo mueve el grupo.
+      const draggedGroups = changes.flatMap((c) => (c.type === 'position' && c.dragging && c.id in groups ? [c.id] : []));
       for (const change of changes) {
         const isGroup = change.type !== 'add' && change.id in groups;
         const isNote = change.type !== 'add' && change.id in stickyNotes;
         if (change.type === 'position' && change.position) {
+          if (change.dragging && draggedGroups.some((g) => isInside(hierarchy, change.id, g))) continue;
           if (isNote) moveStickyNote(change.id, change.position);
           else if (!isGroup) moveNode(change.id, change.position);
           // Arrastrar un grupo mueve sus nodos; redimensionarlo desde arriba o la izquierda solo mueve la caja.
@@ -443,7 +588,10 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         if (change.type === 'remove') {
           if (isGroup) removeGroup(change.id);
           else if (isNote) removeStickyNote(change.id);
-          else removeNode(change.id);
+          else {
+            warnAffectedFlows(Object.values(graphEdges).filter((e) => e.from === change.id || e.to === change.id).map((e) => e.id));
+            removeNode(change.id);
+          }
           setSelectedNodes((s) => toggle(s, change.id, false));
         }
         if (change.type === 'select') setSelectedNodes((s) => toggle(s, change.id, change.selected));
@@ -457,33 +605,121 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         }
       }
     },
-    [moveNode, removeNode, groups, stickyNotes, layout, moveGroup, resizeGroup, removeGroup, moveStickyNote, removeStickyNote],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [moveNode, removeNode, groups, stickyNotes, layout, moveGroup, resizeGroup, removeGroup, moveStickyNote, removeStickyNote, hierarchy, graphEdges],
   );
 
-  // Soltar un nodo dentro de un grupo lo incluye; soltarlo fuera lo saca (criterio 18).
+  /** Al borrar conexiones usadas en recorridos, avisa qué recorridos revisar (el paso queda marcado en el editor). */
+  function warnAffectedFlows(edgeIds: readonly string[]) {
+    const affected = Object.values(tours).filter((t) => t.steps.some((step) => step.edgeId && edgeIds.includes(step.edgeId)));
+    if (affected.length === 0) return;
+    setNotice(
+      `La conexión se usaba en ${affected.map((t) => `«${t.name}»`).join(', ')}: revisa el paso marcado en Tours.`,
+    );
+  }
+
+  /**
+   * A qué grupo iría cada elemento arrastrado al soltarlo (criterio 18; parte 1): una caja o nota por su centro, un
+   * grupo por su asa. Solo cuentan los de más afuera: lo que está dentro de un grupo arrastrado viaja con él.
+   */
+  const dropTargets = useCallback(
+    (dragged: { id: string }[]) => {
+      const ids = dragged.map((d) => d.id);
+      const roots = ids.filter((id) => !ids.some((other) => other !== id && groups[other] && isInside(hierarchy, id, other)));
+      return roots.flatMap((id) => {
+        const box = layout[id];
+        if (!box) return [];
+        const point = groups[id] ? { x: box.x + GROUP_GRIP.x, y: box.y + GROUP_GRIP.y } : centerOf(id);
+        if (!point) return [];
+        return [{ id, target: groupAt(point, id), current: ownerOf(hierarchy, id) }];
+      });
+    },
+    [groups, hierarchy, layout, centerOf, groupAt],
+  );
+
+  // Mientras se arrastra se indica dónde quedará: el grupo destino se resalta y la pista lo dice.
+  const onNodeDrag = useCallback(
+    (_: unknown, __: unknown, dragged: { id: string }[]) => {
+      const moves = dropTargets(dragged).filter((m) => m.target !== m.current);
+      const first = moves[0];
+      const more = moves.length > 1 ? ` y ${moves.length - 1} más` : '';
+      const next = first
+        ? {
+            groupId: first.target,
+            text: first.target
+              ? `Suelta para meter «${itemTitle(first.id)}»${more} en ${groupPath(first.target)}`
+              : `Suelta para sacar «${itemTitle(first.id)}»${more} de «${groups[first.current!]?.title ?? ''}»`,
+          }
+        : null;
+      setDropHint((current) => (current?.text === next?.text ? current : next));
+    },
+    [dropTargets, itemTitle, groupPath, groups],
+  );
+
+  // Soltar dentro de un grupo lo incluye; soltarlo fuera lo saca (criterio 18). Vale para cajas, notas y grupos.
   const onNodeDragStop = useCallback(
     (_: unknown, __: unknown, dragged: { id: string }[]) => {
-      for (const { id } of dragged) {
-        if (id in groups || id in stickyNotes) continue;
-        const center = centerOf(id);
-        if (center) setNodeGroup(id, groupAt(center));
+      setDropHint(null);
+      const moved = dropTargets(dragged).filter((m) => m.target !== m.current && setParent(m.id, m.target));
+      const first = moved[0];
+      if (first) {
+        setNotice(
+          first.target
+            ? `«${itemTitle(first.id)}» quedó dentro de ${groupPath(first.target)}`
+            : `«${itemTitle(first.id)}» quedó fuera de los grupos`,
+        );
       }
     },
-    [groups, stickyNotes, centerOf, groupAt, setNodeGroup],
+    [dropTargets, setParent, itemTitle, groupPath],
   );
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange<WalkieFlowEdge>[]) => {
       for (const change of changes) {
         if (change.type === 'remove') {
+          warnAffectedFlows([change.id]);
           removeEdge(change.id);
           setSelectedEdges((s) => toggle(s, change.id, false));
         }
         if (change.type === 'select') setSelectedEdges((s) => toggle(s, change.id, change.selected));
       }
     },
-    [removeEdge],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [removeEdge, tours],
   );
+
+  /**
+   * "Crear recorrido" (parte 3): con las conexiones seleccionadas, en el orden sugerido si la secuencia es única (si no,
+   * en el orden en que se seleccionaron). Se abre en el editor de Tours para nombrarlo, revisarlo y ordenarlo.
+   */
+  const createFlow = useCallback(
+    (edgeIds: readonly string[]) => {
+      const order = suggestOrder(edgeIds, graphEdges) ?? [...edgeIds];
+      const names = new Set(Object.values(tours).map((t) => t.name));
+      let n = Object.values(tours).filter(isFlowTour).length + 1;
+      while (names.has(`Recorrido ${n}`)) n++;
+      const id = addFlowTour(`Recorrido ${n}`, order);
+      if (!id) return;
+      setSelectedNodes(new Set());
+      setSelectedEdges(new Set());
+      setOpenTourId(id);
+      setCreatedTourId(id);
+      setPickingTourId(null);
+      if (!inspectorOpen) {
+        setInspectorOpenState(true);
+        setInspectorOpen(true);
+      }
+    },
+    [graphEdges, tours, addFlowTour, inspectorOpen],
+  );
+  const openFlow = useCallback((tourId: string) => {
+    setSelectedNodes(new Set());
+    setSelectedEdges(new Set());
+    setOpenTourId(tourId);
+  }, []);
+
+  // El modo de agregar pasos desde el lienzo termina si su recorrido se cierra o desaparece.
+  if (pickingTourId && (!tours[pickingTourId] || openTourId !== pickingTourId || playing)) setPickingTourId(null);
 
   // Panel de propiedades: solo con un único elemento seleccionado (nodo o conexión). Se filtra por lo
   // que existe: React Flow no deselecciona lo que se borra (ni las conexiones que caen en cascada).
@@ -517,25 +753,26 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     (create: (position: Position) => string, clientX: number, clientY: number) => {
       const position = screenToFlowPosition({ x: clientX, y: clientY });
       const id = create(position);
-      // Un nodo que cae dentro de un grupo queda en él.
+      // Una caja o nota que cae dentro de un grupo queda en él.
       const group = groupAt({ x: position.x + NODE_SIZE.width / 2, y: position.y + NODE_SIZE.height / 2 });
-      if (group) setNodeGroup(id, group);
+      if (group) setParent(id, group);
       setSelectedNodes(new Set([id]));
     },
-    [screenToFlowPosition, groupAt, setNodeGroup],
+    [screenToFlowPosition, groupAt, setParent],
   );
 
   /**
    * "Grupo" (criterio 18): con cajas seleccionadas, las rodea y las incluye; si no, uno vacío en el centro.
    */
   function createGroup() {
-    const members = [...selectedNodes].filter((id) => graphNodes[id] && layout[id]);
+    // Cajas, notas y grupos seleccionados; lo que ya está dentro de otro seleccionado va con él.
+    const picked = [...selectedNodes].filter((id) => (graphNodes[id] || stickyNotes[id] || groups[id]) && layout[id]);
+    const members = picked.filter((id) => !picked.some((o) => o !== id && groups[o] && isInside(hierarchy, id, o)));
     let box: Box;
     if (members.length > 0) {
       const rects = members.map((id) => {
-        const at = layout[id]!;
-        const size = measured[id] ?? NODE_SIZE;
-        return { x: at.x, y: at.y, r: at.x + size.width, b: at.y + size.height };
+        const r = boxOf(id)!;
+        return { x: r.x, y: r.y, r: r.x + r.w, b: r.y + r.h };
       });
       const x = Math.min(...rects.map((r) => r.x)) - GRID * 4;
       const y = Math.min(...rects.map((r) => r.y)) - GRID * 7;
@@ -548,7 +785,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       });
       box = { x: center.x - 240, y: center.y - 160, w: 480, h: 320 };
     }
-    const id = addGroup(box, { members });
+    // El grupo nuevo queda donde estaban sus miembros (dentro de su grupo común, si lo tienen).
+    const id = addGroup(box, { members, parentId: commonOwner(hierarchy, members) });
     setSelectedNodes(new Set([id]));
     setSelectedEdges(new Set());
   }
@@ -618,9 +856,10 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         duplicate(ids);
         return;
       }
-      if (event.key === 'Escape' && (preview || menu)) {
+      if (event.key === 'Escape' && (preview || menu || pickingTourId)) {
         setPreview(null);
         setMenu(null);
+        setPickingTourId(null);
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target) || playing) return;
@@ -670,9 +909,27 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
 
   // Las ayudas de uso viven en "?" (atajos y gestos) y en los tooltips; aquí solo lo que cambia el modo del lienzo.
   const previewEdge = previewId ? edges.find((e) => e.id === previewId) : undefined;
+  // Encuadre del reproductor: la caja del paso activo y la de todo el recorrido (con lo que se ve de cada extremo).
+  const unionOf = (ids: readonly string[]): Rect | null => {
+    const rects = ids.map((id) => boxOf(visibleEnd(hierarchy, id, collapsedGroups))).filter((r): r is Rect => !!r);
+    if (rects.length === 0) return null;
+    const x = Math.min(...rects.map((r) => r.x));
+    const y = Math.min(...rects.map((r) => r.y));
+    return { x, y, w: Math.max(...rects.map((r) => r.x + r.w)) - x, h: Math.max(...rects.map((r) => r.y + r.h)) - y };
+  };
+  const flowFrames = { step: flowPlaying ? unionOf(activeIds) : null, all: flowPlaying ? unionOf([...participants]) : null };
+
   const hint = playing
     ? null
-    : preview && previewEdge?.data?.display
+    : dropHint
+      ? dropHint.text
+      : notice
+        ? notice
+        : pickingTour
+          ? `Agregando pasos a «${pickingTour.name}»: toca una conexión en el lienzo${
+              pickFrom ? ` (resaltadas, las que siguen desde «${graphNodes[pickFrom]?.title ?? ''}»)` : ''
+            }. Esc termina.`
+          : preview && previewEdge?.data?.display
       ? `Previsualizando${preview.ids.length > 1 ? ` · ${preview.index + 1} de ${preview.ids.length}` : ''}: ${
           graphNodes[graphEdges[previewEdge.id]!.from]?.title ?? ''
         } → ${graphNodes[graphEdges[previewEdge.id]!.to]?.title ?? ''} (${edgeDisplayText(previewEdge.data.display)}) · Esc termina`
@@ -696,9 +953,12 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
 
   return (
     <div
+      style={{ '--flow-travel': `${Math.round(FLOW_TIMING.travel / flowSpeed)}ms` } as CSSProperties}
       className={[
         'canvas',
         preview && 'canvas-previewing',
+        flowPlaying && 'canvas-flowing',
+        pickingTourId && 'canvas-picking',
         readOnly && 'canvas-readonly',
         playing && 'canvas-touring',
         edgeMotion && 'edge-motion',
@@ -724,7 +984,12 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeDrag={onNodeDrag}
           onNodeDragStop={onNodeDragStop}
+          // Agregando pasos desde el lienzo: tocar una conexión la suma al recorrido (en vez de seleccionarla).
+          onEdgeClick={(_, edge) => {
+            if (pickingTourId && !locked) addEdgeStep(pickingTourId, edge.id);
+          }}
           // El título de un `ref` se edita en el catálogo; el doble clic en un `portal` abre su destino.
           onNodeDoubleClick={(_, flowNode) => {
             if (locked) return;
@@ -750,7 +1015,9 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           onPaneClick={() => setMenu(null)}
           onMoveStart={() => setMenu(null)}
           zoomOnDoubleClick={false}
-          // Mayús, Ctrl o Cmd + clic suman cajas a la selección (para agruparlas con G).
+          // Seleccionar un grupo no lo sube por encima de lo que contiene (taparía los grupos y cajas de dentro).
+          elevateNodesOnSelect={false}
+          // Mayús, Ctrl o Cmd + clic suman cajas (para agruparlas con G) o conexiones (para crear un recorrido).
           multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
           connectOnClick={false}
           snapToGrid
@@ -758,7 +1025,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           deleteKeyCode={locked ? null : ['Delete', 'Backspace']}
           nodesDraggable={!locked}
           nodesConnectable={!locked}
-          elementsSelectable={!locked}
+          elementsSelectable={!locked && !pickingTourId}
           fitView={fitOnMount}
           fitViewOptions={{ padding: fitPadding }}
           defaultViewport={savedViewport ?? { x: 0, y: 0, zoom: 1 }}
@@ -808,7 +1075,29 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             onClose={() => setMenu(null)}
           />
         )}
-        {playing && (
+        {!locked && !pickingTourId && liveEdges.length > 1 && liveNodes.length + liveGroups.length + liveNotes.length === 0 && (
+          <div className="selection-bar floating" role="toolbar" aria-label="Conexiones seleccionadas">
+            <span>
+              <strong>{liveEdges.length}</strong> conexiones seleccionadas
+            </span>
+            <button type="button" className="pixel-button is-primary" onClick={() => createFlow(liveEdges)}>
+              Crear recorrido
+            </button>
+            <span className="selection-bar-help">Mayús + clic suma o quita</span>
+          </div>
+        )}
+        {playing && flowPlaying && (
+          <FlowPlayer
+            playing={playing}
+            setPlaying={setPlaying}
+            speed={flowSpeed}
+            onSpeed={setFlowSpeedState}
+            frames={flowFrames}
+            pane={pane}
+            onExit={() => setPlaying(null)}
+          />
+        )}
+        {playing && !flowPlaying && (
           <TourPlayer
             tourId={playing.tourId}
             step={playing.step}
@@ -842,7 +1131,14 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             noteId={panelNoteId}
             onSelect={selectFromPanel}
             preview={{ activeEdgeId: previewId, onStart: startPreview, onStop: stopPreview }}
-            tours={{ openTourId, onOpen: setOpenTourId, onPlay: startTour }}
+            flows={{ onCreate: (edgeId) => createFlow([edgeId]), onOpen: openFlow }}
+            tours={{
+              openTourId,
+              onOpen: setOpenTourId,
+              onPlay: startTour,
+              createdTourId,
+              picking: { tourId: pickingTourId, onToggle: setPickingTourId },
+            }}
           />
         </div>
       ) : (

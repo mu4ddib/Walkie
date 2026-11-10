@@ -224,7 +224,11 @@ describe('grupos de infraestructura', () => {
       groups: { g: { id: 'g', title: 'Backend', kind: 'backend', collapsed: true } },
     };
     s().loadGraph(graph);
-    expect(toGraph(s())).toEqual(graph);
+    // Al guardar, el grafo declara la jerarquía explícita; recargarlo da lo mismo.
+    const saved = toGraph(s());
+    expect(saved).toEqual({ ...graph, groupNesting: 'explicit' });
+    s().loadGraph(saved);
+    expect(toGraph(s())).toEqual(saved);
 
     s().loadGraph({ ...graph, nodes: {}, layout: {}, groups: undefined });
     expect(toGraph(s())).not.toHaveProperty('groups');
