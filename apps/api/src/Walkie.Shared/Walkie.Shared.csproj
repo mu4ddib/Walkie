@@ -12,6 +12,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <!-- Fuente de verdad del grafo: se embebe el mismo archivo que usa la web (WalkieSchemas). -->
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-graph.schema.json" LogicalName="walkie-graph.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-app-map.schema.json" LogicalName="walkie-app-map.schema.json" />
   </ItemGroup>
 
 </Project>

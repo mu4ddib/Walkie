@@ -25,6 +25,10 @@ import {
   updateCatalogItem,
   updateFeature,
   listCanvasPreviews,
+  getAppMap,
+  saveMapLayout,
+  type AppMap,
+  type MapLayout,
   type CatalogItem,
   type FeatureChanges,
   type CatalogItemChanges,
@@ -43,6 +47,8 @@ export const queryKeys = {
   features: (appId: string) => ['apps', appId, 'features'] as const,
   /** Bajo `canvas` para que guardar un lienzo las marque viejas (ver `useSaveCanvas`). */
   previews: (appId: string) => ['canvas', 'previews', appId] as const,
+  /** Bajo `canvas`: guardar un lienzo cambia el mapa de su app. */
+  map: (appId: string) => ['canvas', 'map', appId] as const,
   canvas: (featureId: string) => ['canvas', featureId] as const,
   catalog: (appId: string) => ['apps', appId, 'catalog'] as const,
   catalogItem: (itemId: string) => ['catalog', itemId] as const,
@@ -96,6 +102,26 @@ export function useUpdateFeature(appId: string) {
     mutationFn: ({ featureId, changes }: { featureId: string; changes: FeatureChanges }) =>
       updateFeature(token, featureId, changes),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) }),
+  });
+}
+
+/** Mapa de la app (spec mapa-de-la-app). */
+export function useAppMap(appId: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.map(appId),
+    queryFn: ({ signal }) => getAppMap(token, appId, signal),
+  });
+}
+
+/** Guarda la distribución del mapa; al terminar, el mapa en caché lleva la versión nueva. */
+export function useSaveMapLayout(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (layout: MapLayout) => saveMapLayout(token, appId, layout),
+    onSuccess: (layout) =>
+      queryClient.setQueryData<AppMap>(queryKeys.map(appId), (map) => (map ? { ...map, layout } : map)),
   });
 }
 

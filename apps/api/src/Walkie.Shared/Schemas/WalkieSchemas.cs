@@ -11,6 +11,7 @@ namespace Walkie.Shared.Schemas;
 public static class WalkieSchemas
 {
     private const string GraphId = "https://github.com/mu4ddib/Walkie/packages/schema/walkie-graph.schema.json";
+    private const string AppMapId = "https://github.com/mu4ddib/Walkie/packages/schema/walkie-app-map.schema.json";
 
     /// <summary>Registro propio: no se mezcla con el global de la aplicación ni de las pruebas.</summary>
     private static readonly BuildOptions Options = new() { SchemaRegistry = new SchemaRegistry() };
@@ -23,6 +24,14 @@ public static class WalkieSchemas
 
     /// <summary><c>$defs/database</c> del grafo: estructura de una base de datos.</summary>
     public static JsonSchema Database { get; } = Definition("database");
+
+    /// <summary><c>walkie-app-map.schema.json</c>: mapa de una app.</summary>
+    public static JsonSchema AppMap { get; } = JsonSchema.FromText(Load("walkie-app-map.schema.json"), Options);
+
+    /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
+    public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
+        $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",
+        Options);
 
     /// <summary>
     /// Errores por ruta JSON con <paramref name="prefix"/> delante (ej. <c>/nodes/n1</c> o <c>Http</c>); vacío si cumple.

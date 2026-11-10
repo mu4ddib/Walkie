@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-app-map.schema.json",
+  "title": "Walkie app map v0",
+  "description": "Mapa de una app (spec mapa-de-la-app): sus features, cómo se conectan por portales, qué elementos del catálogo usa cada una y la distribución guardada. Se arma con el último lienzo guardado de cada feature; los nombres y descripciones vienen de la lista de features.",
+  "type": "object",
+  "required": ["appId", "features", "links", "catalog", "layout"],
+  "additionalProperties": false,
+  "properties": {
+    "appId": { "type": "string", "format": "uuid" },
+    "features": {
+      "type": "array",
+      "description": "Todas las features de la app, tengan o no lienzo guardado",
+      "items": {
+        "type": "object",
+        "required": ["id", "screens", "apis", "tours", "flows", "unresolvedPortals"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "screens": { "type": "integer", "minimum": 0, "description": "Pantallas del lienzo" },
+          "apis": { "type": "integer", "minimum": 0, "description": "APIs del lienzo (propias o del catálogo)" },
+          "tours": { "type": "integer", "minimum": 0, "description": "Tours guiados" },
+          "flows": { "type": "integer", "minimum": 0, "description": "Recorridos" },
+          "unresolvedPortals": { "type": "integer", "minimum": 0, "description": "Portales sin destino o con un destino que ya no es de la app" }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "description": "Un elemento por par de features (origen → destino) con los portales que lo forman",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "portals"],
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string", "format": "uuid" },
+          "to": { "type": "string", "format": "uuid" },
+          "portals": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["nodeId", "sources"],
+              "additionalProperties": false,
+              "properties": {
+                "nodeId": { "type": "string", "minLength": 1, "description": "Nodo portal en el lienzo de la feature de origen" },
+                "sources": {
+                  "type": "array",
+                  "description": "Títulos de las cajas que se conectan al portal (desde dónde se llega)",
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "catalog": {
+      "type": "array",
+      "description": "Elementos del catálogo usados en lienzos de la app y por qué features",
+      "items": {
+        "type": "object",
+        "required": ["itemId", "type", "title", "features"],
+        "additionalProperties": false,
+        "properties": {
+          "itemId": { "type": "string", "format": "uuid" },
+          "type": { "enum": ["api", "service", "database"] },
+          "title": { "type": "string" },
+          "features": { "type": "array", "minItems": 1, "items": { "type": "string", "format": "uuid" } }
+        }
+      }
+    },
+    "layout": { "$ref": "#/$defs/layout" }
+  },
+  "$defs": {
+    "layout": {
+      "type": "object",
+      "description": "Distribución guardada del mapa. version 0 y sin posiciones: nunca se guardó (se distribuye sola)",
+      "required": ["version", "positions"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "integer", "minimum": 0, "description": "Concurrencia optimista: un guardado con versión vieja responde 409" },
+        "positions": {
+          "type": "object",
+          "maxProperties": 1000,
+          "description": "Clave: id de feature, o catalog:<id> para un elemento del catálogo -> posición en el mapa",
+          "propertyNames": { "maxLength": 64 },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["x", "y"],
+            "additionalProperties": false,
+            "properties": {
+              "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+              "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

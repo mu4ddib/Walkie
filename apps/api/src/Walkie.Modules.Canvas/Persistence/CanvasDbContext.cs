@@ -10,6 +10,8 @@ internal sealed class CanvasDbContext(DbContextOptions<CanvasDbContext> options)
 
     public DbSet<CanvasDocument> Canvases => Set<CanvasDocument>();
 
+    public DbSet<AppMapLayout> AppMaps => Set<AppMapLayout>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(Schema);
@@ -23,6 +25,17 @@ internal sealed class CanvasDbContext(DbContextOptions<CanvasDbContext> options)
             canvas.Property(c => c.Version).HasColumnName("version").IsConcurrencyToken();
             canvas.Property(c => c.UpdatedAt).HasColumnName("updated_at");
             canvas.Property(c => c.UpdatedBy).HasColumnName("updated_by").HasMaxLength(255);
+        });
+
+        modelBuilder.Entity<AppMapLayout>(map =>
+        {
+            map.ToTable("app_maps");
+            map.HasKey(m => m.AppId);
+            map.Property(m => m.AppId).HasColumnName("app_id").ValueGeneratedNever();
+            map.Property(m => m.Positions).HasColumnName("positions").HasColumnType("jsonb");
+            map.Property(m => m.Version).HasColumnName("version").IsConcurrencyToken();
+            map.Property(m => m.UpdatedAt).HasColumnName("updated_at");
+            map.Property(m => m.UpdatedBy).HasColumnName("updated_by").HasMaxLength(255);
         });
     }
 }

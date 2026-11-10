@@ -8,6 +8,7 @@ import { matches, type FeatureSort } from '../gallery/search';
 import { latest } from '../gallery/dates';
 import { NameForm } from '../ui/NameForm';
 import { catalogPath } from './catalogPaths';
+import { mapPath } from '../workspace/paths';
 import { QueryState } from '../ui/QueryState';
 
 /**
@@ -51,6 +52,10 @@ export function AppPage() {
           Cada feature es un objetivo del usuario con su propio lienzo.{' '}
           <Link to={catalogPath(appId)}>Catálogo de la app</Link>: APIs, servicios y bases de datos compartidos.
         </p>
+        {/* Vista adicional (spec mapa-de-la-app): la galería sigue igual. */}
+        <Link className="pixel-button gallery-map-link" to={mapPath(appId)}>
+          ◇ Ver mapa
+        </Link>
       </header>
       <div className="gallery-create">
         <NameForm
