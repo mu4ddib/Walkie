@@ -27,7 +27,7 @@ export interface WalkieCanvasGraphV0 {
     [k: string]: Edge;
   };
   /**
-   * Mapa id de nodo o grupo -> posición (separado del contenido)
+   * Mapa id de nodo, grupo o nota adhesiva -> posición (separado del contenido)
    */
   layout: {
     [k: string]: {
@@ -45,6 +45,12 @@ export interface WalkieCanvasGraphV0 {
    */
   groups?: {
     [k: string]: Group;
+  };
+  /**
+   * Mapa id -> nota adhesiva (anotación del lienzo, no es un nodo del flujo); su posición va en layout con el mismo id
+   */
+  stickyNotes?: {
+    [k: string]: StickyNote;
   };
 }
 export interface Node {
@@ -71,9 +77,22 @@ export interface Node {
     ruleIds?: Id[];
   }[];
   /**
-   * Regla en lenguaje natural o pseudo-código (rule)
+   * Regla en lenguaje natural o pseudo-código (rule); en una decisión, la condición que se evalúa
    */
   expression?: string;
+  /**
+   * Modo de un nodo rule: ausente documenta una validación o restricción; decision es una bifurcación con salidas (branches)
+   */
+  mode?: 'decision';
+  /**
+   * Salidas de una decisión (solo rule con mode decision); una conexión las referencia con branch
+   *
+   * @maxItems 24
+   */
+  branches?: {
+    id: Id;
+    label: string;
+  }[];
   http?: Http;
   database?: Database;
   /**
@@ -214,9 +233,42 @@ export interface Edge {
   kind: 'navigation' | 'request' | 'response' | 'event' | 'uses' | 'reads' | 'writes';
   label?: string;
   /**
-   * Condición, ej. código de respuesta 200 o 404
+   * Condición que activa la conexión (ej. la de una rama de decisión). El código de una respuesta va en status
    */
   when?: string;
+  /**
+   * UUID v7 generado en el cliente
+   */
+  branch?: string;
+  /**
+   * Código HTTP de una respuesta (kind response)
+   */
+  status?: number;
+  /**
+   * UUID v7 generado en el cliente
+   */
+  replyTo?: string;
+  /**
+   * Qué ocurre después de una respuesta
+   */
+  outcome?: string;
+  /**
+   * Datos propios de una solicitud (kind request): endpoint y parámetros de este paso. Sin method ni path, vale el contrato de la API destino
+   */
+  request?: {
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    path?: string;
+    /**
+     * Parámetros o headers con el valor que lleva este paso
+     *
+     * @maxItems 50
+     */
+    params?: {
+      name: string;
+      in: 'path' | 'query' | 'header';
+      value?: string;
+    }[];
+  };
   notes?: string;
   /**
    * Acceso a datos de la interacción
@@ -258,4 +310,11 @@ export interface Group {
   title: string;
   kind: 'frontend' | 'backend' | 'external' | 'data' | 'network' | 'environment' | 'cloud' | 'custom';
   collapsed?: boolean;
+}
+/**
+ * Nota adhesiva: texto libre sobre el lienzo, sin conexiones
+ */
+export interface StickyNote {
+  id: Id;
+  text: string;
 }

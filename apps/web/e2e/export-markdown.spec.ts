@@ -73,7 +73,7 @@ test('exportar una feature documentada a un .zip con su Markdown e imágenes', a
   expect(markdown).toContain('```mermaid\nflowchart LR\n');
   expect(markdown).toContain('["Pantalla: Login"]');
   expect(markdown).toContain('{{"Regla: Documento válido"}}');
-  expect(markdown).toContain('-->|"llama"|');
+  expect(markdown).toMatch(/-->\|"llama[":]/);
   for (const heading of ['## Pantallas', '## Reglas', '## APIs', '## Portales', '## Conexiones', '## Tours']) {
     expect(markdown).toContain(heading);
   }
@@ -82,7 +82,8 @@ test('exportar una feature documentada a un .zip con su Markdown e imágenes', a
   expect(markdown).toContain('Valida: `documento` (Login).');
   expect(markdown).toContain('`GET /clientes/{id}`');
   expect(markdown).toContain('Lleva a **Transferir**.');
-  expect(markdown).toContain('- Login → Consultar cliente (llama)');
+  // Sin etiqueta propia, la solicitud lleva el endpoint del contrato.
+  expect(markdown).toMatch(/- Login → Consultar cliente \(llama[):]/);
   expect(markdown).toContain('- Login → Transferir (navega)');
   expect(markdown).toContain('1. **Login**: Aquí empieza todo.\n2. **Consultar cliente**');
 

@@ -11,6 +11,8 @@ interface PaletteProps {
   onAdd: (type: NodeType) => void;
   /** "Grupo" (tecla G): rodea las cajas seleccionadas o crea uno vacío. */
   onAddGroup?: () => void;
+  /** "Nota" (tecla N): una nota adhesiva en el centro, lista para escribir. */
+  onAddNote?: () => void;
   /** Panel "Componentes" (catálogo de la app); sin él la barra solo trae los tipos. */
   catalog?: {
     appId: string;
@@ -26,7 +28,7 @@ interface PaletteProps {
  * (clic lo pone en el centro, arrastre donde lo sueltes, teclas 1–7) y el panel "Componentes" con
  * el catálogo compartido de la app.
  */
-export function Palette({ onAdd, onAddGroup, catalog }: PaletteProps) {
+export function Palette({ onAdd, onAddGroup, onAddNote, catalog }: PaletteProps) {
   const [componentsOpen, setComponentsOpen] = useState(false);
   const panelId = useId();
 
@@ -73,6 +75,23 @@ export function Palette({ onAdd, onAddGroup, catalog }: PaletteProps) {
             </span>
             <span className="toolbar-key" aria-hidden="true">
               G
+            </span>
+          </button>
+        )}
+        {onAddNote && (
+          <button
+            type="button"
+            className="toolbar-tool toolbar-note"
+            aria-label="Nota adhesiva"
+            aria-keyshortcuts="N"
+            data-tip="Nota adhesiva (anotación) · N"
+            onClick={onAddNote}
+          >
+            <span className="toolbar-glyph" aria-hidden="true">
+              ▤
+            </span>
+            <span className="toolbar-key" aria-hidden="true">
+              N
             </span>
           </button>
         )}

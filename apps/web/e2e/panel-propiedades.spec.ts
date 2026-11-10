@@ -40,6 +40,8 @@ test('documentar inputs, reglas, API y conexión; recargar idéntico; borrar la 
   await connect(page, 1, 2);
   await page.locator('.kind-edge-label').click();
   await field(page, 'Etiqueta').fill('Buscar');
+  // La condición es un detalle opcional: va en su sección plegable.
+  await page.locator('summary', { hasText: 'Condición' }).click();
   await field(page, 'Condición').fill('200');
 
   // Lo que se ve en el lienzo (criterios 5, 6, 8 y 8c).

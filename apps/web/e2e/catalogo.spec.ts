@@ -39,7 +39,8 @@ test('catálogo compartido entre dos lienzos con ref, Mover al catálogo y borra
     await page.getByRole('button', { name: 'Componentes' }).click();
     await connect(page, 0, 1);
     await page.locator('.react-flow__pane').click({ position: { x: 700, y: 600 } });
-    await expect(page.locator('.kind-edge-label')).toHaveText('llama');
+    // Sin etiqueta propia, la solicitud muestra el endpoint del contrato del componente.
+    await expect(page.locator('.kind-edge-label')).toHaveText('llama · GET /clientes/{id}');
     await page.keyboard.press('Control+s');
     await expect(saveStatus(page)).toHaveText('Guardado');
   }

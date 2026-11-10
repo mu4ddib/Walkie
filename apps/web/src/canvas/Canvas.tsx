@@ -14,7 +14,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import type { StoreApi } from 'zustand/vanilla';
 import type { CatalogItem, NewCatalogItem } from '../api/client';
-import { CatalogContext, effectiveType, portalTarget, type CanvasCatalog } from '../catalog/catalogContext';
+import { CatalogContext, effectiveType, portalTarget, refTarget, type CanvasCatalog } from '../catalog/catalogContext';
 import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
 import { nodeTypes } from '../nodes/nodeTypes';
@@ -23,6 +23,7 @@ import { SharedTours } from '../tours/SharedTours';
 import { TourPlayer } from '../tours/TourPlayer';
 import type { WalkieFlowNode } from '../nodes/PixelNode';
 import type { GroupFlowNode } from '../nodes/GroupNode';
+import type { StickyFlowNode } from '../nodes/StickyNoteNode';
 import { COLLAPSED_GROUP } from '../nodes/groupMeta';
 import { GROUP_MIN, defaultEdgeKind, type Box, type GraphStore, type NodeType, type Position } from '../store/graphStore';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
@@ -40,6 +41,8 @@ import {
   setInspectorOpen,
 } from '../workspace/session';
 import { EdgeMarkers } from '../edges/EdgeMarkers';
+import { edgeDisplay, edgeDisplayText, interactionEdges } from '../edges/edgeMeta';
+import { NodeMenu } from './NodeMenu';
 import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
 import { EmptyCanvasGuide } from './EmptyCanvasGuide';
 import { ShortcutsDialog } from './ShortcutsDialog';
@@ -49,6 +52,13 @@ import './canvas.css';
 const NO_CATALOG: CanvasCatalog = { appId: '', items: {} };
 /** Tamaño de una caja sin medir (el mínimo de `.pixel-node`). */
 const NODE_SIZE = { width: 184, height: 72 } as const;
+/** Separación entre conexiones que unen el mismo par (px): cada una va por su carril, con su etiqueta. */
+const LANE_GAP = 24;
+/** Lo que dura cada tramo de "Previsualizar interacción" (la ida, luego la vuelta). */
+const PREVIEW_STEP_MS = 1800;
+/** Hueco mínimo para que una conexión hacia la izquierda salga por el lado izquierdo en vez de rodear las cajas. */
+const BACKWARD_GAP = 16;
+type CanvasFlowNode = WalkieFlowNode | GroupFlowNode | StickyFlowNode;
 
 /**
  * Lienzo de una feature. Todo cambio del grafo pasa por las acciones del store. `catalog` es el catálogo
@@ -72,7 +82,9 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
   const groups = useGraphStore((s) => s.groups);
-  const { addNode, addRef, moveNode, removeNode, connect, removeEdge } = useGraphStore((s) => s);
+  const stickyNotes = useGraphStore((s) => s.stickyNotes);
+  const { addNode, addRef, moveNode, removeNode, connect, removeEdge, duplicateNode } = useGraphStore((s) => s);
+  const { addStickyNote, moveStickyNote, removeStickyNote, duplicateStickyNote } = useGraphStore((s) => s);
   const { addGroup, moveGroup, resizeGroup, setNodeGroup, removeGroup, updateGroup } = useGraphStore((s) => s);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport } = useReactFlow();
   const openFeature = useOpenFeature();
@@ -103,6 +115,11 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const [selectedEdges, setSelectedEdges] = useState<ReadonlySet<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [openTourId, setOpenTourId] = useState<string | null>(null);
+  // Menú contextual de una caja o nota (clic derecho): duplicar, editar, eliminar.
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  // "Previsualizar interacción": las conexiones del intercambio, en orden (ida y vueltas), y la que se recorre ahora.
+  const [preview, setPreview] = useState<{ ids: string[]; index: number } | null>(null);
+  const previewId = preview?.ids[preview.index] ?? null;
   // Modo tour (spec modo-tour): qué tour y en qué paso; el lienzo queda de solo lectura.
   const [playing, setPlaying] = useState<{ tourId: string; step: number } | null>(null);
   const tours = useGraphStore((s) => s.tours);
@@ -140,7 +157,26 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     [inspectorOpen, catalog.share, pane.width, pane.height],
   );
 
+  const startPreview = useCallback(
+    (edgeId: string) => {
+      const ids = interactionEdges(graphEdges, edgeId);
+      setPreview(ids.length > 0 ? { ids, index: 0 } : null);
+    },
+    [graphEdges],
+  );
+  const stopPreview = useCallback(() => setPreview(null), []);
+  // Cada tramo se muestra un momento y pasa al siguiente; tras el último, la previsualización termina sola.
+  useEffect(() => {
+    if (!preview) return;
+    const timer = setTimeout(
+      () => setPreview((p) => (p && p.index + 1 < p.ids.length ? { ...p, index: p.index + 1 } : null)),
+      PREVIEW_STEP_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [preview]);
+
   const startTour = useCallback((tourId: string) => {
+    setPreview(null);
     setSelectedNodes(new Set());
     setSelectedEdges(new Set());
     setEditingId(null);
@@ -158,7 +194,20 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     [groups, playing],
   );
 
-  const nodes = useMemo<(WalkieFlowNode | GroupFlowNode)[]>(() => {
+  const nodes = useMemo<CanvasFlowNode[]>(() => {
+    // En una previsualización se destacan los extremos del intercambio.
+    const previewEdges = (preview?.ids ?? []).map((id) => graphEdges[id]).filter((e) => !!e);
+    const previewNodes = new Set(previewEdges.flatMap((e) => [e.from, e.to]));
+    const stateClass = (id: string) =>
+      playing
+        ? id === tourNodeId
+          ? 'tour-current'
+          : 'tour-dim'
+        : preview
+          ? previewNodes.has(id)
+            ? 'preview-node'
+            : 'preview-dim'
+          : undefined;
     const counts: Record<string, number> = {};
     for (const node of Object.values(graphNodes)) if (node.groupId) counts[node.groupId] = (counts[node.groupId] ?? 0) + 1;
     // Los grupos van primero y detrás (zIndex −1): React Flow dibuja en orden.
@@ -180,9 +229,20 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           resizable: !locked,
         },
         selected: selectedNodes.has(group.id),
-        className: playing ? 'tour-dim' : undefined,
+        className: playing ? 'tour-dim' : preview ? 'preview-dim' : undefined,
       };
     });
+    // Notas adhesivas: anotaciones sin conexiones, por encima de los grupos y debajo de las cajas.
+    const noteNodes: StickyFlowNode[] = Object.values(stickyNotes).map((note) => ({
+      id: note.id,
+      type: 'stickyNote',
+      position: layout[note.id] ?? { x: 0, y: 0 },
+      data: { note, editing: editingId === note.id, onEditDone: stopEditing, readOnly: locked },
+      selected: selectedNodes.has(note.id),
+      measured: measured[note.id],
+      connectable: false,
+      className: playing ? 'tour-dim' : preview ? 'preview-dim' : undefined,
+    }));
     const graphFlowNodes: WalkieFlowNode[] = Object.values(graphNodes).map((node) => ({
       id: node.id,
       type: node.type,
@@ -191,11 +251,14 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       selected: selectedNodes.has(node.id),
       measured: measured[node.id],
       hidden: !!node.groupId && collapsedGroups.has(node.groupId),
-      className: playing ? (node.id === tourNodeId ? 'tour-current' : 'tour-dim') : undefined,
+      className: stateClass(node.id),
     }));
-    return [...groupNodes, ...graphFlowNodes];
+    return [...groupNodes, ...noteNodes, ...graphFlowNodes];
   }, [
     graphNodes,
+    graphEdges,
+    preview,
+    stickyNotes,
     groups,
     collapsedGroups,
     layout,
@@ -223,29 +286,113 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       const next = nextTourNodeId && (from === nextTourNodeId || to === nextTourNodeId);
       return next ? 'tour-edge tour-edge-next' : 'tour-edge';
     };
-    const visible = Object.values(graphEdges)
+    /** Caja con la que se dibuja un extremo: el nodo (medido) o su grupo plegado. */
+    const boxOf = (id: string) => {
+      const at = layout[id];
+      if (!at) return null;
+      if (groups[id]) return { x: at.x, y: at.y, w: COLLAPSED_GROUP.width, h: COLLAPSED_GROUP.height };
+      const size = measured[id] ?? NODE_SIZE;
+      return { x: at.x, y: at.y, w: size.width, h: size.height };
+    };
+    const all = Object.values(graphEdges);
+    const position = new Map(all.map((edge, i) => [edge.id, i]));
+    // Una respuesta va justo después de su solicitud: en el lienzo queda en el carril siguiente.
+    const order = (edge: (typeof all)[number]) => {
+      const request = edge.replyTo ? position.get(edge.replyTo) : undefined;
+      return request === undefined ? position.get(edge.id)! : request + 0.5;
+    };
+    const visible = [...all]
+      .sort((a, b) => order(a) - order(b) || position.get(a.id)! - position.get(b.id)!)
       .map((edge) => ({ edge, source: end(edge.from), target: end(edge.to) }))
       .filter(({ source, target }) => source !== target);
-    // Etiquetas de conexiones que unen el mismo par: se reparten en vertical para que no se tapen (criterio 22).
+    // Conexiones que unen el mismo par (también las que llegan a un grupo plegado): cada una por su carril,
+    // con la etiqueta junto a su trazo, para poder leerlas y seleccionarlas (criterio 22).
     const pairs: Record<string, number> = {};
     const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
     for (const { source, target } of visible) pairs[pairKey(source, target)] = (pairs[pairKey(source, target)] ?? 0) + 1;
     const seen: Record<string, number> = {};
+    // Ramas de una misma decisión: cada una dobla en su propia x (las que suben, de arriba abajo; las que bajan,
+    // al revés) para que los tramos verticales no se pisen y cada etiqueta quede sobre su rama.
+    const bends = new Map<string, number>();
+    const byDecision: Record<string, { id: string; index: number; up: boolean }[]> = {};
+    for (const { edge, source, target } of visible) {
+      const origin = graphNodes[edge.from];
+      const index = origin?.branches?.findIndex((b) => b.id === edge.branch) ?? -1;
+      const from = boxOf(source);
+      const to = boxOf(target);
+      if (index < 0 || source !== edge.from || !from || !to || to.x < from.x + from.w + GRID * 8) continue;
+      (byDecision[source] ??= []).push({ id: edge.id, index, up: to.y + to.h / 2 < from.y + from.h / 2 });
+    }
+    for (const [source, list] of Object.entries(byDecision)) {
+      const from = boxOf(source)!;
+      const up = list.filter((e) => e.up).sort((a, b) => a.index - b.index);
+      const down = list.filter((e) => !e.up).sort((a, b) => b.index - a.index);
+      [...up, ...down].forEach((e, i) => bends.set(e.id, from.x + from.w + GRID * 4 + i * GRID * 2));
+    }
     return visible.map(({ edge, source, target }) => {
       const key = pairKey(source, target);
+      const count = pairs[key] ?? 1;
       const index = (seen[key] = (seen[key] ?? -1) + 1);
-      const labelOffset = (index - ((pairs[key] ?? 1) - 1) / 2) * 26;
+      const lane = index - (count - 1) / 2;
+      const from = boxOf(source);
+      const to = boxOf(target);
+      // Los carriles no se salen de la caja más baja del par.
+      const room = Math.min(from?.h ?? NODE_SIZE.height, to?.h ?? NODE_SIZE.height) - GRID * 3;
+      const gap = count > 1 ? Math.min(LANE_GAP, Math.max(GRID, room / (count - 1))) : 0;
+      const backward =
+        from && to && to.x + to.w + BACKWARD_GAP <= from.x ? { sourceX: from.x, targetX: to.x + to.w } : undefined;
+      const sourceNode = graphNodes[edge.from];
+      const targetNode = graphNodes[edge.to];
+      const branch = edge.branch ? sourceNode?.branches?.find((b) => b.id === edge.branch) : undefined;
+      const display = edgeDisplay(edge, {
+        branchLabel: branch?.label,
+        targetHttp: targetNode && (refTarget(targetNode, catalog.items)?.http ?? targetNode.http),
+      });
+      const step = preview ? preview.ids.indexOf(edge.id) : -1;
       return {
         id: edge.id,
         source,
         target,
+        // Una rama sale del punto de su salida en la decisión (si la decisión no está dentro de un grupo plegado).
+        sourceHandle: branch && source === edge.from ? branch.id : undefined,
         type: 'kind',
-        data: { kind: edge.kind, label: edge.label, when: edge.when, labelOffset },
+        data: {
+          kind: edge.kind,
+          label: edge.label,
+          when: edge.when,
+          display,
+          // La etiqueta va sobre su propio trazo; si los carriles quedan muy juntos, se abre lo que falte.
+          labelOffset: lane * Math.max(0, 26 - gap),
+          laneOffset: lane * gap,
+          backward,
+          bendX: count === 1 ? bends.get(edge.id) : undefined,
+          step: step >= 0 && preview!.ids.length > 1 ? step + 1 : undefined,
+        },
         selected: selectedEdges.has(edge.id),
-        className: tourClass(edge.from, edge.to),
+        className: preview
+          ? step < 0
+            ? 'edge-preview-dim'
+            : edge.id === previewId
+              ? 'edge-preview edge-preview-active'
+              : 'edge-preview'
+          : tourClass(edge.from, edge.to),
       };
     });
-  }, [graphEdges, graphNodes, collapsedGroups, selectedEdges, playing, tourNodeId, nextTourNodeId]);
+  }, [
+    graphEdges,
+    graphNodes,
+    groups,
+    layout,
+    measured,
+    catalog.items,
+    collapsedGroups,
+    selectedEdges,
+    playing,
+    tourNodeId,
+    nextTourNodeId,
+    preview,
+    previewId,
+  ]);
 
   /** Grupo desplegado que contiene el punto (el más chico si hay varios), para incluir un nodo al soltarlo. */
   const groupAt = useCallback(
@@ -274,11 +421,13 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   );
 
   const onNodesChange = useCallback(
-    (changes: NodeChange<WalkieFlowNode | GroupFlowNode>[]) => {
+    (changes: NodeChange<CanvasFlowNode>[]) => {
       for (const change of changes) {
         const isGroup = change.type !== 'add' && change.id in groups;
+        const isNote = change.type !== 'add' && change.id in stickyNotes;
         if (change.type === 'position' && change.position) {
-          if (!isGroup) moveNode(change.id, change.position);
+          if (isNote) moveStickyNote(change.id, change.position);
+          else if (!isGroup) moveNode(change.id, change.position);
           // Arrastrar un grupo mueve sus nodos; redimensionarlo desde arriba o la izquierda solo mueve la caja.
           else if (change.dragging) moveGroup(change.id, change.position);
           else {
@@ -293,6 +442,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         }
         if (change.type === 'remove') {
           if (isGroup) removeGroup(change.id);
+          else if (isNote) removeStickyNote(change.id);
           else removeNode(change.id);
           setSelectedNodes((s) => toggle(s, change.id, false));
         }
@@ -307,19 +457,19 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         }
       }
     },
-    [moveNode, removeNode, groups, layout, moveGroup, resizeGroup, removeGroup],
+    [moveNode, removeNode, groups, stickyNotes, layout, moveGroup, resizeGroup, removeGroup, moveStickyNote, removeStickyNote],
   );
 
   // Soltar un nodo dentro de un grupo lo incluye; soltarlo fuera lo saca (criterio 18).
   const onNodeDragStop = useCallback(
     (_: unknown, __: unknown, dragged: { id: string }[]) => {
       for (const { id } of dragged) {
-        if (id in groups) continue;
+        if (id in groups || id in stickyNotes) continue;
         const center = centerOf(id);
         if (center) setNodeGroup(id, groupAt(center));
       }
     },
-    [groups, centerOf, groupAt, setNodeGroup],
+    [groups, stickyNotes, centerOf, groupAt, setNodeGroup],
   );
 
   const onEdgesChange = useCallback(
@@ -339,12 +489,14 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   // que existe: React Flow no deselecciona lo que se borra (ni las conexiones que caen en cascada).
   const liveNodes = [...selectedNodes].filter((id) => graphNodes[id]);
   const liveGroups = [...selectedNodes].filter((id) => groups[id]);
+  const liveNotes = [...selectedNodes].filter((id) => stickyNotes[id]);
   const liveEdges = [...selectedEdges].filter((id) => graphEdges[id]);
-  const single = liveNodes.length + liveGroups.length + liveEdges.length === 1;
+  const single = liveNodes.length + liveGroups.length + liveNotes.length + liveEdges.length === 1;
+  const panelNoteId = single ? (liveNotes[0] ?? null) : null;
   const panelNodeId = single ? (liveNodes[0] ?? null) : null;
   const panelGroupId = single ? (liveGroups[0] ?? null) : null;
   const panelEdgeId = single ? (liveEdges[0] ?? null) : null;
-  const panelSelected = Boolean(panelNodeId || panelEdgeId || panelGroupId);
+  const panelSelected = Boolean(panelNodeId || panelEdgeId || panelGroupId || panelNoteId);
 
   // Un `ref` conecta como su elemento del catálogo (spec catalogo, criterio 9).
   const onConnect = useCallback(
@@ -355,7 +507,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         source && target
           ? defaultEdgeKind(effectiveType(source, catalog.items), effectiveType(target, catalog.items))
           : undefined;
-      connect(c.source, c.target, kind);
+      // Desde el punto de una salida de decisión, la conexión nace como esa rama.
+      connect(c.source, c.target, kind, { branch: c.sourceHandle });
     },
     [connect, graphNodes, catalog.items],
   );
@@ -400,6 +553,34 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     setSelectedEdges(new Set());
   }
 
+  /** Selecciona desde el inspector (ir de una solicitud a su respuesta, o al contrato de la API). */
+  const selectFromPanel = useCallback((target: { nodeId?: string; edgeId?: string }) => {
+    setSelectedNodes(new Set(target.nodeId ? [target.nodeId] : []));
+    setSelectedEdges(new Set(target.edgeId ? [target.edgeId] : []));
+  }, []);
+
+  /**
+   * Duplicar (Ctrl+D o el menú contextual): copia las cajas y notas seleccionadas con un ligero desplazamiento
+   * y deja seleccionadas las copias. Una copia empieza sin conexiones.
+   */
+  function duplicate(ids: readonly string[]) {
+    const copies: string[] = [];
+    for (const id of ids) {
+      const copy = graphNodes[id] ? duplicateNode(id) : stickyNotes[id] ? duplicateStickyNote(id) : null;
+      if (copy) copies.push(copy);
+    }
+    if (copies.length === 0) return;
+    setSelectedNodes(new Set(copies));
+    setSelectedEdges(new Set());
+    setEditingId(null);
+  }
+
+  function removeFromMenu(id: string) {
+    if (graphNodes[id]) removeNode(id);
+    else removeStickyNote(id);
+    setSelectedNodes((s) => toggle(s, id, false));
+  }
+
   function onDrop(event: DragEvent) {
     event.preventDefault();
     if (locked) return;
@@ -416,9 +597,32 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     addAt(create, pane ? pane.left + pane.width / 2 - 100 + step : 0, pane ? pane.top + pane.height / 2 - 40 + step : 0);
   }
 
+  /** Nota adhesiva en el centro, lista para escribir. */
+  function addNote() {
+    addAtCenter((p) => {
+      const id = addStickyNote(p);
+      setEditingId(id);
+      return id;
+    });
+  }
+
   // Atajos (spec espacio-de-trabajo, criterio 5): 1–7 agregan, + − 0 zoom, I inspector, ? ayuda.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      // Ctrl+D / Cmd+D duplica lo seleccionado. Mientras se escribe (inspector, título, nota) no hace nada aquí.
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'd') {
+        if (isTyping(event.target) || locked) return;
+        const ids = [...selectedNodes].filter((id) => graphNodes[id] || stickyNotes[id]);
+        if (ids.length === 0) return;
+        event.preventDefault();
+        duplicate(ids);
+        return;
+      }
+      if (event.key === 'Escape' && (preview || menu)) {
+        setPreview(null);
+        setMenu(null);
+        return;
+      }
       if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target) || playing) return;
       const digit = Number(event.key);
       if (!readOnly && Number.isInteger(digit) && digit >= 1 && digit <= PALETTE_TYPES.length) {
@@ -428,6 +632,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       else if (event.key === '0') void fitView({ padding: fitPadding, duration: 200 });
       else if (!readOnly && event.key.toLowerCase() === 'i') toggleInspector();
       else if (!readOnly && event.key.toLowerCase() === 'g') createGroup();
+      else if (!readOnly && event.key.toLowerCase() === 'n') addNote();
       else if (event.key.toLowerCase() === 'm') toggleEdgeMotion();
       else if (event.key === '?') setHelpOpen((open) => !open);
       else return;
@@ -463,22 +668,17 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     [catalog.featureId, readOnly],
   );
 
-  const selectedNode = panelNodeId ? graphNodes[panelNodeId] : undefined;
+  // Las ayudas de uso viven en "?" (atajos y gestos) y en los tooltips; aquí solo lo que cambia el modo del lienzo.
+  const previewEdge = previewId ? edges.find((e) => e.id === previewId) : undefined;
   const hint = playing
     ? null
-    : readOnly
-      ? 'Solo lectura: desplázate, acerca y recorre los tours.'
-      : panelGroupId
-        ? 'Grupo: arrástralo por su nombre para mover sus cajas · Suelta una caja dentro para incluirla · Supr lo quita'
-        : selectedNode?.type === 'ref'
-        ? 'Componente: su definición se edita en el inspector y cambia en todos los lienzos · Supr lo quita de aquí'
-        : selectedNode
-          ? 'Arrastra el punto derecho hasta otra caja para conectarlas · Doble clic edita el título · Supr borra'
-          : panelEdgeId
-            ? 'La animación muestra el sentido del flujo documentado, no tráfico real · Edita el detalle en el inspector · Supr la borra'
-            : empty
-              ? null
-              : 'Clic en una caja para ver sus propiedades · Arrastra el fondo para moverte · ? atajos';
+    : preview && previewEdge?.data?.display
+      ? `Previsualizando${preview.ids.length > 1 ? ` · ${preview.index + 1} de ${preview.ids.length}` : ''}: ${
+          graphNodes[graphEdges[previewEdge.id]!.from]?.title ?? ''
+        } → ${graphNodes[graphEdges[previewEdge.id]!.to]?.title ?? ''} (${edgeDisplayText(previewEdge.data.display)}) · Esc termina`
+      : readOnly
+        ? 'Solo lectura: desplázate, acerca y recorre los tours.'
+        : null;
 
   const paletteCatalog = catalog.appId
     ? {
@@ -498,6 +698,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     <div
       className={[
         'canvas',
+        preview && 'canvas-previewing',
         readOnly && 'canvas-readonly',
         playing && 'canvas-touring',
         edgeMotion && 'edge-motion',
@@ -527,6 +728,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           // El título de un `ref` se edita en el catálogo; el doble clic en un `portal` abre su destino.
           onNodeDoubleClick={(_, flowNode) => {
             if (locked) return;
+            if (stickyNotes[flowNode.id]) return setEditingId(flowNode.id);
             const node = graphNodes[flowNode.id];
             if (!node || node.type === 'ref') return;
             if (node.type === 'portal') {
@@ -536,6 +738,17 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             }
             setEditingId(node.id);
           }}
+          onNodeContextMenu={(event, flowNode) => {
+            if (locked || !(graphNodes[flowNode.id] || stickyNotes[flowNode.id])) return;
+            event.preventDefault();
+            if (!selectedNodes.has(flowNode.id)) {
+              setSelectedNodes(new Set([flowNode.id]));
+              setSelectedEdges(new Set());
+            }
+            setMenu({ id: flowNode.id, x: event.clientX, y: event.clientY });
+          }}
+          onPaneClick={() => setMenu(null)}
+          onMoveStart={() => setMenu(null)}
           zoomOnDoubleClick={false}
           // Mayús, Ctrl o Cmd + clic suman cajas a la selección (para agruparlas con G).
           multiSelectionKeyCode={['Shift', 'Meta', 'Control']}
@@ -558,6 +771,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           <Palette
             onAdd={(type) => addAtCenter((p) => addNode(type, p))}
             onAddGroup={createGroup}
+            onAddNote={addNote}
             catalog={paletteCatalog}
           />
         )}
@@ -570,6 +784,29 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           <p className="canvas-hint" aria-live="polite">
             {hint}
           </p>
+        )}
+        {menu && !locked && (
+          <NodeMenu
+            x={menu.x}
+            y={menu.y}
+            // Con varias cajas seleccionadas, "Duplicar" las copia todas.
+            count={selectedNodes.has(menu.id) ? [...selectedNodes].filter((id) => graphNodes[id] || stickyNotes[id]).length : 1}
+            editLabel={
+              stickyNotes[menu.id]
+                ? 'Editar texto'
+                : graphNodes[menu.id]?.type === 'ref' || graphNodes[menu.id]?.type === 'portal'
+                  ? null
+                  : 'Editar título'
+            }
+            onDuplicate={() =>
+              duplicate(
+                selectedNodes.has(menu.id) ? [...selectedNodes].filter((id) => graphNodes[id] || stickyNotes[id]) : [menu.id],
+              )
+            }
+            onEdit={() => setEditingId(menu.id)}
+            onRemove={() => removeFromMenu(menu.id)}
+            onClose={() => setMenu(null)}
+          />
         )}
         {playing && (
           <TourPlayer
@@ -602,6 +839,9 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             nodeId={panelNodeId}
             edgeId={panelEdgeId}
             groupId={panelGroupId}
+            noteId={panelNoteId}
+            onSelect={selectFromPanel}
+            preview={{ activeEdgeId: previewId, onStart: startPreview, onStop: stopPreview }}
             tours={{ openTourId, onOpen: setOpenTourId, onPlay: startTour }}
           />
         </div>

@@ -5,7 +5,7 @@ namespace Walkie.Modules.Canvas.Features;
 
 /// <summary>
 /// Valida un grafo contra <c>packages/schema/walkie-graph.schema.json</c> (<see cref="WalkieSchemas"/>)
-/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones, layout y pasos de tours apuntan a nodos o grupos, inputs y reglas).
+/// y luego la integridad que el schema no puede expresar (claves = ids, conexiones, layout y pasos de tours apuntan a nodos, grupos o notas, inputs y reglas, salidas de una decisión y solicitud de una respuesta).
 /// </summary>
 internal sealed class GraphValidator
 {
@@ -45,6 +45,8 @@ internal sealed class GraphValidator
             OnlyOn(node, "targetFeatureId", "portal", "Solo los portales tienen feature destino.", errors);
             OnlyOn(node, "http", "api", "Solo las API tienen contrato.", errors);
             OnlyOn(node, "database", "database", "Solo las bases de datos tienen estructura.", errors);
+            OnlyOn(node, "mode", "rule", "Solo una regla puede ser una decisión.", errors);
+            BranchErrors(node, errors);
             if (node.Value.TryGetProperty("groupId", out var groupId) && !groupIds.Contains(groupId.GetString()!))
             {
                 errors[$"/nodes/{node.Name}/groupId"] = ["El nodo está en un grupo que no existe."];
@@ -67,8 +69,29 @@ internal sealed class GraphValidator
             }
         }
 
-        foreach (var edge in graph.GetProperty("edges").EnumerateObject())
+        var stickyIds = new HashSet<string>(StringComparer.Ordinal);
+        if (graph.TryGetProperty("stickyNotes", out var stickyNotes))
         {
+            foreach (var note in stickyNotes.EnumerateObject())
+            {
+                stickyIds.Add(note.Name);
+                if (note.Value.GetProperty("id").GetString() != note.Name)
+                {
+                    errors[$"/stickyNotes/{note.Name}/id"] = ["El id de la nota debe coincidir con su clave."];
+                }
+
+                if (nodeIds.Contains(note.Name) || groupIds.Contains(note.Name))
+                {
+                    errors[$"/stickyNotes/{note.Name}"] = ["Una nota no puede tener el id de un nodo o de un grupo."];
+                }
+            }
+        }
+
+        var edges = graph.GetProperty("edges");
+        foreach (var edge in edges.EnumerateObject())
+        {
+            EdgeLinkErrors(edge, edges, nodes, errors);
+
             if (edge.Value.GetProperty("id").GetString() != edge.Name)
             {
                 errors[$"/edges/{edge.Name}/id"] = ["El id de la conexión debe coincidir con su clave."];
@@ -97,9 +120,9 @@ internal sealed class GraphValidator
                     errors[$"/layout/{position.Name}"] = ["La caja de un grupo necesita ancho y alto."];
                 }
             }
-            else if (!nodeIds.Contains(position.Name))
+            else if (!nodeIds.Contains(position.Name) && !stickyIds.Contains(position.Name))
             {
-                errors[$"/layout/{position.Name}"] = ["La posición es de un nodo o grupo que no existe."];
+                errors[$"/layout/{position.Name}"] = ["La posición es de un nodo, grupo o nota que no existe."];
             }
         }
 
@@ -125,6 +148,65 @@ internal sealed class GraphValidator
                 }
 
                 i++;
+            }
+        }
+    }
+
+    /// <summary>Salidas de una decisión: solo en una regla en modo <c>decision</c> y con ids únicos.</summary>
+    private static void BranchErrors(JsonProperty node, Dictionary<string, string[]> errors)
+    {
+        if (!node.Value.TryGetProperty("branches", out var branches))
+        {
+            return;
+        }
+
+        var decision = node.Value.GetProperty("type").GetString() == "rule"
+            && node.Value.TryGetProperty("mode", out var mode) && mode.GetString() == "decision";
+        if (!decision)
+        {
+            errors[$"/nodes/{node.Name}/branches"] = ["Solo una decisión tiene salidas."];
+            return;
+        }
+
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var i = 0;
+        foreach (var branch in branches.EnumerateArray())
+        {
+            if (!ids.Add(branch.GetProperty("id").GetString()!))
+            {
+                errors[$"/nodes/{node.Name}/branches/{i}/id"] = ["Ya hay una salida con ese id en la decisión."];
+            }
+
+            i++;
+        }
+    }
+
+    /// <summary>
+    /// Vínculos de una conexión: <c>branch</c> es una salida de la decisión de origen y <c>replyTo</c> es otra
+    /// conexión <c>request</c> del lienzo.
+    /// </summary>
+    private static void EdgeLinkErrors(JsonProperty edge, JsonElement edges, JsonElement nodes, Dictionary<string, string[]> errors)
+    {
+        if (edge.Value.TryGetProperty("branch", out var branch))
+        {
+            var known = nodes.TryGetProperty(edge.Value.GetProperty("from").GetString()!, out var source)
+                && source.TryGetProperty("branches", out var branches)
+                && branches.EnumerateArray().Any(b => b.GetProperty("id").GetString() == branch.GetString());
+            if (!known)
+            {
+                errors[$"/edges/{edge.Name}/branch"] = ["La conexión apunta a una salida que su nodo de origen no tiene."];
+            }
+        }
+
+        if (edge.Value.TryGetProperty("replyTo", out var replyTo))
+        {
+            var id = replyTo.GetString()!;
+            var isRequest = id != edge.Name
+                && edges.TryGetProperty(id, out var request)
+                && request.GetProperty("kind").GetString() == "request";
+            if (!isRequest)
+            {
+                errors[$"/edges/{edge.Name}/replyTo"] = ["La respuesta apunta a una solicitud que no existe."];
             }
         }
     }

@@ -658,35 +658,112 @@ div.pixel-node-image {
   stroke: var(--stone-500) !important;
 }
 
-/* Sentido animado (criterio 21): solo en selección, al pasar por encima o en el paso de un tour. Es un flujo
-   documentado, no tráfico real; se apaga con el interruptor o con movimiento reducido. */
-.kind-edge-flow {
-  stroke: var(--spice);
-  stroke-width: 3px;
-  stroke-dasharray: 3 13;
+/* Sentido animado (criterio 21): un pulso que recorre la conexión del origen al destino, solo en selección, al
+   pasar por encima, en una previsualización o en el paso de un tour. Es un flujo documentado, no tráfico real; se
+   apaga con el interruptor o con movimiento reducido (flechas y etiquetas siguen diciendo el sentido). */
+.kind-edge-flow,
+.kind-edge-flow-halo {
+  /* `pathLength="100"`: un pulso de 9 % del largo y el resto vacío. */
+  stroke-dasharray: 9 91;
+  stroke-dashoffset: 9;
   stroke-linecap: round;
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--t-fast) var(--ease);
 }
 
+.kind-edge-flow {
+  stroke: var(--spice);
+  stroke-width: 4px;
+}
+
+/* Halo claro bajo el pulso: lo separa del trazo y del fondo de puntos. */
+.kind-edge-flow-halo {
+  stroke: #fffaf1;
+  stroke-width: 8px;
+}
+
 .edge-motion .react-flow__edge:hover .kind-edge-flow,
 .edge-motion .react-flow__edge.selected .kind-edge-flow,
-.edge-motion .react-flow__edge.tour-edge-next .kind-edge-flow {
-  opacity: 0.9;
-  animation: edge-flow 0.9s linear infinite;
+.edge-motion .react-flow__edge.tour-edge-next .kind-edge-flow,
+.react-flow__edge.edge-preview-active .kind-edge-flow {
+  opacity: 1;
+  animation: edge-flow 1.3s linear infinite;
+}
+
+.edge-motion .react-flow__edge:hover .kind-edge-flow-halo,
+.edge-motion .react-flow__edge.selected .kind-edge-flow-halo,
+.edge-motion .react-flow__edge.tour-edge-next .kind-edge-flow-halo,
+.react-flow__edge.edge-preview-active .kind-edge-flow-halo {
+  opacity: 0.95;
+  animation: edge-flow 1.3s linear infinite;
 }
 
 @keyframes edge-flow {
+  from {
+    stroke-dashoffset: 9;
+  }
+
   to {
-    stroke-dashoffset: -16;
+    stroke-dashoffset: -91;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kind-edge-flow {
+  .kind-edge-flow,
+  .kind-edge-flow-halo {
     display: none;
   }
+}
+
+/* Rama de decisión: el trazo claro de "usa" con punta, para que la salida se lea con su sentido. */
+.kind-edge.is-branch {
+  stroke: var(--stone-700) !important;
+}
+
+/* Previsualizar interacción: el intercambio se destaca, el tramo en curso lleva el pulso y el resto se atenúa. */
+.react-flow__edge.edge-preview .kind-edge {
+  stroke: var(--ink) !important;
+  stroke-width: 2.25px !important;
+}
+
+.react-flow__edge.edge-preview-active .kind-edge {
+  stroke: var(--spice) !important;
+  stroke-width: 2.75px !important;
+}
+
+.react-flow__edge.edge-preview-dim,
+.react-flow__node.preview-dim {
+  opacity: 0.28;
+}
+
+.react-flow__node.preview-node .pixel-node {
+  outline: 2px solid var(--spice);
+  outline-offset: 3px;
+}
+
+.canvas-previewing .kind-edge-label {
+  opacity: 0.3;
+}
+
+.canvas-previewing .kind-edge-label:has(.kind-edge-step) {
+  opacity: 1;
+  border-color: var(--spice);
+}
+
+.kind-edge-step {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--spice);
+  color: #fff8ee;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .edge-markers {
@@ -735,6 +812,45 @@ div.pixel-node-image {
   font-family: var(--font-mono);
   font-weight: 500;
   color: var(--ink);
+}
+
+.kind-edge-text.is-mono,
+.is-mono {
+  font-family: var(--font-mono);
+  font-size: 0.94em;
+}
+
+/* Código HTTP de una respuesta: distintivo propio (no es una condición). */
+.kind-edge-code {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--dune-100);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.kind-edge-code[data-tone='ok'] {
+  background: color-mix(in srgb, var(--ok) 18%, var(--sand-raised));
+  color: color-mix(in srgb, var(--ok) 75%, var(--ink));
+}
+
+.kind-edge-code[data-tone='error'] {
+  background: color-mix(in srgb, var(--danger) 16%, var(--sand-raised));
+  color: var(--danger);
+}
+
+/* La etiqueta de una salida de decisión se lee como parte de la rama. */
+.kind-edge-label[data-branch] {
+  border-color: color-mix(in srgb, #b58316 55%, var(--dune-300));
+  background: color-mix(in srgb, #b58316 10%, var(--sand-raised));
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.kind-edge-label[data-branch] .kind-edge-text {
+  font-weight: 400;
 }
 
 .kind-edge-label[data-selected] {
@@ -886,6 +1002,11 @@ div.pixel-node-image {
     left: auto;
   }
 
+  /* Con el inspector abajo queda menos alto: las herramientas se compactan para no llegar a él. */
+  .toolbar-tool {
+    height: 34px;
+  }
+
   .inspector {
     top: auto;
     left: 12px;
@@ -1009,4 +1130,147 @@ div.pixel-node-image {
 
 .zoom-button.motion-toggle[aria-pressed='false'] {
   color: var(--stone-500);
+}
+
+/* Decisión: una regla que bifurca. Mismo color; encabezado propio y una fila por salida con su punto. */
+.pixel-node[data-mode='decision'] {
+  border-style: dashed;
+}
+
+.pixel-node-branches {
+  margin: 8px 0 0;
+  padding: 6px 0 0;
+  list-style: none;
+  border-top: 1px dashed color-mix(in srgb, var(--node-color) 35%, transparent);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.pixel-node-branches li {
+  position: relative;
+  padding: 2px 16px 2px 10px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.pixel-node-branches li span::after {
+  content: ' ▸';
+  color: var(--node-color);
+}
+
+.pixel-node .pixel-node-handle-fallback {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Notas adhesivas: anotaciones, no nodos del flujo. Papel paja sin borde de tipo ni puntos de conexión. */
+.sticky-note {
+  position: relative;
+  width: 184px;
+  min-height: 72px;
+  padding: 10px 12px 12px;
+  border: 1px solid #dcc98a;
+  border-radius: 2px 2px 12px 2px;
+  background: #f8ecbf;
+  color: var(--ink);
+  box-shadow: 2px 2px 0 rgb(91 78 64 / 22%);
+}
+
+/* Esquina doblada. */
+.sticky-note::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-top: 1px solid #dcc98a;
+  border-left: 1px solid #dcc98a;
+  border-radius: 2px 0 12px;
+  background: #ead9a0;
+}
+
+.sticky-note[data-selected] {
+  outline: 2px solid var(--ibad);
+  outline-offset: 3px;
+}
+
+.sticky-note-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sticky-note[data-empty] .sticky-note-text {
+  color: var(--stone-500);
+  font-style: italic;
+}
+
+.sticky-note-input {
+  display: block;
+  width: 100%;
+  min-height: 80px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.sticky-note-input:focus {
+  box-shadow: none;
+}
+
+.toolbar-note .toolbar-glyph {
+  color: #9a7a1c;
+  font-size: 15px;
+}
+
+/* Menú contextual de una caja. */
+.node-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 208px;
+  padding: 4px;
+}
+
+.node-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.node-menu button:hover,
+.node-menu button:focus-visible {
+  background: var(--dune-100);
+}
+
+.node-menu button.is-danger {
+  color: var(--danger);
+}
+
+.node-menu kbd {
+  border: 0;
+  background: transparent;
+  color: var(--stone-500);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }

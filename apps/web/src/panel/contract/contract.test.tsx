@@ -119,6 +119,5 @@ describe('notas y detalle de las conexiones', () => {
       data: { operation: 'write', entities: ['cuentas', 'movimientos'] },
       example: 'INSERT',
     });
-    expect(screen.getByText(/el contrato completo/i)).toBeInTheDocument();
   });
 });

@@ -449,3 +449,225 @@
   font-size: 12px;
   font-weight: 600;
 }
+
+/* Inspector de una conexión: resumen (origen → destino, tipo y etiqueta) y acciones. */
+.edge-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand);
+}
+
+.edge-route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.edge-route-end {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+button.edge-route-end {
+  cursor: pointer;
+  text-decoration: underline dotted var(--stone-500);
+  text-underline-offset: 3px;
+}
+
+button.edge-route-end:hover {
+  color: var(--spice-strong);
+}
+
+.edge-route-arrow {
+  color: var(--spice);
+  font-weight: 700;
+}
+
+.edge-summary-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  color: var(--stone-700);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.edge-summary-label .kind-edge-main {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.edge-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.edge-summary-actions .pixel-button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.edge-summary-actions .pixel-button[aria-pressed='true'] {
+  border-color: var(--spice);
+  background: var(--spice-tint);
+}
+
+.edge-note,
+.edge-contract {
+  margin: 0;
+  color: var(--stone-700);
+  font-size: 12.5px;
+}
+
+p.edge-contract {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+
+.edge-contract code {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.link-button {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--spice-strong);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.edge-status-input {
+  width: 88px;
+}
+
+.edge-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.edge-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.edge-link:hover:not(:disabled) {
+  border-color: var(--stone-500);
+}
+
+.edge-link-muted {
+  color: var(--stone-500);
+  font-size: 12px;
+}
+
+.edge-add-responses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.edge-add-responses .pixel-button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+/* Regla | Decisión */
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 2px;
+  border: 1px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  background: var(--sand);
+}
+
+.segmented button {
+  min-height: 28px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--stone-700);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--sand-raised);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--dune-300);
+}
+
+.branch-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.branch-row .panel-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.branch-row .icon-button {
+  width: 32px;
+  min-height: 32px;
+}
+
+.branch-assign {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.branch-assign label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

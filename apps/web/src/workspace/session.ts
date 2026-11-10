@@ -72,3 +72,10 @@ export const setInspectorOpen = (open: boolean) => write(INSPECTOR, open);
 export const getEdgeMotion = () => read(EDGE_MOTION, (v): v is boolean => typeof v === 'boolean') ?? true;
 
 export const setEdgeMotion = (on: boolean) => write(EDGE_MOTION, on);
+
+const AUTOSAVE = 'walkie.autosave';
+
+/** Autoguardado del lienzo: preferencia de este navegador; apagado por defecto (guardado manual). */
+export const getAutosave = () => read(AUTOSAVE, (v): v is boolean => typeof v === 'boolean') ?? false;
+
+export const setAutosave = (on: boolean) => write(AUTOSAVE, on);

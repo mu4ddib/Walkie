@@ -1,9 +1,9 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import { v7 as uuidv7 } from 'uuid';
-import type { Edge, Group, Node, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
+import type { Edge, Group, Node, StickyNote, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import { GRID } from '../theme/palette';
-import { normalizeDatabase, normalizeEdgeData, normalizeHttp } from '../contracts/contracts';
+import { normalizeDatabase, normalizeEdgeData, normalizeEdgeRequest, normalizeHttp } from '../contracts/contracts';
 
 export type NodeType = Node['type'];
 export type EdgeKind = Edge['kind'];
@@ -79,7 +79,31 @@ export interface EdgePatch {
   example?: string;
   /** Acceso a datos (operación y entidades); `null` lo quita. */
   data?: Edge['data'] | null;
+  /** Salida de la decisión de origen; `null` la quita. Se ignora si el origen no tiene esa salida. */
+  branch?: string | null;
+  /** Código HTTP de una respuesta (100 a 599); `null` lo quita. */
+  status?: number | null;
+  /** Solicitud a la que responde; `null` la desvincula. Debe ser otra conexión `request`. */
+  replyTo?: string | null;
+  /** Qué ocurre después de una respuesta. */
+  outcome?: string;
+  /** Endpoint y parámetros propios de una solicitud; `null` vuelve al contrato de la API. */
+  request?: Edge['request'] | null;
+  /** Invierte el sentido (origen ↔ destino) en el mismo cambio; pierde la salida de decisión, que era del origen. */
+  reverse?: boolean;
 }
+
+export type Branch = NonNullable<Node['branches']>[number];
+/** Máximo del schema para `branches`. */
+export const BRANCHES_MAX = 24;
+/** Máximo del schema para `edge.outcome`. */
+export const OUTCOME_MAX_LENGTH = 500;
+/** Máximo del schema para el texto de una nota adhesiva. */
+export const STICKY_TEXT_MAX_LENGTH = 1000;
+/** Salidas con las que nace una decisión. */
+export const DEFAULT_BRANCH_LABELS = ['Sí', 'No'] as const;
+/** Desplazamiento de una copia respecto del original (3 celdas de la grilla). */
+export const DUPLICATE_OFFSET = GRID * 3;
 
 /** Límite de las notas de un nodo (schema). */
 export const NOTES_MAX_LENGTH = 4000;
@@ -182,6 +206,33 @@ function freeInputName(node: Node): string {
   return `campo ${n}`;
 }
 
+/** Código HTTP válido para `edge.status`. */
+function validStatus(status: number | null | undefined): status is number {
+  return typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599;
+}
+
+/** Quita `replyTo` de las respuestas cuya solicitud ya no existe. */
+function withoutDanglingReplies(edges: Record<string, Edge>): Record<string, Edge> {
+  if (!Object.values(edges).some((e) => e.replyTo && !edges[e.replyTo])) return edges;
+  return Object.fromEntries(
+    Object.entries(edges).map(([key, e]) => {
+      if (!e.replyTo || edges[e.replyTo]) return [key, e];
+      const copy = { ...e };
+      delete copy.replyTo;
+      return [key, copy];
+    }),
+  );
+}
+
+/** Primera etiqueta libre para una salida nueva: "Sí", "No", "Rama 3"… */
+function freeBranchLabel(branches: readonly Branch[]): string {
+  const taken = new Set(branches.map((b) => b.label));
+  for (const label of DEFAULT_BRANCH_LABELS) if (!taken.has(label)) return label;
+  let n = branches.length + 1;
+  while (taken.has(`Rama ${n}`)) n++;
+  return `Rama ${n}`;
+}
+
 /** Copia de `record` sin la clave `key`. */
 function omit<T>(record: Record<string, T>, key: string): Record<string, T> {
   const copy = { ...record };
@@ -197,6 +248,8 @@ export interface GraphState {
   tours: Record<string, Tour>;
   /** Grupos de infraestructura, por id; su caja (x, y, w, h) está en `layout` con el mismo id. */
   groups: Record<string, Group>;
+  /** Notas adhesivas (anotaciones del lienzo), por id; su posición está en `layout` con el mismo id. */
+  stickyNotes: Record<string, StickyNote>;
   /** Versión guardada en el servidor (concurrencia optimista). */
   version: number;
   /** Hay cambios sin guardar. */
@@ -251,10 +304,35 @@ export interface GraphActions {
   removeInput(nodeId: string, index: number): void;
   /** Borra el nodo, sus conexiones y su `layout`; si es una regla, la quita de los `ruleIds` de los inputs. */
   removeNode(id: string): void;
-  /** Crea la conexión; `null` si algún nodo no existe o es el mismo nodo. */
-  connect(from: string, to: string, kind?: EdgeKind): string | null;
+  /**
+   * Copia de la caja con id propio, sus propiedades (imagen, inputs, contrato, `catalogId`, salidas) y el mismo
+   * grupo, corrida `DUPLICATE_OFFSET`; sin conexiones ni pasos de tour. Devuelve el id nuevo o `null` si no existe.
+   */
+  duplicateNode(id: string): string | null;
+  /** Regla ↔ decisión con el mismo id, título, posición y conexiones. A decisión: nace con "Sí" y "No". */
+  setRuleMode(id: string, mode: 'rule' | 'decision'): void;
+  /** Agrega una salida a una decisión; devuelve su id o `null` (no es decisión, etiqueta vacía o límite). */
+  addBranch(nodeId: string, label?: string): string | null;
+  /** Etiqueta de una salida; vacía no se aplica. */
+  renameBranch(nodeId: string, branchId: string, label: string): void;
+  /** Quita la salida; sus conexiones siguen, sin salida asignada. */
+  removeBranch(nodeId: string, branchId: string): void;
+  /** Nota adhesiva en `position`; devuelve su id. */
+  addStickyNote(position: Position, text?: string): string;
+  updateStickyNote(id: string, text: string): void;
+  moveStickyNote(id: string, position: Position): void;
+  removeStickyNote(id: string): void;
+  /** Copia de la nota, corrida `DUPLICATE_OFFSET`; devuelve su id o `null`. */
+  duplicateStickyNote(id: string): string | null;
+  /** Crea la conexión; `null` si algún nodo no existe o es el mismo nodo. `branch`: salida de la decisión de origen. */
+  connect(from: string, to: string, kind?: EdgeKind, init?: { branch?: string | null }): string | null;
+  /**
+   * Respuesta a una solicitud: conexión `response` en sentido inverso, vinculada con `replyTo`. Una solicitud puede
+   * tener varias (éxito, error). Devuelve su id o `null` si `requestId` no es una conexión `request`.
+   */
+  addResponse(requestId: string, init?: { status?: number; label?: string }): string | null;
   setEdgeKind(id: string, kind: EdgeKind): void;
-  /** Tipo, etiqueta (`label`) y condición (`when`). */
+  /** Tipo, etiqueta (`label`), condición (`when`) y el detalle propio de cada interacción (`EdgePatch`). */
   updateEdge(id: string, patch: EdgePatch): void;
   removeEdge(id: string): void;
   /** Crea un tour vacío; devuelve su id o `null` si el nombre queda vacío. */
@@ -285,6 +363,7 @@ const emptyState: GraphState = {
   layout: {},
   tours: {},
   groups: {},
+  stickyNotes: {},
   version: 0,
   dirty: false,
 };
@@ -337,6 +416,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           layout: graph.layout,
           tours: graph.tours ?? {},
           groups: graph.groups ?? {},
+          stickyNotes: graph.stickyNotes ?? {},
           version: graph.version,
           dirty: false,
         }),
@@ -584,7 +664,9 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
             );
           }
           const layout = omit(s.layout, id);
-          const edges = Object.fromEntries(Object.entries(s.edges).filter(([, e]) => e.from !== id && e.to !== id));
+          const edges = withoutDanglingReplies(
+            Object.fromEntries(Object.entries(s.edges).filter(([, e]) => e.from !== id && e.to !== id)),
+          );
           // Los pasos de tours sobre el nodo desaparecen (spec modo-tour, criterio 4).
           const usedInTours = Object.values(s.tours).some((t) => t.steps.some((step) => step.nodeId === id));
           const tours = usedInTours
@@ -599,7 +681,130 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         });
       },
 
-      connect: (from, to, kind) => {
+      duplicateNode: (id) => {
+        const { nodes, layout } = get();
+        const node = nodes[id];
+        if (!node) return null;
+        const copyId = newId();
+        // Copia profunda: inputs, contrato y salidas no se comparten con el original.
+        const copy: Node = { ...(JSON.parse(JSON.stringify(node)) as Node), id: copyId };
+        const at = layout[id] ?? { x: 0, y: 0 };
+        set((s) => ({
+          nodes: { ...s.nodes, [copyId]: copy },
+          layout: { ...s.layout, [copyId]: { x: at.x + DUPLICATE_OFFSET, y: at.y + DUPLICATE_OFFSET } },
+          dirty: true,
+        }));
+        return copyId;
+      },
+
+      setRuleMode: (id, mode) => {
+        const node = get().nodes[id];
+        if (!node || node.type !== 'rule') return;
+        if (mode === 'decision') {
+          if (node.mode === 'decision') return;
+          const branches = node.branches?.length
+            ? node.branches
+            : DEFAULT_BRANCH_LABELS.map((label) => ({ id: newId(), label }));
+          set((s) => ({ nodes: { ...s.nodes, [id]: { ...node, mode: 'decision', branches } }, dirty: true }));
+          return;
+        }
+        if (node.mode !== 'decision') return;
+        const labels = new Map((node.branches ?? []).map((b) => [b.id, b.label]));
+        const next = { ...node };
+        delete next.mode;
+        delete next.branches;
+        set((s) => ({
+          nodes: { ...s.nodes, [id]: next },
+          // La etiqueta de la salida no se pierde: pasa a ser la de la conexión si no tenía una.
+          edges: Object.fromEntries(
+            Object.entries(s.edges).map(([key, e]) => {
+              if (e.from !== id || !e.branch) return [key, e];
+              const copy = { ...e };
+              const label = labels.get(e.branch);
+              delete copy.branch;
+              if (label && !copy.label) copy.label = label;
+              return [key, copy];
+            }),
+          ),
+          dirty: true,
+        }));
+      },
+
+      addBranch: (nodeId, label) => {
+        const node = get().nodes[nodeId];
+        if (!node || node.mode !== 'decision') return null;
+        const branches = node.branches ?? [];
+        if (branches.length >= BRANCHES_MAX) return null;
+        const clean = (label ?? freeBranchLabel(branches)).trim().slice(0, EDGE_TEXT_MAX_LENGTH);
+        if (!clean) return null;
+        const id = newId();
+        putNode({ ...node, branches: [...branches, { id, label: clean }] });
+        return id;
+      },
+
+      renameBranch: (nodeId, branchId, label) => {
+        const node = get().nodes[nodeId];
+        const clean = label.trim().slice(0, EDGE_TEXT_MAX_LENGTH);
+        if (!node?.branches?.some((b) => b.id === branchId) || !clean) return;
+        putNode({ ...node, branches: node.branches.map((b) => (b.id === branchId ? { ...b, label: clean } : b)) });
+      },
+
+      removeBranch: (nodeId, branchId) => {
+        const node = get().nodes[nodeId];
+        if (!node?.branches?.some((b) => b.id === branchId)) return;
+        set((s) => ({
+          nodes: { ...s.nodes, [nodeId]: { ...node, branches: node.branches!.filter((b) => b.id !== branchId) } },
+          edges: Object.fromEntries(
+            Object.entries(s.edges).map(([key, e]) => {
+              if (e.from !== nodeId || e.branch !== branchId) return [key, e];
+              const copy = { ...e };
+              delete copy.branch;
+              return [key, copy];
+            }),
+          ),
+          dirty: true,
+        }));
+      },
+
+      addStickyNote: (position, text = '') => {
+        const id = newId();
+        set((s) => ({
+          stickyNotes: { ...s.stickyNotes, [id]: { id, text: text.slice(0, STICKY_TEXT_MAX_LENGTH) } },
+          layout: { ...s.layout, [id]: { x: snap(position.x), y: snap(position.y) } },
+          dirty: true,
+        }));
+        return id;
+      },
+
+      updateStickyNote: (id, text) => {
+        const note = get().stickyNotes[id];
+        const clean = text.trim().slice(0, STICKY_TEXT_MAX_LENGTH);
+        if (!note || note.text === clean) return;
+        set((s) => ({ stickyNotes: { ...s.stickyNotes, [id]: { id, text: clean } }, dirty: true }));
+      },
+
+      moveStickyNote: (id, position) => {
+        const current = get().layout[id];
+        if (!get().stickyNotes[id]) return;
+        const x = snap(position.x);
+        const y = snap(position.y);
+        if (current && current.x === x && current.y === y) return;
+        set((s) => ({ layout: { ...s.layout, [id]: { x, y } }, dirty: true }));
+      },
+
+      removeStickyNote: (id) => {
+        if (!get().stickyNotes[id]) return;
+        set((s) => ({ stickyNotes: omit(s.stickyNotes, id), layout: omit(s.layout, id), dirty: true }));
+      },
+
+      duplicateStickyNote: (id) => {
+        const note = get().stickyNotes[id];
+        if (!note) return null;
+        const at = get().layout[id] ?? { x: 0, y: 0 };
+        return get().addStickyNote({ x: at.x + DUPLICATE_OFFSET, y: at.y + DUPLICATE_OFFSET }, note.text);
+      },
+
+      connect: (from, to, kind, init) => {
         const { nodes } = get();
         const source = nodes[from];
         const target = nodes[to];
@@ -611,6 +816,18 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           to,
           kind: kind ?? defaultEdgeKind(source.type, target.type),
         };
+        if (init?.branch && source.branches?.some((b) => b.id === init.branch)) edge.branch = init.branch;
+        set((s) => ({ edges: { ...s.edges, [id]: edge }, dirty: true }));
+        return id;
+      },
+
+      addResponse: (requestId, init) => {
+        const request = get().edges[requestId];
+        if (!request || request.kind !== 'request') return null;
+        const id = newId();
+        let edge: Edge = { id, from: request.to, to: request.from, kind: 'response', replyTo: requestId };
+        if (validStatus(init?.status)) edge.status = init.status;
+        edge = withText(edge, 'label', init?.label, EDGE_TEXT_MAX_LENGTH);
         set((s) => ({ edges: { ...s.edges, [id]: edge }, dirty: true }));
         return id;
       },
@@ -632,10 +849,34 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         next = withText(next, 'when', patch.when, EDGE_TEXT_MAX_LENGTH);
         next = withText(next, 'notes', patch.notes, TEXT_MAX_LENGTH);
         next = withText(next, 'example', patch.example, EXAMPLE_MAX_LENGTH);
+        next = withText(next, 'outcome', patch.outcome, OUTCOME_MAX_LENGTH);
         if (patch.data !== undefined) {
           const data = normalizeEdgeData(patch.data ?? undefined);
           if (data) next.data = data;
           else delete next.data;
+        }
+        if (patch.request !== undefined) {
+          const request = normalizeEdgeRequest(patch.request ?? undefined);
+          if (request) next.request = request;
+          else delete next.request;
+        }
+        if (patch.status !== undefined) {
+          if (validStatus(patch.status)) next.status = patch.status;
+          else if (patch.status === null) delete next.status;
+        }
+        if (patch.replyTo !== undefined) {
+          const target = patch.replyTo ? get().edges[patch.replyTo] : undefined;
+          if (target && target.id !== id && target.kind === 'request') next.replyTo = target.id;
+          else if (patch.replyTo === null) delete next.replyTo;
+        }
+        if (patch.reverse) {
+          next = { ...next, from: edge.to, to: edge.from };
+          delete next.branch;
+        }
+        if (patch.branch !== undefined) {
+          if (patch.branch && get().nodes[next.from]?.branches?.some((b) => b.id === patch.branch)) {
+            next.branch = patch.branch;
+          } else if (patch.branch === null) delete next.branch;
         }
         if (sameJson(edge, next)) return;
         set((s) => ({ edges: { ...s.edges, [id]: next }, dirty: true }));
@@ -643,7 +884,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
 
       removeEdge: (id) => {
         if (!get().edges[id]) return;
-        set((s) => ({ edges: omit(s.edges, id), dirty: true }));
+        set((s) => ({ edges: withoutDanglingReplies(omit(s.edges, id)), dirty: true }));
       },
 
       addTour: (name) => {
@@ -712,7 +953,8 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
             s.edges === sent.edges &&
             s.layout === sent.layout &&
             s.tours === sent.tours &&
-            s.groups === sent.groups);
+            s.groups === sent.groups &&
+            s.stickyNotes === sent.stickyNotes);
         set({ version, dirty: unchanged ? false : s.dirty });
       },
     };
@@ -731,6 +973,7 @@ export function toGraph(state: GraphState): WalkieCanvasGraphV0 {
   // Sin tours, el grafo no lleva el campo (así un lienzo sin tours recarga idéntico).
   if (Object.keys(state.tours).length > 0) graph.tours = state.tours;
   if (Object.keys(state.groups).length > 0) graph.groups = state.groups;
+  if (Object.keys(state.stickyNotes).length > 0) graph.stickyNotes = state.stickyNotes;
   return graph;
 }
 

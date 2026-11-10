@@ -152,7 +152,7 @@ describe('contenido de PixelNode', () => {
 });
 
 describe('KindEdge', () => {
-  it('muestra el tipo, la etiqueta y la condición', () => {
+  it('muestra el tipo, la etiqueta y el código de una respuesta (también si venía como condición)', () => {
     const props = {
       id: 'e1',
       data: { kind: 'response', label: 'Cliente', when: '404' },
@@ -174,7 +174,7 @@ describe('KindEdge', () => {
       </GraphStoreProvider>,
     );
 
-    expect(document.querySelector('.kind-edge-label')?.textContent).toBe('responde · Cliente [404]');
+    expect(document.querySelector('.kind-edge-label')?.textContent).toBe('responde 404 · Cliente');
   });
 
   function renderEdge(kind: string, selected: boolean, labelOffset?: number) {

@@ -34,7 +34,7 @@ test('conexiones con movimiento: interruptor, trazo por tipo y tour', async ({ p
   const canvas = page.locator('.canvas');
   await expect(canvas).toHaveClass(/edge-motion/);
   const flow = edges.nth(1).locator('.kind-edge-flow');
-  await expect(flow).toHaveCSS('opacity', '0.9');
+  await expect(flow).toHaveCSS('opacity', '1');
   await page.getByRole('button', { name: 'Animar el sentido de las conexiones' }).click();
   await expect(canvas).not.toHaveClass(/edge-motion/);
   await expect(flow).toHaveCSS('opacity', '0');

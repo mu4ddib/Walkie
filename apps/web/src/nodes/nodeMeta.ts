@@ -11,3 +11,11 @@ export const NODE_LABELS: Record<Node['type'], { label: string; glyph: string }>
   ref: { label: 'Referencia', glyph: '->' },
   portal: { label: 'Portal', glyph: '@' },
 };
+
+/** Una regla en modo decisión (bifurcación con salidas): mismo tipo y color, otro encabezado. */
+export const DECISION_LABEL = { label: 'Decisión', glyph: '◇' } as const;
+
+/** Etiqueta y glifo de un nodo concreto (una regla puede ser una decisión). */
+export function nodeLabel(node: Pick<Node, 'type' | 'mode'>): { label: string; glyph: string } {
+  return node.type === 'rule' && node.mode === 'decision' ? DECISION_LABEL : NODE_LABELS[node.type];
+}
