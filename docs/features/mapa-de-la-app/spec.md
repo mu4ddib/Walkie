@@ -1,11 +1,15 @@
 # Spec: Mapa de la app
 
-- Issue padre: (pendiente)
-- Estado: borrador
+- Issue padre: #125
+- Estado: aprobada
 
 ## Objetivo
 
 Ver una app entera de un vistazo: cada feature como una caja y, entre ellas, cómo se conectan (portales) y qué componentes del catálogo comparten, para entender el panorama completo antes de entrar al lienzo de cada una.
+
+## Alcance: una vista adicional
+
+El mapa **se suma** a lo que ya existe, no lo reemplaza: la página de la app sigue mostrando su galería de features (miniaturas, búsqueda, orden, crear y editar) y cada feature se sigue abriendo y editando en su lienzo como hoy. El mapa es otra forma de mirar la misma app, a la que se llega a propósito con «Ver mapa».
 
 ## Usuarios
 
@@ -15,6 +19,7 @@ Quien llega nuevo a una app (onboarding), quien la presenta o revisa su alcance,
 
 ### Abrir el mapa
 
+- [ ] Dada la página de una app, entonces sigue siendo la galería de siempre, con un botón adicional «Ver mapa»; nada de la galería cambia ni se mueve.
 - [ ] Dada la página de una app, cuando uso «Ver mapa», entonces se abre `/apps/:appId/map` con el lienzo de la app. También desde el selector de app de la barra del editor.
 - [ ] Dada una app sin features, entonces el mapa lo dice y ofrece crear la primera.
 
@@ -62,6 +67,4 @@ Quien llega nuevo a una app (onboarding), quien la presenta o revisa su alcance,
 - Distribución automática la primera vez, movible y guardada por app.
 - Componentes compartidos del catálogo con el interruptor «Mostrar componentes compartidos», apagado por defecto.
 
-## Preguntas abiertas
-
-- (Pendiente: ajustes que pidió el autor antes de aprobar.)
+- El mapa es una característica adicional: la galería y los lienzos de cada feature quedan como están.
