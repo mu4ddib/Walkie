@@ -4,77 +4,126 @@ import { NODE_LABELS } from '../nodes/nodeMeta';
 import type { Edge, Node, Tour } from '../schema/walkie-graph';
 import { STEP_NOTE_MAX_LENGTH, TOUR_NAME_MAX_LENGTH } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
-import { continuations, isFlowTour, lastEnd, stepIssues, suggestOrder, type StepIssue, type TourStep } from '../tours/flows';
+import {
+  continuations,
+  lastEnd,
+  stepIssues,
+  suggestOrder,
+  tourKind,
+  type StepIssue,
+  type TourKind,
+  type TourStep,
+} from '../tours/flows';
 import { branchLabel, edgeSummary, nodeTitle, stepSummary } from '../tours/flowText';
+import { TOUR_KIND_TEXT } from '../tours/tourKinds';
 import { TextField } from './TextField';
 
 export interface ToursSectionProps {
-  /** Tour abierto en el editor (lo guarda el lienzo para no perderlo al seleccionar un nodo). */
+  /** Tour o recorrido abierto en el editor (lo guarda el lienzo para no perderlo al seleccionar un nodo). */
   openTourId: string | null;
   onOpen: (tourId: string | null) => void;
-  /** "Ver tour" / "Reproducir" (modo tour o reproducción del recorrido); sin él, el botón no aparece. */
+  /** Pestaña visible (la guarda el lienzo); sin ella, la sección la recuerda mientras está montada. */
+  tab?: TourKind;
+  onTab?: (tab: TourKind) => void;
+  /** "Ver tour" / "Reproducir recorrido"; sin él, el botón no aparece. */
   onPlay?: (tourId: string) => void;
-  /** Recorrido recién creado desde el lienzo: su nombre se enfoca para escribirlo. */
+  /** Recorrido recién creado: su nombre se enfoca para escribirlo. */
   createdTourId?: string | null;
   /** Agregar pasos tocando conexiones en el lienzo (lo atiende el lienzo); sin él, la opción no aparece. */
   picking?: { tourId: string | null; onToggle: (tourId: string | null) => void };
 }
 
 /**
- * Tours de la feature (spec modo-tour, criterios 1 a 3; spec recorridos-y-grupos, partes 3, 5 y 6): con nada
- * seleccionado en el lienzo, lista, "Nuevo tour" y el editor. Un tour guía por nodos; un recorrido, por conexiones
- * (origen → destino, en su sentido real). Todo cambia el grafo por las acciones del store.
+ * Tours y recorridos de la feature (spec modo-tour; spec recorridos-y-grupos; spec tours-y-recorridos): con nada
+ * seleccionado en el lienzo, dos pestañas con su lista, su alta y su editor. Un tour presenta nodos; un recorrido
+ * reproduce conexiones. Todo cambia el grafo por las acciones del store.
  */
-export function ToursSection({ openTourId, onOpen, onPlay, createdTourId, picking }: ToursSectionProps) {
+export function ToursSection({ openTourId, onOpen, tab, onTab, onPlay, createdTourId, picking }: ToursSectionProps) {
   const tours = useGraphStore((s) => s.tours);
   const edges = useGraphStore((s) => s.edges);
+  const [localTab, setLocalTab] = useState<TourKind>('guide');
   const open = openTourId ? tours[openTourId] : undefined;
+  // La pestaña sigue al tour abierto; si no hay, la elegida.
+  const active: TourKind = open ? tourKind(open) : (tab ?? localTab);
+  const select = (next: TourKind) => {
+    setLocalTab(next);
+    onTab?.(next);
+    if (open && tourKind(open) !== next) onOpen(null);
+  };
+  const close = () => {
+    if (open) select(tourKind(open));
+    onOpen(null);
+  };
+  const byKind = (kind: TourKind) =>
+    Object.values(tours)
+      .filter((t) => tourKind(t) === kind)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  const list = byKind(active);
+  const text = TOUR_KIND_TEXT[active];
+  const panelId = useId();
 
   return (
-    <section className="panel-section" aria-label="Tours">
-      <h4>Tours y recorridos</h4>
-      {open ? (
-        <TourEditor
-          key={open.id}
-          tourId={open.id}
-          onClose={() => onOpen(null)}
-          onPlay={onPlay}
-          focusName={createdTourId === open.id}
-          picking={picking}
-        />
-      ) : (
-        <>
-          {Object.values(tours).length === 0 && (
-            <p className="panel-help">
-              Aún no hay tours. Crea uno para guiar a quien llega nuevo, o selecciona conexiones con Mayús + clic y
-              usa «Crear recorrido».
-            </p>
-          )}
-          <ul className="panel-list tours-list">
-            {Object.values(tours)
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((tour) => {
-                const pending = pendingCount(tour, edges);
-                return (
-                  <li key={tour.id}>
-                    <button type="button" className="link-button" onClick={() => onOpen(tour.id)}>
-                      {tour.name}
-                    </button>{' '}
-                    {isFlowTour(tour) && <span className="tour-kind">recorrido</span>}{' '}
-                    <span className="panel-help">({tour.steps.length} pasos)</span>
-                    {pending > 0 && (
-                      <span className="tour-warning">
-                        {' '}
-                        ⚠ {pending === 1 ? '1 paso por revisar' : `${pending} pasos por revisar`}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-          </ul>
-          <NewTourForm onCreated={onOpen} />
-        </>
-      )}
+    <section className="panel-section tours-section" aria-label="Tours y recorridos">
+      <div className="tours-tabs" role="tablist" aria-label="Tours y recorridos">
+        {(['guide', 'flow'] as const).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            role="tab"
+            id={`${panelId}-${kind}`}
+            aria-selected={active === kind}
+            aria-controls={panelId}
+            className="tours-tab"
+            onClick={() => select(kind)}
+          >
+            {TOUR_KIND_TEXT[kind].title} <span className="tours-tab-count">{byKind(kind).length}</span>
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id={panelId} aria-labelledby={`${panelId}-${active}`} className="tours-panel">
+        {open ? (
+          tourKind(open) === 'flow' ? (
+            <FlowEditor
+              key={open.id}
+              tourId={open.id}
+              onClose={close}
+              onPlay={onPlay}
+              focusName={createdTourId === open.id}
+              picking={picking}
+            />
+          ) : (
+            <GuideEditor key={open.id} tourId={open.id} onClose={close} onPlay={onPlay} />
+          )
+        ) : (
+          <>
+            <p className="panel-help">{text.help}</p>
+            {list.length === 0 ? (
+              <p className="panel-help tours-empty">{text.empty}</p>
+            ) : (
+              <ul className="panel-list tours-list" aria-label={text.title}>
+                {list.map((tour) => {
+                  const pending = pendingCount(tour, edges);
+                  return (
+                    <li key={tour.id}>
+                      <button type="button" className="link-button" onClick={() => onOpen(tour.id)}>
+                        {tour.name}
+                      </button>{' '}
+                      <span className="panel-help">({tour.steps.length === 1 ? '1 paso' : `${tour.steps.length} pasos`})</span>
+                      {pending > 0 && (
+                        <span className="tour-warning">
+                          {' '}
+                          ⚠ {pending === 1 ? '1 paso por revisar' : `${pending} pasos por revisar`}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <NewTourForm kind={active} onCreated={onOpen} />
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -84,14 +133,15 @@ function pendingCount(tour: Tour, edges: Record<string, Edge>): number {
   return tour.steps.filter((s) => s.removedEdge || (s.edgeId && !edges[s.edgeId])).length;
 }
 
-function NewTourForm({ onCreated }: { onCreated: (tourId: string) => void }) {
+function NewTourForm({ kind, onCreated }: { kind: TourKind; onCreated: (tourId: string) => void }) {
   const addTour = useGraphStore((s) => s.addTour);
   const [name, setName] = useState('');
   const inputId = useId();
+  const flow = kind === 'flow';
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    const id = addTour(name);
+    const id = addTour(name, kind);
     if (id) {
       setName('');
       onCreated(id);
@@ -99,24 +149,110 @@ function NewTourForm({ onCreated }: { onCreated: (tourId: string) => void }) {
   }
 
   return (
-    <form className="panel-field" onSubmit={submit} aria-label="Nuevo tour">
-      <label htmlFor={inputId}>Nombre del tour nuevo</label>
+    <form className="panel-field" onSubmit={submit} aria-label={flow ? 'Nuevo recorrido' : 'Nuevo tour'}>
+      <label htmlFor={inputId}>{flow ? 'Nombre del recorrido nuevo' : 'Nombre del tour nuevo'}</label>
       <input
         id={inputId}
         type="text"
         value={name}
         maxLength={TOUR_NAME_MAX_LENGTH}
-        placeholder="Iniciar sesión"
+        placeholder={flow ? 'Alta exitosa' : 'Iniciar sesión'}
         onChange={(e) => setName(e.target.value)}
       />
       <button type="submit" className="pixel-button" disabled={!name.trim()}>
-        Nuevo tour
+        {flow ? 'Nuevo recorrido' : 'Nuevo tour'}
       </button>
     </form>
   );
 }
 
-function TourEditor({
+/** Tour guiado: solo pasos de nodo, con su nota. */
+function GuideEditor({
+  tourId,
+  onClose,
+  onPlay,
+}: {
+  tourId: string;
+  onClose: () => void;
+  onPlay?: (tourId: string) => void;
+}) {
+  const tour = useGraphStore((s) => s.tours[tourId]);
+  const nodes = useGraphStore((s) => s.nodes);
+  const { renameTour, removeTour, addStep } = useGraphStore((s) => s);
+  const nodeOptions = Object.values(nodes).sort((a, b) => a.title.localeCompare(b.title));
+  const [newNode, setNewNode] = useState('');
+  const newNodeId = useId();
+  if (!tour) return null;
+
+  function addNodeStep() {
+    const nodeId = newNode || nodeOptions[0]?.id;
+    if (nodeId && addStep(tourId, nodeId) !== null) setNewNode('');
+  }
+
+  return (
+    <div className="tour-editor">
+      <button type="button" className="link-button" onClick={onClose}>
+        ← Todos los tours
+      </button>
+      <TextField
+        label="Nombre del tour"
+        value={tour.name}
+        maxLength={TOUR_NAME_MAX_LENGTH}
+        validate={(name) => (name.trim() ? null : 'El nombre no puede quedar vacío.')}
+        onChange={(name) => renameTour(tourId, name)}
+      />
+      {onPlay && (
+        <button type="button" className="pixel-button" disabled={tour.steps.length === 0} onClick={() => onPlay(tourId)}>
+          Ver tour
+        </button>
+      )}
+      <ol className="tour-steps" aria-label="Pasos">
+        {tour.steps.map((step, index) => (
+          <StepEditor
+            key={`${index}-${step.nodeId ?? step.edgeId ?? 'removed'}`}
+            tourId={tourId}
+            index={index}
+            count={tour.steps.length}
+            step={step}
+            issues={[]}
+            nodeOptions={nodeOptions}
+            edgeOptions={[]}
+          />
+        ))}
+      </ol>
+      {nodeOptions.length === 0 ? (
+        <p className="panel-help">Agrega nodos al lienzo para armar los pasos.</p>
+      ) : (
+        <div className="panel-field">
+          <label htmlFor={newNodeId}>Nodo del paso nuevo</label>
+          <select id={newNodeId} value={newNode || nodeOptions[0]!.id} onChange={(e) => setNewNode(e.target.value)}>
+            {nodeOptions.map((n) => (
+              <option key={n.id} value={n.id}>
+                {nodeLabel(n)}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="pixel-button" onClick={addNodeStep}>
+            Agregar paso
+          </button>
+        </div>
+      )}
+      <button
+        type="button"
+        className="pixel-button"
+        onClick={() => {
+          removeTour(tourId);
+          onClose();
+        }}
+      >
+        Borrar tour
+      </button>
+    </div>
+  );
+}
+
+/** Recorrido: solo pasos de conexión, con continuaciones, elegir en el lienzo, orden sugerido y avisos. */
+function FlowEditor({
   tourId,
   onClose,
   onPlay,
@@ -132,9 +268,8 @@ function TourEditor({
   const tour = useGraphStore((s) => s.tours[tourId]);
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
-  const { renameTour, removeTour, addStep, addEdgeStep, reorderSteps } = useGraphStore((s) => s);
+  const { renameTour, removeTour, addEdgeStep, reorderSteps } = useGraphStore((s) => s);
   const { items } = useCanvasCatalog();
-  const nodeOptions = Object.values(nodes).sort((a, b) => a.title.localeCompare(b.title));
   const edgeOptions = useMemo(
     () =>
       Object.values(edges)
@@ -142,13 +277,10 @@ function TourEditor({
         .sort((a, b) => a.text.localeCompare(b.text, 'es')),
     [edges, nodes, items],
   );
-  const [newNode, setNewNode] = useState('');
   const [newEdge, setNewEdge] = useState('');
-  const newNodeId = useId();
   const newEdgeId = useId();
   if (!tour) return null;
 
-  const flow = isFlowTour(tour);
   const issues = stepIssues(tour, edges);
   const end = lastEnd(tour, edges);
   const next = continuations(edges, end);
@@ -170,11 +302,6 @@ function TourEditor({
     reorderSteps(tourId, order);
   }
 
-  function addNodeStep() {
-    const nodeId = newNode || nodeOptions[0]?.id;
-    if (nodeId && addStep(tourId, nodeId) !== null) setNewNode('');
-  }
-
   function addConnectionStep() {
     const edgeId = newEdge || edgeOptions[0]?.edge.id;
     if (edgeId && addEdgeStep(tourId, edgeId) !== null) setNewEdge('');
@@ -183,10 +310,10 @@ function TourEditor({
   return (
     <div className="tour-editor">
       <button type="button" className="link-button" onClick={onClose}>
-        ← Todos los tours
+        ← Todos los recorridos
       </button>
       <TextField
-        label={flow ? 'Nombre del recorrido' : 'Nombre del tour'}
+        label="Nombre del recorrido"
         value={tour.name}
         maxLength={TOUR_NAME_MAX_LENGTH}
         autoFocus={focusName}
@@ -196,11 +323,11 @@ function TourEditor({
       {onPlay && (
         <button
           type="button"
-          className={flow ? 'pixel-button is-primary' : 'pixel-button'}
-          disabled={tour.steps.length === 0}
+          className="pixel-button is-primary"
+          disabled={!tour.steps.some((s) => s.edgeId && edges[s.edgeId])}
           onClick={() => onPlay(tourId)}
         >
-          {flow ? '▶ Reproducir recorrido' : 'Ver tour'}
+          ▶ Reproducir recorrido
         </button>
       )}
       {allEdges && (
@@ -219,6 +346,11 @@ function TourEditor({
           )}
         </p>
       )}
+      {tour.steps.length === 0 && (
+        <p className="panel-help">
+          Agrega la primera conexión: elígela en el lienzo o en la lista de abajo. Después se ofrecen las que continúan.
+        </p>
+      )}
       <ol className="tour-steps" aria-label="Pasos">
         {tour.steps.map((step, index) => (
           <StepEditor
@@ -228,12 +360,15 @@ function TourEditor({
             count={tour.steps.length}
             step={step}
             issues={issues[index] ?? []}
-            nodeOptions={nodeOptions}
+            nodeOptions={[]}
             edgeOptions={edgeOptions}
+            legacyNode={!!step.nodeId}
           />
         ))}
       </ol>
-      {edgeOptions.length > 0 && (
+      {edgeOptions.length === 0 ? (
+        <p className="panel-help">Conecta nodos en el lienzo para armar los pasos.</p>
+      ) : (
         <section className="tour-next" aria-label="Siguiente paso">
           {end && next.length > 0 && (
             <>
@@ -286,27 +421,6 @@ function TourEditor({
           </div>
         </section>
       )}
-      {nodeOptions.length === 0 ? (
-        <p className="panel-help">Agrega nodos al lienzo para armar los pasos.</p>
-      ) : (
-        <div className="panel-field">
-          <label htmlFor={newNodeId}>Nodo del paso nuevo</label>
-          <select
-            id={newNodeId}
-            value={newNode || nodeOptions[0]!.id}
-            onChange={(e) => setNewNode(e.target.value)}
-          >
-            {nodeOptions.map((n) => (
-              <option key={n.id} value={n.id}>
-                {nodeLabel(n)}
-              </option>
-            ))}
-          </select>
-          <button type="button" className="pixel-button" onClick={addNodeStep}>
-            Agregar paso
-          </button>
-        </div>
-      )}
       <button
         type="button"
         className="pixel-button"
@@ -315,7 +429,7 @@ function TourEditor({
           onClose();
         }}
       >
-        {flow ? 'Borrar recorrido' : 'Borrar tour'}
+        Borrar recorrido
       </button>
     </div>
   );
@@ -329,6 +443,7 @@ function StepEditor({
   issues,
   nodeOptions,
   edgeOptions,
+  legacyNode,
 }: {
   tourId: string;
   index: number;
@@ -337,6 +452,8 @@ function StepEditor({
   issues: StepIssue[];
   nodeOptions: Node[];
   edgeOptions: { edge: Edge; text: string }[];
+  /** En un recorrido, un paso de nodo (de un lienzo anterior) no se cambia: solo se describe o se quita. */
+  legacyNode?: boolean;
 }) {
   const { setStepNode, setStepEdge, updateStepNote, moveStep, removeStep } = useGraphStore((s) => s);
   const nodes = useGraphStore((s) => s.nodes);
@@ -394,6 +511,15 @@ function StepEditor({
               ))}
             </select>
           </div>
+        </>
+      ) : legacyNode ? (
+        <>
+          <p className="tour-step-route">
+            <span className="flow-step-number">{n}</span> Paso de nodo: {stepSummary(step, edges, nodes, items)}
+          </p>
+          <p className="tour-step-issue" role="note">
+            Un recorrido solo recorre conexiones: este paso viene de antes. Quítalo o pásalo a un tour.
+          </p>
         </>
       ) : (
         <div className="panel-field">

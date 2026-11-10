@@ -1,7 +1,7 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { createGraphStore } from '../store/graphStore';
+import { createGraphStore, toGraph } from '../store/graphStore';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { PropertiesPanel } from './PropertiesPanel';
 
@@ -89,5 +89,78 @@ describe('editor de recorridos', () => {
     });
     await userEvent.selectOptions(within(step).getByLabelText('Paso 2: reemplazar por'), again);
     expect(s().tours[tourId]!.steps[1]).toEqual({ edgeId: again });
+  });
+});
+
+describe('pestañas de tours y recorridos', () => {
+  function renderLists() {
+    const store = createGraphStore();
+    const s = () => store.getState();
+    const a = s().addNode('screen', { x: 0, y: 0 });
+    const b = s().addNode('api', { x: 0, y: 0 });
+    const e = s().connect(a, b, 'request')!;
+    s().addTour('Conoce la pantalla');
+    s().addFlowTour('Alta', [e]);
+    const onOpen = vi.fn();
+    render(
+      <GraphStoreProvider store={store}>
+        <PropertiesPanel nodeId={null} edgeId={null} tours={{ openTourId: null, onOpen }} />
+      </GraphStoreProvider>,
+    );
+    return { s, onOpen };
+  }
+
+  it('separa tours y recorridos, cada uno con su cantidad, su explicación y su alta', async () => {
+    const { s, onOpen } = renderLists();
+
+    expect(screen.getByRole('tab', { name: 'Tours 1' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Recorridos 1' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('list', { name: 'Tours' })).toHaveTextContent('Conoce la pantalla');
+    expect(screen.queryByText('Alta')).not.toBeInTheDocument();
+    expect(screen.getByText(/El guía presenta nodos/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Recorridos 1' }));
+    expect(screen.getByRole('list', { name: 'Recorridos' })).toHaveTextContent('Alta');
+    expect(screen.getByText(/Reproducen conexiones en orden/)).toBeInTheDocument();
+
+    // Un recorrido nuevo nace vacío y es un recorrido.
+    await userEvent.type(screen.getByLabelText('Nombre del recorrido nuevo'), 'Error de correo');
+    await userEvent.click(screen.getByRole('button', { name: 'Nuevo recorrido' }));
+    const created = onOpen.mock.calls[0]![0] as string;
+    expect(s().tours[created]).toMatchObject({ name: 'Error de correo', kind: 'flow', steps: [] });
+  });
+});
+
+describe('editores separados', () => {
+  it('un tour solo ofrece nodos; un recorrido, conexiones (y marca los pasos de nodo que trae de antes)', () => {
+    const store = createGraphStore();
+    const s = () => store.getState();
+    const a = s().addNode('screen', { x: 0, y: 0 });
+    const b = s().addNode('api', { x: 0, y: 0 });
+    const e = s().connect(a, b, 'request')!;
+    const guide = s().addTour('Clásico')!;
+    s().addStep(guide, a);
+    s().loadGraph({
+      ...toGraph(s()),
+      tours: { ...s().tours, old: { id: 'old', name: 'Anterior', steps: [{ nodeId: a }, { edgeId: e }] } },
+    });
+    const { rerender } = render(
+      <GraphStoreProvider store={store}>
+        <PropertiesPanel nodeId={null} edgeId={null} tours={{ openTourId: guide, onOpen: vi.fn() }} />
+      </GraphStoreProvider>,
+    );
+    expect(screen.getByLabelText('Nodo del paso nuevo')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Conexión del paso nuevo')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Tours/ })).toHaveAttribute('aria-selected', 'true');
+
+    rerender(
+      <GraphStoreProvider store={store}>
+        <PropertiesPanel nodeId={null} edgeId={null} tours={{ openTourId: 'old', onOpen: vi.fn() }} />
+      </GraphStoreProvider>,
+    );
+    expect(screen.getByRole('tab', { name: /Recorridos/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('Conexión del paso nuevo')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Nodo del paso nuevo')).not.toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: 'Paso 1' })).toHaveTextContent('Paso de nodo');
   });
 });

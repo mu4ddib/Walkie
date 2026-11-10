@@ -108,6 +108,6 @@ describe('SharedTours', () => {
   it('sin tours lo dice', () => {
     renderTours(undefined);
 
-    expect(screen.getByText('Este lienzo no tiene tours.')).toBeInTheDocument();
+    expect(screen.getByText('Este lienzo no tiene tours ni recorridos.')).toBeInTheDocument();
   });
 });

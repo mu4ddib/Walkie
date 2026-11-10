@@ -40,7 +40,7 @@ import {
 } from '../store/hierarchy';
 import { FlowPlayer, type Rect } from '../tours/FlowPlayer';
 import { FLOW_TIMING, firstPhase, type Playing } from '../tours/flowPlayback';
-import { isFlowTour, lastEnd, suggestOrder, tourNodes } from '../tours/flows';
+import { isFlowTour, lastEnd, suggestOrder, tourNodes, type TourKind } from '../tours/flows';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { useGraphStore } from '../store/useGraphStore';
 import { GRID, palette } from '../theme/palette';
@@ -137,6 +137,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const [selectedEdges, setSelectedEdges] = useState<ReadonlySet<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [openTourId, setOpenTourId] = useState<string | null>(null);
+  // Pestaña de la sección Tours y recorridos (spec tours-y-recorridos): se recuerda al seleccionar cajas.
+  const [toursTab, setToursTab] = useState<TourKind>('guide');
   // Menú contextual de una caja o nota (clic derecho): duplicar, editar, eliminar.
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   // "Previsualizar interacción": las conexiones del intercambio, en orden (ida y vueltas), y la que se recorre ahora.
@@ -759,6 +761,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       setSelectedNodes(new Set());
       setSelectedEdges(new Set());
       setOpenTourId(id);
+      setToursTab('flow');
       setCreatedTourId(id);
       setPickingTourId(null);
       if (!inspectorOpen) {
@@ -1224,6 +1227,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             tours={{
               openTourId,
               onOpen: setOpenTourId,
+              tab: toursTab,
+              onTab: setToursTab,
               onPlay: startTour,
               createdTourId,
               picking: { tourId: pickingTourId, onToggle: setPickingTourId },
