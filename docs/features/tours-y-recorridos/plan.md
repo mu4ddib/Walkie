@@ -12,9 +12,9 @@ Basado en `spec.md` (aprobada 2026-11-10). Issue padre: #115.
 
 ## Tareas
 
-1. [ ] Schema `tour.kind`, store y validación/export en la API. — issue #117
-2. [ ] Inspector: pestañas «Tours» y «Recorridos» con editores separados (y en el enlace de solo lectura). — issue #118
-3. [ ] Inspector sin desborde horizontal a cualquier ancho + E2E en 1440, 1024 y 768 px. — issue #119
+1. [x] Schema `tour.kind`, store y validación/export en la API. — issue #117
+2. [x] Inspector: pestañas «Tours» y «Recorridos» con editores separados (y en el enlace de solo lectura). — issue #118
+3. [x] Inspector sin desborde horizontal a cualquier ancho + E2E en 1440, 1024 y 768 px. — issue #119
 
 ## Pruebas
 
@@ -24,4 +24,4 @@ Basado en `spec.md` (aprobada 2026-11-10). Issue padre: #115.
 
 ## Estado
 
-Última actualización: 2026-11-10 — plan aprobado.
+Última actualización: 2026-11-10 — feature completa. El E2E de desborde falla sin el arreglo (el contenido medía 708 px en un inspector de 338 px) y pasa con él. Fuera de alcance observado: a 768 px la barra superior encima el nombre de la feature y el estado de guardado.

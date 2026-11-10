@@ -71,6 +71,10 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
       style={{ '--node-color': nodeColors[shown.type] } as CSSProperties}
     >
       <Handle type="target" position={Position.Left} />
+      {/* Arriba y abajo (spec puertos-de-conexion): se ven al pasar el puntero; con conexión libre en el lienzo,
+          cualquier punto empieza o termina una conexión. El lado con el que se dibuja lo decide la posición. */}
+      <Handle type="source" position={Position.Top} id="top" className="pixel-node-handle-extra" title={connectTip} />
+      <Handle type="source" position={Position.Bottom} id="bottom" className="pixel-node-handle-extra" title={connectTip} />
       <div className="pixel-node-kind">
         <span aria-hidden="true">{meta.glyph}</span>{' '}
         {missing ? (node.type === 'portal' ? 'Destino no encontrado' : 'Elemento no encontrado') : meta.label}

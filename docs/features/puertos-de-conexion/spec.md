@@ -1,7 +1,7 @@
 # Spec: Puertos de conexión
 
 - Issue padre: #116
-- Estado: aprobada
+- Estado: implementada
 
 ## Objetivo
 

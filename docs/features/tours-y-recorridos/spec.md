@@ -1,7 +1,7 @@
 # Spec: Tours y recorridos separados
 
 - Issue padre: #115
-- Estado: aprobada
+- Estado: implementada
 
 ## Objetivo
 

@@ -10,9 +10,9 @@ Basado en `spec.md` (aprobada 2026-11-10). Issue padre: #116. Sin cambios de sch
 
 ## Tareas
 
-1. [ ] Cálculo de puertos: lado por extremo y reparto ordenado por lado (con ramas de decisión y grupos plegados). — issue #120
-2. [ ] Puntos de conexión en los cuatro lados y dibujo de las conexiones desde sus puertos. — issue #121
-3. [ ] E2E (varias conexiones por lado, cambiar de lado al mover) y documentación. — issue #122
+1. [x] Cálculo de puertos: lado por extremo y reparto ordenado por lado (con ramas de decisión y grupos plegados). — issue #120
+2. [x] Puntos de conexión en los cuatro lados y dibujo de las conexiones desde sus puertos. — issue #121
+3. [x] E2E (varias conexiones por lado, cambiar de lado al mover) y documentación. — issue #122
 
 ## Pruebas
 
@@ -21,4 +21,4 @@ Basado en `spec.md` (aprobada 2026-11-10). Issue padre: #116. Sin cambios de sch
 
 ## Estado
 
-Última actualización: 2026-11-10 — plan aprobado.
+Última actualización: 2026-11-10 — feature completa. Criterio de lado: con hueco horizontal ≥ 48 px, izquierda/derecha (el lienzo se lee de izquierda a derecha); si no, arriba/abajo. Las conexiones que comparten lado de salida doblan cada una en su línea, escalonadas para no cruzarse. Limitaciones: no esquiva cajas que quedan en medio del trazo; en cajas muy bajas los puntos de un lado quedan cerca (los separan los dobleces).

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import {
   Background,
   BackgroundVariant,
+  ConnectionMode,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -57,6 +58,7 @@ import {
   setInspectorOpen,
 } from '../workspace/session';
 import { EdgeMarkers } from '../edges/EdgeMarkers';
+import { computePorts, staggerBends } from '../edges/ports';
 import { edgeDisplay, edgeDisplayText, interactionEdges } from '../edges/edgeMeta';
 import { NodeMenu } from './NodeMenu';
 import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
@@ -72,6 +74,8 @@ const NODE_SIZE = { width: 184, height: 72 } as const;
 const LANE_GAP = 24;
 /** Lo que dura cada tramo de "Previsualizar interacción" (la ida, luego la vuelta). */
 const PREVIEW_STEP_MS = 1800;
+/** Separación mínima (px) entre las etiquetas de conexiones que unen el mismo par. */
+const LABEL_GAP = 26;
 /** Hueco mínimo para que una conexión hacia la izquierda salga por el lado izquierdo en vez de rodear las cajas. */
 const BACKWARD_GAP = 16;
 /** Cuánto se ve el aviso de lo que pasó (al soltar en un grupo, al borrar una conexión usada). */
@@ -461,6 +465,52 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       const down = list.filter((e) => !e.up).sort((a, b) => b.index - a.index);
       [...up, ...down].forEach((e, i) => bends.set(e.id, from.x + from.w + GRID * 4 + i * GRID * 2));
     }
+    // Puertos (spec puertos-de-conexion): cada conexión sale y entra por el lado que mira al otro extremo, repartida
+    // a lo largo de él. Una rama sale de su salida en la decisión (lo dibuja React Flow): solo se reparte su llegada;
+    // para ordenarla se toma un punto aproximado en el lado derecho de la decisión.
+    const rects: Record<string, Rect> = {};
+    for (const { source, target } of visible) {
+      for (const id of [source, target]) {
+        const r = boxOf(id);
+        if (r) rects[id] = r;
+      }
+    }
+    const ports = computePorts(
+      visible.map(({ edge, source, target }) => {
+        const branches = source === edge.from ? (graphNodes[edge.from]?.branches ?? []) : [];
+        const index = branches.findIndex((b) => b.id === edge.branch);
+        const from = rects[source];
+        const fixedSource =
+          index >= 0 && from
+            ? { x: from.x + from.w, y: from.y + from.h - (branches.length - index) * 16 - 4, side: 'right' as const }
+            : undefined;
+        return { id: edge.id, source, target, fixedSource };
+      }),
+      rects,
+    );
+    // Las que comparten lado de salida doblan cada una en su línea (las ramas de una decisión ya tienen la suya).
+    const staggered = staggerBends(
+      visible.flatMap(({ edge, source }) => {
+        const p = ports[edge.id];
+        return p && !bends.has(edge.id) ? [{ id: edge.id, box: source, source: p.source, target: p.target }] : [];
+      }),
+    );
+    // Etiquetas de las conexiones de un mismo par: cada una queda cerca de la altura de sus puertos, pero al menos a
+    // LABEL_GAP de la anterior (con cajas bajas los puertos quedan más juntos que lo que mide una etiqueta).
+    const labelShift = new Map<string, number>();
+    const byPair: Record<string, { id: string; y: number }[]> = {};
+    for (const { edge, source, target } of visible) {
+      const p = ports[edge.id];
+      if (!p || (pairs[pairKey(source, target)] ?? 1) < 2) continue;
+      (byPair[pairKey(source, target)] ??= []).push({ id: edge.id, y: (p.source.y + p.target.y) / 2 });
+    }
+    for (const list of Object.values(byPair)) {
+      const sorted = [...list].sort((a, b) => a.y - b.y);
+      const placed: number[] = [];
+      for (const [i, item] of sorted.entries()) placed.push(i === 0 ? item.y : Math.max(item.y, placed[i - 1]! + LABEL_GAP));
+      const drift = (placed.reduce((a, b) => a + b, 0) - sorted.reduce((a, b) => a + b.y, 0)) / sorted.length;
+      sorted.forEach((item, i) => labelShift.set(item.id, placed[i]! - drift - item.y));
+    }
     return visible.map(({ edge, source, target }) => {
       const key = pairKey(source, target);
       const count = pairs[key] ?? 1;
@@ -495,10 +545,15 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           when: edge.when,
           display,
           // La etiqueta va sobre su propio trazo; si los carriles quedan muy juntos, se abre lo que falte.
-          labelOffset: lane * Math.max(0, 26 - gap),
+          labelOffset: labelShift.get(edge.id) ?? lane * Math.max(0, LABEL_GAP - gap),
           laneOffset: lane * gap,
           backward,
-          bendX: count === 1 ? bends.get(edge.id) : undefined,
+          bendX: count === 1 ? (bends.get(edge.id) ?? staggered[edge.id]?.x) : undefined,
+          bendY: count === 1 ? staggered[edge.id]?.y : undefined,
+          ports: ports[edge.id] && {
+            source: branch && source === edge.from ? undefined : ports[edge.id]!.source,
+            target: ports[edge.id]!.target,
+          },
           step: step >= 0 && preview!.ids.length > 1 ? String(step + 1) : flowBadge,
         },
         selected: selectedEdges.has(edge.id),
@@ -1096,6 +1151,8 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           onPaneClick={() => setMenu(null)}
           onMoveStart={() => setMenu(null)}
           zoomOnDoubleClick={false}
+          // Cualquier punto de una caja empieza o termina una conexión (spec puertos-de-conexion).
+          connectionMode={ConnectionMode.Loose}
           // Seleccionar un grupo no lo sube por encima de lo que contiene (taparía los grupos y cajas de dentro).
           elevateNodesOnSelect={false}
           // Mayús, Ctrl o Cmd + clic suman cajas (para agruparlas con G) o conexiones (para crear un recorrido).
