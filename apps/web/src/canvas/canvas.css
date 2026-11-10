@@ -404,7 +404,8 @@
 
 .inspector .properties-panel {
   flex: 1;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .inspector-reopen {
@@ -598,6 +599,22 @@
 
 .react-flow__node:hover .react-flow__handle {
   transform: scale(1.25);
+}
+
+/* Puntos de arriba y abajo (spec puertos-de-conexion): aparecen al pasar el puntero, con la caja seleccionada o
+   mientras se arrastra una conexión; así la caja no se llena de puntos. */
+.pixel-node .pixel-node-handle-extra {
+  opacity: 0;
+  transition:
+    opacity var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+
+.react-flow__node:hover .pixel-node-handle-extra,
+.react-flow__node.selected .pixel-node-handle-extra,
+.react-flow__node:focus-visible .pixel-node-handle-extra,
+.react-flow:has(.react-flow__connectionline) .pixel-node-handle-extra {
+  opacity: 1;
 }
 
 .pixel-node-badge {

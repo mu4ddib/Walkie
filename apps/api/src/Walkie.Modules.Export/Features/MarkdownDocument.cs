@@ -95,7 +95,9 @@ internal static class MarkdownDocument
         var nodes = ReadNodes(input);
         var byId = nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
         var edges = ReadEdges(input.Graph, byId);
-        var tours = ReadTours(input.Graph, byId);
+        var allTours = ReadTours(input.Graph, byId);
+        var tours = allTours.Where(t => !t.IsFlow).ToList();
+        var flows = allTours.Where(t => t.IsFlow).ToList();
         var groups = ReadGroups(input.Graph, nodes);
         var stickyNotes = ReadStickyNotes(input.Graph);
         var md = new Md();
@@ -141,6 +143,11 @@ internal static class MarkdownDocument
             md.Line("- [Tours](#tours)");
         }
 
+        if (flows.Count > 0)
+        {
+            md.Line("- [Recorridos](#recorridos)");
+        }
+
         md.Blank();
         WriteDiagram(md, nodes, edges, groups);
 
@@ -184,37 +191,49 @@ internal static class MarkdownDocument
             md.Blank();
         }
 
-        if (tours.Count > 0)
-        {
-            md.Line("## Tours");
-            md.Blank();
-            foreach (var tour in tours)
-            {
-                md.Line($"### {MarkdownText.Inline(tour.Name)}");
-                md.Blank();
-                if (tour.Steps.Count == 0)
-                {
-                    md.Line("Sin pasos.");
-                }
-
-                for (var i = 0; i < tour.Steps.Count; i++)
-                {
-                    var (title, note) = tour.Steps[i];
-                    var number = string.Create(CultureInfo.InvariantCulture, $"{i + 1}. ");
-                    var text = $"**{MarkdownText.Inline(title)}**";
-                    if (!string.IsNullOrWhiteSpace(note))
-                    {
-                        text += ": " + MarkdownText.Indent(MarkdownText.Block(note), number.Length);
-                    }
-
-                    md.Line(number + text);
-                }
-
-                md.Blank();
-            }
-        }
+        WriteTours(md, "Tours", tours);
+        WriteTours(md, "Recorridos", flows);
 
         return md.ToString();
+    }
+
+    /// <summary>
+    /// Tours (el guía presenta nodos) o recorridos (conexiones en orden), cada uno en su sección (spec
+    /// tours-y-recorridos). Sin ninguno, la sección no sale.
+    /// </summary>
+    private static void WriteTours(Md md, string heading, List<ExportTour> tours)
+    {
+        if (tours.Count == 0)
+        {
+            return;
+        }
+
+        md.Line($"## {heading}");
+        md.Blank();
+        foreach (var tour in tours)
+        {
+            md.Line($"### {MarkdownText.Inline(tour.Name)}");
+            md.Blank();
+            if (tour.Steps.Count == 0)
+            {
+                md.Line("Sin pasos.");
+            }
+
+            for (var i = 0; i < tour.Steps.Count; i++)
+            {
+                var (title, note) = tour.Steps[i];
+                var number = string.Create(CultureInfo.InvariantCulture, $"{i + 1}. ");
+                var text = $"**{MarkdownText.Inline(title)}**";
+                if (!string.IsNullOrWhiteSpace(note))
+                {
+                    text += ": " + MarkdownText.Indent(MarkdownText.Block(note), number.Length);
+                }
+
+                md.Line(number + text);
+            }
+
+            md.Blank();
+        }
     }
 
     private static void WriteDiagram(Md md, List<ExportNode> nodes, List<ExportEdge> edges, List<ExportGroup> groups)
@@ -812,7 +831,8 @@ internal static class MarkdownDocument
                 [.. t.GetProperty("steps").EnumerateArray()
                     .Select(s => (Title: StepTitle(s), Note: Text(s, "note")))
                     .Where(s => s.Title is not null)
-                    .Select(s => (s.Title!, s.Note))]))
+                    .Select(s => (s.Title!, s.Note))],
+                IsFlow(t)))
             .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(t => t.Name, StringComparer.Ordinal)
             .ThenBy(t => t.Id, StringComparer.Ordinal)
@@ -886,7 +906,14 @@ internal static class MarkdownDocument
     private sealed record ExportGroup(
         string Id, string Title, string Kind, List<ExportNode> Members, string Key, string? ParentId = null);
 
-    private sealed record ExportTour(string Id, string Name, List<(string Title, string? Note)> Steps);
+    private sealed record ExportTour(string Id, string Name, List<(string Title, string? Note)> Steps, bool IsFlow);
+
+    /// <summary>Recorrido: <c>kind</c> = <c>flow</c> o, sin <c>kind</c> (lienzos anteriores), algún paso de conexión.</summary>
+    private static bool IsFlow(JsonElement tour) =>
+        tour.TryGetProperty("kind", out var kind)
+            ? kind.GetString() == "flow"
+            : tour.GetProperty("steps").EnumerateArray()
+                .Any(s => s.TryGetProperty("edgeId", out _) || s.TryGetProperty("removedEdge", out _));
 
     private sealed record ExportInputField(string Name, string Type, bool Required, List<string> Options, List<string> RuleIds);
 

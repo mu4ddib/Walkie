@@ -6,6 +6,13 @@ import { GRID } from '../theme/palette';
 import { normalizeDatabase, normalizeEdgeData, normalizeEdgeRequest, normalizeHttp } from '../contracts/contracts';
 import { canNest, descendantsOf, inferHierarchy, isInside, ownerOf } from './hierarchy';
 import { History, sameSnapshot, snapshotOf, type Snapshot } from './history';
+import { tourKind, type TourKind } from '../tours/flows';
+
+/** Tours con `kind` explícito (los anteriores, deducido de sus pasos). */
+function withKinds(tours: Record<string, Tour>): Record<string, Tour> {
+  if (Object.values(tours).every((t) => t.kind)) return tours;
+  return Object.fromEntries(Object.entries(tours).map(([id, t]) => [id, t.kind ? t : { ...t, kind: tourKind(t) }]));
+}
 
 /** Paso de un tour: un nodo (`nodeId`), una conexión (`edgeId`) o una conexión eliminada (`removedEdge`). */
 export type TourStep = Tour['steps'][number];
@@ -381,8 +388,11 @@ export interface GraphActions {
   /** Tipo, etiqueta (`label`), condición (`when`) y el detalle propio de cada interacción (`EdgePatch`). */
   updateEdge(id: string, patch: EdgePatch): void;
   removeEdge(id: string): void;
-  /** Crea un tour vacío; devuelve su id o `null` si el nombre queda vacío. */
-  addTour(name: string): string | null;
+  /**
+   * Crea un tour vacío de tipo `kind` (spec tours-y-recorridos): `guide` (por defecto) solo admite pasos de nodo y
+   * `flow` (recorrido) solo pasos de conexión. Devuelve su id o `null` si el nombre queda vacío.
+   */
+  addTour(name: string, kind?: TourKind): string | null;
   renameTour(id: string, name: string): void;
   removeTour(id: string): void;
   /** Agrega un paso al final; devuelve su índice o `null` si el tour o el nodo no existen. */
@@ -503,7 +513,8 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           nodes: graph.nodes,
           edges: graph.edges,
           layout: graph.layout,
-          tours: graph.tours ?? {},
+          // Lienzos anteriores: cada tour recibe el tipo que se deduce de sus pasos (sin marcar cambios).
+          tours: withKinds(graph.tours ?? {}),
           groups: graph.groups ?? {},
           stickyNotes: graph.stickyNotes ?? {},
           version: graph.version,
@@ -1025,11 +1036,11 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         }));
       },
 
-      addTour: (name) => {
+      addTour: (name, kind = 'guide') => {
         const clean = name.trim().slice(0, TOUR_NAME_MAX_LENGTH);
         if (!clean) return null;
         const id = newId();
-        set((s) => ({ tours: { ...s.tours, [id]: { id, name: clean, steps: [] } }, dirty: true }));
+        set((s) => ({ tours: { ...s.tours, [id]: { id, name: clean, kind, steps: [] } }, dirty: true }));
         return id;
       },
 
@@ -1047,20 +1058,21 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
 
       addStep: (tourId, nodeId, note) => {
         const tour = get().tours[tourId];
-        if (!tour || !get().nodes[nodeId]) return null;
+        // Un recorrido solo recorre conexiones: los pasos de nodo son de los tours.
+        if (!tour || !get().nodes[nodeId] || tourKind(tour) === 'flow') return null;
         putTour({ ...tour, steps: [...tour.steps, withNote({ nodeId }, note)] });
         return tour.steps.length;
       },
 
       addEdgeStep: (tourId, edgeId, note) => {
         const tour = get().tours[tourId];
-        if (!tour || !get().edges[edgeId]) return null;
+        if (!tour || !get().edges[edgeId] || tourKind(tour) === 'guide') return null;
         putTour({ ...tour, steps: [...tour.steps, withNote({ edgeId }, note)] });
         return tour.steps.length;
       },
 
       addFlowTour: (name, edgeIds) => {
-        const id = get().addTour(name);
+        const id = get().addTour(name, 'flow');
         if (!id) return null;
         const steps = edgeIds.filter((e) => get().edges[e]).map((edgeId) => ({ edgeId }));
         if (steps.length) putTour({ ...get().tours[id]!, steps });

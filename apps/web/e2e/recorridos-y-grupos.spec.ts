@@ -254,7 +254,7 @@ test('recorridos: crear con varias conexiones, ramas, reproducir con grupos pleg
   await capture(page, '3-editor-recorrido');
 
   // Segundo recorrido desde una conexión, con la otra rama, agregando el paso desde el lienzo.
-  await inspector.getByRole('button', { name: '← Todos los tours' }).click();
+  await inspector.getByRole('button', { name: '← Todos los recorridos' }).click();
   await label(page, 'dd').click();
   await inspector.getByRole('button', { name: 'Crear recorrido desde aquí' }).click();
   await inspector.getByLabel('Nombre del recorrido').fill('Correo repetido');
@@ -266,7 +266,7 @@ test('recorridos: crear con varias conexiones, ramas, reproducir con grupos pleg
   await page.keyboard.press('Escape');
 
   // Plegar Backend y guardar: la reproducción no debe tocar lo guardado.
-  await inspector.getByRole('button', { name: '← Todos los tours' }).click();
+  await inspector.getByRole('button', { name: '← Todos los recorridos' }).click();
   await page.getByRole('button', { name: 'Plegar grupo Backend' }).click();
   await page.keyboard.press('Control+s');
   await expect(saveStatus(page)).toHaveText('Guardado');
@@ -302,7 +302,8 @@ test('recorridos: crear con varias conexiones, ramas, reproducir con grupos pleg
   await expect(saveStatus(page)).toHaveText('Guardado');
 
   // Un tour guardado antes de estos cambios se sigue reproduciendo con el guía.
-  await inspector.getByRole('button', { name: '← Todos los tours' }).click();
+  await inspector.getByRole('button', { name: '← Todos los recorridos' }).click();
+  await inspector.getByRole('tab', { name: /Tours/ }).click();
   await inspector.getByRole('button', { name: 'Tour clásico' }).click();
   await inspector.getByRole('button', { name: 'Ver tour' }).click();
   await expect(page.getByRole('toolbar', { name: 'Tour' })).toContainText('Paso 1 de 2');
@@ -317,6 +318,7 @@ test('recorridos: crear con varias conexiones, ramas, reproducir con grupos pleg
   const paneBox = (await page.locator('.react-flow__pane').boundingBox())!;
   await page.mouse.click(paneBox.x + paneBox.width * 0.4, paneBox.y + 12);
   await inspector.getByRole('button', { name: '← Todos los tours' }).click();
+  await inspector.getByRole('tab', { name: /Recorridos/ }).click();
   await expect(inspector.getByText('⚠ 1 paso por revisar')).toBeVisible();
   await inspector.getByRole('button', { name: 'Alta exitosa' }).click();
   await expect(steps.getByRole('listitem', { name: 'Paso 2' })).toContainText('Conexión eliminada: API usuarios → Servicio usuarios');
@@ -328,6 +330,7 @@ test('recorridos: crear con varias conexiones, ramas, reproducir con grupos pleg
   await page.keyboard.press('Control+s');
   await expect(saveStatus(page)).toHaveText('Guardado');
   await page.reload();
+  await inspector.getByRole('tab', { name: /Recorridos/ }).click();
   await expect(inspector.getByText('Correo repetido')).toBeVisible();
   await inspector.getByRole('button', { name: 'Alta exitosa' }).click();
   await expect(steps.getByRole('listitem')).toHaveCount(7);

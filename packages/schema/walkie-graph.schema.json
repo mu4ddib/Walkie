@@ -348,6 +348,10 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "kind": {
+          "enum": ["guide", "flow"],
+          "description": "guide: tour (el guía presenta nodos; solo pasos nodeId). flow: recorrido (reproduce conexiones; pasos edgeId o removedEdge). Ausente en lienzos anteriores: flow si tiene algún paso de conexión"
+        },
         "steps": {
           "type": "array",
           "description": "En orden; un paso centra y resalta su nodo, o recorre su conexión (origen, conexión, destino). Una conexión puede repetirse (reintento)",

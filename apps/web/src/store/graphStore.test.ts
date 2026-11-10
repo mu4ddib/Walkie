@@ -607,7 +607,7 @@ describe('tours', () => {
   it('addTour crea un tour vacío con el nombre recortado; vacío no crea nada', () => {
     const { tour } = setup();
 
-    expect(s().tours[tour]).toEqual({ id: tour, name: 'Iniciar sesión', steps: [] });
+    expect(s().tours[tour]).toEqual({ id: tour, name: 'Iniciar sesión', kind: 'guide', steps: [] });
     expect(s().addTour('   ')).toBeNull();
     expect(s().addTour('x'.repeat(80))).not.toBeNull();
     expect(Object.values(s().tours).map((t) => t.name.length)).toContain(60);
@@ -656,7 +656,7 @@ describe('tours', () => {
 
     s().renameTour(tour, 'Login');
     s().removeStep(tour, 0);
-    expect(s().tours[tour]).toEqual({ id: tour, name: 'Login', steps: [] });
+    expect(s().tours[tour]).toEqual({ id: tour, name: 'Login', kind: 'guide', steps: [] });
 
     s().removeTour(tour);
     expect(s().tours).toEqual({});

@@ -154,3 +154,40 @@ describe('stepIssues y continuaciones', () => {
     expect(s().edges[s().tours[failure]!.steps[0]!.edgeId!]?.branch).toBe(no!.id);
   });
 });
+
+describe('tipo de tour (tours-y-recorridos)', () => {
+  it('un tour solo admite pasos de nodo y un recorrido solo de conexión; nacen con su tipo', () => {
+    const e = signUp();
+    const guide = s().addTour('Conoce la pantalla')!;
+    const flow = s().addTour('Alta', 'flow')!;
+
+    expect(s().tours[guide]?.kind).toBe('guide');
+    expect(s().tours[flow]?.kind).toBe('flow');
+    // Un recorrido vacío sigue siendo un recorrido.
+    expect(isFlowTour(s().tours[flow])).toBe(true);
+    expect(s().addEdgeStep(guide, e.req)).toBeNull();
+    expect(s().addStep(flow, e.screen)).toBeNull();
+    expect(s().addStep(guide, e.screen)).toBe(0);
+    expect(s().addEdgeStep(flow, e.req)).toBe(0);
+    const fromSelection = s().addFlowTour('Desde la selección', [e.req])!;
+    expect(s().tours[fromSelection]?.kind).toBe('flow');
+  });
+
+  it('los tours de lienzos anteriores reciben el tipo de sus pasos al abrir, sin marcar cambios', () => {
+    s().loadGraph({
+      schemaVersion: 0,
+      version: 2,
+      nodes: { a: { id: 'a', type: 'screen', title: 'A' }, b: { id: 'b', type: 'api', title: 'B' } },
+      edges: { e: { id: 'e', from: 'a', to: 'b', kind: 'request' } },
+      layout: {},
+      tours: {
+        t1: { id: 't1', name: 'Clásico', steps: [{ nodeId: 'a' }] },
+        t2: { id: 't2', name: 'Mixto', steps: [{ nodeId: 'a' }, { edgeId: 'e' }] },
+        t3: { id: 't3', name: 'Vacío', steps: [] },
+      },
+    });
+    expect(s().dirty).toBe(false);
+    expect(Object.values(s().tours).map((t) => t.kind)).toEqual(['guide', 'flow', 'guide']);
+    expect(toGraph(s()).tours?.t2?.kind).toBe('flow');
+  });
+});
