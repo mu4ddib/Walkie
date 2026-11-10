@@ -9,9 +9,10 @@
 | **Nodo** | Caja del lienzo. Tipos: `actor`, `screen`, `rule`, `api`, `service`, `database`, `ref`, `portal`. |
 | **ref** | Nodo que apunta a un elemento del catálogo (`catalogId`). Si el elemento cambia, cambia en todos los lienzos. |
 | **portal** | Nodo que lleva a otra feature. Permite recorrer la app sin un lienzo gigante. |
-| **Conexión (edge)** | Relación entre nodos. Tipos: `navigation`, `request`, `response`, `uses`, `reads`, `writes`. |
+| **Conexión (edge)** | Relación entre nodos. Tipos: `navigation`, `request`, `response`, `event`, `uses`, `reads`, `writes`. Una respuesta puede llevar `status` y `replyTo` (su solicitud); una solicitud, su `request` (endpoint y parámetros del paso). |
 | **Input** | Dato que una pantalla pide al usuario (ej. `cc`), con sus reglas. |
-| **Regla** | Validación o lógica de negocio (ej. `cc` de 6 a 10 dígitos). |
+| **Regla** | Validación o lógica de negocio (ej. `cc` de 6 a 10 dígitos). En modo **decisión** (`mode: decision`) es una bifurcación con salidas (`branches`); cada rama es una conexión con `branch`. |
+| **Nota adhesiva** | Anotación libre sobre el lienzo (`stickyNotes`): no es un nodo, no se conecta ni entra en tours. |
 | **Tour** | Secuencia de pasos sobre nodos de una feature, con notas; puede continuar por un portal. |
 | **Layout** | Posición `x, y` de cada nodo, guardada aparte del contenido. |
 

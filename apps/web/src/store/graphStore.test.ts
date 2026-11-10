@@ -766,3 +766,209 @@ describe('snap', () => {
     expect([0, 3, 4, 12, -5].map(snap)).toEqual([0, 0, 8, 16, -8]);
   });
 });
+
+describe('decisión (modo de una regla)', () => {
+  it('convierte una regla conservando id, título, posición y conexiones, con "Sí" y "No" de partida', () => {
+    const rule = s().addNode('rule', { x: 40, y: 80 });
+    s().renameNode(rule, '¿Tiene cuenta?');
+    const login = s().addNode('screen', { x: 0, y: 0 });
+    const edge = s().connect(rule, login)!;
+
+    s().setRuleMode(rule, 'decision');
+
+    const node = s().nodes[rule]!;
+    expect(node).toMatchObject({ id: rule, type: 'rule', mode: 'decision', title: '¿Tiene cuenta?' });
+    expect(node.branches?.map((b) => b.label)).toEqual(['Sí', 'No']);
+    expect(s().layout[rule]).toEqual({ x: 40, y: 80 });
+    // La conexión sigue ahí, sin salida: se asigna a mano.
+    expect(s().edges[edge]).toEqual({ id: edge, from: rule, to: login, kind: 'uses' });
+    s().updateEdge(edge, { branch: node.branches![0]!.id });
+    expect(s().edges[edge]?.branch).toBe(node.branches![0]!.id);
+  });
+
+  it('una conexión que nace de una salida es esa rama; una salida ajena se ignora', () => {
+    const rule = s().addNode('rule', { x: 0, y: 0 });
+    const a = s().addNode('screen', { x: 0, y: 0 });
+    s().setRuleMode(rule, 'decision');
+    const [yes] = s().nodes[rule]!.branches!;
+
+    const edge = s().connect(rule, a, undefined, { branch: yes!.id })!;
+    const other = s().connect(a, rule, undefined, { branch: yes!.id })!;
+
+    expect(s().edges[edge]?.branch).toBe(yes!.id);
+    expect(s().edges[other]?.branch).toBeUndefined();
+    s().updateEdge(edge, { branch: 'no-existe' });
+    expect(s().edges[edge]?.branch).toBe(yes!.id);
+  });
+
+  it('renombra, agrega y quita salidas; quitar una deja sus conexiones sin asignar', () => {
+    const rule = s().addNode('rule', { x: 0, y: 0 });
+    const a = s().addNode('screen', { x: 0, y: 0 });
+    s().setRuleMode(rule, 'decision');
+    const [yes, no] = s().nodes[rule]!.branches!;
+    const edge = s().connect(rule, a, undefined, { branch: no!.id })!;
+
+    s().renameBranch(rule, yes!.id, '  Ya es cliente ');
+    s().renameBranch(rule, yes!.id, '   ');
+    const extra = s().addBranch(rule)!;
+    s().removeBranch(rule, no!.id);
+
+    expect(s().nodes[rule]!.branches).toEqual([
+      { id: yes!.id, label: 'Ya es cliente' },
+      { id: extra, label: 'Sí' },
+    ]);
+    expect(s().edges[edge]).toEqual({ id: edge, from: rule, to: a, kind: 'uses' });
+    expect(s().addBranch(a)).toBeNull();
+  });
+
+  it('volver a regla quita las salidas y deja su etiqueta en la conexión', () => {
+    const rule = s().addNode('rule', { x: 0, y: 0 });
+    const a = s().addNode('screen', { x: 0, y: 0 });
+    s().setRuleMode(rule, 'decision');
+    const edge = s().connect(rule, a, undefined, { branch: s().nodes[rule]!.branches![0]!.id })!;
+
+    s().setRuleMode(rule, 'rule');
+
+    expect(s().nodes[rule]).toEqual({ id: rule, type: 'rule', title: 'Regla' });
+    expect(s().edges[edge]).toEqual({ id: edge, from: rule, to: a, kind: 'uses', label: 'Sí' });
+  });
+
+  it('solo una regla puede ser una decisión', () => {
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+    s().markSaved(1);
+
+    s().setRuleMode(screen, 'decision');
+
+    expect(s().nodes[screen]?.mode).toBeUndefined();
+    expect(s().dirty).toBe(false);
+  });
+});
+
+describe('solicitud y respuesta', () => {
+  function exchange() {
+    const screen = s().addNode('screen', { x: 0, y: 0 });
+    const api = s().addNode('api', { x: 0, y: 0 });
+    const request = s().connect(screen, api)!;
+    return { screen, api, request };
+  }
+
+  it('addResponse crea el retorno en sentido inverso, vinculado a la solicitud; admite varias', () => {
+    const { screen, api, request } = exchange();
+
+    const ok = s().addResponse(request, { status: 201 })!;
+    const error = s().addResponse(request, { status: 409, label: 'Correo ya registrado' })!;
+
+    expect(s().edges[ok]).toEqual({ id: ok, from: api, to: screen, kind: 'response', replyTo: request, status: 201 });
+    expect(s().edges[error]).toMatchObject({ from: api, to: screen, replyTo: request, status: 409, label: 'Correo ya registrado' });
+    expect(s().addResponse(ok)).toBeNull();
+  });
+
+  it('el código va en su campo (100 a 599), aparte de la condición', () => {
+    const { request } = exchange();
+    const response = s().addResponse(request)!;
+
+    s().updateEdge(response, { status: 200, when: 'si hay saldo', outcome: ' Se muestra el comprobante ' });
+    s().updateEdge(response, { status: 99 });
+
+    expect(s().edges[response]).toMatchObject({ status: 200, when: 'si hay saldo', outcome: 'Se muestra el comprobante' });
+    s().updateEdge(response, { status: null, outcome: '' });
+    expect(s().edges[response]).toEqual(expect.not.objectContaining({ status: expect.anything(), outcome: expect.anything() }));
+  });
+
+  it('replyTo solo acepta otra conexión request; borrar la solicitud desvincula sus respuestas', () => {
+    const { request } = exchange();
+    const response = s().addResponse(request)!;
+
+    s().updateEdge(response, { replyTo: response });
+    expect(s().edges[response]?.replyTo).toBe(request);
+    s().removeEdge(request);
+
+    expect(s().edges[response]).toBeDefined();
+    expect(s().edges[response]?.replyTo).toBeUndefined();
+  });
+
+  it('reverse intercambia origen y destino y conserva etiqueta y detalle', () => {
+    const { screen, api, request } = exchange();
+    s().updateEdge(request, { label: 'Alta', notes: 'Con reintento' });
+
+    s().updateEdge(request, { kind: 'response', reverse: true });
+
+    expect(s().edges[request]).toEqual({ id: request, from: api, to: screen, kind: 'response', label: 'Alta', notes: 'Con reintento' });
+  });
+
+  it('una solicitud guarda el endpoint y los parámetros de ese paso, normalizados', () => {
+    const { request } = exchange();
+
+    s().updateEdge(request, {
+      request: { method: 'POST', path: ' /usuarios ', params: [{ name: ' X-Canal ', in: 'header', value: ' app ' }, { name: ' ', in: 'query' }] },
+    });
+
+    expect(s().edges[request]?.request).toEqual({ method: 'POST', path: '/usuarios', params: [{ name: 'X-Canal', in: 'header', value: 'app' }] });
+    s().updateEdge(request, { request: null });
+    expect(s().edges[request]?.request).toBeUndefined();
+  });
+});
+
+describe('duplicateNode', () => {
+  it('copia propiedades, imagen y grupo con id propio, corrida y sin conexiones', () => {
+    const screen = s().addNode('screen', { x: 80, y: 80 });
+    const api = s().addNode('api', { x: 400, y: 80 });
+    s().updateNode(screen, { title: 'Inicio', description: 'Pantalla inicial', assetId: '018f0000-0000-7000-8000-000000000001' });
+    s().addInput(screen, { name: 'correo' });
+    const group = s().addGroup({ x: 0, y: 0, w: 400, h: 400 }, { members: [screen] });
+    s().connect(screen, api);
+
+    const copy = s().duplicateNode(screen)!;
+
+    expect(copy).not.toBe(screen);
+    expect(s().nodes[copy]).toEqual({ ...s().nodes[screen], id: copy });
+    expect(s().nodes[copy]?.groupId).toBe(group);
+    expect(s().nodes[copy]?.inputs).not.toBe(s().nodes[screen]?.inputs);
+    expect(s().layout[copy]).toEqual({ x: 104, y: 104 });
+    expect(Object.values(s().edges).filter((e) => e.from === copy || e.to === copy)).toEqual([]);
+    expect(Object.keys(s().edges)).toHaveLength(1);
+  });
+
+  it('la copia de un ref apunta al mismo elemento del catálogo', () => {
+    const ref = s().addRef({ id: 'item-1', title: 'Clientes' }, { x: 0, y: 0 });
+
+    const copy = s().duplicateNode(ref)!;
+
+    expect(s().nodes[copy]).toEqual({ id: copy, type: 'ref', title: 'Clientes', catalogId: 'item-1' });
+    expect(s().duplicateNode('no-existe')).toBeNull();
+  });
+});
+
+describe('notas adhesivas', () => {
+  it('se crean, editan, mueven, duplican y borran; van en el grafo solo si hay alguna', () => {
+    expect(toGraph(s()).stickyNotes).toBeUndefined();
+    const note = s().addStickyNote({ x: 13, y: 21 });
+    s().updateStickyNote(note, '  Pendiente: validar  ');
+    s().moveStickyNote(note, { x: 101, y: 50 });
+
+    expect(toGraph(s()).stickyNotes).toEqual({ [note]: { id: note, text: 'Pendiente: validar' } });
+    expect(s().layout[note]).toEqual({ x: 104, y: 48 });
+
+    const copy = s().duplicateStickyNote(note)!;
+    expect(s().stickyNotes[copy]?.text).toBe('Pendiente: validar');
+    expect(s().layout[copy]).toEqual({ x: 128, y: 72 });
+
+    s().removeStickyNote(note);
+    s().removeStickyNote(copy);
+    expect(s().stickyNotes).toEqual({});
+    expect(s().layout).toEqual({});
+  });
+
+  it('se cargan con el grafo y un cambio en ellas durante un guardado sigue pendiente', () => {
+    s().loadGraph({ schemaVersion: 0, version: 2, nodes: {}, edges: {}, layout: { n: { x: 0, y: 0 } }, stickyNotes: { n: { id: 'n', text: 'Hola' } } });
+    expect(s().stickyNotes['n']?.text).toBe('Hola');
+
+    s().updateStickyNote('n', 'Hola de nuevo');
+    const sent = s();
+    s().updateStickyNote('n', 'Otro cambio');
+    s().markSaved(3, sent);
+
+    expect(s().version).toBe(3);
+    expect(s().dirty).toBe(true);
+  });
+});

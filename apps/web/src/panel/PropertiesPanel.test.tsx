@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { createGraphStore, type GraphStore } from '../store/graphStore';
@@ -91,5 +91,105 @@ describe('PropertiesPanel', () => {
     act(() => store.getState().renameNode(nodeId, 'Inicio'));
 
     expect(screen.getByLabelText('Título')).toHaveValue('Inicio');
+  });
+});
+
+describe('regla y decisión', () => {
+  it('convierte una regla en decisión y deja asignar a mano la salida de cada conexión', async () => {
+    const { store, nodeId } = renderPanel((s) => {
+      const rule = s.addNode('rule', { x: 0, y: 0 });
+      const login = s.addNode('screen', { x: 0, y: 0 });
+      s.renameNode(login, 'Login');
+      s.connect(rule, login);
+      return { nodeId: rule };
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Decisión/ }));
+
+    expect(screen.getByRole('button', { name: /Decisión/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Salida 1')).toHaveValue('Sí');
+    expect(screen.getByLabelText('Salida 2')).toHaveValue('No');
+    await userEvent.selectOptions(screen.getByLabelText('→ Login'), 'No');
+    await userEvent.click(screen.getByRole('button', { name: '+ Agregar rama' }));
+
+    const node = store.getState().nodes[nodeId]!;
+    expect(node.branches?.map((b) => b.label)).toEqual(['Sí', 'No', 'Rama 3']);
+    expect(Object.values(store.getState().edges)[0]?.branch).toBe(node.branches![1]!.id);
+  });
+});
+
+describe('inspector de una conexión', () => {
+  it('resume origen → destino y, al marcar "responde" una pantalla → API, invierte el sentido y lo dice', async () => {
+    const { store, edgeId } = renderPanel((s) => {
+      const screenId = s.addNode('screen', { x: 0, y: 0 });
+      const api = s.addNode('api', { x: 0, y: 0 });
+      return { edgeId: s.connect(screenId, api)! };
+    });
+    const summary = screen.getByRole('region', { name: 'Resumen de la conexión' });
+    expect(summary).toHaveTextContent('Pantalla→API');
+    expect(summary).toHaveTextContent('llama');
+
+    await userEvent.type(screen.getByLabelText('Etiqueta'), 'Alta');
+    await userEvent.selectOptions(screen.getByLabelText('Tipo'), 'response');
+
+    const edge = store.getState().edges[edgeId]!;
+    expect(store.getState().nodes[edge.from]?.type).toBe('api');
+    expect(edge).toMatchObject({ kind: 'response', label: 'Alta' });
+    expect(summary).toHaveTextContent('API→Pantalla');
+    expect(screen.getByRole('status')).toHaveTextContent('Se invirtió el sentido');
+
+    await userEvent.click(screen.getByRole('button', { name: /Invertir sentido/ }));
+    expect(store.getState().nodes[store.getState().edges[edgeId]!.from]?.type).toBe('screen');
+  });
+
+  it('una solicitud muestra el contrato de la API y añade respuestas vinculadas con su código', async () => {
+    const { store, edgeId } = renderPanel((s) => {
+      const screenId = s.addNode('screen', { x: 0, y: 0 });
+      const api = s.addNode('api', { x: 0, y: 0 });
+      s.setHttp(api, { method: 'POST', path: '/creacionUsuario', responses: [{ status: 201 }, { status: 409 }] });
+      return { edgeId: s.connect(screenId, api)! };
+    });
+
+    expect(screen.getByRole('region', { name: 'Solicitud' })).toHaveTextContent('Contrato de la API: POST /creacionUsuario');
+    expect(screen.queryByLabelText('Código HTTP')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Operación')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Añadir respuesta 409' }));
+    await userEvent.click(screen.getByRole('button', { name: '+ Añadir respuesta' }));
+
+    const responses = Object.values(store.getState().edges).filter((e) => e.replyTo === edgeId);
+    expect(responses.map((r) => [r.kind, r.status])).toEqual([
+      ['response', 409],
+      ['response', undefined],
+    ]);
+    expect(within(screen.getByRole('region', { name: 'Respuestas' })).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('una respuesta tiene código HTTP propio, solicitud asociada y "qué ocurre después"', async () => {
+    const { store, edgeId } = renderPanel((s) => {
+      const screenId = s.addNode('screen', { x: 0, y: 0 });
+      const api = s.addNode('api', { x: 0, y: 0 });
+      const request = s.connect(screenId, api)!;
+      const response = s.connect(api, screenId)!;
+      s.updateEdge(response, { when: '200' });
+      s.updateEdge(request, { label: 'Alta' });
+      return { edgeId: response };
+    });
+
+    // Un código que venía como condición se muestra en su campo.
+    const code = screen.getByLabelText('Código HTTP');
+    expect(code).toHaveValue('200');
+    await userEvent.clear(code);
+    await userEvent.type(code, '42');
+    expect(screen.getByRole('alert')).toHaveTextContent('100 a 599');
+    await userEvent.type(code, '2');
+    await userEvent.selectOptions(screen.getByLabelText('Solicitud asociada'), 'Pantalla → API · Alta');
+    await userEvent.type(screen.getByLabelText('Qué ocurre después'), 'Se navega al inicio');
+
+    const edge = store.getState().edges[edgeId]!;
+    // El código pasa a su campo y deja de ser la condición.
+    expect(edge.status).toBe(422);
+    expect(edge.when).toBeUndefined();
+    expect(edge.outcome).toBe('Se navega al inicio');
+    expect(store.getState().edges[edge.replyTo!]?.label).toBe('Alta');
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useStore } from 'zustand';
 import { ApiError } from '../api/client';
@@ -11,16 +11,30 @@ import { saveFile } from '../ui/download';
 import { ApiStatus } from '../api/ApiStatus';
 import { UserMenu } from '../auth/UserMenu';
 import { LocationBar } from '../workspace/LocationBar';
+import { Popover } from '../workspace/Popover';
+import { getAutosave, setAutosave } from '../workspace/session';
 import { APPS_PATH } from '../workspace/paths';
 import { Canvas } from './Canvas';
 import { OPEN_HELP_EVENT } from './canvasShortcuts';
-import { UNSAVED_CONFIRM } from './useOpenFeature';
+import { UNSAVED_AFTER_ERROR_CONFIRM, UNSAVED_CONFIRM, setLeaveGuard } from './leaveGuard';
 
-type Status = { kind: 'idle' } | { kind: 'saved' } | { kind: 'error'; message: string } | { kind: 'conflict'; serverVersion?: number };
+type Status =
+  | { kind: 'idle' }
+  | { kind: 'saved' }
+  | { kind: 'error'; message: string }
+  | { kind: 'conflict'; serverVersion?: number }
+  /** Tras "Seguir editando" en un conflicto: el servidor tiene otra versión y guardar volvería a fallar. */
+  | { kind: 'stale' };
+
+/** Pausa en la edición tras la que el autoguardado guarda. */
+export const AUTOSAVE_DELAY_MS = 1200;
+/** Al soltar tras un movimiento (arrastrar una caja), el autoguardado guarda antes. */
+export const AUTOSAVE_AFTER_MOVE_MS = 400;
 
 /**
- * Lienzo editable de una feature con guardado manual (botón y Ctrl+S), indicador de cambios
- * pendientes y manejo de 409 (recargar la versión del servidor) y 400 (grafo inválido).
+ * Lienzo editable de una feature. Guardado manual (botón y Ctrl+S) o autoguardado (opción en el estado de
+ * guardado; usa el mismo `PUT` con versión), indicador de estado y manejo de 409 (recargar la versión del
+ * servidor) y 400 (grafo inválido). Un guardado nunca marca como guardado lo que cambió mientras viajaba.
  */
 export function FeatureEditor({
   featureId,
@@ -61,20 +75,106 @@ export function FeatureEditor({
     }
   }
 
-  const saveNow = useCallback(async () => {
+  const [autosave, setAutosaveState] = useState(getAutosave);
+  // Guardado en curso: los guardados van de uno en uno (cada uno necesita la versión que devolvió el anterior).
+  const saving = useRef<Promise<boolean> | null>(null);
+  const [pending, setPending] = useState(false);
+  const { mutateAsync } = save;
+
+  /** Guarda lo pendiente; `true` si el lienzo quedó guardado (o no había nada que guardar). */
+  const saveNow = useCallback(async (): Promise<boolean> => {
+    while (saving.current) await saving.current;
     const state = store.getState();
-    if (!state.dirty || save.isPending) return;
-    try {
-      const saved = await save.mutateAsync(toGraph(state));
-      store.getState().markSaved(saved.version, state);
-      setStatus({ kind: 'saved' });
-    } catch (error) {
-      setStatus(toStatus(error));
-    }
-  }, [save, store]);
+    if (!state.dirty) return true;
+    const run = (async () => {
+      setPending(true);
+      try {
+        const saved = await mutateAsync(toGraph(state));
+        // Solo queda "guardado" si el grafo sigue siendo el que se envió: lo que cambió entretanto sigue pendiente.
+        store.getState().markSaved(saved.version, state);
+        setStatus({ kind: 'saved' });
+        return !store.getState().dirty;
+      } catch (error) {
+        setStatus(toStatus(error));
+        return false;
+      } finally {
+        saving.current = null;
+        setPending(false);
+      }
+    })();
+    saving.current = run;
+    return run;
+  }, [mutateAsync, store]);
+
+  // Con un conflicto de versión el autoguardado se detiene: reintentar daría otro 409.
+  const blocked = status.kind === 'conflict' || status.kind === 'stale';
+
+  // Autoguardado: tras una pausa breve en la edición y al terminar un movimiento. Mientras se arrastra no guarda.
+  useEffect(() => {
+    if (!autosave || blocked) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let pointerDown = false;
+    const schedule = (ms: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (pointerDown) return;
+        void saveNow().then(() => {
+          // Lo que cambió durante el guardado se guarda en la siguiente pausa.
+          if (store.getState().dirty && timer !== undefined) schedule(AUTOSAVE_DELAY_MS);
+        });
+      }, ms);
+    };
+    const unsubscribe = store.subscribe((state, prev) => {
+      const changed =
+        state.nodes !== prev.nodes ||
+        state.edges !== prev.edges ||
+        state.layout !== prev.layout ||
+        state.tours !== prev.tours ||
+        state.groups !== prev.groups ||
+        state.stickyNotes !== prev.stickyNotes;
+      if (state.dirty && changed) schedule(AUTOSAVE_DELAY_MS);
+    });
+    const onDown = () => (pointerDown = true);
+    const onUp = () => {
+      pointerDown = false;
+      if (store.getState().dirty) schedule(AUTOSAVE_AFTER_MOVE_MS);
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointercancel', onUp, true);
+    // Al activarlo con cambios pendientes, se guardan.
+    if (store.getState().dirty) schedule(AUTOSAVE_AFTER_MOVE_MS);
+    return () => {
+      clearTimeout(timer);
+      timer = undefined;
+      unsubscribe();
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+    };
+  }, [autosave, blocked, saveNow, store]);
+
+  // Si el editor se desmonta por otra vía (atrás del navegador) con el autoguardado activo, se intenta guardar.
+  const leaving = useRef({ autosave, blocked, saveNow });
+  useEffect(() => {
+    leaving.current = { autosave, blocked, saveNow };
+  });
+  useEffect(
+    () => () => {
+      const last = leaving.current;
+      if (last.autosave && !last.blocked && store.getState().dirty) void last.saveNow();
+    },
+    [store],
+  );
+
+  function toggleAutosave(on: boolean) {
+    setAutosave(on);
+    setAutosaveState(on);
+  }
 
   async function reloadFromServer() {
     try {
+      while (saving.current) await saving.current;
       store.getState().loadGraph(await fetchCanvas());
       setCanvasKey((k) => k + 1);
       setStatus({ kind: 'idle' });
@@ -104,14 +204,39 @@ export function FeatureEditor({
   }, [dirty]);
 
   const navigate = useNavigate();
+  // Salir del lienzo (otra feature, otra app) con cambios pendientes: con autoguardado se guardan antes;
+  // si no se puede, o en modo manual, la persona decide.
+  const canLeaveNow = useCallback(async () => {
+    if (!store.getState().dirty) return true;
+    if (!autosave || blocked) return window.confirm(UNSAVED_CONFIRM);
+    return (await saveNow()) || window.confirm(UNSAVED_AFTER_ERROR_CONFIRM);
+  }, [autosave, blocked, saveNow, store]);
   // Cambiar de app o feature desde la barra: con cambios sin guardar se confirma (spec imagenes-portal, decisión 3).
   const go = useCallback(
     (path: string) => {
-      if (store.getState().dirty && !window.confirm(UNSAVED_CONFIRM)) return;
-      void navigate(path);
+      void canLeaveNow().then((ok) => {
+        if (ok) void navigate(path);
+      });
     },
-    [navigate, store],
+    [navigate, canLeaveNow],
   );
+
+  // Los portales del lienzo salen por la misma puerta (`useOpenFeature` → `canLeave`).
+  useEffect(() => {
+    setLeaveGuard(store, canLeaveNow);
+    return () => setLeaveGuard(store, null);
+  }, [store, canLeaveNow]);
+
+  // Estado que se muestra: discreto y de una palabra; el detalle de un error va aparte.
+  const saveState: SaveState = pending
+    ? 'saving'
+    : dirty
+      ? status.kind === 'error'
+        ? 'error'
+        : 'dirty'
+      : status.kind === 'saved'
+        ? 'saved'
+        : 'idle';
 
   return (
     <div className="feature-editor">
@@ -136,23 +261,59 @@ export function FeatureEditor({
           />
         )}
         <div className="save-bar">
-          <span className="save-status" role="status" data-dirty={dirty || undefined} data-saved={status.kind === 'saved' || undefined}>
-            {dirty ? 'Sin guardar' : status.kind === 'saved' ? 'Guardado' : 'Al día'}
-          </span>
-          <button
-            type="button"
-            className={dirty ? 'pixel-button is-primary' : 'pixel-button'}
-            onClick={() => void saveNow()}
-            disabled={!dirty || save.isPending}
-            data-tip="Guardar · Ctrl+S"
+          <Popover
+            className="save-menu"
+            label="Opciones de guardado"
+            buttonLabel={
+              <span className="save-status" role="status" data-state={saveState} data-tip="Opciones de guardado">
+                {SAVE_LABELS[saveState]}
+                {autosave && !blocked && <span className="save-auto"> · auto</span>}
+              </span>
+            }
           >
-            {save.isPending ? 'Guardando…' : 'Guardar'}
-          </button>
+            {() => (
+              <div className="save-options">
+                <label className="save-option">
+                  <input type="checkbox" checked={autosave} onChange={(e) => toggleAutosave(e.target.checked)} />
+                  <span>Autoguardado</span>
+                </label>
+                <p>
+                  {autosave
+                    ? 'Guarda solo tras una pausa breve al editar y al terminar de mover. Guardar y Ctrl+S siguen disponibles.'
+                    : 'Desactivado: los cambios se guardan con el botón Guardar o con Ctrl+S.'}
+                </p>
+                {autosave && blocked && <p>En pausa: el servidor tiene una versión más reciente de este lienzo.</p>}
+              </div>
+            )}
+          </Popover>
+          {saveState === 'error' ? (
+            <button type="button" className="pixel-button is-primary" onClick={() => void saveNow()}>
+              Reintentar
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={dirty ? 'pixel-button is-primary' : 'pixel-button'}
+              onClick={() => void saveNow()}
+              disabled={!dirty || pending}
+              data-tip="Guardar · Ctrl+S"
+            >
+              {pending ? 'Guardando…' : 'Guardar'}
+            </button>
+          )}
         </div>
         <div className="workspace-messages">
-          {status.kind === 'error' && (
+          {status.kind === 'error' && dirty && (
             <span role="alert" className="save-error">
               {status.message}
+            </span>
+          )}
+          {status.kind === 'stale' && dirty && (
+            <span role="note" className="save-error">
+              El servidor tiene otra versión de este lienzo.{' '}
+              <button type="button" className="link-button" onClick={() => void reloadFromServer()}>
+                Recargar
+              </button>
             </span>
           )}
           {exporter.isError && (
@@ -203,7 +364,7 @@ export function FeatureEditor({
           <button type="button" className="pixel-button" onClick={() => void reloadFromServer()}>
             Recargar versión del servidor
           </button>
-          <button type="button" className="pixel-button" onClick={() => setStatus({ kind: 'idle' })}>
+          <button type="button" className="pixel-button" onClick={() => setStatus({ kind: 'stale' })}>
             Seguir editando
           </button>
         </div>
@@ -214,6 +375,15 @@ export function FeatureEditor({
     </div>
   );
 }
+
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+const SAVE_LABELS: Record<SaveState, string> = {
+  idle: 'Al día',
+  dirty: 'Sin guardar',
+  saving: 'Guardando',
+  saved: 'Guardado',
+  error: 'Error al guardar',
+};
 
 function toStatus(error: unknown): Status {
   if (error instanceof ApiError && error.status === 409) {

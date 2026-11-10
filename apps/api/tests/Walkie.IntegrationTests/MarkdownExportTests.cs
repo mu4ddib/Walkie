@@ -340,6 +340,51 @@ public sealed class MarkdownExportTests
         Assert.Equal("img/pantalla-0198f0c0.jpg", Slugs.ImagePath("¿?", Asset, "image/jpeg"));
     }
 
+    [Fact]
+    public void Ramas_respuestas_y_notas_adhesivas_salen_con_su_etiqueta_codigo_y_texto()
+    {
+        var graph = Graph();
+        graph["nodes"]!["d1"] = new JsonObject
+        {
+            ["id"] = "d1", ["type"] = "rule", ["title"] = "¿Tiene cuenta?", ["mode"] = "decision",
+            ["branches"] = new JsonArray(new JsonObject { ["id"] = "si", ["label"] = "Sí" }),
+        };
+        graph["nodes"]!["x1"] = new JsonObject
+        {
+            ["id"] = "x1", ["type"] = "api", ["title"] = "API Usuarios",
+            ["http"] = new JsonObject { ["method"] = "POST", ["path"] = "/creacionUsuario" },
+        };
+        graph["edges"]!["e4"] = new JsonObject { ["id"] = "e4", ["from"] = "d1", ["to"] = "s1", ["kind"] = "uses", ["branch"] = "si" };
+        graph["edges"]!["e5"] = new JsonObject
+        {
+            ["id"] = "e5", ["from"] = "s1", ["to"] = "x1", ["kind"] = "request",
+            ["request"] = new JsonObject
+            {
+                ["params"] = new JsonArray(new JsonObject { ["name"] = "X-Canal", ["in"] = "header", ["value"] = "app" }),
+            },
+        };
+        graph["edges"]!["e6"] = new JsonObject
+        {
+            ["id"] = "e6", ["from"] = "x1", ["to"] = "s1", ["kind"] = "response", ["replyTo"] = "e5", ["status"] = 201,
+            ["outcome"] = "Se muestra la confirmación",
+        };
+        graph["stickyNotes"] = new JsonObject
+        {
+            ["k1"] = new JsonObject { ["id"] = "k1", ["text"] = "Pendiente: validar con seguridad" },
+            ["k2"] = new JsonObject { ["id"] = "k2", ["text"] = "" },
+        };
+
+        var markdown = MarkdownDocument.Render(Input(graph));
+
+        Assert.Contains("¿Tiene cuenta? → Login (Sí)", markdown, StringComparison.Ordinal);
+        Assert.Contains("Login → API Usuarios (llama: POST /creacionUsuario)", markdown, StringComparison.Ordinal);
+        Assert.Contains("  - Parámetro (header): `X-Canal` = `app`", markdown, StringComparison.Ordinal);
+        Assert.Contains("API Usuarios → Login (responde 201)", markdown, StringComparison.Ordinal);
+        Assert.Contains("  - Después: Se muestra la confirmación", markdown, StringComparison.Ordinal);
+        Assert.Contains("- [Notas del lienzo](#notas-del-lienzo)", markdown, StringComparison.Ordinal);
+        Assert.Contains("## Notas del lienzo\n\n- Pendiente: validar con seguridad\n\n## Tours", markdown, StringComparison.Ordinal);
+    }
+
     private static ExportInput Input(JsonObject graph)
     {
         using var doc = JsonDocument.Parse(graph.ToJsonString());

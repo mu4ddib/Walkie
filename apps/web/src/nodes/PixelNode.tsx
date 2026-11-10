@@ -14,7 +14,7 @@ import {
   moreLabel,
   preview,
 } from './nodeContent';
-import { NODE_LABELS } from './nodeMeta';
+import { nodeLabel } from './nodeMeta';
 import { NodeImage } from './NodeImage';
 
 export type WalkieFlowNode = FlowNode<{
@@ -57,12 +57,15 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
         : node.targetFeatureId
           ? `→ ${node.title}`
           : 'Sin destino';
-  const meta = NODE_LABELS[shown.type];
+  const meta = nodeLabel(shown);
+  const decision = node.type === 'rule' && node.mode === 'decision';
+  const connectTip = share ? undefined : 'Arrastra hasta otra caja para conectarlas';
 
   return (
     <div
       className="pixel-node"
       data-type={node.type}
+      data-mode={decision ? 'decision' : undefined}
       data-ref={node.type === 'ref' || node.type === 'portal' ? (missing ? 'missing' : 'ok') : undefined}
       data-selected={selected || undefined}
       style={{ '--node-color': nodeColors[shown.type] } as CSSProperties}
@@ -91,7 +94,23 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
       )}
       {node.type === 'screen' && node.assetId && <NodeImage assetId={node.assetId} />}
       <NodeContent node={shown} />
-      <Handle type="source" position={Position.Right} />
+      {decision ? (
+        <>
+          {/* Cada salida tiene su punto: la conexión que nace de él es esa rama y lleva su etiqueta. */}
+          <ul className="pixel-node-branches" aria-label="Salidas">
+            {(node.branches ?? []).map((branch) => (
+              <li key={branch.id}>
+                <span>{branch.label}</span>
+                <Handle type="source" position={Position.Right} id={branch.id} title={connectTip} />
+              </li>
+            ))}
+          </ul>
+          {/* Punto común, oculto: ancla las conexiones que aún no tienen salida asignada (regla convertida). */}
+          <Handle type="source" position={Position.Right} className="pixel-node-handle-fallback" isConnectable={false} />
+        </>
+      ) : (
+        <Handle type="source" position={Position.Right} title={connectTip} />
+      )}
     </div>
   );
 }

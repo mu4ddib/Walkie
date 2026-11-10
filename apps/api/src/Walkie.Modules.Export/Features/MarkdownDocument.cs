@@ -97,6 +97,7 @@ internal static class MarkdownDocument
         var edges = ReadEdges(input.Graph, byId);
         var tours = ReadTours(input.Graph, byId);
         var groups = ReadGroups(input.Graph, nodes);
+        var stickyNotes = ReadStickyNotes(input.Graph);
         var md = new Md();
 
         md.Line($"# {MarkdownText.Inline(input.FeatureName)}");
@@ -130,6 +131,11 @@ internal static class MarkdownDocument
             md.Line("- [Conexiones](#conexiones)");
         }
 
+        if (stickyNotes.Count > 0)
+        {
+            md.Line("- [Notas del lienzo](#notas-del-lienzo)");
+        }
+
         if (tours.Count > 0)
         {
             md.Line("- [Tours](#tours)");
@@ -161,6 +167,18 @@ internal static class MarkdownDocument
             {
                 md.Line($"- {EdgeText(edge, MarkdownText.Inline)}");
                 WriteEdgeDetail(md, edge);
+            }
+
+            md.Blank();
+        }
+
+        if (stickyNotes.Count > 0)
+        {
+            md.Line("## Notas del lienzo");
+            md.Blank();
+            foreach (var note in stickyNotes)
+            {
+                md.Line($"- {MarkdownText.Indent(MarkdownText.Block(note), 2)}");
             }
 
             md.Blank();
@@ -496,6 +514,20 @@ internal static class MarkdownDocument
     private static void WriteEdgeDetail(Md md, ExportEdge edge)
     {
         var json = edge.Json;
+        if (json.TryGetProperty("request", out var request) && request.TryGetProperty("params", out var parameters))
+        {
+            foreach (var parameter in parameters.EnumerateArray())
+            {
+                var value = Text(parameter, "value") is { Length: > 0 } v ? $" = {MarkdownText.Code(v)}" : string.Empty;
+                md.Line($"  - Parámetro ({Text(parameter, "in")}): {MarkdownText.Code(Text(parameter, "name") ?? string.Empty)}{value}");
+            }
+        }
+
+        if (Text(json, "outcome") is { Length: > 0 } outcome)
+        {
+            md.Line($"  - Después: {MarkdownText.Indent(MarkdownText.Block(outcome), 4)}");
+        }
+
         if (json.TryGetProperty("data", out var data))
         {
             var operation = Text(data, "operation") switch
@@ -576,13 +608,27 @@ internal static class MarkdownDocument
     private static string EdgeText(ExportEdge edge, Func<string, string> escape) =>
         $"{escape(edge.From.Title)} → {escape(edge.To.Title)} ({escape(EdgeLabel(edge))})";
 
-    /// <summary>"navega: Buscar [200]": tipo, etiqueta y condición.</summary>
+    /// <summary>
+    /// "navega: Buscar [200]": tipo, etiqueta y condición. Una rama de decisión lleva la etiqueta de su salida en
+    /// vez del genérico "usa" ("Sí"), una respuesta su código ("responde 201") y una solicitud sin etiqueta, su
+    /// endpoint ("llama: POST /usuarios").
+    /// </summary>
     private static string EdgeLabel(ExportEdge edge)
     {
-        var text = EdgeKinds.GetValueOrDefault(edge.Kind, edge.Kind);
+        var kind = EdgeKinds.GetValueOrDefault(edge.Kind, edge.Kind);
+        var text = BranchLabel(edge) is { } branch ? (edge.Kind == "uses" ? branch : $"{branch} · {kind}") : kind;
+        if (edge.Kind == "response" && edge.Json.TryGetProperty("status", out var status) && status.TryGetInt32(out var code))
+        {
+            text += string.Create(CultureInfo.InvariantCulture, $" {code}");
+        }
+
         if (!string.IsNullOrWhiteSpace(edge.Label))
         {
             text += $": {edge.Label}";
+        }
+        else if (edge.Kind == "request" && Endpoint(edge) is { Length: > 0 } endpoint)
+        {
+            text += $": {endpoint}";
         }
 
         if (!string.IsNullOrWhiteSpace(edge.When))
@@ -591,6 +637,29 @@ internal static class MarkdownDocument
         }
 
         return text;
+    }
+
+    /// <summary>Etiqueta de la salida de la decisión de origen a la que corresponde la conexión.</summary>
+    private static string? BranchLabel(ExportEdge edge)
+    {
+        if (Text(edge.Json, "branch") is not { } id || !edge.From.Json.TryGetProperty("branches", out var branches))
+        {
+            return null;
+        }
+
+        return branches.EnumerateArray()
+            .Where(b => Text(b, "id") == id)
+            .Select(b => Text(b, "label"))
+            .FirstOrDefault();
+    }
+
+    /// <summary>"POST /ruta" de una solicitud: lo propio del paso o, si falta, el contrato de la API destino.</summary>
+    private static string Endpoint(ExportEdge edge)
+    {
+        var own = edge.Json.TryGetProperty("request", out var r) && r.ValueKind == JsonValueKind.Object ? r : default;
+        var method = (own.ValueKind == JsonValueKind.Object ? Text(own, "method") : null) ?? edge.To.Method;
+        var path = (own.ValueKind == JsonValueKind.Object ? Text(own, "path") : null) ?? edge.To.Path;
+        return string.Join(' ', new[] { method, path }.Where(p => !string.IsNullOrWhiteSpace(p)));
     }
 
     private static string Shape(string section, string label) => section switch
@@ -681,6 +750,16 @@ internal static class MarkdownDocument
             .ThenBy(e => e.To.Key.Length).ThenBy(e => e.To.Key, StringComparer.Ordinal)
             .ThenBy(e => e.Id, StringComparer.Ordinal)
             .ToList();
+
+    /// <summary>Textos de las notas adhesivas (anotaciones del lienzo), en orden de id; las vacías no salen.</summary>
+    private static List<string> ReadStickyNotes(JsonElement graph) =>
+        graph.TryGetProperty("stickyNotes", out var notes)
+            ? [.. notes.EnumerateObject()
+                .OrderBy(n => n.Name, StringComparer.Ordinal)
+                .Select(n => Text(n.Value, "text"))
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(t => t!)]
+            : [];
 
     private static List<ExportTour> ReadTours(JsonElement graph, Dictionary<string, ExportNode> nodes)
     {

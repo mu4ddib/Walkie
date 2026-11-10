@@ -21,7 +21,7 @@
     },
     "layout": {
       "type": "object",
-      "description": "Mapa id de nodo o grupo -> posición (separado del contenido)",
+      "description": "Mapa id de nodo, grupo o nota adhesiva -> posición (separado del contenido)",
       "additionalProperties": {
         "type": "object",
         "required": ["x", "y"],
@@ -42,6 +42,11 @@
       "type": "object",
       "description": "Mapa id -> grupo de infraestructura; su caja (x, y, w, h) va en layout con el mismo id",
       "additionalProperties": { "$ref": "#/$defs/group" }
+    },
+    "stickyNotes": {
+      "type": "object",
+      "description": "Mapa id -> nota adhesiva (anotación del lienzo, no es un nodo del flujo); su posición va en layout con el mismo id",
+      "additionalProperties": { "$ref": "#/$defs/stickyNote" }
     }
   },
   "$defs": {
@@ -76,7 +81,22 @@
             }
           }
         },
-        "expression": { "type": "string", "maxLength": 2000, "description": "Regla en lenguaje natural o pseudo-código (rule)" },
+        "expression": { "type": "string", "maxLength": 2000, "description": "Regla en lenguaje natural o pseudo-código (rule); en una decisión, la condición que se evalúa" },
+        "mode": { "enum": ["decision"], "description": "Modo de un nodo rule: ausente documenta una validación o restricción; decision es una bifurcación con salidas (branches)" },
+        "branches": {
+          "type": "array",
+          "maxItems": 24,
+          "description": "Salidas de una decisión (solo rule con mode decision); una conexión las referencia con branch",
+          "items": {
+            "type": "object",
+            "required": ["id", "label"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "label": { "type": "string", "minLength": 1, "maxLength": 60 }
+            }
+          }
+        },
         "http": { "$ref": "#/$defs/http" },
         "database": { "$ref": "#/$defs/database" },
         "catalogId": { "type": "string", "minLength": 1, "description": "Elemento del catálogo de la app (ref)" },
@@ -96,7 +116,35 @@
         "to": { "$ref": "#/$defs/id" },
         "kind": { "enum": ["navigation", "request", "response", "event", "uses", "reads", "writes"], "description": "event: mensaje o evento asíncrono (cola, webhook)" },
         "label": { "type": "string", "maxLength": 60 },
-        "when": { "type": "string", "maxLength": 60, "description": "Condición, ej. código de respuesta 200 o 404" },
+        "when": { "type": "string", "maxLength": 60, "description": "Condición que activa la conexión (ej. la de una rama de decisión). El código de una respuesta va en status" },
+        "branch": { "$ref": "#/$defs/id", "description": "Salida de la decisión de origen (id en branches del nodo from); su etiqueta se muestra en la conexión" },
+        "status": { "type": "integer", "minimum": 100, "maximum": 599, "description": "Código HTTP de una respuesta (kind response)" },
+        "replyTo": { "$ref": "#/$defs/id", "description": "Solicitud (conexión request) a la que responde una respuesta" },
+        "outcome": { "type": "string", "maxLength": 500, "description": "Qué ocurre después de una respuesta" },
+        "request": {
+          "type": "object",
+          "description": "Datos propios de una solicitud (kind request): endpoint y parámetros de este paso. Sin method ni path, vale el contrato de la API destino",
+          "additionalProperties": false,
+          "properties": {
+            "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+            "path": { "type": "string", "maxLength": 2000 },
+            "params": {
+              "type": "array",
+              "maxItems": 50,
+              "description": "Parámetros o headers con el valor que lleva este paso",
+              "items": {
+                "type": "object",
+                "required": ["name", "in"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+                  "in": { "enum": ["path", "query", "header"] },
+                  "value": { "type": "string", "maxLength": 500 }
+                }
+              }
+            }
+          }
+        },
         "notes": { "type": "string", "maxLength": 2000 },
         "data": {
           "type": "object",
@@ -274,6 +322,16 @@
         "title": { "type": "string", "minLength": 1, "maxLength": 120 },
         "kind": { "enum": ["frontend", "backend", "external", "data", "network", "environment", "cloud", "custom"] },
         "collapsed": { "type": "boolean" }
+      }
+    },
+    "stickyNote": {
+      "type": "object",
+      "description": "Nota adhesiva: texto libre sobre el lienzo, sin conexiones",
+      "required": ["id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "type": "string", "maxLength": 1000 }
       }
     },
     "tour": {

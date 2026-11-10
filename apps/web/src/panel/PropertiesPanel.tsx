@@ -1,13 +1,11 @@
 import { useId } from 'react';
-import { KIND_LABELS, SELECTABLE_KINDS } from '../edges/edgeMeta';
-import { NODE_LABELS } from '../nodes/nodeMeta';
+import { nodeLabel } from '../nodes/nodeMeta';
 import {
-  EDGE_TEXT_MAX_LENGTH,
   HTTP_METHODS,
+  STICKY_TEXT_MAX_LENGTH,
   TEXT_MAX_LENGTH,
   TITLE_MAX_LENGTH,
   CATALOG_NODE_TYPES,
-  type EdgeKind,
   type HttpMethod,
 } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
@@ -21,9 +19,10 @@ import { TextField } from './TextField';
 import { ToursSection, type ToursSectionProps } from './ToursSection';
 import { ApiContractEditor } from './contract/ApiContractEditor';
 import { DatabaseEditor } from './contract/DatabaseEditor';
-import { EdgeDetail } from './contract/EdgeDetail';
 import { NotesField } from './contract/NotesField';
 import { GroupPanel } from './GroupPanel';
+import { DecisionSection, RuleModeSwitch } from './DecisionSection';
+import { EdgePanel, type EdgePanelActions } from './EdgePanel';
 import './panel.css';
 
 /**
@@ -34,23 +33,30 @@ export function PropertiesPanel({
   nodeId,
   edgeId,
   groupId = null,
+  noteId = null,
   tours,
+  onSelect,
+  preview,
 }: {
   nodeId: string | null;
   edgeId: string | null;
   /** Grupo de infraestructura seleccionado (spec espacio-de-trabajo, criterio 18). */
   groupId?: string | null;
+  /** Nota adhesiva seleccionada. */
+  noteId?: string | null;
   /** Sección "Tours" cuando no hay nada seleccionado (spec modo-tour); sin ella, solo la ayuda. */
   tours?: ToursSectionProps;
-}) {
+} & EdgePanelActions) {
   return (
     <aside className="properties-panel" aria-label="Propiedades">
       {nodeId ? (
         <NodePanel key={nodeId} id={nodeId} />
       ) : edgeId ? (
-        <EdgePanel key={edgeId} id={edgeId} />
+        <EdgePanel key={edgeId} id={edgeId} onSelect={onSelect} preview={preview} />
       ) : groupId ? (
         <GroupPanel key={groupId} id={groupId} />
+      ) : noteId ? (
+        <StickyPanel key={noteId} id={noteId} />
       ) : (
         <>
           <p className="panel-help">Selecciona un nodo o una conexión para ver y editar sus propiedades.</p>
@@ -71,15 +77,17 @@ function NodePanel({ id }: { id: string }) {
   if (!node) return null;
   if (node.type === 'ref') return <RefPanel node={node} />;
   if (node.type === 'portal') return <PortalPanel node={node} />;
-  const meta = NODE_LABELS[node.type];
+  const meta = nodeLabel(node);
+  const decision = node.type === 'rule' && node.mode === 'decision';
 
   return (
     <>
       <h3>
         <span aria-hidden="true">{meta.glyph}</span> {meta.label}
       </h3>
+      {node.type === 'rule' && <RuleModeSwitch node={node} />}
       <TextField
-        label="Título"
+        label={decision ? 'Pregunta' : 'Título'}
         value={node.title}
         maxLength={TITLE_MAX_LENGTH}
         onChange={(title) => updateNode(id, { title })}
@@ -94,14 +102,15 @@ function NodePanel({ id }: { id: string }) {
       {node.type === 'rule' && (
         <>
           <TextField
-            label="Expresión"
+            // En una decisión, la expresión es la condición que se evalúa.
+            label={decision ? 'Condición evaluada' : 'Expresión'}
             multiline
-            placeholder="cc: solo dígitos, de 6 a 10"
+            placeholder={decision ? 'Ej. el correo ya está registrado' : 'cc: solo dígitos, de 6 a 10'}
             value={node.expression ?? ''}
             maxLength={TEXT_MAX_LENGTH}
             onChange={(expression) => updateNode(id, { expression })}
           />
-          <RuleUsages ruleId={id} />
+          {decision ? <DecisionSection node={node} /> : <RuleUsages ruleId={id} />}
         </>
       )}
       {appId && node.type === 'screen' && <ScreenImage appId={appId} node={node} />}
@@ -143,40 +152,28 @@ function NodePanel({ id }: { id: string }) {
   );
 }
 
-function EdgePanel({ id }: { id: string }) {
-  const edge = useGraphStore((s) => s.edges[id]);
-  const updateEdge = useGraphStore((s) => s.updateEdge);
-  const kindId = useId();
-  if (!edge) return null;
-  const kinds = SELECTABLE_KINDS.includes(edge.kind) ? SELECTABLE_KINDS : [edge.kind, ...SELECTABLE_KINDS];
-
+/** Nota adhesiva: su texto y poco más (es una anotación, no un nodo del flujo). */
+function StickyPanel({ id }: { id: string }) {
+  const note = useGraphStore((s) => s.stickyNotes[id]);
+  const updateStickyNote = useGraphStore((s) => s.updateStickyNote);
+  const removeStickyNote = useGraphStore((s) => s.removeStickyNote);
+  if (!note) return null;
   return (
     <>
-      <h3>Conexión</h3>
-      <div className="panel-field">
-        <label htmlFor={kindId}>Tipo</label>
-        <select id={kindId} value={edge.kind} onChange={(e) => updateEdge(id, { kind: e.target.value as EdgeKind })}>
-          {kinds.map((k) => (
-            <option key={k} value={k}>
-              {KIND_LABELS[k]} ({k})
-            </option>
-          ))}
-        </select>
-      </div>
+      <h3>
+        <span aria-hidden="true">▤</span> Nota adhesiva
+      </h3>
       <TextField
-        label="Etiqueta"
-        value={edge.label ?? ''}
-        maxLength={EDGE_TEXT_MAX_LENGTH}
-        onChange={(label) => updateEdge(id, { label })}
+        label="Texto"
+        multiline
+        value={note.text}
+        maxLength={STICKY_TEXT_MAX_LENGTH}
+        placeholder="Una anotación para quien lea el lienzo"
+        onChange={(text) => updateStickyNote(id, text)}
       />
-      <TextField
-        label="Condición"
-        placeholder="200"
-        value={edge.when ?? ''}
-        maxLength={EDGE_TEXT_MAX_LENGTH}
-        onChange={(when) => updateEdge(id, { when })}
-      />
-      <EdgeDetail edge={edge} />
+      <button type="button" className="pixel-button" onClick={() => removeStickyNote(id)}>
+        Eliminar nota
+      </button>
     </>
   );
 }

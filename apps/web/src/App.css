@@ -217,13 +217,70 @@
   background: var(--ok);
 }
 
-.save-status[data-dirty] {
+.save-status[data-state='dirty'] {
   color: var(--spice-strong);
   font-weight: 500;
 }
 
-.save-status[data-dirty]::before {
+.save-status[data-state='dirty']::before,
+.save-status[data-state='saving']::before {
   background: var(--spice);
+}
+
+.save-status[data-state='saving']::before {
+  animation: save-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.save-status[data-state='error'] {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.save-status[data-state='error']::before {
+  background: var(--danger);
+}
+
+@keyframes save-pulse {
+  to {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .save-status[data-state='saving']::before {
+    animation: none;
+  }
+}
+
+.save-auto {
+  color: var(--stone-500);
+  font-weight: 400;
+}
+
+.save-menu .popover-panel {
+  width: 264px;
+}
+
+.save-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.save-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.save-options p {
+  margin: 0;
+  color: var(--stone-700);
+  font-size: 12.5px;
 }
 
 .workspace-messages {

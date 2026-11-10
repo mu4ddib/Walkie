@@ -13,6 +13,8 @@ export type DbTable = NonNullable<Database['tables']>[number];
 export type DbField = NonNullable<DbTable['fields']>[number];
 export type DbRelation = NonNullable<DbTable['relations']>[number];
 export type EdgeData = NonNullable<Edge['data']>;
+export type EdgeRequest = NonNullable<Edge['request']>;
+export type EdgeRequestParam = NonNullable<EdgeRequest['params']>[number];
 
 export const AUTH_TYPES: readonly AuthType[] = ['none', 'bearer', 'apiKey', 'basic', 'oauth2', 'mtls', 'other'];
 export const AUTH_LABELS: Record<AuthType, string> = {
@@ -177,6 +179,19 @@ export function normalizeEdgeData(d: EdgeData | undefined): EdgeData | undefined
     operation: d.operation,
     entities: d.entities?.map((e) => text(e, LIMITS.name)).filter((e): e is string => !!e),
   });
+}
+
+/** Endpoint y parámetros propios de una solicitud (`edge.request`); vacío → `undefined`. */
+export function normalizeEdgeRequest(r: EdgeRequest | undefined): EdgeRequest | undefined {
+  if (!r) return undefined;
+  const params = r.params
+    ?.map((p) => {
+      const name = text(p.name, LIMITS.name);
+      if (!name) return undefined;
+      return { name, in: p.in, ...compact({ value: text(p.value, LIMITS.short) }) } as EdgeRequestParam;
+    })
+    .filter((p): p is EdgeRequestParam => !!p);
+  return compact({ method: r.method, path: text(r.path, 2000), params });
 }
 
 /** Lista separada por comas → elementos, sin recortar (el borrador conserva lo escrito; la normalización recorta). */
