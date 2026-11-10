@@ -10,13 +10,15 @@ import { TextField } from './TextField';
  * parte 1): nombre, tipo, plegado, en qué grupo está y lo que contiene (nodos, notas y grupos). Un grupo es parte del
  * lienzo de la feature: no es una app ni una feature.
  */
-export function GroupPanel({ id }: { id: string }) {
+export function GroupPanel({ id, onNest }: { id: string; onNest?: (id: string, groupId: string | null) => void }) {
   const group = useGraphStore((s) => s.groups[id]);
   const groups = useGraphStore((s) => s.groups);
   const allNodes = useGraphStore((s) => s.nodes);
   const stickyNotes = useGraphStore((s) => s.stickyNotes);
   const updateGroup = useGraphStore((s) => s.updateGroup);
-  const setParent = useGraphStore((s) => s.setParent);
+  const storeSetParent = useGraphStore((s) => s.setParent);
+  // Desde el lienzo, meter algo en un grupo también lo agranda si queda afuera de su caja.
+  const setParent = onNest ?? storeSetParent;
   const removeGroup = useGraphStore((s) => s.removeGroup);
   const kindId = useId();
   const parentId = useId();

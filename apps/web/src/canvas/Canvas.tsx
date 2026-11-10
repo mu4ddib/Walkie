@@ -25,7 +25,7 @@ import type { WalkieFlowNode } from '../nodes/PixelNode';
 import type { GroupFlowNode } from '../nodes/GroupNode';
 import type { StickyFlowNode } from '../nodes/StickyNoteNode';
 import { COLLAPSED_GROUP } from '../nodes/groupMeta';
-import { GROUP_MIN, defaultEdgeKind, type Box, type GraphStore, type NodeType, type Position } from '../store/graphStore';
+import { DUPLICATE_OFFSET, GROUP_MIN, defaultEdgeKind, type Box, type GraphStore, type NodeType, type Position } from '../store/graphStore';
 import {
   ancestorsOf,
   canNest,
@@ -107,6 +107,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const { addStickyNote, moveStickyNote, removeStickyNote, duplicateStickyNote } = useGraphStore((s) => s);
   const { addGroup, moveGroup, resizeGroup, setParent, removeGroup, updateGroup } = useGraphStore((s) => s);
   const { addFlowTour, addEdgeStep } = useGraphStore((s) => s);
+  const { undo, redo, beginBatch, endBatch, growGroup, canUndo, canRedo } = useGraphStore((s) => s);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport } = useReactFlow();
   const openFeature = useOpenFeature();
   // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
@@ -265,6 +266,13 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     },
     [layout, groups, collapsedGroups, measured],
   );
+
+  /** Caja completa de `id`: la de un grupo aunque se vea plegado (es lo que ocupará al desplegarlo). */
+  function fullBoxOf(id: string): Rect | null {
+    const at = layout[id];
+    if (groups[id] && at?.w && at.h) return { x: at.x, y: at.y, w: at.w, h: at.h };
+    return boxOf(id);
+  }
 
   // Pasos del recorrido que se muestra (el que se reproduce, o el abierto en el editor): número de paso por conexión.
   const shownFlow = flowPlaying
@@ -657,10 +665,32 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   );
 
   // Soltar dentro de un grupo lo incluye; soltarlo fuera lo saca (criterio 18). Vale para cajas, notas y grupos.
+  // Un arrastre (y lo que pasa al soltar: meter en un grupo, agrandarlo) es un solo paso de deshacer. El lote se
+  // cierra al soltar; si React Flow no avisara el fin, lo cierra el `pointerup` de la ventana.
+  const dragBatch = useRef(false);
+  const finishDrag = useCallback(() => {
+    if (!dragBatch.current) return;
+    dragBatch.current = false;
+    endBatch();
+  }, [endBatch]);
+  const onNodeDragStart = useCallback(() => {
+    if (dragBatch.current) return;
+    dragBatch.current = true;
+    beginBatch();
+    window.addEventListener('pointerup', () => setTimeout(finishDrag, 0), { once: true });
+  }, [beginBatch, finishDrag]);
+
   const onNodeDragStop = useCallback(
     (_: unknown, __: unknown, dragged: { id: string }[]) => {
       setDropHint(null);
-      const moved = dropTargets(dragged).filter((m) => m.target !== m.current && setParent(m.id, m.target));
+      const moves = dropTargets(dragged);
+      const moved = moves.filter((m) => m.target !== m.current && setParent(m.id, m.target));
+      // Lo que queda dentro de un grupo (recién metido o movido dentro) no sobresale: el grupo crece si hace falta.
+      for (const m of moves) {
+        const owner = moved.includes(m) ? m.target : m.current;
+        const box = fullBoxOf(m.id);
+        if (owner && box) growGroup(owner, box);
+      }
       const first = moved[0];
       if (first) {
         setNotice(
@@ -669,8 +699,34 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             : `«${itemTitle(first.id)}» quedó fuera de los grupos`,
         );
       }
+      finishDrag();
     },
-    [dropTargets, setParent, itemTitle, groupPath],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dropTargets, setParent, itemTitle, groupPath, growGroup, finishDrag, layout, measured, groups],
+  );
+
+  /** Mete `id` en `groupId` (o lo saca) y agranda el grupo si queda afuera de su caja: desde el inspector. */
+  const nest = useCallback(
+    (id: string, groupId: string | null) => {
+      if (!setParent(id, groupId)) return;
+      const box = fullBoxOf(id);
+      if (groupId && box) growGroup(groupId, box);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setParent, growGroup, layout, measured, groups],
+  );
+
+  /** Deshacer / rehacer (Ctrl+Z, Ctrl+Mayús+Z o Ctrl+Y, y los botones junto al zoom); la pista lo confirma. */
+  const step = useCallback(
+    (direction: 'undo' | 'redo') => {
+      if (direction === 'undo' ? !canUndo : !canRedo) return;
+      if (direction === 'undo') undo();
+      else redo();
+      setPreview(null);
+      setEditingId(null);
+      setNotice(direction === 'undo' ? 'Deshecho' : 'Rehecho');
+    },
+    [canUndo, canRedo, undo, redo],
   );
 
   const onEdgesChange = useCallback(
@@ -755,10 +811,14 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       const id = create(position);
       // Una caja o nota que cae dentro de un grupo queda en él.
       const group = groupAt({ x: position.x + NODE_SIZE.width / 2, y: position.y + NODE_SIZE.height / 2 });
-      if (group) setParent(id, group);
+      if (group && setParent(id, group)) {
+        // Una caja nueva aún no está medida: se usa el tamaño mínimo (ya en la grilla, como la guardó el store).
+        const at = { x: Math.round(position.x / GRID) * GRID, y: Math.round(position.y / GRID) * GRID };
+        growGroup(group, { x: at.x, y: at.y, w: NODE_SIZE.width, h: NODE_SIZE.height });
+      }
       setSelectedNodes(new Set([id]));
     },
-    [screenToFlowPosition, groupAt, setParent],
+    [screenToFlowPosition, groupAt, setParent, growGroup],
   );
 
   /**
@@ -786,7 +846,10 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
       box = { x: center.x - 240, y: center.y - 160, w: 480, h: 320 };
     }
     // El grupo nuevo queda donde estaban sus miembros (dentro de su grupo común, si lo tienen).
-    const id = addGroup(box, { members, parentId: commonOwner(hierarchy, members) });
+    const parentId = commonOwner(hierarchy, members);
+    const id = addGroup(box, { members, parentId });
+    // El grupo nuevo puede no caber en el que lo contiene: ese crece.
+    if (parentId) growGroup(parentId, box);
     setSelectedNodes(new Set([id]));
     setSelectedEdges(new Set());
   }
@@ -805,7 +868,14 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     const copies: string[] = [];
     for (const id of ids) {
       const copy = graphNodes[id] ? duplicateNode(id) : stickyNotes[id] ? duplicateStickyNote(id) : null;
-      if (copy) copies.push(copy);
+      if (!copy) continue;
+      copies.push(copy);
+      // La copia queda en el grupo del original, corrida: el grupo crece si sobresale.
+      const owner = ownerOf(hierarchy, id);
+      const original = boxOf(id);
+      if (owner && original) {
+        growGroup(owner, { ...original, x: original.x + DUPLICATE_OFFSET, y: original.y + DUPLICATE_OFFSET });
+      }
     }
     if (copies.length === 0) return;
     setSelectedNodes(new Set(copies));
@@ -847,6 +917,13 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   // Atajos (spec espacio-de-trabajo, criterio 5): 1–7 agregan, + − 0 zoom, I inspector, ? ayuda.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      // Ctrl+Z deshace; Ctrl+Mayús+Z o Ctrl+Y rehace. Mientras se escribe, el campo deshace su propio texto.
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && ['z', 'y'].includes(event.key.toLowerCase())) {
+        if (isTyping(event.target) || locked) return;
+        event.preventDefault();
+        step(event.key.toLowerCase() === 'z' && !event.shiftKey ? 'undo' : 'redo');
+        return;
+      }
       // Ctrl+D / Cmd+D duplica lo seleccionado. Mientras se escribe (inspector, título, nota) no hace nada aquí.
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'd') {
         if (isTyping(event.target) || locked) return;
@@ -984,6 +1061,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeDragStart={onNodeDragStart}
           onNodeDrag={onNodeDrag}
           onNodeDragStop={onNodeDragStop}
           // Agregando pasos desde el lienzo: tocar una conexión la suma al recorrido (en vez de seleccionarla).
@@ -1043,7 +1121,17 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           />
         )}
         <EdgeMarkers />
-        {!playing && <ZoomControls fitPadding={fitPadding} motion={{ on: edgeMotion, onToggle: toggleEdgeMotion }} />}
+        {!playing && (
+          <ZoomControls
+            fitPadding={fitPadding}
+            motion={{ on: edgeMotion, onToggle: toggleEdgeMotion }}
+            history={
+              readOnly
+                ? undefined
+                : { canUndo, canRedo, onUndo: () => step('undo'), onRedo: () => step('redo') }
+            }
+          />
+        )}
         {!readOnly && !playing && empty && (
           <EmptyCanvasGuide onAdd={(type) => addAtCenter((p) => addNode(type, p))} onHelp={() => setHelpOpen(true)} />
         )}
@@ -1132,6 +1220,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
             onSelect={selectFromPanel}
             preview={{ activeEdgeId: previewId, onStart: startPreview, onStop: stopPreview }}
             flows={{ onCreate: (edgeId) => createFlow([edgeId]), onOpen: openFlow }}
+            onNest={nest}
             tours={{
               openTourId,
               onOpen: setOpenTourId,
