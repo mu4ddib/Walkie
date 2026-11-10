@@ -5,6 +5,7 @@ import type { Edge, Group, Node, StickyNote, Tour, WalkieCanvasGraphV0 } from '.
 import { GRID } from '../theme/palette';
 import { normalizeDatabase, normalizeEdgeData, normalizeEdgeRequest, normalizeHttp } from '../contracts/contracts';
 import { canNest, descendantsOf, inferHierarchy, isInside, ownerOf } from './hierarchy';
+import { History, sameSnapshot, snapshotOf, type Snapshot } from './history';
 
 /** Paso de un tour: un nodo (`nodeId`), una conexión (`edgeId`) o una conexión eliminada (`removedEdge`). */
 export type TourStep = Tour['steps'][number];
@@ -288,7 +289,13 @@ export interface GraphState {
   version: number;
   /** Hay cambios sin guardar. */
   dirty: boolean;
+  /** Hay algo que deshacer / rehacer (el historial vive fuera del estado; esto es lo que la interfaz necesita). */
+  canUndo: boolean;
+  canRedo: boolean;
 }
+
+/** Margen que deja un grupo alrededor de lo que contiene (lados y abajo; arriba, además, su encabezado). */
+export const GROUP_PADDING = { side: GRID * 3, top: GRID * 7, bottom: GRID * 3 } as const;
 
 export interface GraphActions {
   loadGraph(graph: WalkieCanvasGraphV0): void;
@@ -403,6 +410,18 @@ export interface GraphActions {
    * sigue siendo el que se envió (`sent`); si hubo cambios mientras viajaba la petición, siguen pendientes.
    */
   markSaved(version: number, sent?: GraphState): void;
+  /** Deshace el último paso del grafo (spec deshacer-y-cajas). No toca la versión; `dirty` según lo guardado. */
+  undo(): void;
+  /** Rehace lo último que se deshizo. Un cambio nuevo después de deshacer descarta lo que había para rehacer. */
+  redo(): void;
+  /** Abre un lote: hasta `endBatch`, todos los cambios son un solo paso del historial (ej. un arrastre). */
+  beginBatch(): void;
+  endBatch(): void;
+  /**
+   * Agranda la caja del grupo para que `box` quede dentro con su margen (`GROUP_PADDING`), y lo mismo con sus
+   * grupos de afuera si el grupo crecido ya no les cabe. Solo agranda: nunca achica ni mueve lo de dentro.
+   */
+  growGroup(id: string, box: Box): void;
 }
 
 export type GraphStore = GraphState & GraphActions;
@@ -416,6 +435,8 @@ const emptyState: GraphState = {
   stickyNotes: {},
   version: 0,
   dirty: false,
+  canUndo: false,
+  canRedo: false,
 };
 
 /**
@@ -423,7 +444,21 @@ const emptyState: GraphState = {
  * solo llaman acciones. Estado normalizado por ID para poder migrar a Yjs (`Y.Map`).
  */
 export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphStore> {
-  return createStore<GraphStore>()((set, get) => {
+  const history = new History();
+  // El grafo tal como está guardado: deshacer hasta él deja el lienzo "al día" otra vez.
+  let saved: Snapshot = snapshotOf(emptyState);
+  // Mientras se aplica un deshacer, rehacer o una carga, el cambio no se anota en el historial.
+  let replaying = false;
+
+  const store = createStore<GraphStore>()((set, get) => {
+    const flags = () => ({ canUndo: history.canUndo, canRedo: history.canRedo });
+    /** Pone una instantánea (deshacer/rehacer) sin anotarla. */
+    const restore = (snapshot: Snapshot) => {
+      replaying = true;
+      set({ ...snapshot, dirty: !sameSnapshot(snapshot, saved), ...flags() });
+      replaying = false;
+    };
+
     const putTour = (tour: Tour) => set((s) => ({ tours: { ...s.tours, [tour.id]: tour }, dirty: true }));
 
     /** Reemplaza el nodo si cambió y marca `dirty`. */
@@ -462,6 +497,8 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
       loadGraph: (loaded) => {
         // Lienzos anteriores a la jerarquía explícita: se infiere por contención (sin marcar cambios).
         const graph = inferHierarchy(loaded);
+        history.reset();
+        replaying = true;
         set({
           nodes: graph.nodes,
           edges: graph.edges,
@@ -471,7 +508,11 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           stickyNotes: graph.stickyNotes ?? {},
           version: graph.version,
           dirty: false,
+          canUndo: false,
+          canRedo: false,
         });
+        replaying = false;
+        saved = snapshotOf(get());
       },
 
       addNode: (type, position) => {
@@ -1082,10 +1123,65 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
             s.tours === sent.tours &&
             s.groups === sent.groups &&
             s.stickyNotes === sent.stickyNotes);
+        saved = snapshotOf(sent ?? s);
         set({ version, dirty: unchanged ? false : s.dirty });
+      },
+
+      undo: () => {
+        const previous = history.undo(snapshotOf(get()));
+        if (previous) restore(previous);
+      },
+
+      redo: () => {
+        const next = history.redo(snapshotOf(get()));
+        if (next) restore(next);
+      },
+
+      beginBatch: () => history.begin(),
+      endBatch: () => history.end(),
+
+      growGroup: (id, inner) => {
+        const { groups } = get();
+        const layout = { ...get().layout };
+        let current: string | undefined = id;
+        let rect: Box = inner;
+        let changed = false;
+        const seen = new Set<string>();
+        while (current && groups[current] && !seen.has(current)) {
+          seen.add(current);
+          const box = layout[current];
+          if (!box?.w || !box.h) break;
+          // Hacia la grilla por fuera: la caja crece lo justo para no cortar lo de dentro.
+          const x = Math.min(box.x, Math.floor((rect.x - GROUP_PADDING.side) / GRID) * GRID);
+          const y = Math.min(box.y, Math.floor((rect.y - GROUP_PADDING.top) / GRID) * GRID);
+          const right = Math.max(box.x + box.w, Math.ceil((rect.x + rect.w + GROUP_PADDING.side) / GRID) * GRID);
+          const bottom = Math.max(box.y + box.h, Math.ceil((rect.y + rect.h + GROUP_PADDING.bottom) / GRID) * GRID);
+          if (x === box.x && y === box.y && right === box.x + box.w && bottom === box.y + box.h) break;
+          const next = { x: x + 0, y: y + 0, w: right - x, h: bottom - y };
+          layout[current] = next;
+          changed = true;
+          rect = next;
+          current = groups[current]?.parentId;
+        }
+        if (changed) set({ layout, dirty: true });
       },
     };
   });
+
+  // Cada cambio del grafo se anota en el historial (salvo cargas, deshacer y rehacer).
+  store.subscribe((state, previous) => {
+    if (replaying) return;
+    const before = snapshotOf(previous);
+    const after = snapshotOf(state);
+    if (sameSnapshot(before, after)) return;
+    history.record(before, after);
+    if (state.canUndo !== history.canUndo || state.canRedo !== history.canRedo) {
+      replaying = true;
+      store.setState({ canUndo: history.canUndo, canRedo: history.canRedo });
+      replaying = false;
+    }
+  });
+  return store;
 }
 
 /** Grafo listo para `PUT /api/features/{id}/canvas`. */

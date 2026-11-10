@@ -38,6 +38,7 @@ export function PropertiesPanel({
   onSelect,
   preview,
   flows,
+  onNest,
 }: {
   nodeId: string | null;
   edgeId: string | null;
@@ -45,6 +46,8 @@ export function PropertiesPanel({
   groupId?: string | null;
   /** Nota adhesiva seleccionada. */
   noteId?: string | null;
+  /** Meter o sacar algo de un grupo desde su inspector (el lienzo además agranda el grupo si hace falta). */
+  onNest?: (id: string, groupId: string | null) => void;
   /** Sección "Tours" cuando no hay nada seleccionado (spec modo-tour); sin ella, solo la ayuda. */
   tours?: ToursSectionProps;
 } & EdgePanelActions) {
@@ -55,7 +58,7 @@ export function PropertiesPanel({
       ) : edgeId ? (
         <EdgePanel key={edgeId} id={edgeId} onSelect={onSelect} preview={preview} flows={flows} />
       ) : groupId ? (
-        <GroupPanel key={groupId} id={groupId} />
+        <GroupPanel key={groupId} id={groupId} onNest={onNest} />
       ) : noteId ? (
         <StickyPanel key={noteId} id={noteId} />
       ) : (

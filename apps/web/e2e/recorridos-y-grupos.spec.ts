@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login, openNewFeature, saveStatus } from './helpers';
+import { login, openNewFeature, saveStatus, seedCanvas } from './helpers';
 
 /**
  * Feature recorridos-y-grupos (docs/features/recorridos-y-grupos/spec.md) con API, Keycloak y Postgres reales.
@@ -7,36 +7,11 @@ import { login, openNewFeature, saveStatus } from './helpers';
  * Datos ficticios.
  */
 
-const API = process.env.VITE_API_URL ?? 'http://localhost:5080';
 
 /** Con `WALKIE_CAPTURES=<carpeta>`, guarda capturas para revisar el resultado visual. */
 async function capture(page: Page, name: string) {
   const dir = process.env.WALKIE_CAPTURES;
   if (dir) await page.screenshot({ path: `${dir}/recorridos-y-grupos-${name}.png` });
-}
-
-/** Guarda `graph` como lienzo de la feature abierta (con la versión actual) y recarga la página. */
-async function seedCanvas(page: Page, graph: Record<string, unknown>) {
-  const featureId = /features\/([^/?#]+)/.exec(page.url())![1]!;
-  const status = await page.evaluate(
-    async ({ api, featureId, graph }) => {
-      const key = Object.keys(sessionStorage).find((k) => k.startsWith('oidc.user:'))!;
-      const token = (JSON.parse(sessionStorage.getItem(key)!) as { access_token: string }).access_token;
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const url = `${api}/api/features/${featureId}/canvas`;
-      const current = (await (await fetch(url, { headers })).json()) as { version: number };
-      const put = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ ...graph, version: current.version }) });
-      return put.status;
-    },
-    { api: API, featureId, graph },
-  );
-  expect(status).toBe(200);
-  await page.reload();
-  await expect(page.locator('.react-flow__node').first()).toBeVisible();
-  // La vista recordada es la del lienzo vacío: «Ver todo» encuadra lo sembrado (ya medido).
-  await page.waitForTimeout(500);
-  await page.keyboard.press('0');
-  await page.waitForTimeout(500);
 }
 
 const box = (page: Page, title: string) =>
