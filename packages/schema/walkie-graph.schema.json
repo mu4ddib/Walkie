@@ -47,6 +47,10 @@
       "type": "object",
       "description": "Mapa id -> nota adhesiva (anotación del lienzo, no es un nodo del flujo); su posición va en layout con el mismo id",
       "additionalProperties": { "$ref": "#/$defs/stickyNote" }
+    },
+    "groupNesting": {
+      "const": "explicit",
+      "description": "Los grupos guardan su grupo padre en parentId y las notas su grupo en groupId. Sin este campo (lienzos anteriores) la jerarquía se infiere por contención al abrir el lienzo"
     }
   },
   "$defs": {
@@ -314,14 +318,15 @@
     },
     "group": {
       "type": "object",
-      "description": "Grupo de infraestructura del lienzo (frontend, backend…); no es una app ni una feature",
+      "description": "Grupo de infraestructura del lienzo (frontend, backend…); no es una app ni una feature. Puede estar dentro de otro grupo (parentId)",
       "required": ["id", "title", "kind"],
       "additionalProperties": false,
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "title": { "type": "string", "minLength": 1, "maxLength": 120 },
         "kind": { "enum": ["frontend", "backend", "external", "data", "network", "environment", "cloud", "custom"] },
-        "collapsed": { "type": "boolean" }
+        "collapsed": { "type": "boolean", "description": "Plegado; se conserva aunque un grupo padre se pliegue y despliegue" },
+        "parentId": { "$ref": "#/$defs/id", "description": "Grupo que lo contiene (sin ciclos). Plegar el padre oculta este grupo y todo lo suyo" }
       }
     },
     "stickyNote": {
@@ -331,12 +336,13 @@
       "additionalProperties": false,
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "text": { "type": "string", "maxLength": 1000 }
+        "text": { "type": "string", "maxLength": 1000 },
+        "groupId": { "$ref": "#/$defs/id", "description": "Grupo al que pertenece la anotación: se oculta y se mueve con él" }
       }
     },
     "tour": {
       "type": "object",
-      "description": "Recorrido guiado por pasos sobre los nodos del lienzo (modo tour)",
+      "description": "Recorrido guiado por pasos: sobre nodos (modo tour) o sobre conexiones (recorrido de un flujo)",
       "required": ["id", "name", "steps"],
       "additionalProperties": false,
       "properties": {
@@ -344,14 +350,27 @@
         "name": { "type": "string", "minLength": 1, "maxLength": 60 },
         "steps": {
           "type": "array",
-          "description": "En orden; cada paso centra y resalta su nodo",
+          "description": "En orden; un paso centra y resalta su nodo, o recorre su conexión (origen, conexión, destino). Una conexión puede repetirse (reintento)",
           "items": {
             "type": "object",
-            "required": ["nodeId"],
             "additionalProperties": false,
+            "oneOf": [{ "required": ["nodeId"] }, { "required": ["edgeId"] }, { "required": ["removedEdge"] }],
             "properties": {
-              "nodeId": { "$ref": "#/$defs/id" },
-              "note": { "type": "string", "maxLength": 500, "description": "Lo que el guía cuenta en el paso" }
+              "nodeId": { "$ref": "#/$defs/id", "description": "Nodo que muestra el paso" },
+              "edgeId": { "$ref": "#/$defs/id", "description": "Conexión que recorre el paso, en su sentido real (from → to)" },
+              "removedEdge": {
+                "type": "object",
+                "description": "Paso cuya conexión se eliminó: lo que se sabía de ella, para reemplazarla o quitar el paso",
+                "required": ["from", "to", "kind"],
+                "additionalProperties": false,
+                "properties": {
+                  "from": { "$ref": "#/$defs/id" },
+                  "to": { "$ref": "#/$defs/id" },
+                  "kind": { "$ref": "#/$defs/edge/properties/kind" },
+                  "label": { "type": "string", "maxLength": 60 }
+                }
+              },
+              "note": { "type": "string", "maxLength": 500, "description": "Lo que el guía cuenta en el paso (descripción del paso)" }
             }
           }
         }

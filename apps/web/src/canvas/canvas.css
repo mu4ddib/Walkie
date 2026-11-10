@@ -1021,8 +1021,10 @@ div.pixel-node-image {
 
 /* Grupos de infraestructura (spec espacio-de-trabajo, criterios 18 y 19). El cuerpo deja pasar los clics al lienzo
    y a las cajas: el grupo se toma por su encabezado. */
-.react-flow__node-infraGroup {
-  pointer-events: none;
+.react-flow__node.react-flow__node-infraGroup {
+  /* React Flow pone `pointer-events: all` en línea a cada nodo: sin `!important`, el cuerpo de un grupo taparía
+     los grupos y cajas que se le superponen (grupos anidados o hermanos). */
+  pointer-events: none !important;
 }
 
 .react-flow__node-infraGroup .group-node-header,
@@ -1105,7 +1107,7 @@ div.pixel-node-image {
 }
 
 .react-flow__node-infraGroup.react-flow__node-infraGroup:has([data-collapsed]) {
-  pointer-events: all;
+  pointer-events: all !important;
 }
 
 .group-node .react-flow__handle {
@@ -1273,4 +1275,290 @@ div.pixel-node-image {
   color: var(--stone-500);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+/* Jerarquía de grupos (spec recorridos-y-grupos, parte 1): al arrastrar, el grupo que recibiría lo arrastrado se
+   marca; la pista dice la pertenencia resultante («AWS › microservicio usuarios»). */
+.group-node[data-drop-target] {
+  border-style: solid;
+  border-color: var(--spice);
+  background: color-mix(in srgb, var(--spice) 9%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--spice) 35%, transparent);
+  outline-offset: 3px;
+}
+
+/* Selección de varias conexiones: barra contextual para crear un recorrido. */
+.selection-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 6px 14px;
+  transform: translateX(-50%);
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-float);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.selection-bar-help {
+  color: var(--stone-700);
+  font-size: 12.5px;
+}
+
+/* Recorridos: insignia con los pasos que usan la conexión (2·5) y conexiones que continúan al elegir desde el lienzo. */
+.react-flow__edge.flow-edge .kind-edge {
+  stroke: var(--ink) !important;
+  stroke-width: 2.25px !important;
+}
+
+.react-flow__edge.flow-candidate .kind-edge {
+  stroke: var(--spice) !important;
+  stroke-width: 2.5px !important;
+  stroke-dasharray: 6 4;
+}
+
+.canvas-picking .react-flow__edge {
+  cursor: copy;
+}
+
+/* Reproducción de un recorrido (parte 4): el origen se resalta, la conexión activa se dibuja en su sentido real, el
+   destino se destaca al llegar; lo ajeno al recorrido se atenúa. */
+.react-flow__node.flow-dim,
+.react-flow__edge.flow-edge-dim {
+  opacity: 0.22;
+  transition: opacity var(--t-med) var(--ease);
+}
+
+.canvas-flowing .kind-edge-label {
+  opacity: 0.35;
+}
+
+.canvas-flowing .react-flow__edge.flow-edge .kind-edge-label,
+.canvas-flowing .kind-edge-label:has(.kind-edge-step) {
+  opacity: 1;
+}
+
+.react-flow__node.flow-source .pixel-node,
+.react-flow__node.flow-source .group-node {
+  outline: 3px solid var(--ink);
+  outline-offset: 4px;
+}
+
+.react-flow__node.flow-next .pixel-node {
+  outline: 2px dashed var(--spice);
+  outline-offset: 4px;
+}
+
+.react-flow__node.flow-target .pixel-node,
+.react-flow__node.flow-target .group-node {
+  outline: 3px solid var(--spice);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--spice) 18%, transparent), var(--shadow-pixel);
+  animation: flow-arrive 360ms var(--ease);
+}
+
+@keyframes flow-arrive {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--spice) 40%, transparent), var(--shadow-pixel);
+  }
+}
+
+.react-flow__edge.flow-edge-done .kind-edge {
+  stroke: color-mix(in srgb, var(--spice) 55%, var(--ink)) !important;
+}
+
+.react-flow__edge.flow-edge-active .kind-edge {
+  stroke: var(--spice) !important;
+  stroke-width: 3px !important;
+}
+
+/* La conexión activa se "dibuja" del origen al destino durante la fase de recorrido y queda llena al llegar. */
+.react-flow__edge.flow-edge-active .kind-edge-flow {
+  opacity: 1;
+  stroke-dasharray: 100 100;
+  stroke-dashoffset: 100;
+  stroke-width: 5px;
+}
+
+.react-flow__edge.flow-phase-travel .kind-edge-flow {
+  animation: flow-draw var(--flow-travel, 1500ms) linear forwards;
+}
+
+.react-flow__edge.flow-phase-target .kind-edge-flow {
+  stroke-dashoffset: 0;
+}
+
+.react-flow__edge.flow-phase-travel .kind-edge-flow-halo {
+  opacity: 0.95;
+  animation: edge-flow 1s linear infinite;
+}
+
+@keyframes flow-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Sin animación, la conexión activa se ve llena desde el principio. */
+  .react-flow__edge.flow-edge-active .kind-edge-flow {
+    display: inline;
+    stroke-dashoffset: 0;
+    animation: none !important;
+  }
+
+  .react-flow__node.flow-target .pixel-node {
+    animation: none;
+  }
+}
+
+.flow-player {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  gap: 8px;
+  width: min(820px, calc(100% - 24px));
+  padding: 10px 12px;
+  transform: translateX(-50%);
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-float);
+  font-size: 14px;
+}
+
+.flow-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.flow-name {
+  font-family: var(--font-title);
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.flow-progress {
+  color: var(--stone-700);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.flow-controls,
+.flow-view {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.flow-view {
+  margin-left: auto;
+}
+
+.flow-play {
+  min-width: 128px;
+}
+
+.flow-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--stone-700);
+  font-size: 12.5px;
+}
+
+.flow-follow {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.flow-detail p {
+  margin: 0;
+}
+
+.flow-route {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.flow-route[data-removed] {
+  color: var(--danger);
+}
+
+.flow-note {
+  margin-top: 4px !important;
+  color: var(--stone-700);
+  white-space: pre-wrap;
+}
+
+.flow-step-number {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--spice);
+  color: #fff8ee;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.flow-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-chip {
+  min-width: 26px;
+  height: 24px;
+  border: 1px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  background: var(--sand);
+  color: var(--stone-700);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.flow-chip[data-done] {
+  border-color: color-mix(in srgb, var(--spice) 45%, var(--dune-300));
+  background: var(--spice-tint);
+  color: var(--ink);
+}
+
+.flow-chip[aria-current='step'] {
+  border-color: var(--spice);
+  background: var(--spice);
+  color: #fff8ee;
+}
+
+.flow-chip[data-removed] {
+  border-style: dashed;
+  border-color: var(--danger);
+}
+
+@media (max-width: 900px) {
+  .flow-view {
+    margin-left: 0;
+  }
+
+  .selection-bar-help {
+    display: none;
+  }
 }

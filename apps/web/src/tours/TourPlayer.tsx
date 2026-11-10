@@ -56,7 +56,7 @@ export function TourPlayer({ tourId, sizes, pane, step, onStep, onExit }: TourPl
 
   const steps = tour?.steps ?? [];
   const current = steps[step];
-  const node = current ? nodes[current.nodeId] : undefined;
+  const node = current?.nodeId ? nodes[current.nodeId] : undefined;
   const note = current?.note ?? '';
   const last = step === steps.length - 1;
   const destination = node ? portalTarget(node, features) : undefined;

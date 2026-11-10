@@ -45,6 +45,8 @@ export interface EdgePanelActions {
   onSelect?: (target: { nodeId?: string; edgeId?: string }) => void;
   /** "Previsualizar interacción": recorre la conexión o el par solicitud/respuesta en el lienzo. */
   preview?: { activeEdgeId: string | null; onStart: (edgeId: string) => void; onStop: () => void };
+  /** Recorridos (spec recorridos-y-grupos, parte 3): crear uno desde esta conexión o abrir los que la usan. */
+  flows?: { onCreate: (edgeId: string) => void; onOpen: (tourId: string) => void };
 }
 
 /**
@@ -52,8 +54,9 @@ export interface EdgePanelActions {
  * corresponde a esa interacción (solicitud, respuesta, rama de decisión, acceso a datos…), con lo opcional en
  * secciones plegables. El contrato completo vive en el nodo API; aquí va lo propio de este intercambio.
  */
-export function EdgePanel({ id, onSelect, preview }: { id: string } & EdgePanelActions) {
+export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & EdgePanelActions) {
   const edge = useGraphStore((s) => s.edges[id]);
+  const tours = useGraphStore((s) => s.tours);
   const edges = useGraphStore((s) => s.edges);
   const nodes = useGraphStore((s) => s.nodes);
   const updateEdge = useGraphStore((s) => s.updateEdge);
@@ -142,6 +145,34 @@ export function EdgePanel({ id, onSelect, preview }: { id: string } & EdgePanelA
           </p>
         )}
       </section>
+
+      {flows && (
+        <section className="panel-section edge-flows" aria-label="Recorridos de la conexión">
+          <h4>Recorridos</h4>
+          {(() => {
+            const using = Object.values(tours)
+              .map((t) => ({ t, steps: t.steps.flatMap((step, i) => (step.edgeId === id ? [i + 1] : [])) }))
+              .filter((u) => u.steps.length > 0);
+            return using.length > 0 ? (
+              <ul className="panel-list">
+                {using.map(({ t, steps }) => (
+                  <li key={t.id}>
+                    <button type="button" className="link-button" onClick={() => flows.onOpen(t.id)}>
+                      {t.name}
+                    </button>{' '}
+                    <span className="panel-help">(paso {steps.join(', ')})</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="panel-help">Mayús + clic en otras conexiones para armar un recorrido con varios pasos.</p>
+            );
+          })()}
+          <button type="button" className="pixel-button" onClick={() => flows.onCreate(id)}>
+            Crear recorrido desde aquí
+          </button>
+        </section>
+      )}
 
       <div className="panel-field">
         <label htmlFor={kindId}>Tipo</label>

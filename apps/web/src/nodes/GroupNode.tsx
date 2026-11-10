@@ -7,8 +7,12 @@ import { GROUP_COLORS, GROUP_LABELS } from './groupMeta';
 export type GroupFlowNode = FlowNode<
   {
     group: Group;
-    /** Nodos que contiene. */
+    /** Nodos que contiene, a cualquier profundidad. */
     count: number;
+    /** Grupos que contiene, a cualquier profundidad. */
+    subgroups?: number;
+    /** Lo que se arrastra caería dentro de este grupo (indicación de la pertenencia resultante). */
+    dropTarget?: boolean;
     /** Plegar o desplegar; sin él (solo lectura) no hay botón. */
     onToggle?: () => void;
     /** Se puede redimensionar (no en solo lectura); los cambios llegan a `Canvas` por `onNodesChange`. */
@@ -22,7 +26,10 @@ export type GroupFlowNode = FlowNode<
  * Plegado es una caja compacta con el nombre y cuántos nodos tiene, y sus conexiones llegan a ella.
  */
 export function GroupNode({ data, selected }: NodeProps<GroupFlowNode>) {
-  const { group, count, onToggle, resizable } = data;
+  const { group, count, subgroups = 0, dropTarget, onToggle, resizable } = data;
+  const contents = [count === 1 ? '1 nodo' : `${count} nodos`, subgroups ? (subgroups === 1 ? '1 grupo' : `${subgroups} grupos`) : '']
+    .filter(Boolean)
+    .join(' · ');
   const collapsed = !!group.collapsed;
   const label = GROUP_LABELS[group.kind];
 
@@ -31,6 +38,7 @@ export function GroupNode({ data, selected }: NodeProps<GroupFlowNode>) {
       className="group-node"
       data-collapsed={collapsed || undefined}
       data-selected={selected || undefined}
+      data-drop-target={dropTarget || undefined}
       style={{ '--group-color': GROUP_COLORS[group.kind] } as CSSProperties}
     >
       {!collapsed && resizable && (
@@ -41,7 +49,7 @@ export function GroupNode({ data, selected }: NodeProps<GroupFlowNode>) {
       <div className="group-node-header">
         <span className="group-node-kind">{label}</span>
         <span className="group-node-title">{group.title}</span>
-        <span className="group-node-count">{count === 1 ? '1 nodo' : `${count} nodos`}</span>
+        <span className="group-node-count">{contents}</span>
         {onToggle && (
           <button
             type="button"

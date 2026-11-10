@@ -37,6 +37,44 @@ public sealed class ToursTests(WalkieApiFactory factory)
     }
 
     [Fact]
+    public async Task Un_recorrido_por_conexiones_se_guarda_con_repeticiones_y_pasos_de_conexiones_eliminadas()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client);
+
+        var saved = await client.PutAsJsonAsync(CanvasUri(feature), FlowGraph(0));
+
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        using var expected = JsonDocument.Parse(FlowGraph(1).ToJsonString());
+        Assert.True(JsonElement.DeepEquals(
+            expected.RootElement, await client.GetFromJsonAsync<JsonElement>(CanvasUri(feature))));
+    }
+
+    [Fact]
+    public async Task Un_paso_a_una_conexion_inexistente_responde_400()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client);
+        var graph = FlowGraph(0);
+        graph["tours"]!["f1"]!["steps"]!.AsArray().Add(new JsonObject { ["edgeId"] = "fantasma" });
+
+        await AssertErrorAsync(await client.PutAsJsonAsync(CanvasUri(feature), graph), "/tours/f1/steps/4/edgeId");
+    }
+
+    [Fact]
+    public async Task Un_paso_con_nodo_y_conexion_a_la_vez_responde_400()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client);
+        var graph = FlowGraph(0);
+        graph["tours"]!["f1"]!["steps"]![0]!["nodeId"] = "s1";
+
+        var response = await client.PutAsJsonAsync(CanvasUri(feature), graph);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Un_tour_cuya_clave_no_es_su_id_responde_400()
     {
         using var client = factory.CreateAuthenticatedClient();
@@ -91,6 +129,43 @@ public sealed class ToursTests(WalkieApiFactory factory)
                 ["steps"] = new JsonArray(
                     new JsonObject { ["nodeId"] = "s1", ["note"] = "Aquí empieza todo: el usuario escribe su documento." },
                     new JsonObject { ["nodeId"] = "r1" }),
+            },
+        },
+    };
+
+    /// <summary>
+    /// Pantalla → API (solicitud) y API → Pantalla (respuesta), con un recorrido que repite la solicitud (reintento) y
+    /// un paso cuya conexión ya se eliminó (datos ficticios).
+    /// </summary>
+    private static JsonObject FlowGraph(int version) => new()
+    {
+        ["schemaVersion"] = 0,
+        ["version"] = version,
+        ["nodes"] = new JsonObject
+        {
+            ["s1"] = new JsonObject { ["id"] = "s1", ["type"] = "screen", ["title"] = "Creación de cuenta" },
+            ["a1"] = new JsonObject { ["id"] = "a1", ["type"] = "api", ["title"] = "API usuarios" },
+        },
+        ["edges"] = new JsonObject
+        {
+            ["e1"] = new JsonObject { ["id"] = "e1", ["from"] = "s1", ["to"] = "a1", ["kind"] = "request" },
+            ["e2"] = new JsonObject { ["id"] = "e2", ["from"] = "a1", ["to"] = "s1", ["kind"] = "response", ["replyTo"] = "e1" },
+        },
+        ["layout"] = new JsonObject(),
+        ["tours"] = new JsonObject
+        {
+            ["f1"] = new JsonObject
+            {
+                ["id"] = "f1",
+                ["name"] = "Alta con reintento",
+                ["steps"] = new JsonArray(
+                    new JsonObject { ["edgeId"] = "e1", ["note"] = "Envía el formulario" },
+                    new JsonObject { ["edgeId"] = "e1", ["note"] = "Reintenta" },
+                    new JsonObject { ["edgeId"] = "e2" },
+                    new JsonObject
+                    {
+                        ["removedEdge"] = new JsonObject { ["from"] = "a1", ["to"] = "x9", ["kind"] = "request" },
+                    }),
             },
         },
     };

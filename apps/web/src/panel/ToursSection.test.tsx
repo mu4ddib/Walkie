@@ -1,122 +1,93 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { createGraphStore, type GraphStore } from '../store/graphStore';
+import { createGraphStore } from '../store/graphStore';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { PropertiesPanel } from './PropertiesPanel';
 
-function Harness({ onPlay }: { onPlay?: (id: string) => void }) {
-  const [openTourId, setOpenTourId] = useState<string | null>(null);
-  return <PropertiesPanel nodeId={null} edgeId={null} tours={{ openTourId, onOpen: setOpenTourId, onPlay }} />;
-}
-
-function renderTours(setup: (s: GraphStore) => void = () => {}, onPlay?: (id: string) => void) {
+/** Pantalla → API → Servicio, con la respuesta de la API, y un recorrido sobre esas conexiones. */
+function setup(order: 'ok' | 'mixed' = 'ok') {
   const store = createGraphStore();
-  setup(store.getState());
-  store.getState().markSaved(1);
+  const s = () => store.getState();
+  const screenId = s().addNode('screen', { x: 0, y: 0 });
+  s().renameNode(screenId, 'Creación de cuenta');
+  const api = s().addNode('api', { x: 0, y: 0 });
+  s().renameNode(api, 'API usuarios');
+  const service = s().addNode('service', { x: 0, y: 0 });
+  s().renameNode(service, 'Servicio usuarios');
+  const req = s().connect(screenId, api, 'request')!;
+  const call = s().connect(api, service, 'request')!;
+  const reply = s().addResponse(req, { status: 201 })!;
+  const steps = order === 'ok' ? [req, call] : [reply, call, req];
+  const tourId = s().addFlowTour('Alta', steps)!;
+  const onPlay = vi.fn();
+  const onToggle = vi.fn();
   render(
     <GraphStoreProvider store={store}>
-      <Harness onPlay={onPlay} />
+      <PropertiesPanel
+        nodeId={null}
+        edgeId={null}
+        tours={{ openTourId: tourId, onOpen: vi.fn(), onPlay, picking: { tourId: null, onToggle } }}
+      />
     </GraphStoreProvider>,
   );
-  return { store, tours: () => Object.values(store.getState().tours) };
+  return { store, s, tourId, req, call, reply, api, service, onPlay, onToggle };
 }
 
-function withNodes(s: GraphStore) {
-  const login = s.addNode('screen', { x: 0, y: 0 });
-  s.updateNode(login, { title: 'Login' });
-  const rule = s.addNode('rule', { x: 0, y: 0 });
-  s.updateNode(rule, { title: 'Documento válido' });
-}
+describe('editor de recorridos', () => {
+  it('muestra cada paso con origen → destino, encadenados, y lo reproduce', async () => {
+    const { tourId, onPlay } = setup();
 
-describe('sección Tours del panel', () => {
-  it('sin nada seleccionado muestra la ayuda y la sección vacía', () => {
-    renderTours();
-
-    expect(screen.getByText(/Selecciona un nodo o una conexión/)).toBeInTheDocument();
-    expect(screen.getByText(/Aún no hay tours/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Nuevo tour' })).toBeDisabled();
-  });
-
-  it('crea un tour y abre su editor', async () => {
-    const { store, tours } = renderTours(withNodes);
-
-    await userEvent.type(screen.getByLabelText('Nombre del tour nuevo'), 'Iniciar sesión');
-    await userEvent.click(screen.getByRole('button', { name: 'Nuevo tour' }));
-
-    expect(tours()).toEqual([{ id: expect.any(String), name: 'Iniciar sesión', steps: [] }]);
-    expect(screen.getByLabelText('Nombre del tour')).toHaveValue('Iniciar sesión');
-    expect(store.getState().dirty).toBe(true);
-  });
-
-  it('agrega pasos con nodo y nota, los ordena y los quita', async () => {
-    const { tours } = renderTours((s) => {
-      withNodes(s);
-      s.addTour('Iniciar sesión');
-    });
-    await userEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
-
-    await userEvent.selectOptions(screen.getByLabelText('Nodo del paso nuevo'), 'Pantalla: Login');
-    await userEvent.click(screen.getByRole('button', { name: 'Agregar paso' }));
-    await userEvent.selectOptions(screen.getByLabelText('Nodo del paso nuevo'), 'Regla: Documento válido');
-    await userEvent.click(screen.getByRole('button', { name: 'Agregar paso' }));
-    await userEvent.type(screen.getByLabelText('Paso 1: nota'), 'Aquí empieza todo');
-
-    const titles = () => tours()[0]!.steps.map((step) => (step.nodeId && step.note ? `${step.note}` : 'sin nota'));
-    expect(titles()).toEqual(['Aquí empieza todo', 'sin nota']);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Bajar paso 1' }));
-    expect(titles()).toEqual(['sin nota', 'Aquí empieza todo']);
-    expect(screen.getByRole('button', { name: 'Subir paso 1' })).toBeDisabled();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Quitar paso 1' }));
-    expect(titles()).toEqual(['Aquí empieza todo']);
-    expect(within(screen.getByRole('list', { name: 'Pasos' })).getAllByRole('listitem')).toHaveLength(1);
-  });
-
-  it('renombra, vuelve a la lista y borra el tour', async () => {
-    const { tours } = renderTours((s) => {
-      withNodes(s);
-      s.addTour('Iniciar sesión');
-    });
-    await userEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
-
-    const name = screen.getByLabelText('Nombre del tour');
-    await userEvent.clear(name);
-    expect(screen.getByRole('alert')).toHaveTextContent('El nombre no puede quedar vacío.');
-    await userEvent.type(name, 'Login');
-    expect(tours()[0]!.name).toBe('Login');
-
-    await userEvent.click(screen.getByRole('button', { name: '← Todos los tours' }));
-    expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Login' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Borrar tour' }));
-    expect(tours()).toEqual([]);
-    expect(screen.getByText(/Aún no hay tours/)).toBeInTheDocument();
-  });
-
-  it('Ver tour avisa con el id y solo se habilita con pasos', async () => {
-    const onPlay = vi.fn();
-    let tourId = '';
-    renderTours((s) => {
-      withNodes(s);
-      tourId = s.addTour('Iniciar sesión')!;
-    }, onPlay);
-    await userEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
-
-    expect(screen.getByRole('button', { name: 'Ver tour' })).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: 'Agregar paso' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Ver tour' }));
-
+    const steps = screen.getByRole('list', { name: 'Pasos' });
+    expect(within(steps).getByRole('listitem', { name: 'Paso 1' })).toHaveTextContent(
+      'Creación de cuenta → API usuarios · llama',
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Los pasos están encadenados');
+    await userEvent.click(screen.getByRole('button', { name: '▶ Reproducir recorrido' }));
     expect(onPlay).toHaveBeenCalledWith(tourId);
   });
 
-  it('sin nodos en el lienzo lo dice', async () => {
-    renderTours((s) => void s.addTour('Vacío'));
-    await userEvent.click(screen.getByRole('button', { name: 'Vacío' }));
+  it('agrega la continuación desde el último nodo y la descripción de un paso', async () => {
+    const { s, tourId, onToggle } = setup();
+    await userEvent.click(screen.getByRole('button', { name: '＋ Elegir pasos en el lienzo' }));
+    expect(onToggle).toHaveBeenCalledWith(tourId);
 
-    expect(screen.getByText('Agrega nodos al lienzo para armar los pasos.')).toBeInTheDocument();
+    // El recorrido termina en el servicio, que no tiene salidas: se agrega con la lista de conexiones.
+    await userEvent.selectOptions(screen.getByLabelText('Conexión del paso nuevo'), s().tours[tourId]!.steps[0]!.edgeId!);
+    await userEvent.click(screen.getByRole('button', { name: 'Agregar conexión' }));
+    expect(s().tours[tourId]!.steps).toHaveLength(3);
+    // Repetir la solicitud (reintento) señala el salto desde el servicio.
+    expect(screen.getByRole('listitem', { name: 'Paso 3' })).toHaveTextContent('Salto');
+
+    await userEvent.type(screen.getByLabelText('Paso 1: descripción'), 'Envía el formulario');
+    expect(s().tours[tourId]!.steps[0]!.note).toBe('Envía el formulario');
+  });
+
+  it('ofrece el orden sugerido cuando la secuencia es única y señala la respuesta adelantada', async () => {
+    const { s, tourId, req, call, reply } = setup('mixed');
+
+    expect(screen.getByRole('listitem', { name: 'Paso 1' })).toHaveTextContent('va antes de su solicitud');
+    // req → reply y req → call: dos continuaciones desde la API, no hay un único orden... salvo que la respuesta cierre.
+    expect(screen.getByRole('status')).toHaveTextContent(/define tú el orden|único orden/);
+    act(() => s().removeStep(tourId, 1));
+    await userEvent.click(await screen.findByRole('button', { name: 'Aplicar orden sugerido' }));
+    expect(s().tours[tourId]!.steps.map((x) => x.edgeId)).toEqual([req, reply]);
+    expect(call).toBeDefined();
+  });
+
+  it('una conexión eliminada deja el paso marcado: se reemplaza o se quita', async () => {
+    const { s, tourId, call, api, service } = setup();
+    act(() => s().removeEdge(call));
+
+    const step = await screen.findByRole('listitem', { name: 'Paso 2' });
+    expect(step).toHaveTextContent('Conexión eliminada: API usuarios → Servicio usuarios');
+    expect(step).toHaveTextContent('reemplázala o quita el paso');
+
+    let again = '';
+    act(() => {
+      again = s().connect(api, service, 'event')!;
+    });
+    await userEvent.selectOptions(within(step).getByLabelText('Paso 2: reemplazar por'), again);
+    expect(s().tours[tourId]!.steps[1]).toEqual({ edgeId: again });
   });
 });

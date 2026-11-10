@@ -385,6 +385,44 @@ public sealed class MarkdownExportTests
         Assert.Contains("## Notas del lienzo\n\n- Pendiente: validar con seguridad\n\n## Tours", markdown, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Un_recorrido_sale_con_cada_conexion_en_su_sentido_y_los_grupos_anidados_con_su_padre()
+    {
+        var graph = Graph();
+        graph["nodes"]!["x1"] = new JsonObject { ["id"] = "x1", ["type"] = "api", ["title"] = "API Usuarios" };
+        graph["edges"]!["q1"] = new JsonObject { ["id"] = "q1", ["from"] = "s1", ["to"] = "x1", ["kind"] = "request" };
+        graph["edges"]!["q2"] = new JsonObject
+        {
+            ["id"] = "q2", ["from"] = "x1", ["to"] = "s1", ["kind"] = "response", ["replyTo"] = "q1", ["label"] = "creado",
+        };
+        graph["tours"] = new JsonObject
+        {
+            ["f1"] = new JsonObject
+            {
+                ["id"] = "f1",
+                ["name"] = "Alta",
+                ["steps"] = new JsonArray(
+                    new JsonObject { ["edgeId"] = "q1", ["note"] = "Envía el formulario" },
+                    new JsonObject { ["edgeId"] = "q2" },
+                    new JsonObject { ["removedEdge"] = new JsonObject { ["from"] = "x1", ["to"] = "s1", ["kind"] = "event" } }),
+            },
+        };
+        graph["groups"] = new JsonObject
+        {
+            ["ga"] = new JsonObject { ["id"] = "ga", ["title"] = "AWS", ["kind"] = "cloud" },
+            ["gb"] = new JsonObject { ["id"] = "gb", ["title"] = "Usuarios", ["kind"] = "backend", ["parentId"] = "ga" },
+        };
+        graph["layout"]!["ga"] = new JsonObject { ["x"] = 0, ["y"] = 0, ["w"] = 800, ["h"] = 600 };
+        graph["layout"]!["gb"] = new JsonObject { ["x"] = 40, ["y"] = 80, ["w"] = 400, ["h"] = 300 };
+
+        var markdown = MarkdownDocument.Render(Input(graph));
+
+        Assert.Contains("1. **Login → API Usuarios (llama)**: Envía el formulario", markdown, StringComparison.Ordinal);
+        Assert.Contains("2. **API Usuarios → Login (responde · creado)**", markdown, StringComparison.Ordinal);
+        Assert.Contains("3. **Conexión eliminada: API Usuarios → Login (emite)**", markdown, StringComparison.Ordinal);
+        Assert.Contains("### Usuarios (Backend)\n\nDentro de **AWS**.", markdown, StringComparison.Ordinal);
+    }
+
     private static ExportInput Input(JsonObject graph)
     {
         using var doc = JsonDocument.Parse(graph.ToJsonString());

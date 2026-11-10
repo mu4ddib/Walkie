@@ -31,7 +31,7 @@ describe('inspector de un grupo', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /Plegado/ }));
 
     expect(store.getState().groups[groupId]).toEqual({ id: groupId, title: 'Core bancario', kind: 'backend', collapsed: true });
-    const members = screen.getByRole('region', { name: 'Nodos del grupo' });
+    const members = screen.getByRole('region', { name: 'Contenido del grupo' });
     expect(members).toHaveTextContent('1 nodo');
     expect(within(members).getByText('Transferir')).toBeInTheDocument();
   });
