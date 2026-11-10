@@ -23,6 +23,37 @@ namespace Walkie.Modules.Canvas.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Walkie.Modules.Canvas.Domain.AppMapLayout", b =>
+                {
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<string>("Positions")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("positions");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("updated_by");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("AppId");
+
+                    b.ToTable("app_maps", "canvas");
+                });
+
             modelBuilder.Entity("Walkie.Modules.Canvas.Domain.CanvasDocument", b =>
                 {
                     b.Property<Guid>("FeatureId")
