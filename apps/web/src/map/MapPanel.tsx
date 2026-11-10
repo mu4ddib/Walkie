@@ -38,6 +38,7 @@ export function MapPanel({
           Selecciona una feature o una flecha para ver sus conexiones. Doble clic abre el lienzo. Arrastra las cajas para
           acomodarlas: la distribución se guarda para todos.
         </p>
+        <p className="panel-help">Teclas: 0 ve todo el mapa, + y − acercan y alejan, Esc quita la selección.</p>
         {map.features.some((f) => f.unresolvedPortals > 0) && (
           <p className="tour-step-issue">Hay portales sin destino: se marcan en su feature.</p>
         )}

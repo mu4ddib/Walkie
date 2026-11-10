@@ -85,6 +85,23 @@ test('mapa de la app: features, portales, componentes compartidos, abrir en el l
   await expect(arrow).toHaveText('desde Home');
   await capture(page, '1-mapa');
 
+  // Teclas de vista, como en el lienzo: «+» acerca hasta que una caja queda fuera; «0» vuelve a mostrar todo.
+  // Visible = dentro del área libre del lienzo (a la izquierda del panel lateral).
+  const visible = async (name: string) => {
+    const pane = (await page.locator('.map-canvas').boundingBox())!;
+    const panel = (await page.locator('.map-panel').boundingBox())!;
+    const box = (await featureBox(page, name).boundingBox())!;
+    return box.x >= pane.x && box.y >= pane.y && box.x + box.width <= panel.x && box.y + box.height <= pane.y + pane.height;
+  };
+  const fitted = await page.locator('.zoom-level').textContent();
+  for (let i = 0; i < 4; i++) await page.keyboard.press('+');
+  await expect(page.locator('.zoom-level')).not.toHaveText(fitted!);
+  await expect.poll(() => visible('Conectar cuentas para eventos')).toBe(false);
+  await page.keyboard.press('0');
+  await expect(page.locator('.zoom-level')).toHaveText(fitted!);
+  await expect.poll(() => visible('Login')).toBe(true);
+  await expect.poll(() => visible('Conectar cuentas para eventos')).toBe(true);
+
   // Una feature seleccionada muestra a dónde lleva y qué comparte.
   await featureBox(page, 'Login').click();
   const panel = page.getByRole('complementary', { name: 'Feature' });
