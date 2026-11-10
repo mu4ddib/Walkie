@@ -89,3 +89,10 @@ export const getFlowSpeed = () =>
   read(FLOW_SPEED, (v): v is number => typeof v === 'number' && (FLOW_SPEEDS as readonly number[]).includes(v)) ?? 1;
 
 export const setFlowSpeed = (speed: number) => write(FLOW_SPEED, speed);
+
+const MAP_SHARED = 'walkie.mapShared';
+
+/** Mapa de la app: mostrar los componentes compartidos del catálogo; apagado por defecto. */
+export const getMapShowShared = () => read(MAP_SHARED, (v): v is boolean => typeof v === 'boolean') ?? false;
+
+export const setMapShowShared = (on: boolean) => write(MAP_SHARED, on);

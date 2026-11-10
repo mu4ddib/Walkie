@@ -1,7 +1,7 @@
 # Spec: Mapa de la app
 
 - Issue padre: #125
-- Estado: aprobada
+- Estado: implementada
 
 ## Objetivo
 

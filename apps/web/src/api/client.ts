@@ -3,6 +3,12 @@ import type { WalkieCatalogItemV0 } from '../schema/walkie-catalog-item';
 import type { WalkieAssetV0 } from '../schema/walkie-asset';
 import type { WalkieShareV0 } from '../schema/walkie-share';
 import type { WalkieSharedFeatureV0 } from '../schema/walkie-shared-feature';
+import type { Layout, WalkieAppMapV0 } from '../schema/walkie-app-map';
+
+/** Mapa de una app (`GET /api/apps/{appId}/map`, spec mapa-de-la-app). */
+export type AppMap = WalkieAppMapV0;
+/** Distribución guardada del mapa (`$defs/layout`). */
+export type MapLayout = Layout;
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:5080';
 
@@ -169,6 +175,19 @@ export function updateFeature(token: string, featureId: string, changes: Feature
 
 export function listCanvasPreviews(token: string, appId: string, signal?: AbortSignal): Promise<CanvasPreview[]> {
   return request(`/api/apps/${encodeURIComponent(appId)}/canvas-previews`, { token, signal });
+}
+
+export function getAppMap(token: string, appId: string, signal?: AbortSignal): Promise<AppMap> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/map`, { token, signal });
+}
+
+/** Guarda la distribución del mapa; responde la distribución con `version` + 1, o 409 / 400 como `ApiError`. */
+export function saveMapLayout(token: string, appId: string, layout: MapLayout): Promise<MapLayout> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/map/layout`, {
+    token,
+    method: 'PUT',
+    body: JSON.stringify(layout),
+  });
 }
 
 export function getCanvas(token: string, featureId: string, signal?: AbortSignal): Promise<WalkieCanvasGraphV0> {

@@ -90,19 +90,28 @@ type CanvasFlowNode = WalkieFlowNode | GroupFlowNode | StickyFlowNode;
  * de la app: los nodos `ref` lo leen por contexto y la paleta lo ofrece para crear `ref`. Con `catalog.share`
  * (vista de un enlace) queda de solo lectura: sin paleta ni panel, solo la lista de tours.
  */
-export function Canvas({ store, catalog = NO_CATALOG }: { store: StoreApi<GraphStore>; catalog?: CanvasCatalog }) {
+export function Canvas({
+  store,
+  catalog = NO_CATALOG,
+  focusId,
+}: {
+  store: StoreApi<GraphStore>;
+  catalog?: CanvasCatalog;
+  /** Caja con la que se abre el lienzo: seleccionada y centrada (ej. un portal desde el mapa de la app). */
+  focusId?: string;
+}) {
   return (
     <GraphStoreProvider store={store}>
       <CatalogContext.Provider value={catalog}>
         <ReactFlowProvider>
-          <CanvasInner catalog={catalog} />
+          <CanvasInner catalog={catalog} focusId={focusId} />
         </ReactFlowProvider>
       </CatalogContext.Provider>
     </GraphStoreProvider>
   );
 }
 
-function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
+function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: string }) {
   const graphNodes = useGraphStore((s) => s.nodes);
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
@@ -113,7 +122,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   const { addGroup, moveGroup, resizeGroup, setParent, removeGroup, updateGroup } = useGraphStore((s) => s);
   const { addFlowTour, addEdgeStep } = useGraphStore((s) => s);
   const { undo, redo, beginBatch, endBatch, growGroup, canUndo, canRedo } = useGraphStore((s) => s);
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport, setCenter } = useReactFlow();
   const openFeature = useOpenFeature();
   // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
   // solo si el lienzo ya trae nodos: con uno vacío, React Flow ajustaría el zoom al aparecer el primero
@@ -138,7 +147,9 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   }, []);
 
   // La selección es estado de UI, no del grafo: vive aquí y no en el store.
-  const [selectedNodes, setSelectedNodes] = useState<ReadonlySet<string>>(new Set());
+  const [selectedNodes, setSelectedNodes] = useState<ReadonlySet<string>>(
+    () => new Set(focusId && graphNodes[focusId] ? [focusId] : []),
+  );
   const [selectedEdges, setSelectedEdges] = useState<ReadonlySet<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [openTourId, setOpenTourId] = useState<string | null>(null);
@@ -1049,6 +1060,17 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
     window.addEventListener(OPEN_HELP_EVENT, open);
     return () => window.removeEventListener(OPEN_HELP_EVENT, open);
   }, []);
+
+  // Abrir con una caja enfocada (desde el mapa de la app): se centra una vez, cuando ya está medida.
+  const focused = useRef(false);
+  const focusSize = focusId ? measured[focusId] : undefined;
+  useEffect(() => {
+    if (focused.current || !focusId || !focusSize) return;
+    const at = layout[focusId];
+    if (!at) return;
+    focused.current = true;
+    void setCenter(at.x + focusSize.width / 2, at.y + focusSize.height / 2, { zoom: 1.1, duration: 300 });
+  }, [focusId, focusSize, layout, setCenter]);
 
   // La vista también se guarda al salir: `onMoveEnd` llega al terminar una animación de zoom, y quien
   // cierra o recarga la página antes perdería el último movimiento.

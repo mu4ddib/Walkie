@@ -2,7 +2,7 @@ import { useId, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError, type App, type Feature } from '../api/client';
 import { useApps, useCreateApp, useCreateFeature, useFeatures } from '../api/hooks';
-import { APPS_PATH, appPath, featurePath } from './paths';
+import { APPS_PATH, appPath, featurePath, mapPath } from './paths';
 import { Popover } from './Popover';
 import './workspace.css';
 
@@ -86,9 +86,15 @@ function FeatureMenu({ appId, currentId, onPick }: { appId: string; currentId: s
       onCreate={async (name) => onPick(featurePath(appId, (await create.mutateAsync(name)).id))}
       createError={create.error}
       footer={
-        <Link className="switcher-footer" to={appPath(appId)} onClick={(e) => { e.preventDefault(); onPick(appPath(appId)); }}>
-          Ver todas las features
-        </Link>
+        <>
+          <Link className="switcher-footer" to={appPath(appId)} onClick={(e) => { e.preventDefault(); onPick(appPath(appId)); }}>
+            Ver todas las features
+          </Link>
+          {/* Mapa de la app (spec mapa-de-la-app): pasa por la misma confirmación si hay cambios sin guardar. */}
+          <Link className="switcher-footer" to={mapPath(appId)} onClick={(e) => { e.preventDefault(); onPick(mapPath(appId)); }}>
+            ◇ Ver mapa de la app
+          </Link>
+        </>
       }
     />
   );

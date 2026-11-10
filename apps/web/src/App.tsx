@@ -11,6 +11,8 @@ export function App() {
   const shared = useMatch(SHARED_PATH);
   // El editor y la bienvenida ocupan toda la pantalla y traen su propia barra (spec espacio-de-trabajo).
   const editor = useMatch('/apps/:appId/features/:featureId');
+  // El mapa de la app también es un lienzo a pantalla completa con su barra (spec mapa-de-la-app).
+  const appMap = useMatch('/apps/:appId/map');
   const home = useMatch('/');
 
   // Un enlace de solo lectura se abre sin sesión (ADR-0005): sin AuthGate ni menú de usuario.
@@ -27,7 +29,7 @@ export function App() {
     );
   }
 
-  if (editor) {
+  if (editor || appMap) {
     return (
       <AuthGate>
         <main className="app-full">

@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { useEffect, useMemo } from 'react';
 import { useApp, useCanvas, useCatalog, useCreateCatalogItem, useFeatures } from '../api/hooks';
 import { toCanvasCatalog } from '../catalog/catalogContext';
@@ -13,6 +13,9 @@ import { forgetLastWorkspace, setLastWorkspace } from '../workspace/session';
  */
 export function FeaturePage() {
   const { appId = '', featureId = '' } = useParams();
+  // `?select=<id>`: abrir con esa caja seleccionada y centrada (ej. «Abrir en el lienzo» desde el mapa de la app).
+  const [search] = useSearchParams();
+  const focusId = search.get('select') ?? undefined;
   const app = useApp(appId);
   const features = useFeatures(appId);
   const feature = features.data?.find((f) => f.id === featureId);
@@ -64,6 +67,7 @@ export function FeaturePage() {
         initialGraph={canvas.data}
         catalog={catalog}
         location={{ appId, appName: app.data?.name, featureName: feature.name }}
+        focusId={focusId}
       />
     </section>
   );

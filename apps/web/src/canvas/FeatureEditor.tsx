@@ -41,6 +41,7 @@ export function FeatureEditor({
   initialGraph,
   catalog,
   location,
+  focusId,
 }: {
   featureId: string;
   initialGraph: WalkieCanvasGraphV0;
@@ -48,6 +49,8 @@ export function FeatureEditor({
   catalog?: CanvasCatalog;
   /** Dónde está el editor, para la barra superior (app y feature con sus nombres). */
   location?: { appId: string; appName?: string; featureName?: string };
+  /** Caja con la que se abre (seleccionada y centrada). */
+  focusId?: string;
 }) {
   const [store] = useState(() => {
     const s = createGraphStore();
@@ -370,7 +373,7 @@ export function FeatureEditor({
         </div>
       )}
       <div className="feature-canvas">
-        <Canvas key={canvasKey} store={store} catalog={catalog} />
+        <Canvas key={canvasKey} store={store} catalog={catalog} focusId={focusId} />
       </div>
     </div>
   );
