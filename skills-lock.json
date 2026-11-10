@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "brainstorming": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/brainstorming/SKILL.md",
+      "computedHash": "b344a85378eb5e5da192bceb0f9c0c15a4820a3ee8b5ad867e3a70ef3c691e3d"
+    },
     "canvas-design": {
       "source": "anthropics/skills",
       "sourceType": "github",
@@ -13,11 +19,23 @@
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "89496d5dd00f4810205f351759594fc2742bf8eea85a2f2b2d1de59f4bd91576"
     },
+    "frontend-design-direction": {
+      "source": "affaan-m/ECC",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design-direction/SKILL.md",
+      "computedHash": "cc51d244e53ab937b6cca66f3a299e66b8517360312efe363028e2340ec78578"
+    },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",
       "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
       "computedHash": "411316b5893571bda59f1517b1fd639682cbbc26f8c804c08a071f2b7b864992"
+    },
+    "writing-plans": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/writing-plans/SKILL.md",
+      "computedHash": "c2647b5bf067be353a893e5a39a632cbbeb7ad81e61fa5ae227ece5490029073"
     }
   }
 }
