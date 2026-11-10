@@ -59,6 +59,7 @@ import {
 } from '../workspace/session';
 import { EdgeMarkers } from '../edges/EdgeMarkers';
 import { computePorts, staggerBends } from '../edges/ports';
+import { routeAround, type Point } from '../edges/route';
 import { edgeDisplay, edgeDisplayText, interactionEdges } from '../edges/edgeMeta';
 import { NodeMenu } from './NodeMenu';
 import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
@@ -495,6 +496,31 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
         return p && !bends.has(edge.id) ? [{ id: edge.id, box: source, source: p.source, target: p.target }] : [];
       }),
     );
+    // Cajas que una conexión esquiva (tarea 4 de puertos-de-conexion): lo que se ve como caja —nodos, grupos plegados
+    // y notas—, no los grupos desplegados (se entra en ellos).
+    const obstacles: { id: string; rect: Rect }[] = [];
+    for (const node of Object.values(graphNodes)) {
+      const r = !isHidden(hierarchy, node.id, collapsedGroups) && boxOf(node.id);
+      if (r) obstacles.push({ id: node.id, rect: r });
+    }
+    for (const id of collapsedGroups) {
+      const r = !isHidden(hierarchy, id, collapsedGroups) && boxOf(id);
+      if (r) obstacles.push({ id, rect: r });
+    }
+    for (const id of Object.keys(stickyNotes)) {
+      const r = !isHidden(hierarchy, id, collapsedGroups) && boxOf(id);
+      if (r) obstacles.push({ id, rect: r });
+    }
+    const routes: Record<string, Point[]> = {};
+    for (const { edge, source, target } of visible) {
+      const p = ports[edge.id];
+      const branchEdge = !!edge.branch && source === edge.from;
+      if (!p || branchEdge) continue;
+      const others = obstacles.filter((o) => o.id !== source && o.id !== target).map((o) => o.rect);
+      const single = (pairs[pairKey(source, target)] ?? 1) === 1;
+      const route = routeAround(p.source, p.target, others, single ? staggered[edge.id] : undefined);
+      if (route) routes[edge.id] = route;
+    }
     // Etiquetas de las conexiones de un mismo par: cada una queda cerca de la altura de sus puertos, pero al menos a
     // LABEL_GAP de la anterior (con cajas bajas los puertos quedan más juntos que lo que mide una etiqueta).
     const labelShift = new Map<string, number>();
@@ -550,6 +576,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
           backward,
           bendX: count === 1 ? (bends.get(edge.id) ?? staggered[edge.id]?.x) : undefined,
           bendY: count === 1 ? staggered[edge.id]?.y : undefined,
+          route: routes[edge.id],
           ports: ports[edge.id] && {
             source: branch && source === edge.from ? undefined : ports[edge.id]!.source,
             target: ports[edge.id]!.target,
@@ -571,6 +598,7 @@ function CanvasInner({ catalog }: { catalog: CanvasCatalog }) {
   }, [
     graphEdges,
     graphNodes,
+    stickyNotes,
     boxOf,
     hierarchy,
     flowSteps,

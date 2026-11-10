@@ -10,6 +10,7 @@ import {
   type EdgeDisplay,
 } from './edgeMeta';
 import type { Port, Side } from './ports';
+import { polylinePath, type Point } from './route';
 import { useChangeEdgeKind } from './useChangeEdgeKind';
 
 const SIDE_POSITION: Record<Side, Position> = {
@@ -39,6 +40,8 @@ export type WalkieFlowEdge = FlowEdge<{
   backward?: { sourceX: number; targetX: number };
   /** x en la que dobla el trazo (ramas de una decisión: cada una en la suya). */
   bendX?: number;
+  /** Camino que esquiva cajas (spec puertos-de-conexion, tarea 4); sin él, el escalón de siempre. */
+  route?: Point[];
   /** y en la que dobla el trazo (conexiones que comparten un lado de arriba o de abajo). */
   bendY?: number;
   /**
@@ -71,7 +74,7 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
   const leftY = backward ? targetY : sourceY;
   const rightY = backward ? sourceY : targetY;
   const centerX = (sourceX + targetX) / 2 - lane * Math.sign(rightY - leftY);
-  const [path, labelX, labelY] = getSmoothStepPath({
+  const [stepPath, stepLabelX, stepLabelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
@@ -82,6 +85,11 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
     centerX: data?.bendX ?? (lane === 0 ? undefined : centerX),
     centerY: data?.bendY,
   });
+  // Si hay que esquivar cajas, el trazo es el camino calculado y la etiqueta va a mitad de su largo.
+  const routed = data?.route ? polylinePath(data.route) : null;
+  const path = routed?.d ?? stepPath;
+  const labelX = routed?.labelX ?? stepLabelX;
+  const labelY = routed?.labelY ?? stepLabelY;
   const kinds = SELECTABLE_KINDS.includes(kind) ? SELECTABLE_KINDS : [kind, ...SELECTABLE_KINDS];
   const offset = data?.labelOffset ?? 0;
 

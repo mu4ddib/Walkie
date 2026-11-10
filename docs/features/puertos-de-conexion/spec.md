@@ -22,11 +22,12 @@ Quien arma y lee un lienzo con varias integraciones por nodo (una pantalla que n
 - [ ] Dado que muevo una caja, cuando cambia qué lado mira al otro extremo, entonces la conexión cambia de lado al soltarla (y durante el arrastre).
 - [ ] Los recorridos, la previsualización, los tours y el enlace de solo lectura dibujan las conexiones igual.
 - [ ] Los E2E existentes de conexiones siguen pasando.
+- [ ] Dado que el trazo de una conexión atravesaría una caja (nodo, grupo plegado o nota adhesiva), cuando se dibuja, entonces rodea esa caja con un camino en escalones que deja un margen alrededor, con los menos dobleces posibles, y sigue saliendo y llegando por sus lados. Los grupos desplegados no se esquivan (se entra en ellos). (Agregado a pedido del autor, tarea 4, #124.)
+- [ ] Dado que nada se cruza en el camino, entonces el trazo es el de siempre; al apartar la caja que estorbaba, vuelve a serlo.
 
 ## Fuera de alcance
 
 - Fijar a mano el lado de una conexión (ver preguntas abiertas).
-- Esquivar cajas que quedan en medio del trazo (enrutado con obstáculos).
 
 ## Impacto en el modelo
 

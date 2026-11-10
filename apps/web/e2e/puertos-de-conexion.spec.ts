@@ -136,3 +136,70 @@ test('puntos arriba y abajo: aparecen al pasar el puntero y sirven para conectar
   await page.mouse.up();
   await expect(page.locator('.react-flow__edge')).toHaveCount(before + 1);
 });
+
+/** Pantalla → API con otra caja y una nota justo en medio. */
+const blocked = {
+  schemaVersion: 0,
+  nodes: {
+    screen: { id: 'screen', type: 'screen', title: 'Creación de cuenta' },
+    api: { id: 'api', type: 'api', title: 'API usuarios' },
+    middle: { id: 'middle', type: 'service', title: 'Servicio en medio' },
+  },
+  edges: { e: { id: 'e', from: 'screen', to: 'api', kind: 'request' } },
+  layout: {
+    screen: { x: 0, y: 200 },
+    middle: { x: 360, y: 184 },
+    api: { x: 760, y: 200 },
+    note: { x: 360, y: 40 },
+  },
+  stickyNotes: { note: { id: 'note', text: 'Pendiente: validar con seguridad' } },
+};
+
+/** Puntos del trazo (coordenadas del lienzo). */
+async function points(page: Page, edgeId: string) {
+  const d = (await page.locator(`[data-testid="rf__edge-${edgeId}"] path.kind-edge`).getAttribute('d')) ?? '';
+  const n = d.match(/-?\d+(\.\d+)?/g)!.map(Number);
+  return Array.from({ length: n.length / 2 }, (_, i) => ({ x: n[2 * i]!, y: n[2 * i + 1]! }));
+}
+
+/** Caja de un nodo en coordenadas del lienzo: su posición sembrada y su tamaño medido. */
+async function rect(page: Page, id: string, at: { x: number; y: number }) {
+  const size = await page.locator(`[data-testid="rf__node-${id}"]`).evaluate((el) => ({ w: (el as HTMLElement).offsetWidth, h: (el as HTMLElement).offsetHeight }));
+  return { ...at, ...size };
+}
+
+const crosses = (pts: { x: number; y: number }[], r: { x: number; y: number; w: number; h: number }) =>
+  pts.some((p, i) => {
+    if (i === 0) return false;
+    const a = pts[i - 1]!;
+    return Math.max(a.x, p.x) > r.x && Math.min(a.x, p.x) < r.x + r.w && Math.max(a.y, p.y) > r.y && Math.min(a.y, p.y) < r.y + r.h;
+  });
+
+test('las conexiones esquivan las cajas y notas que quedan en medio', async ({ page }) => {
+  await login(page);
+  await openNewFeature(page, 'Esquivar');
+  await seedCanvas(page, blocked);
+  await capture(page, '3-esquiva');
+
+  const middle = await rect(page, 'middle', blocked.layout.middle);
+  const note = await rect(page, 'note', blocked.layout.note);
+  const route = await points(page, 'e');
+  expect(route.length).toBeGreaterThan(2);
+  expect(crosses(route, middle)).toBe(false);
+  expect(crosses(route, note)).toBe(false);
+  // Sale por la derecha de la pantalla y llega por la izquierda de la API.
+  expect(route[0]!.x).toBeGreaterThan(blocked.layout.screen.x + 100);
+  expect(route.at(-1)!.x).toBe(blocked.layout.api.x);
+
+  // Apartar la caja de en medio (hacia abajo): la conexión vuelve a ser recta.
+  const zoom = Number(
+    /matrix\(([^,]+)/.exec(await page.locator('.react-flow__viewport').evaluate((el) => getComputedStyle(el).transform))?.[1] ?? 1,
+  );
+  const box = (await page.locator('[data-testid="rf__node-middle"]').boundingBox())!;
+  await page.mouse.move(box.x + 40, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 40, box.y + 20 + 260 * zoom, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(async () => new Set((await points(page, 'e')).map((p) => Math.round(p.y))).size).toBe(1);
+  await capture(page, '4-recta');
+});
