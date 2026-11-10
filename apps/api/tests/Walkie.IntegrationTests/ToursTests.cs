@@ -62,6 +62,20 @@ public sealed class ToursTests(WalkieApiFactory factory)
     }
 
     [Fact]
+    public async Task Un_tour_guiado_con_un_paso_de_conexion_responde_400_y_un_recorrido_declarado_se_guarda()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client);
+        var graph = FlowGraph(0);
+        graph["tours"]!["f1"]!["kind"] = "guide";
+
+        await AssertErrorAsync(await client.PutAsJsonAsync(CanvasUri(feature), graph), "/tours/f1/steps/0");
+
+        graph["tours"]!["f1"]!["kind"] = "flow";
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(CanvasUri(feature), graph)).StatusCode);
+    }
+
+    [Fact]
     public async Task Un_paso_con_nodo_y_conexion_a_la_vez_responde_400()
     {
         using var client = factory.CreateAuthenticatedClient();

@@ -7,8 +7,20 @@ export type TourStep = Tour['steps'][number];
  * referencia una conexión existente por `edgeId` y se reproduce en su sentido real (from → to); si la conexión se
  * borra, el paso queda como `removedEdge` hasta que se reemplace o se quite.
  */
+export type TourKind = NonNullable<Tour['kind']>;
+
+/**
+ * Tipo de un tour (spec tours-y-recorridos): el declarado en `kind` o, en lienzos anteriores sin él, `flow` si tiene
+ * algún paso de conexión y `guide` si no.
+ */
+export function tourKind(tour: Tour): TourKind {
+  if (tour.kind) return tour.kind;
+  return tour.steps.some((s) => s.edgeId !== undefined || s.removedEdge !== undefined) ? 'flow' : 'guide';
+}
+
+/** ¿Es un recorrido (pasos por conexión) y no un tour guiado? */
 export function isFlowTour(tour: Tour | undefined): boolean {
-  return !!tour?.steps.some((s) => s.edgeId !== undefined || s.removedEdge !== undefined);
+  return !!tour && tourKind(tour) === 'flow';
 }
 
 /** Origen y destino de un paso (`null` en un paso de nodo o roto sin datos). */

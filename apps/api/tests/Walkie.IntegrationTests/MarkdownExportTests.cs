@@ -420,6 +420,9 @@ public sealed class MarkdownExportTests
         Assert.Contains("1. **Login → API Usuarios (llama)**: Envía el formulario", markdown, StringComparison.Ordinal);
         Assert.Contains("2. **API Usuarios → Login (responde · creado)**", markdown, StringComparison.Ordinal);
         Assert.Contains("3. **Conexión eliminada: API Usuarios → Login (emite)**", markdown, StringComparison.Ordinal);
+        // Los recorridos tienen su propia sección, aparte de los tours.
+        Assert.Contains("- [Recorridos](#recorridos)", markdown, StringComparison.Ordinal);
+        Assert.Contains("## Recorridos\n\n### Alta", markdown, StringComparison.Ordinal);
         Assert.Contains("### Usuarios (Backend)\n\nDentro de **AWS**.", markdown, StringComparison.Ordinal);
     }
 

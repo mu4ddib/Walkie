@@ -296,6 +296,10 @@ export interface Tour {
   id: Id;
   name: string;
   /**
+   * guide: tour (el guía presenta nodos; solo pasos nodeId). flow: recorrido (reproduce conexiones; pasos edgeId o removedEdge). Ausente en lienzos anteriores: flow si tiene algún paso de conexión
+   */
+  kind?: 'guide' | 'flow';
+  /**
    * En orden; un paso centra y resalta su nodo, o recorre su conexión (origen, conexión, destino). Una conexión puede repetirse (reintento)
    */
   steps: ({

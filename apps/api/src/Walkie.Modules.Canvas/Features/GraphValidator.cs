@@ -197,9 +197,16 @@ internal sealed class GraphValidator
                 errors[$"/tours/{tour.Name}/id"] = ["El id del tour debe coincidir con su clave."];
             }
 
+            // Un tour guiado solo presenta nodos; un recorrido, conexiones (spec tours-y-recorridos).
+            var guide = tour.Value.TryGetProperty("kind", out var kind) && kind.GetString() == "guide";
             var i = 0;
             foreach (var step in tour.Value.GetProperty("steps").EnumerateArray())
             {
+                if (guide && (step.TryGetProperty("edgeId", out _) || step.TryGetProperty("removedEdge", out _)))
+                {
+                    errors[$"/tours/{tour.Name}/steps/{i}"] = ["Un tour guiado solo tiene pasos de nodo; las conexiones van en un recorrido."];
+                }
+
                 if (step.TryGetProperty("nodeId", out var nodeId) && !nodeIds.Contains(nodeId.GetString()!))
                 {
                     errors[$"/tours/{tour.Name}/steps/{i}/nodeId"] = ["El paso apunta a un nodo que no existe."];
