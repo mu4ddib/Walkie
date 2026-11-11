@@ -829,3 +829,449 @@ p.edge-contract {
 .shared-tours-group + .shared-tours-group {
   margin-top: 12px;
 }
+
+/* Tours compactos (spec tours-compactos): lista en filas, detalle con cabecera fija, pasos como acordeones y la forma
+   de agregar fija abajo. Un solo desplazamiento: el del inspector. */
+.tour-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tour-new {
+  display: flex;
+  gap: 6px;
+}
+
+.tour-new input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tour-search input {
+  width: 100%;
+}
+
+.tour-rows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tour-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 4px 6px;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand);
+}
+
+.tour-row:hover {
+  border-color: var(--dune-300);
+}
+
+.tour-row-open {
+  overflow: hidden;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tour-row-open:hover {
+  color: var(--spice-strong);
+}
+
+.tour-row-meta {
+  color: var(--stone-700);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tour-row-rename input {
+  width: 100%;
+}
+
+/* Menú de acciones secundarias. */
+.action-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.action-menu-button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 6px;
+}
+
+.action-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-float);
+}
+
+.action-menu-item {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.action-menu-item:hover:not(:disabled),
+.action-menu-item:focus-visible {
+  background: var(--dune-100);
+  outline: none;
+}
+
+.action-menu-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ibad);
+}
+
+.action-menu-item:disabled {
+  color: var(--stone-500);
+  cursor: default;
+}
+
+.action-menu-item[data-danger] {
+  color: var(--danger);
+}
+
+/* Detalle: cabecera fija arriba del desplazamiento del inspector. */
+.tour-detail-head {
+  position: sticky;
+  top: -4px;
+  z-index: 3;
+  display: grid;
+  gap: 6px;
+  margin: 0 -14px;
+  padding: 8px 14px 10px;
+  border-bottom: 1px solid var(--dune-200);
+  background: var(--sand-raised);
+}
+
+.tour-detail-head .panel-field {
+  gap: 0;
+}
+
+.tour-detail-head > .link-button {
+  justify-self: start;
+}
+
+.tour-name-input {
+  text-align: left;
+}
+
+.tour-name-input,
+.tour-detail-name {
+  overflow: hidden;
+  margin: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tour-name-input:hover {
+  border-color: var(--dune-200);
+}
+
+.tour-name-input:focus {
+  border-color: var(--dune-300);
+  background: var(--sand);
+}
+
+.tour-detail-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tour-detail-count {
+  margin-right: auto;
+  color: var(--stone-700);
+  font-size: 12.5px;
+}
+
+.tour-detail-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  font-size: 12.5px;
+}
+
+.tour-detail-tools .link-button:disabled {
+  color: var(--stone-500);
+  text-decoration: none;
+  cursor: default;
+}
+
+.tour-editor > .tour-steps {
+  gap: 6px;
+}
+
+/* Un paso: encabezado legible cerrado; el cuerpo solo al abrirlo. */
+.tour-editor .tour-step {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand);
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+
+.tour-editor .tour-step[data-open] {
+  border-color: var(--dune-300);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-float);
+}
+
+.tour-editor .tour-step[data-active] {
+  border-color: var(--spice);
+  background: color-mix(in srgb, var(--spice-tint) 55%, var(--sand-raised));
+}
+
+.tour-editor .tour-step[data-missing] {
+  border-style: dashed;
+  border-color: var(--danger);
+}
+
+.tour-editor .tour-step[data-dragging] {
+  opacity: 0.5;
+}
+
+.tour-editor .tour-step[data-drop='before'] {
+  box-shadow: 0 -3px 0 var(--spice);
+}
+
+.tour-editor .tour-step[data-drop='after'] {
+  box-shadow: 0 3px 0 var(--spice);
+}
+
+.tour-step-head {
+  display: flex;
+  align-items: stretch;
+}
+
+.tour-step-grip {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--dune-200);
+  border-radius: var(--radius-m) 0 0 var(--radius-m);
+  background: transparent;
+  color: var(--stone-500);
+  font-size: 14px;
+  cursor: grab;
+}
+
+.tour-step-grip:hover {
+  background: var(--dune-100);
+  color: var(--ink);
+}
+
+.tour-step-grip:active {
+  cursor: grabbing;
+}
+
+.tour-step-toggle {
+  display: grid;
+  flex: 1;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 6px 7px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tour-step-toggle:hover {
+  background: color-mix(in srgb, var(--dune-100) 60%, transparent);
+}
+
+.tour-step-grip:focus-visible,
+.tour-step-toggle:focus-visible {
+  outline: 2px solid var(--ibad);
+  outline-offset: -2px;
+}
+
+.tour-step-number {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--dune-200);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.tour-step[data-open] .tour-step-number,
+.tour-step[data-active] .tour-step-number {
+  background: var(--spice);
+  color: #fff8ee;
+}
+
+.tour-step-glyph {
+  min-width: 22px;
+  white-space: nowrap;
+  color: var(--stone-700);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+}
+
+.tour-step-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tour-step-title,
+.tour-step-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tour-step-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.tour-step-meta {
+  display: flex;
+  min-width: 0;
+  color: var(--stone-700);
+  font-size: 12px;
+}
+
+/* Tipo y vista previa se recortan cada uno con «…»: ninguna caja sale del panel. */
+.tour-step-kind,
+.tour-step-preview {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.tour-step-kind {
+  flex: 0 1 auto;
+}
+
+.tour-step-preview {
+  flex: 1 1 0;
+}
+
+.tour-step-meta[data-issue] .tour-step-preview {
+  color: var(--danger);
+}
+
+.tour-step-chevron {
+  color: var(--stone-500);
+  font-size: 12px;
+}
+
+.tour-step-body {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px dashed var(--dune-200);
+}
+
+.tour-step-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* La nota crece con lo escrito (desde tres líneas) y se puede ampliar a mano. */
+.panel-field textarea.is-autogrow {
+  min-height: 4.6em;
+  max-height: 45vh;
+  field-sizing: content;
+  resize: vertical;
+}
+
+/* Agregar paso: fijo abajo del desplazamiento del inspector, siempre a mano. */
+.tour-add {
+  position: sticky;
+  bottom: -16px;
+  z-index: 3;
+  display: grid;
+  gap: 6px;
+  margin: 0 -14px -16px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--dune-200);
+  background: var(--sand-raised);
+}
+
+.tour-add-row {
+  display: flex;
+  gap: 6px;
+}
+
+.tour-add-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.tour-detail-empty {
+  padding: 12px;
+  border: 1px dashed var(--dune-300);
+  border-radius: var(--radius-m);
+}
+
+/* En pantallas bajas, menos aire en la cabecera fija. */
+@media (max-height: 640px) {
+  .tour-detail-head {
+    gap: 4px;
+    padding: 4px 14px 6px;
+  }
+
+  .tour-detail-tools {
+    display: none;
+  }
+}

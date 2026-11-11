@@ -40,8 +40,9 @@ import {
   type Hierarchy,
 } from '../store/hierarchy';
 import { FlowPlayer, type Rect } from '../tours/FlowPlayer';
-import { FLOW_TIMING, firstPhase, type Playing } from '../tours/flowPlayback';
-import { isFlowTour, lastEnd, suggestOrder, tourNodes, type TourKind } from '../tours/flows';
+import { FLOW_TIMING, firstPhase, goTo, type Playing } from '../tours/flowPlayback';
+import { EMPTY_TOURS_UI, type ToursUi } from '../panel/tours/toursUi';
+import { isFlowTour, lastEnd, suggestOrder, tourNodes, type TourKind, type TourStep } from '../tours/flows';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { useGraphStore } from '../store/useGraphStore';
 import { GRID, palette } from '../theme/palette';
@@ -155,6 +156,15 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
   const [openTourId, setOpenTourId] = useState<string | null>(null);
   // Pestaña de la sección Tours y recorridos (spec tours-y-recorridos): se recuerda al seleccionar cajas.
   const [toursTab, setToursTab] = useState<TourKind>('guide');
+  // Estado de interfaz de la sección de tours (pasos abiertos, búsquedas, desplazamiento): nunca va al store.
+  const [toursUi, setToursUi] = useState<ToursUi>(EMPTY_TOURS_UI);
+  // «Localizar en lienzo»: el nodo o la conexión de un paso se resalta un momento.
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!flash) return;
+    const timer = setTimeout(() => setFlash(null), 1800);
+    return () => clearTimeout(timer);
+  }, [flash]);
   // Menú contextual de una caja o nota (clic derecho): duplicar, editar, eliminar.
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   // "Previsualizar interacción": las conexiones del intercambio, en orden (ida y vueltas), y la que se recorre ahora.
@@ -371,7 +381,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             resizable: !locked,
           },
           selected: selectedNodes.has(group.id),
-          className: groupClass(group.id),
+          className: [groupClass(group.id), flash === group.id && 'locate-flash'].filter(Boolean).join(' ') || undefined,
         };
       });
     // Notas adhesivas: anotaciones sin conexiones, por encima de los grupos y debajo de las cajas.
@@ -394,7 +404,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
       selected: selectedNodes.has(node.id),
       measured: measured[node.id],
       hidden: isHidden(hierarchy, node.id, collapsedGroups),
-      className: stateClass(node.id),
+      className: [stateClass(node.id), flash === node.id && 'locate-flash'].filter(Boolean).join(' ') || undefined,
     }));
     return [...groupNodes, ...noteNodes, ...graphFlowNodes];
   }, [
@@ -418,6 +428,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
     currentEdge,
     participants,
     dropHint,
+    flash,
   ]);
 
   const edges = useMemo<WalkieFlowEdge[]>(() => {
@@ -601,9 +612,9 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             : edge.id === previewId
               ? 'edge-preview edge-preview-active'
               : 'edge-preview'
-          : playing && !flowPlaying
-            ? tourClass(edge.from, edge.to)
-            : flowClass(edge.id),
+          : [playing && !flowPlaying ? tourClass(edge.from, edge.to) : flowClass(edge.id), flash === edge.id && 'locate-flash']
+              .filter(Boolean)
+              .join(' ') || undefined,
       };
     });
   }, [
@@ -616,6 +627,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
     flowPlaying,
     currentEdge,
     pickFrom,
+    flash,
     catalog.items,
     collapsedGroups,
     selectedEdges,
@@ -1102,6 +1114,40 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
     const y = Math.min(...rects.map((r) => r.y));
     return { x, y, w: Math.max(...rects.map((r) => r.x + r.w)) - x, h: Math.max(...rects.map((r) => r.y + r.h)) - y };
   };
+  // Lo que tapa el inspector (a la derecha, o abajo en pantallas angostas): reproducir y localizar usan el resto.
+  const narrowPane = pane.width > 0 && pane.width < 900;
+  const insets = {
+    right: !readOnly && inspectorOpen && !narrowPane ? 376 : 0,
+    bottom: !readOnly && inspectorOpen && narrowPane ? Math.round(pane.height * 0.45) + 24 : 0,
+  };
+
+  /**
+   * «Localizar en lienzo» (spec tours-compactos): centra el nodo o la conexión de un paso en el área libre y lo resalta
+   * un momento, sin seleccionarlo (el inspector sigue en el tour). Dentro de un grupo plegado, se ve su grupo.
+   */
+  const locate = (step: TourStep) => {
+    const edge = step.edgeId ? graphEdges[step.edgeId] : undefined;
+    const ids = edge ? [edge.from, edge.to] : step.nodeId && graphNodes[step.nodeId] ? [step.nodeId] : [];
+    const rect = unionOf(ids);
+    if (!rect) return;
+    const zoom = Math.max(getViewport().zoom, 0.8);
+    void setCenter(rect.x + rect.w / 2 + insets.right / 2 / zoom, rect.y + rect.h / 2 + insets.bottom / 2 / zoom, {
+      zoom,
+      duration: 400,
+    });
+    setFlash(edge ? edge.id : visibleEnd(hierarchy, ids[0]!, collapsedGroups));
+  };
+
+  // Reproducción: el panel muestra el tour con su paso activo; tocar un paso salta a él.
+  const playback = playing
+    ? {
+        tourId: playing.tourId,
+        step: playing.step,
+        onJump: (index: number) =>
+          setPlaying((p) => (p ? (flowPlaying ? goTo(playingTour, p, index) : { ...p, step: index }) : p)),
+      }
+    : null;
+
   const flowFrames = { step: flowPlaying ? unionOf(activeIds) : null, all: flowPlaying ? unionOf([...participants]) : null };
 
   const hint = playing
@@ -1291,7 +1337,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             speed={flowSpeed}
             onSpeed={setFlowSpeedState}
             frames={flowFrames}
-            pane={pane}
+            pane={{ width: pane.width - insets.right, height: pane.height - insets.bottom }}
             onExit={() => setPlaying(null)}
           />
         )}
@@ -1301,6 +1347,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             step={playing.step}
             sizes={measured}
             pane={pane}
+            insets={insets}
             onStep={(step) => setPlaying((p) => p && { ...p, step })}
             onExit={() => setPlaying(null)}
           />
@@ -1339,6 +1386,10 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
               onPlay: startTour,
               createdTourId,
               picking: { tourId: pickingTourId, onToggle: setPickingTourId },
+              ui: toursUi,
+              onUi: setToursUi,
+              onLocate: locate,
+              playback,
             }}
           />
         </div>

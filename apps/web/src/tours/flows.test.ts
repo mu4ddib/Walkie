@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { StoreApi } from 'zustand/vanilla';
 import { createGraphStore, toGraph, type GraphStore } from '../store/graphStore';
 import { continuations, isFlowTour, lastEnd, stepIssues, suggestOrder, tourNodes } from './flows';
+import { withoutIds } from '../test/steps';
 
 let store: StoreApi<GraphStore>;
 const s = () => store.getState();
@@ -67,8 +68,8 @@ describe('recorridos en el store', () => {
     const t1 = s().addFlowTour('Alta ok', [e.req, e.created])!;
     const t2 = s().addFlowTour('Solo ida', [e.req])!;
 
-    expect(s().tours[t1]?.steps).toEqual([{ edgeId: e.req }, { edgeId: e.created }]);
-    expect(s().tours[t2]?.steps).toEqual([{ edgeId: e.req }]);
+    expect(withoutIds(s().tours[t1]?.steps)).toEqual([{ edgeId: e.req }, { edgeId: e.created }]);
+    expect(withoutIds(s().tours[t2]?.steps)).toEqual([{ edgeId: e.req }]);
     expect(isFlowTour(s().tours[t1])).toBe(true);
     expect(tourNodes(s().tours[t1], s().edges)).toEqual(new Set([e.screen, e.api]));
     expect(lastEnd(s().tours[t1], s().edges)).toBe(e.screen);
@@ -81,13 +82,13 @@ describe('recorridos en el store', () => {
     expect(s().addEdgeStep(t, e.callService, 'La API delega')).toBe(1);
     expect(s().addEdgeStep(t, 'nada')).toBeNull();
     s().updateStepNote(t, 0, 'Envía el formulario');
-    expect(s().tours[t]?.steps).toEqual([
+    expect(withoutIds(s().tours[t]?.steps)).toEqual([
       { edgeId: e.req, note: 'Envía el formulario' },
       { edgeId: e.callService, note: 'La API delega' },
     ]);
 
     s().setStepEdge(t, 1, e.read);
-    expect(s().tours[t]?.steps[1]).toEqual({ edgeId: e.read, note: 'La API delega' });
+    expect(withoutIds(s().tours[t]?.steps[1])).toEqual({ edgeId: e.read, note: 'La API delega' });
 
     s().reorderSteps(t, [1, 0]);
     expect(s().tours[t]?.steps.map((x) => x.edgeId)).toEqual([e.read, e.req]);
@@ -105,13 +106,13 @@ describe('recorridos en el store', () => {
     s().removeEdge(e.callService);
 
     const step = s().tours[t]!.steps[1]!;
-    expect(step).toEqual({ removedEdge: { from: e.api, to: e.service, kind: 'request' }, note: 'Delega' });
+    expect(withoutIds(step)).toEqual({ removedEdge: { from: e.api, to: e.service, kind: 'request' }, note: 'Delega' });
     expect(stepIssues(s().tours[t]!, s().edges)[1]).toContainEqual({ kind: 'removed' });
 
     // Reemplazar por otra conexión conserva la nota.
     const again = s().connect(e.api, e.service, 'request')!;
     s().setStepEdge(t, 1, again);
-    expect(s().tours[t]!.steps[1]).toEqual({ edgeId: again, note: 'Delega' });
+    expect(withoutIds(s().tours[t]!.steps[1])).toEqual({ edgeId: again, note: 'Delega' });
 
     // Borrar un nodo también marca los pasos de sus conexiones.
     s().removeNode(e.service);

@@ -110,13 +110,16 @@ async function clearSelection(page: Page) {
   await page.locator('.react-flow__pane').click({ position: { x: 700, y: 600 } });
 }
 
-/** Nombre del tour y, por paso, el nodo elegido y la nota, como los muestra el editor del panel. */
+/**
+ * Nombre del tour y, por paso, lo que dice su encabezado cerrado (nodo, tipo y vista previa de la nota) y la nota
+ * completa (en su `title`), como los muestra el editor del panel (spec tours-compactos).
+ */
 function tourEditor(page: Page) {
   return page.locator('.tour-editor').evaluate((editor) => ({
-    name: editor.querySelector<HTMLInputElement>('input')!.value,
+    name: editor.querySelector<HTMLInputElement>('.tour-name-input')!.value,
     steps: [...editor.querySelectorAll('.tour-step')].map((step) => ({
-      node: step.querySelector('select')!.selectedOptions[0]!.textContent,
-      note: step.querySelector('textarea')!.value,
+      heading: step.querySelector('.tour-step-text')!.textContent,
+      full: step.querySelector('.tour-step-toggle')!.getAttribute('title'),
     })),
   }));
 }

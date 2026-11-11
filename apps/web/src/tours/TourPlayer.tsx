@@ -22,6 +22,8 @@ interface TourPlayerProps {
   /** Tamaño del área del lienzo, para ubicar el guía y el globo junto al nodo centrado. */
   pane: { width: number; height: number };
   step: number;
+  /** Lo que tapa el inspector a la derecha (o abajo, en pantallas angostas): el tour se ubica en el resto. */
+  insets?: { right: number; bottom: number };
   onStep: (step: number) => void;
   onExit: () => void;
 }
@@ -31,7 +33,9 @@ interface TourPlayerProps {
  * (o piensa, si es una regla) y cuenta la nota; Anterior/Siguiente/Salir y ← → Esc; celebra al terminar.
  * Al salir vuelve la vista que había.
  */
-export function TourPlayer({ tourId, sizes, pane, step, onStep, onExit }: TourPlayerProps) {
+export function TourPlayer({ tourId, sizes, pane: full, step, insets = { right: 0, bottom: 0 }, onStep, onExit }: TourPlayerProps) {
+  // El área libre: el guía, el globo y el nodo centrado van en ella (no debajo del inspector).
+  const pane = { width: full.width - insets.right, height: full.height - insets.bottom };
   const tour = useGraphStore((s) => s.tours[tourId]);
   const nodes = useGraphStore((s) => s.nodes);
   const layout = useGraphStore((s) => s.layout);
@@ -72,9 +76,13 @@ export function TourPlayer({ tourId, sizes, pane, step, onStep, onExit }: TourPl
   const targetY = target?.y;
   useEffect(() => {
     if (targetX === undefined || targetY === undefined) return;
-    void setCenter(targetX, targetY, { zoom: TOUR_ZOOM, duration: reduced ? 0 : TOUR_TIMING.pan });
+    // setCenter centra en todo el lienzo: se corre lo que tapa el inspector para que quede en el centro del área libre.
+    void setCenter(targetX + insets.right / 2 / TOUR_ZOOM, targetY + insets.bottom / 2 / TOUR_ZOOM, {
+      zoom: TOUR_ZOOM,
+      duration: reduced ? 0 : TOUR_TIMING.pan,
+    });
     // Al entrar al modo tour se ocultan paleta y panel y el lienzo se agranda: se vuelve a centrar con el ancho nuevo.
-  }, [targetX, targetY, setCenter, reduced, pane.width, pane.height]);
+  }, [targetX, targetY, setCenter, reduced, pane.width, pane.height, insets.right, insets.bottom]);
 
   // walk → gesto (point/think lo termina el Guide) ; talk escribe la nota letra a letra → idle.
   useEffect(() => {
@@ -131,9 +139,9 @@ export function TourPlayer({ tourId, sizes, pane, step, onStep, onExit }: TourPl
   const celebrating = state.phase === 'celebrate';
 
   return (
-    <div className="tour-player">
+    <div className="tour-player" style={{ right: insets.right, bottom: insets.bottom }}>
       <div className="tour-bar" role="toolbar" aria-label="Tour">
-        <strong>{tour.name}</strong>
+        <strong title={tour.name}>{tour.name}</strong>
         <span className="tour-progress" role="status">
           Paso {step + 1} de {steps.length}
         </span>

@@ -308,6 +308,10 @@ export interface Tour {
     /**
      * UUID v7 generado en el cliente
      */
+    id?: string;
+    /**
+     * UUID v7 generado en el cliente
+     */
     nodeId?: string;
     /**
      * UUID v7 generado en el cliente

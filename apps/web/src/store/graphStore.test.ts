@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { StoreApi } from 'zustand/vanilla';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import { createGraphStore, defaultEdgeKind, inputNameError, snap, toGraph, type GraphStore } from './graphStore';
+import { withoutIds } from '../test/steps';
 
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -621,7 +622,7 @@ describe('tours', () => {
     expect(s().addStep(tour, 'nada')).toBeNull();
     expect(s().addStep('nada', login)).toBeNull();
 
-    expect(s().tours[tour]?.steps).toEqual([{ nodeId: login, note: 'Aquí empieza' }, { nodeId: rule }]);
+    expect(withoutIds(s().tours[tour]?.steps)).toEqual([{ nodeId: login, note: 'Aquí empieza' }, { nodeId: rule }]);
   });
 
   it('edita la nota (vacía la quita y respeta el límite) y cambia el nodo de un paso', () => {
@@ -631,10 +632,10 @@ describe('tours', () => {
     s().updateStepNote(tour, 0, 'x'.repeat(600));
     expect(s().tours[tour]?.steps[0]?.note).toHaveLength(500);
     s().updateStepNote(tour, 0, '  ');
-    expect(s().tours[tour]?.steps[0]).toEqual({ nodeId: login });
+    expect(withoutIds(s().tours[tour]?.steps[0])).toEqual({ nodeId: login });
 
     s().setStepNode(tour, 0, api);
-    expect(s().tours[tour]?.steps[0]).toEqual({ nodeId: api });
+    expect(withoutIds(s().tours[tour]?.steps[0])).toEqual({ nodeId: api });
   });
 
   it('moveStep sube y baja pasos; fuera de rango no hace nada', () => {
@@ -685,8 +686,8 @@ describe('tours', () => {
 
     s().removeNode(rule);
 
-    expect(s().tours[tour]?.steps).toEqual([{ nodeId: login }]);
-    expect(s().tours[other]?.steps).toEqual([]);
+    expect(withoutIds(s().tours[tour]?.steps)).toEqual([{ nodeId: login }]);
+    expect(withoutIds(s().tours[other]?.steps)).toEqual([]);
   });
 
   it('toGraph lleva los tours solo si hay; loadGraph los recupera', () => {

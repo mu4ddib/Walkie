@@ -89,6 +89,22 @@ public sealed class ToursTests(WalkieApiFactory factory)
     }
 
     [Fact]
+    public async Task Los_pasos_con_id_se_guardan_y_un_id_repetido_responde_400()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client);
+        var graph = Graph(0);
+        graph["tours"]!["t1"]!["steps"]![0]!["id"] = "p1";
+        graph["tours"]!["t1"]!["steps"]![1]!["id"] = "p2";
+
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(CanvasUri(feature), graph)).StatusCode);
+
+        graph["version"] = 1;
+        graph["tours"]!["t1"]!["steps"]![1]!["id"] = "p1";
+        await AssertErrorAsync(await client.PutAsJsonAsync(CanvasUri(feature), graph), "/tours/t1/steps/1/id");
+    }
+
+    [Fact]
     public async Task Un_tour_cuya_clave_no_es_su_id_responde_400()
     {
         using var client = factory.CreateAuthenticatedClient();

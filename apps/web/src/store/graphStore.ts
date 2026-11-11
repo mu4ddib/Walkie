@@ -14,6 +14,34 @@ function withKinds(tours: Record<string, Tour>): Record<string, Tour> {
   return Object.fromEntries(Object.entries(tours).map(([id, t]) => [id, t.kind ? t : { ...t, kind: tourKind(t) }]));
 }
 
+/**
+ * Pasos con identidad (spec tours-compactos): los de lienzos anteriores, o con un id repetido en su tour, reciben uno
+ * nuevo. Devuelve los mismos tours si ya la tenían todos.
+ */
+function withStepIds(tours: Record<string, Tour>, newId: () => string): Record<string, Tour> {
+  const ok = (t: Tour) => t.steps.every((s, i) => s.id && t.steps.findIndex((o) => o.id === s.id) === i);
+  if (Object.values(tours).every(ok)) return tours;
+  return Object.fromEntries(
+    Object.entries(tours).map(([key, t]) => {
+      if (ok(t)) return [key, t];
+      const seen = new Set<string>();
+      const steps = t.steps.map((step) => {
+        const fresh = !step.id || seen.has(step.id);
+        const id = fresh ? newId() : step.id!;
+        seen.add(id);
+        return fresh ? { id, ...stepWithoutId(step) } : step;
+      });
+      return [key, { ...t, steps }];
+    }),
+  );
+}
+
+function stepWithoutId(step: TourStep): TourStep {
+  const copy = { ...step };
+  delete copy.id;
+  return copy;
+}
+
 /** Paso de un tour: un nodo (`nodeId`), una conexión (`edgeId`) o una conexión eliminada (`removedEdge`). */
 export type TourStep = Tour['steps'][number];
 
@@ -176,9 +204,15 @@ function withText<T extends object>(obj: T, key: keyof T & string, value: string
 
 /** Lo que señala un paso, sin su nota. */
 function stepTarget(step: TourStep): TourStep {
-  if (step.edgeId) return { edgeId: step.edgeId };
-  if (step.removedEdge) return { removedEdge: step.removedEdge };
-  return { nodeId: step.nodeId };
+  const id = step.id ? { id: step.id } : {};
+  if (step.edgeId) return { ...id, edgeId: step.edgeId };
+  if (step.removedEdge) return { ...id, removedEdge: step.removedEdge };
+  return { ...id, nodeId: step.nodeId };
+}
+
+/** `target` con la identidad `id` (si la hay) delante: así un paso conserva su id al cambiar de nodo o conexión. */
+function withStepId(id: string | undefined, target: TourStep): TourStep {
+  return id ? { id, ...target } : target;
 }
 
 /** Paso con la nota recortada al límite; vacía o ausente, sin `note`. */
@@ -207,7 +241,7 @@ function withRemovedEdges(tours: Record<string, Tour>, gone: Record<string, Edge
       const steps = t.steps.map((step) => {
         const edge = step.edgeId ? gone[step.edgeId] : undefined;
         if (!edge) return step;
-        const next: TourStep = { removedEdge: removedFrom(edge) };
+        const next: TourStep = withStepId(step.id, { removedEdge: removedFrom(edge) });
         if (step.note) next.note = step.note;
         return next;
       });
@@ -408,6 +442,17 @@ export interface GraphActions {
   setStepNode(tourId: string, index: number, nodeId: string): void;
   /** El paso pasa a recorrer `edgeId` (también para reemplazar una conexión eliminada); conserva la nota. */
   setStepEdge(tourId: string, index: number, edgeId: string): void;
+  /**
+   * Inserta un paso en `index` (0 = al principio; `steps.length` = al final) con su propia identidad: un nodo en un tour
+   * o una conexión en un recorrido. Devuelve el id del paso, o `null` si no se aplicó.
+   */
+  insertStep(tourId: string, index: number, target: { nodeId: string } | { edgeId: string }, note?: string): string | null;
+  /** Copia del paso justo después de él, con su propia identidad; devuelve su id o `null`. */
+  duplicateStep(tourId: string, index: number): string | null;
+  /** Lleva el paso de `from` a `to` (arrastrar para reordenar); conserva su identidad y su nota. */
+  moveStepTo(tourId: string, from: number, to: number): void;
+  /** Copia del tour («Nombre (copia)») con pasos de identidad propia; devuelve su id o `null`. */
+  duplicateTour(tourId: string): string | null;
   /** Reordena los pasos: `order` es una permutación de sus índices. Otra cosa no se aplica. */
   reorderSteps(tourId: string, order: readonly number[]): void;
   /** Nota del paso; vacía la quita. */
@@ -514,7 +559,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           edges: graph.edges,
           layout: graph.layout,
           // Lienzos anteriores: cada tour recibe el tipo que se deduce de sus pasos (sin marcar cambios).
-          tours: withKinds(graph.tours ?? {}),
+          tours: withStepIds(withKinds(graph.tours ?? {}), newId),
           groups: graph.groups ?? {},
           stickyNotes: graph.stickyNotes ?? {},
           version: graph.version,
@@ -1060,21 +1105,21 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         const tour = get().tours[tourId];
         // Un recorrido solo recorre conexiones: los pasos de nodo son de los tours.
         if (!tour || !get().nodes[nodeId] || tourKind(tour) === 'flow') return null;
-        putTour({ ...tour, steps: [...tour.steps, withNote({ nodeId }, note)] });
+        putTour({ ...tour, steps: [...tour.steps, withNote({ id: newId(), nodeId }, note)] });
         return tour.steps.length;
       },
 
       addEdgeStep: (tourId, edgeId, note) => {
         const tour = get().tours[tourId];
         if (!tour || !get().edges[edgeId] || tourKind(tour) === 'guide') return null;
-        putTour({ ...tour, steps: [...tour.steps, withNote({ edgeId }, note)] });
+        putTour({ ...tour, steps: [...tour.steps, withNote({ id: newId(), edgeId }, note)] });
         return tour.steps.length;
       },
 
       addFlowTour: (name, edgeIds) => {
         const id = get().addTour(name, 'flow');
         if (!id) return null;
-        const steps = edgeIds.filter((e) => get().edges[e]).map((edgeId) => ({ edgeId }));
+        const steps = edgeIds.filter((e) => get().edges[e]).map((edgeId) => ({ id: newId(), edgeId }));
         if (steps.length) putTour({ ...get().tours[id]!, steps });
         return id;
       },
@@ -1083,14 +1128,65 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         const tour = get().tours[tourId];
         const step = tour?.steps[index];
         if (!tour || !step || !get().nodes[nodeId] || step.nodeId === nodeId) return;
-        putTour({ ...tour, steps: tour.steps.map((x, i) => (i === index ? withNote({ nodeId }, x.note) : x)) });
+        putTour({
+          ...tour,
+          steps: tour.steps.map((x, i) => (i === index ? withNote(withStepId(x.id, { nodeId }), x.note) : x)),
+        });
       },
 
       setStepEdge: (tourId, index, edgeId) => {
         const tour = get().tours[tourId];
         const step = tour?.steps[index];
         if (!tour || !step || !get().edges[edgeId] || step.edgeId === edgeId) return;
-        putTour({ ...tour, steps: tour.steps.map((x, i) => (i === index ? withNote({ edgeId }, x.note) : x)) });
+        putTour({
+          ...tour,
+          steps: tour.steps.map((x, i) => (i === index ? withNote(withStepId(x.id, { edgeId }), x.note) : x)),
+        });
+      },
+
+      insertStep: (tourId, index, target, note) => {
+        const tour = get().tours[tourId];
+        if (!tour || index < 0 || index > tour.steps.length) return null;
+        const kind = tourKind(tour);
+        if ('nodeId' in target ? kind === 'flow' || !get().nodes[target.nodeId] : kind === 'guide' || !get().edges[target.edgeId]) {
+          return null;
+        }
+        const id = newId();
+        const steps = [...tour.steps];
+        steps.splice(index, 0, withNote({ id, ...target }, note));
+        putTour({ ...tour, steps });
+        return id;
+      },
+
+      duplicateStep: (tourId, index) => {
+        const tour = get().tours[tourId];
+        const step = tour?.steps[index];
+        if (!tour || !step) return null;
+        const id = newId();
+        const steps = [...tour.steps];
+        steps.splice(index + 1, 0, { ...step, id });
+        putTour({ ...tour, steps });
+        return id;
+      },
+
+      moveStepTo: (tourId, from, to) => {
+        const tour = get().tours[tourId];
+        if (!tour || !tour.steps[from] || to < 0 || to >= tour.steps.length || from === to) return;
+        const steps = [...tour.steps];
+        const [moved] = steps.splice(from, 1);
+        steps.splice(to, 0, moved!);
+        putTour({ ...tour, steps });
+      },
+
+      duplicateTour: (tourId) => {
+        const tour = get().tours[tourId];
+        if (!tour) return null;
+        const id = newId();
+        const name = `${tour.name} (copia)`.slice(0, TOUR_NAME_MAX_LENGTH);
+        // Los pasos de la copia tienen su propia identidad: editarlos no toca los del original.
+        const steps = tour.steps.map((step) => ({ ...step, id: newId() }));
+        set((s) => ({ tours: { ...s.tours, [id]: { ...tour, id, name, steps } }, dirty: true }));
+        return id;
       },
 
       reorderSteps: (tourId, order) => {

@@ -199,9 +199,16 @@ internal sealed class GraphValidator
 
             // Un tour guiado solo presenta nodos; un recorrido, conexiones (spec tours-y-recorridos).
             var guide = tour.Value.TryGetProperty("kind", out var kind) && kind.GetString() == "guide";
+            var stepIds = new HashSet<string>(StringComparer.Ordinal);
             var i = 0;
             foreach (var step in tour.Value.GetProperty("steps").EnumerateArray())
             {
+                // Identidad del paso (spec tours-compactos): única dentro de su tour.
+                if (step.TryGetProperty("id", out var stepId) && !stepIds.Add(stepId.GetString()!))
+                {
+                    errors[$"/tours/{tour.Name}/steps/{i}/id"] = ["Ya hay un paso con ese id en el tour."];
+                }
+
                 if (guide && (step.TryGetProperty("edgeId", out _) || step.TryGetProperty("removedEdge", out _)))
                 {
                     errors[$"/tours/{tour.Name}/steps/{i}"] = ["Un tour guiado solo tiene pasos de nodo; las conexiones van en un recorrido."];

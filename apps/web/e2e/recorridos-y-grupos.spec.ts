@@ -239,22 +239,25 @@ test('recorridos: crear con varias conexiones, ramas, reproducir con grupos pleg
     'API usuarios → Servicio usuarios',
     'Servicio usuarios → BD usuarios',
     'BD usuarios → Servicio usuarios',
-    'Servicio usuarios → API usuarios · responde 200',
-    'API usuarios → Creación de cuenta · responde 201',
+    'Servicio usuarios → API usuarios. responde 200',
+    'API usuarios → Creación de cuenta. responde 201',
   ];
+  // Los pasos se leen cerrados (spec tours-compactos): origen → destino y, debajo, qué hace la conexión.
   for (const [i, text] of expected.entries()) {
     await expect(steps.getByRole('listitem', { name: `Paso ${i + 1}` })).toContainText(text);
   }
+  await steps.getByRole('listitem', { name: 'Paso 1' }).locator('.tour-step-toggle').click();
   await inspector.getByLabel('Paso 1: descripción').fill('Envía el formulario de alta');
   // Siguiente paso: la decisión y luego su rama «Sí» (dos continuaciones posibles: decide el usuario).
   await inspector.getByRole('button', { name: /Siguiente paso: Creación de cuenta → ¿Correo libre\?/ }).click();
   await expect(inspector.getByText('2 continuaciones posibles desde «¿Correo libre?»')).toBeVisible();
   await inspector.getByRole('button', { name: /Siguiente paso: ¿Correo libre\? → Cuenta creada/ }).click();
+  // El paso recién agregado queda abierto: su rama elegida se ve.
   await expect(steps.getByRole('listitem', { name: 'Paso 8' })).toContainText('Rama elegida en la decisión: «Sí»');
   await capture(page, '3-editor-recorrido');
 
   // Segundo recorrido desde una conexión, con la otra rama, agregando el paso desde el lienzo.
-  await inspector.getByRole('button', { name: '← Todos los recorridos' }).click();
+  await inspector.getByRole('button', { name: '← Volver a recorridos' }).click();
   await label(page, 'dd').click();
   await inspector.getByRole('button', { name: 'Crear recorrido desde aquí' }).click();
   await inspector.getByLabel('Nombre del recorrido').fill('Correo repetido');
@@ -262,11 +265,12 @@ test('recorridos: crear con varias conexiones, ramas, reproducir con grupos pleg
   await expect(page.locator('.canvas-hint')).toContainText('Agregando pasos a «Correo repetido»');
   await expect(page.locator('[data-testid="rf__edge-bn"]')).toHaveClass(/flow-candidate/);
   await label(page, 'bn').click();
-  await expect(steps.getByRole('listitem', { name: 'Paso 2' })).toContainText('Rama elegida en la decisión: «No»');
+  // Agregado desde el lienzo: queda cerrado; su encabezado ya dice la rama elegida.
+  await expect(steps.getByRole('listitem', { name: 'Paso 2' })).toContainText('¿Correo libre? → Correo en uso. No');
   await page.keyboard.press('Escape');
 
   // Plegar Backend y guardar: la reproducción no debe tocar lo guardado.
-  await inspector.getByRole('button', { name: '← Todos los recorridos' }).click();
+  await inspector.getByRole('button', { name: '← Volver a recorridos' }).click();
   await page.getByRole('button', { name: 'Plegar grupo Backend' }).click();
   await page.keyboard.press('Control+s');
   await expect(saveStatus(page)).toHaveText('Guardado');
@@ -302,7 +306,7 @@ test('recorridos: crear con varias conexiones, ramas, reproducir con grupos pleg
   await expect(saveStatus(page)).toHaveText('Guardado');
 
   // Un tour guardado antes de estos cambios se sigue reproduciendo con el guía.
-  await inspector.getByRole('button', { name: '← Todos los recorridos' }).click();
+  await inspector.getByRole('button', { name: '← Volver a recorridos' }).click();
   await inspector.getByRole('tab', { name: /Tours/ }).click();
   await inspector.getByRole('button', { name: 'Tour clásico' }).click();
   await inspector.getByRole('button', { name: 'Ver tour' }).click();
@@ -317,13 +321,15 @@ test('recorridos: crear con varias conexiones, ramas, reproducir con grupos pleg
   // Clic en el borde superior del lienzo (libre tras «Ver todo»): nada seleccionado, el inspector muestra los tours.
   const paneBox = (await page.locator('.react-flow__pane').boundingBox())!;
   await page.mouse.click(paneBox.x + paneBox.width * 0.4, paneBox.y + 12);
-  await inspector.getByRole('button', { name: '← Todos los tours' }).click();
+  await inspector.getByRole('button', { name: '← Volver a tours' }).click();
   await inspector.getByRole('tab', { name: /Recorridos/ }).click();
-  await expect(inspector.getByText('⚠ 1 paso por revisar')).toBeVisible();
+  await expect(inspector.getByText('⚠ 1 por revisar')).toBeVisible();
   await inspector.getByRole('button', { name: 'Alta exitosa' }).click();
-  await expect(steps.getByRole('listitem', { name: 'Paso 2' })).toContainText('Conexión eliminada: API usuarios → Servicio usuarios');
+  await expect(steps.getByRole('listitem', { name: 'Paso 2' })).toContainText('API usuarios → Servicio usuarios');
+  await expect(steps.getByRole('listitem', { name: 'Paso 2' })).toContainText('Conexión eliminada');
   await capture(page, '5-paso-eliminado');
-  await inspector.getByRole('button', { name: 'Quitar paso 2' }).click();
+  await inspector.getByRole('button', { name: 'Acciones del paso 2' }).click();
+  await inspector.getByRole('menuitem', { name: 'Quitar paso 2' }).click();
   await expect(steps.getByRole('listitem', { name: 'Paso 2' })).toContainText('Salto');
 
   // Guardar y recargar: los recorridos vuelven con sus pasos.
