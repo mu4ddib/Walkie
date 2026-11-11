@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StoreApi } from 'zustand/vanilla';
 import { createGraphStore, toGraph, type GraphStore } from './graphStore';
 import { COALESCE_MS, HISTORY_LIMIT } from './history';
+import { withoutIds } from '../test/steps';
 
 let store: StoreApi<GraphStore>;
 const s = () => store.getState();
@@ -128,7 +129,7 @@ describe('deshacer y rehacer', () => {
     // Deshacer el borrado recupera la conexión y el paso que la usaba.
     s().undo();
     expect(s().edges[e]).toBeDefined();
-    expect(s().tours[t]?.steps[0]).toEqual({ edgeId: e });
+    expect(withoutIds(s().tours[t]?.steps[0])).toEqual({ edgeId: e });
 
     s().loadGraph(toGraph(s()));
     expect(s().canUndo).toBe(false);

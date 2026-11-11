@@ -68,7 +68,7 @@ test('tours y recorridos separados, cada uno con su editor', async ({ page }) =>
   await expect(inspector.getByLabel('Nodo del paso nuevo')).toBeVisible();
   await expect(inspector.getByLabel('Conexión del paso nuevo')).toHaveCount(0);
   await expect(inspector.getByRole('button', { name: 'Ver tour' })).toBeVisible();
-  await inspector.getByRole('button', { name: '← Todos los tours' }).click();
+  await inspector.getByRole('button', { name: '← Volver a tours' }).click();
 
   // Recorridos: uno nuevo nace vacío en su pestaña y su editor solo ofrece conexiones.
   await flows.click();
@@ -88,7 +88,7 @@ test('tours y recorridos separados, cada uno con su editor', async ({ page }) =>
   await page.mouse.click(pane.x + pane.width * 0.4, pane.y + 12);
   await expect(flows).toHaveAttribute('aria-selected', 'true');
   await expect(inspector.getByLabel('Nombre del recorrido')).toHaveValue('Error de proveedor');
-  await inspector.getByRole('button', { name: '← Todos los recorridos' }).click();
+  await inspector.getByRole('button', { name: '← Volver a recorridos' }).click();
   await expect(flows).toHaveText('Recorridos 2');
   await expect(tours).toHaveText('Tours 1');
 });

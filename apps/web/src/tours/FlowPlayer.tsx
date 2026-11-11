@@ -127,7 +127,13 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
     playing.mode === 'play' ? '⏸ Pausar' : isEnded ? '↺ Reproducir de nuevo' : atStart ? '▶ Reproducir' : '▶ Continuar';
 
   return (
-    <div className="flow-player" role="region" aria-label="Reproducción del recorrido">
+    <div
+      className="flow-player"
+      role="region"
+      aria-label="Reproducción del recorrido"
+      // Centrada en el área libre (sin el inspector).
+      style={{ left: pane.width / 2, width: `min(820px, ${Math.max(280, pane.width - 24)}px)` }}
+    >
       <div className="flow-bar" role="toolbar" aria-label="Controles del recorrido">
         <strong className="flow-name">{tour.name}</strong>
         <span className="flow-progress" role="status">

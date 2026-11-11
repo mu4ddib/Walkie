@@ -360,6 +360,7 @@
             "additionalProperties": false,
             "oneOf": [{ "required": ["nodeId"] }, { "required": ["edgeId"] }, { "required": ["removedEdge"] }],
             "properties": {
+              "id": { "$ref": "#/$defs/id", "description": "Identidad del paso (única en su tour): reordenar, duplicar o quitar no mezcla notas ni referencias. Ausente en lienzos anteriores: se asigna al abrirlos" },
               "nodeId": { "$ref": "#/$defs/id", "description": "Nodo que muestra el paso" },
               "edgeId": { "$ref": "#/$defs/id", "description": "Conexión que recorre el paso, en su sentido real (from → to)" },
               "removedEdge": {

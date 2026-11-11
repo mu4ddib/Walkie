@@ -386,7 +386,9 @@
   display: flex;
   flex-direction: column;
   width: min(340px, calc(100% - 96px));
-  overflow: hidden;
+  /* `clip` y no `hidden`: el foco o un desplazamiento hacia un paso no pueden mover el inspector y cortar su cabecera;
+     solo se desplaza su contenido (spec tours-compactos). */
+  overflow: clip;
 }
 
 .inspector-header {
@@ -404,6 +406,7 @@
 
 .inspector .properties-panel {
   flex: 1;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -911,8 +914,8 @@ div.pixel-node-image {
   box-shadow: var(--shadow-float);
 }
 
-.canvas.canvas-touring > .inspector,
-.canvas.canvas-touring > .inspector-reopen,
+/* Durante un tour o un recorrido el inspector sigue a la vista (spec tours-compactos): muestra la lista de pasos con el
+   activo resaltado. En un enlace de solo lectura, la lista de tours se oculta como antes. */
 .canvas.canvas-touring > .shared-tours {
   display: none;
 }
@@ -953,6 +956,19 @@ div.pixel-node-image {
   background: var(--sand-raised);
   box-shadow: var(--shadow-float);
   font-size: 14px;
+}
+
+.tour-bar strong,
+.flow-name {
+  overflow: hidden;
+  max-width: 240px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tour-progress,
+.flow-progress {
+  white-space: nowrap;
 }
 
 .tour-bar strong {
@@ -1589,5 +1605,37 @@ div.pixel-node-image {
 
   .selection-bar-help {
     display: none;
+  }
+}
+
+/* «Localizar en lienzo» (spec tours-compactos): el nodo o la conexión del paso se marca un momento, en el color del
+   foco. */
+.react-flow__node.locate-flash .pixel-node,
+.react-flow__node.locate-flash .group-node {
+  outline: 3px solid var(--ibad);
+  outline-offset: 5px;
+  animation: locate-flash 1.6s var(--ease);
+}
+
+.react-flow__edge.locate-flash .kind-edge {
+  stroke: var(--ibad) !important;
+  stroke-width: 3.5px !important;
+}
+
+@keyframes locate-flash {
+  0%,
+  50% {
+    outline-color: var(--ibad);
+  }
+
+  100% {
+    outline-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node.locate-flash .pixel-node,
+  .react-flow__node.locate-flash .group-node {
+    animation: none;
   }
 }

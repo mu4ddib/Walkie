@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError, type Feature } from '../api/client';
 import { useApp, useAppMap, useFeatures, useSaveMapLayout } from '../api/hooks';
 import { ZoomControls } from '../canvas/ZoomControls';
+import { isTyping } from '../canvas/canvasShortcuts';
 import { EdgeMarkers } from '../edges/EdgeMarkers';
 import { computePorts, staggerBends, type Rect } from '../edges/ports';
 import { routeAround } from '../edges/route';
@@ -75,7 +76,8 @@ export function MapPage() {
 function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<ReturnType<typeof useAppMap>['data']>; features: Feature[] }) {
   const navigate = useNavigate();
   const save = useSaveMapLayout(appId);
-  const { fitView } = useReactFlow();
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
+
   const [showShared, setShowShared] = useState(getMapShowShared);
   const [selection, setSelection] = useState<MapSelection | null>(null);
   // Posiciones mientras se arrastra (aún sin guardar).
@@ -86,6 +88,22 @@ function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<R
     const timer = setTimeout(() => setNotice(null), 4000);
     return () => clearTimeout(timer);
   }, [notice]);
+
+  // Atajos de vista, los mismos que en el lienzo de una feature: 0 ve todo, + y − acercan y alejan; Esc quita la
+  // selección. No mientras se escribe ni con Ctrl/Cmd/Alt.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return;
+      if (event.key === '0') void fitView({ padding: FIT_PADDING, duration: 200 });
+      else if (event.key === '+' || event.key === '=') void zoomIn();
+      else if (event.key === '-') void zoomOut();
+      else if (event.key === 'Escape') setSelection(null);
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fitView, zoomIn, zoomOut]);
 
   const byId = useMemo(() => new Map(features.map((f) => [f.id, f])), [features]);
   const ordered = useMemo(
