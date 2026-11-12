@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type DragEvent, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useCanvasCatalog } from '../../catalog/catalogContext';
 import { NODE_LABELS } from '../../nodes/nodeMeta';
 import type { Edge, Node } from '../../schema/walkie-graph';
@@ -11,6 +11,8 @@ import { ActionMenu, type MenuAction } from './ActionMenu';
 import { issueShort, notePreview, stepHeading } from './toursUi';
 
 export interface StepItemProps {
+  /** Clave del paso en la lista (para medir su alto). */
+  itemKey: string;
   tourId: string;
   index: number;
   count: number;
@@ -30,6 +32,12 @@ export interface StepItemProps {
   onLocate?: () => void;
   /** Reproducción: solo el encabezado, resaltado si es el paso activo; un clic salta a él. */
   playback?: { active: boolean; onJump: () => void };
+  /** Solo lectura (enlace compartido): se abre para leer la nota; sin asa, menú ni campos. */
+  readOnly?: boolean;
+  /** Total de pasos cuando la lista solo dibuja una parte (para lectores de pantalla). */
+  setSize?: number;
+  /** Algo entre el encabezado y el cuerpo (ej. elegir a qué tour moverlo). */
+  extra?: ReactNode;
   drag: {
     onStart: (e: DragEvent) => void;
     onEnd: () => void;
@@ -50,7 +58,9 @@ export interface StepItemProps {
  * con lo escrito) y «Localizar en lienzo». Lo escrito va al store en cada tecla, así cerrar nunca pierde nada.
  */
 export function StepItem(props: StepItemProps) {
-  const { index, step, flow, issues, open, onToggle, focusOnOpen, onFocused, playback, drag } = props;
+  const { index, step, flow, issues, open, onToggle, focusOnOpen, onFocused, playback, drag, readOnly } = props;
+  // Sin asa ni menú: reproduciendo o en un enlace de solo lectura.
+  const bare = !!playback || !!readOnly;
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
   const { items } = useCanvasCatalog();
@@ -114,11 +124,15 @@ export function StepItem(props: StepItemProps) {
       data-missing={heading.missing || undefined}
       data-drop={drag.drop ?? undefined}
       data-dragging={drag.dragging || undefined}
-      onDragOver={drag.onOver}
-      onDrop={drag.onDrop}
+      data-step-key={props.itemKey}
+      data-index={index}
+      aria-setsize={props.setSize}
+      aria-posinset={props.setSize ? n : undefined}
+      onDragOver={bare ? undefined : drag.onOver}
+      onDrop={bare ? undefined : drag.onDrop}
     >
       <div className="tour-step-head">
-        {!playback && (
+        {!bare && (
           // Un <span> y no un <button>: Chromium no empieza a arrastrar desde un botón (`draggable` no tiene efecto).
           <span
             role="button"
@@ -136,11 +150,16 @@ export function StepItem(props: StepItemProps) {
           </span>
         )}
         {toggle}
-        {!playback && <ActionMenu label={`Acciones del paso ${n}`} actions={props.actions} describedBy={titleId} />}
+        {!bare && <ActionMenu label={`Acciones del paso ${n}`} actions={props.actions} describedBy={titleId} />}
       </div>
+      {props.extra}
       {open && !playback && (
         <div className="tour-step-body" id={bodyId} ref={body}>
-          <StepFields {...props} />
+          {readOnly ? (
+            <p className="tour-step-note">{step.note || 'Este paso no tiene nota.'}</p>
+          ) : (
+            <StepFields {...props} />
+          )}
           <div className="tour-step-tools">
             {props.onLocate && !heading.missing && (
               <button type="button" className="pixel-button is-ghost" onClick={props.onLocate}>
@@ -148,7 +167,7 @@ export function StepItem(props: StepItemProps) {
               </button>
             )}
             {/* Un paso roto se resuelve aquí mismo: reemplazar arriba, o quitarlo. */}
-            {heading.missing && (
+            {heading.missing && !readOnly && (
               <button
                 type="button"
                 className="pixel-button"

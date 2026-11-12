@@ -27,6 +27,8 @@ export interface TourDetailProps {
   playback?: { step: number; onJump: (step: number) => void };
   /** Duplicar el tour abre la copia. */
   onOpenTour: (tourId: string) => void;
+  /** Solo lectura (enlace compartido): leer, localizar y reproducir; nada se edita. */
+  readOnly?: boolean;
 }
 
 /**
@@ -35,7 +37,9 @@ export interface TourDetailProps {
  * (con las continuaciones del último nodo, la lista o tocándolas en el lienzo).
  */
 export function TourDetail(props: TourDetailProps) {
-  const { tourId, kind, onBack, onPlay, focusName, open, onOpen, playback } = props;
+  const { tourId, kind, onBack, onPlay, focusName, open, onOpen, playback, readOnly } = props;
+  // Sin edición: reproduciendo o en un enlace de solo lectura.
+  const still = !!playback || !!readOnly;
   const tour = useGraphStore((s) => s.tours[tourId]);
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
@@ -105,10 +109,11 @@ export function TourDetail(props: TourDetailProps) {
   return (
     <div className="tour-editor" data-kind={kind}>
       <div className="tour-detail-head">
-        <button type="button" className="link-button" onClick={onBack}>
-          ← Volver a {flow ? 'recorridos' : 'tours'}
+        {/* En pantallas bajas la cabecera es una fila: los textos de los botones quedan solo para lectores de pantalla. */}
+        <button type="button" className="link-button tour-back" onClick={onBack} title={`Volver a ${flow ? 'recorridos' : 'tours'}`}>
+          {'← '}<span className="tour-compact-hide">Volver a {flow ? 'recorridos' : 'tours'}</span>
         </button>
-        {playback ? (
+        {still ? (
           <p className="tour-detail-name" title={tour.name}>
             {tour.name}
           </p>
@@ -131,14 +136,26 @@ export function TourDetail(props: TourDetailProps) {
           {onPlay && !playback && (
             <button
               type="button"
-              className={flow ? 'pixel-button is-primary' : 'pixel-button'}
+              className={`tour-play ${flow ? 'pixel-button is-primary' : 'pixel-button'}`}
+              title={flow ? 'Reproducir recorrido' : 'Ver tour'}
               disabled={flow ? !tour.steps.some((s) => s.edgeId && edges[s.edgeId]) : count === 0}
               onClick={() => onPlay(tourId)}
             >
-              {flow ? '▶ Reproducir recorrido' : 'Ver tour'}
+              {flow ? (
+                <>
+                  {'▶ '}<span className="tour-compact-hide">Reproducir recorrido</span>
+                </>
+              ) : (
+                <>
+                  <span className="tour-compact-icon" aria-hidden="true">
+                    ▶
+                  </span>
+                  <span className="tour-compact-hide">Ver tour</span>
+                </>
+              )}
             </button>
           )}
-          {!playback && (
+          {!still && (
             <ActionMenu
               label={`Acciones del ${word}`}
               actions={[
@@ -173,7 +190,7 @@ export function TourDetail(props: TourDetailProps) {
             </button>
           </div>
         )}
-        {allEdges && !playback && (
+        {allEdges && !still && (
           <p className="tour-order" role="status">
             {inOrder ? (
               '✓ Los pasos están encadenados.'
@@ -213,10 +230,11 @@ export function TourDetail(props: TourDetailProps) {
           onCreated={created}
           onLocate={props.onLocate}
           playback={playback}
+          readOnly={readOnly}
         />
       )}
 
-      {flow && !playback && end && next.length > 0 && (
+      {flow && !still && end && next.length > 0 && (
         <section className="tour-next" aria-label="Siguiente paso">
           <p className="panel-help">
             {next.length === 1 ? 'Continúa' : `${next.length} continuaciones posibles`} desde «{nodeTitle(nodes[end], items)}»:
@@ -242,7 +260,7 @@ export function TourDetail(props: TourDetailProps) {
         </section>
       )}
 
-      {!playback && (
+      {!still && (
         <div className="tour-add" aria-label="Agregar paso" role="group">
           {flow ? (
             edgeOptions.length === 0 ? (
@@ -271,11 +289,13 @@ export function TourDetail(props: TourDetailProps) {
                 {props.picking && (
                   <button
                     type="button"
-                    className="pixel-button is-ghost"
+                    className="pixel-button is-ghost tour-pick"
                     aria-pressed={pickingThis}
+                    title={pickingThis ? 'Terminar de elegir' : 'Elegir pasos en el lienzo'}
                     onClick={() => props.picking!.onToggle(pickingThis ? null : tourId)}
                   >
-                    {pickingThis ? '■ Terminar de elegir' : '＋ Elegir pasos en el lienzo'}
+                    {pickingThis ? '■ ' : '＋ '}
+                    <span className="tour-compact-hide">{pickingThis ? 'Terminar de elegir' : 'Elegir pasos en el lienzo'}</span>
                   </button>
                 )}
               </>

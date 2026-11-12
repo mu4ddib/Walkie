@@ -5,6 +5,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Tours a escala (spec `tours-a-escala`, #133):
+  - **Enlace de solo lectura:** usa la misma lista compacta (pestañas, filas, búsqueda) y abre cada tour para leer sus pasos y localizarlos, sin editar nada. Al reproducir, el panel sigue a la vista con el paso activo resaltado (tocar otro salta a él) y el reproductor usa el área libre.
+  - **Mover pasos entre tours:** «Mover a otro tour…» (o «recorrido») en el «⋯» del paso lo pasa al final del elegido, con su nota; solo se ofrecen destinos compatibles y se deshace con Ctrl+Z (`moveStepToTour`).
+  - **Cientos de pasos:** desde 80, la lista solo dibuja los pasos visibles (con espaciadores que guardan el alto); abrir, arrastrar, ↑ ↓, el menú y el paso activo de la reproducción siguen funcionando.
+  - **Pantallas bajas:** con 640 px de alto o menos, la cabecera del tour es una fila (← nombre · pasos · ▶ · ⋯), el pie otra y se oculta la ayuda general del inspector; los nombres accesibles no cambian.
 - Tours compactos (spec `tours-compactos`, #132):
   - **Lista:** cada tour o recorrido es una fila con sus pasos, ▶ y «⋯» (renombrar, duplicar, eliminar). Con cuatro o más hay búsqueda. Al abrir uno, su editor ocupa el panel con «Volver», que recupera la búsqueda y el desplazamiento.
   - **Pasos como acordeones:** se entienden cerrados (número, icono, nodo u «Origen → Destino», tipo y vista previa de la nota o del aviso). Uno abierto a la vez, con «Expandir todos» y «Contraer todos». Un paso nuevo se abre con el foco en su campo y la nota crece con lo escrito.

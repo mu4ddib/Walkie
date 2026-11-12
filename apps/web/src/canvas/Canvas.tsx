@@ -1116,9 +1116,11 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
   };
   // Lo que tapa el inspector (a la derecha, o abajo en pantallas angostas): reproducir y localizar usan el resto.
   const narrowPane = pane.width > 0 && pane.width < 900;
+  // En un enlace compartido, el panel de tours ocupa ese mismo lugar.
+  const sidePanel = readOnly || inspectorOpen;
   const insets = {
-    right: !readOnly && inspectorOpen && !narrowPane ? 376 : 0,
-    bottom: !readOnly && inspectorOpen && narrowPane ? Math.round(pane.height * 0.45) + 24 : 0,
+    right: sidePanel && !narrowPane ? 376 : 0,
+    bottom: sidePanel && narrowPane ? Math.round(pane.height * 0.45) + 24 : 0,
   };
 
   /**
@@ -1354,7 +1356,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
         )}
       </div>
       {readOnly ? (
-        <SharedTours onPlay={startTour} />
+        <SharedTours onPlay={startTour} ui={toursUi} onUi={setToursUi} onLocate={locate} playback={playback} />
       ) : inspectorOpen ? (
         <div className="inspector floating">
           <div className="inspector-header">

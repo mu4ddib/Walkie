@@ -1,50 +1,48 @@
-import { TOUR_KIND_TEXT } from './tourKinds';
+import { useState } from 'react';
+import { ToursSection, type ToursSectionProps } from '../panel/ToursSection';
 import { useGraphStore } from '../store/useGraphStore';
 import { tourKind, type TourKind } from './flows';
 
 /**
- * Tours y recorridos de un lienzo compartido (spec enlace-solo-lectura, criterio 7; spec tours-y-recorridos): cada
- * tipo con su lista y su botón para verlo. Ocupa el lugar del panel de propiedades, que en un enlace no existe.
+ * Tours y recorridos de un lienzo compartido (spec enlace-solo-lectura, criterio 7; spec tours-a-escala): la misma
+ * sección compacta del editor, de solo lectura (pestañas, filas, pasos que se abren para leer la nota, localizar y
+ * reproducir). Ocupa el lugar del inspector y sigue a la vista al reproducir, con el paso activo resaltado.
  */
-export function SharedTours({ onPlay }: { onPlay: (tourId: string) => void }) {
-  const tours = Object.values(useGraphStore((s) => s.tours)).sort((a, b) => a.name.localeCompare(b.name));
-  const kinds: TourKind[] = ['guide', 'flow'];
-  const present = kinds.filter((kind) => tours.some((t) => tourKind(t) === kind));
+export function SharedTours({
+  onPlay,
+  ui,
+  onUi,
+  onLocate,
+  playback,
+}: Pick<ToursSectionProps, 'ui' | 'onUi' | 'onLocate' | 'playback'> & { onPlay: (tourId: string) => void }) {
+  const tours = Object.values(useGraphStore((s) => s.tours));
+  const [openTourId, setOpenTourId] = useState<string | null>(null);
+  // Si solo hay recorridos, se empieza por ellos.
+  const [tab, setTab] = useState<TourKind>(() =>
+    tours.length > 0 && tours.every((t) => tourKind(t) === 'flow') ? 'flow' : 'guide',
+  );
 
   return (
     <aside className="properties-panel shared-tours" aria-label="Tours">
-      {present.length === 0 && (
+      {tours.length === 0 ? (
         <>
           <h4>Tours</h4>
           <p className="panel-help">Este lienzo no tiene tours ni recorridos.</p>
         </>
+      ) : (
+        <ToursSection
+          readOnly
+          openTourId={openTourId}
+          onOpen={setOpenTourId}
+          tab={tab}
+          onTab={setTab}
+          onPlay={onPlay}
+          ui={ui}
+          onUi={onUi}
+          onLocate={onLocate}
+          playback={playback}
+        />
       )}
-      {present.map((kind) => (
-        <section key={kind} className="shared-tours-group" aria-label={TOUR_KIND_TEXT[kind].title}>
-          <h4>{TOUR_KIND_TEXT[kind].title}</h4>
-          <p className="panel-help">{TOUR_KIND_TEXT[kind].help}</p>
-          <ul className="panel-list tours-list">
-            {tours
-              .filter((t) => tourKind(t) === kind)
-              .map((tour) => (
-                <li key={tour.id}>
-                  <span>
-                    {tour.name} <span className="panel-help">({tour.steps.length} pasos)</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="pixel-button"
-                    aria-label={`${kind === 'flow' ? 'Reproducir recorrido' : 'Ver tour'} ${tour.name}`}
-                    disabled={tour.steps.length === 0}
-                    onClick={() => onPlay(tour.id)}
-                  >
-                    {kind === 'flow' ? '▶ Reproducir' : 'Ver tour'}
-                  </button>
-                </li>
-              ))}
-          </ul>
-        </section>
-      ))}
     </aside>
   );
 }

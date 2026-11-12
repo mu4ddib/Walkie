@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
@@ -93,16 +93,42 @@ describe('SharedTours', () => {
     return onPlay;
   }
 
-  it('lista los tours y "Ver tour" los inicia; sin pasos no se puede ver (criterio 7)', async () => {
+  it('lista compacta de solo lectura: filas con ▶, sin crear ni «⋯»; sin pasos no se puede ver (criterio 7)', async () => {
     const onPlay = renderTours({
       t1: { id: 't1', name: 'Primer ingreso', steps: [{ nodeId: 's1', note: 'Aquí empieza.' }] },
       t2: { id: 't2', name: 'Borrador', steps: [] },
     });
 
-    expect(screen.getByRole('complementary', { name: 'Tours' })).toHaveTextContent('Primer ingreso (1 pasos)');
-    expect(screen.getByRole('button', { name: 'Ver tour Borrador' })).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: 'Ver tour Primer ingreso' }));
+    const rows = screen.getByRole('list', { name: 'Tours' });
+    expect(rows).toHaveTextContent(/Primer ingreso\s*1 paso/);
+    expect(screen.queryByRole('button', { name: 'Nuevo tour' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Más acciones' })).not.toBeInTheDocument();
+    // Por nombre: «Borrador» (sin pasos) va primero.
+    const [draft, first] = within(rows).getAllByRole('button', { name: 'Ver tour' });
+    expect(draft).toBeDisabled();
+    await userEvent.click(first!);
     expect(onPlay).toHaveBeenCalledWith('t1');
+  });
+
+  it('el detalle se lee: pasos sin asa ni menú que se abren para leer la nota (spec tours-a-escala)', async () => {
+    renderTours({ t1: { id: 't1', name: 'Primer ingreso', steps: [{ nodeId: 's1', note: 'Aquí empieza.' }] } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Primer ingreso' }));
+    expect(screen.getByText('Primer ingreso', { selector: '.tour-detail-name' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mover paso 1/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Acciones del paso 1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Agregar paso' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^Login/ }));
+    expect(screen.getByText('Aquí empieza.', { selector: '.tour-step-note' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('con solo recorridos, empieza en su pestaña', () => {
+    renderTours({ f1: { id: 'f1', name: 'Alta', kind: 'flow', steps: [] } });
+
+    expect(screen.getByRole('tab', { name: /Recorridos/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('sin tours lo dice', () => {

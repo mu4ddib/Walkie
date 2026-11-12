@@ -451,6 +451,12 @@ export interface GraphActions {
   duplicateStep(tourId: string, index: number): string | null;
   /** Lleva el paso de `from` a `to` (arrastrar para reordenar); conserva su identidad y su nota. */
   moveStepTo(tourId: string, from: number, to: number): void;
+  /**
+   * Pasa el paso `index` de un tour a otro (spec tours-a-escala), al final o en `toIndex`, con su nota e identidad (un id
+   * repetido en el destino se reemplaza). Solo a un destino compatible: un paso de nodo va a un tour; uno de conexión
+   * (o de conexión eliminada), a un recorrido. Devuelve el id del paso en el destino, o `null` si no se aplicó.
+   */
+  moveStepToTour(fromTourId: string, index: number, toTourId: string, toIndex?: number): string | null;
   /** Copia del tour («Nombre (copia)») con pasos de identidad propia; devuelve su id o `null`. */
   duplicateTour(tourId: string): string | null;
   /** Reordena los pasos: `order` es una permutación de sus índices. Otra cosa no se aplica. */
@@ -514,6 +520,9 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
       replaying = false;
     };
 
+    /** Un paso de nodo va en un tour; uno de conexión (o de conexión eliminada), en un recorrido. */
+    const stepFits = (step: Tour['steps'][number], kind: 'guide' | 'flow') =>
+      step.nodeId ? kind === 'guide' : kind === 'flow';
     const putTour = (tour: Tour) => set((s) => ({ tours: { ...s.tours, [tour.id]: tour }, dirty: true }));
 
     /** Reemplaza el nodo si cambió y marca `dirty`. */
@@ -1176,6 +1185,28 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         const [moved] = steps.splice(from, 1);
         steps.splice(to, 0, moved!);
         putTour({ ...tour, steps });
+      },
+
+      moveStepToTour: (fromTourId, index, toTourId, toIndex) => {
+        const from = get().tours[fromTourId];
+        const to = get().tours[toTourId];
+        const step = from?.steps[index];
+        if (!from || !to || !step || fromTourId === toTourId) return null;
+        if (!stepFits(step, tourKind(to))) return null;
+        const at = toIndex === undefined ? to.steps.length : toIndex;
+        if (at < 0 || at > to.steps.length) return null;
+        const id = step.id && !to.steps.some((x) => x.id === step.id) ? step.id : newId();
+        const steps = [...to.steps];
+        steps.splice(at, 0, { ...step, id });
+        set((s) => ({
+          tours: {
+            ...s.tours,
+            [fromTourId]: { ...from, steps: from.steps.filter((_, i) => i !== index) },
+            [toTourId]: { ...to, steps },
+          },
+          dirty: true,
+        }));
+        return id;
       },
 
       duplicateTour: (tourId) => {

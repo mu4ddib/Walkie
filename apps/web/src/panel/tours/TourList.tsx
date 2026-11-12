@@ -27,6 +27,7 @@ export function TourList({
   onQuery,
   onOpen,
   onPlay,
+  readOnly,
 }: {
   kind: TourKind;
   tours: Tour[];
@@ -34,6 +35,8 @@ export function TourList({
   onQuery: (query: string) => void;
   onOpen: (tourId: string) => void;
   onPlay?: (tourId: string) => void;
+  /** Solo lectura (enlace compartido): abrir y reproducir; sin crear, renombrar, duplicar ni eliminar. */
+  readOnly?: boolean;
 }) {
   const edges = useGraphStore((s) => s.edges);
   const { renameTour, duplicateTour, removeTour } = useGraphStore((s) => s);
@@ -47,7 +50,7 @@ export function TourList({
   return (
     <div className="tour-list">
       <p className="panel-help">{text.help}</p>
-      <NewTourForm kind={kind} onCreated={onOpen} />
+      {!readOnly && <NewTourForm kind={kind} onCreated={onOpen} />}
       {tours.length >= SEARCH_FROM && (
         <div className="panel-field tour-search">
           <label htmlFor={searchId} className="sr-only">
@@ -117,6 +120,7 @@ export function TourList({
                     ▶
                   </button>
                 )}
+                {!readOnly && (
                 <ActionMenu
                   label="Más acciones"
                   describedBy={metaId}
@@ -138,6 +142,7 @@ export function TourList({
                     },
                   ]}
                 />
+                )}
               </li>
             );
           })}
