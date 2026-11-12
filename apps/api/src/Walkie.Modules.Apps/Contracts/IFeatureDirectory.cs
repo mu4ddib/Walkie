@@ -16,6 +16,9 @@ public interface IFeatureDirectory
 
     /// <summary>La feature con su app y los nombres de ambas (Sharing); <c>null</c> si no existe.</summary>
     Task<FeatureSummary?> DescribeAsync(Guid featureId, CancellationToken cancellationToken);
+
+    /// <summary>Las features de la app con su descripción, por nombre e id (Export: contexto para IA de la app).</summary>
+    Task<IReadOnlyList<FeatureSummary>> FeaturesOfAppAsync(Guid appId, CancellationToken cancellationToken);
 }
 
 /// <summary>La feature con su app; <c>Description</c> es su propósito (lo usa el contexto para IA).</summary>

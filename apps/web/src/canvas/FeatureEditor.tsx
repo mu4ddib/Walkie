@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useStore } from 'zustand';
 import { ApiError } from '../api/client';
-import { useExportFeature, useFetchCanvas, useSaveCanvas } from '../api/hooks';
+import { useExportFeature, useExportPdf, useFetchCanvas, useSaveCanvas } from '../api/hooks';
+import { requestCanvasImage } from './canvasImage';
 import { AiContextDialog } from './AiContextDialog';
 import { ExportMenu } from './ExportMenu';
+import { ImageExportDialog } from './ImageExportDialog';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import type { CanvasCatalog } from '../catalog/catalogContext';
 import { createGraphStore, toGraph } from '../store/graphStore';
@@ -71,14 +73,37 @@ export function FeatureEditor({
   const [exportedDirty, setExportedDirty] = useState(false);
   // «Contexto para IA» (spec exportar-e-importar): abierto o no, y si había cambios sin guardar al abrirlo.
   const [aiContext, setAiContext] = useState<{ dirty: boolean } | null>(null);
+  const [imageOpen, setImageOpen] = useState(false);
+  // PDF (spec exportar-e-importar, tarea 4): guardar y generar la imagen va antes del pedido a la API.
+  const pdf = useExportPdf(featureId);
+  const [pdfPreparing, setPdfPreparing] = useState(false);
 
-  async function exportNow() {
+  async function exportNow(format: 'markdown' | 'walkie' = 'markdown') {
     setExportedDirty(store.getState().dirty);
     try {
-      const file = await exporter.mutateAsync();
+      const file = await exporter.mutateAsync(format);
       saveFile(file.blob, file.fileName);
     } catch {
       // El error lo muestra `exporter.isError`.
+    }
+  }
+
+  /**
+   * El PDF lleva el texto de lo guardado y la imagen del lienzo de ahora: se guarda antes para que coincidan. Si la
+   * imagen no se puede generar (lienzo vacío), el PDF va sin esa página.
+   */
+  async function exportPdfNow() {
+    setPdfPreparing(true);
+    pdf.reset();
+    try {
+      if (!(await saveNow())) return;
+      const canvas = await requestCanvasImage({ format: 'png', scope: 'all', scale: 2 }).catch(() => null);
+      const file = await pdf.mutateAsync(canvas);
+      saveFile(file.blob, file.fileName);
+    } catch {
+      // El error lo muestra `pdf.isError`.
+    } finally {
+      setPdfPreparing(false);
     }
   }
 
@@ -328,6 +353,11 @@ export function FeatureEditor({
               No se pudo exportar. Revisa la conexión y vuelve a intentarlo.
             </span>
           )}
+          {pdf.isError && (
+            <span role="alert" className="save-error">
+              No se pudo exportar el PDF. Revisa la conexión y vuelve a intentarlo.
+            </span>
+          )}
           {exportedDirty && exporter.isSuccess && (
             <span className="save-note" role="note">
               Se exportó lo guardado: los cambios sin guardar no se incluyen.
@@ -336,9 +366,12 @@ export function FeatureEditor({
         </div>
         <div className="workspace-actions">
           <ExportMenu
-            pending={exporter.isPending}
+            pending={exporter.isPending || pdfPreparing}
             onAiContext={() => setAiContext({ dirty: store.getState().dirty })}
             onMarkdown={() => void exportNow()}
+            onImage={() => setImageOpen(true)}
+            onPdf={() => void exportPdfNow()}
+            onWalkie={() => void exportNow('walkie')}
           />
           <button type="button" className="pixel-button" onClick={() => setSharing(true)}>
             Compartir
@@ -357,8 +390,9 @@ export function FeatureEditor({
         </div>
       </header>
       {sharing && <ShareDialog featureId={featureId} onClose={() => setSharing(false)} />}
+      {imageOpen && <ImageExportDialog featureName={location?.featureName} onClose={() => setImageOpen(false)} />}
       {aiContext && (
-        <AiContextDialog featureId={featureId} dirty={aiContext.dirty} onClose={() => setAiContext(null)} />
+        <AiContextDialog target={{ kind: 'feature', id: featureId }} dirty={aiContext.dirty} onClose={() => setAiContext(null)} />
       )}
       {status.kind === 'conflict' && (
         <div role="alertdialog" aria-labelledby="conflict-title" className="conflict-dialog">

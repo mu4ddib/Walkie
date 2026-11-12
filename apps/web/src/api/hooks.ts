@@ -4,6 +4,8 @@ import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
   createApp,
   createShare,
+  exportApp,
+  exportPdf,
   exportFeature,
   getSharedAssetBlob,
   getSharedFeature,
@@ -35,6 +37,7 @@ import {
   type NewCatalogItem,
   type ShareDays,
   type ExportFormat,
+  importPackage,
 } from './client';
 
 /** Access token de la sesión actual. `AuthGate` garantiza que existe dentro de la app. */
@@ -306,7 +309,55 @@ export function useSharedFeature(shareToken: string) {
 }
 
 /** Descarga el `.zip` del export de la feature (no cambia nada en la API). */
+/** De qué es el contexto para IA: una feature (su lienzo) o la app completa. */
+export type AiContextTarget = { kind: 'feature'; id: string } | { kind: 'app'; id: string };
+
+/** Descarga el contexto para IA de una feature o de la app, en Markdown (`ai`) o JSON (`ai-json`). */
+export function useAiContextExport(target: AiContextTarget) {
+  const token = useToken();
+  return useMutation({
+    mutationFn: (format: 'ai' | 'ai-json') =>
+      target.kind === 'app' ? exportApp(token, target.id, format) : exportFeature(token, target.id, format),
+  });
+}
+
+/** PDF de la feature con la imagen del lienzo (o sin ella). */
+export function useExportPdf(featureId: string) {
+  const token = useToken();
+  return useMutation({ mutationFn: (canvas: Blob | null) => exportPdf(token, featureId, canvas) });
+}
+
+/** Archivo `.walkie` de la app completa (spec exportar-e-importar, tarea 7). */
+export function useExportAppPackage(appId: string) {
+  const token = useToken();
+  return useMutation({ mutationFn: () => exportApp(token, appId, 'walkie') });
+}
+
 export function useExportFeature(featureId: string) {
   const token = useToken();
   return useMutation({ mutationFn: (format?: ExportFormat) => exportFeature(token, featureId, format) });
+}
+
+/**
+ * Importar un `.walkie` (spec exportar-e-importar, tareas 6 y 7): en la app `appId` o, con `null`, como una app nueva.
+ * `dryRun` valida y devuelve el resumen; la importación real refresca las apps o las features, sus miniaturas, el mapa
+ * y el catálogo de la app.
+ */
+export function useImportPackage(appId: string | null) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, dryRun }: { file: Blob; dryRun: boolean }) => importPackage(token, appId, file, dryRun),
+    onSuccess: (summary) => {
+      if (summary.dryRun) return;
+      if (appId === null) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.apps, exact: true });
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.previews(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.map(appId) });
+    },
+  });
 }

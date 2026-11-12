@@ -256,3 +256,57 @@
   justify-content: flex-end;
   gap: 6px;
 }
+
+/* «Importar feature» (spec exportar-e-importar, tarea 6): archivo, resumen del dryRun y errores con su ruta. */
+.import-file {
+  display: grid;
+  gap: 4px;
+}
+
+.import-file label {
+  font-weight: 600;
+}
+
+.import-summary,
+.import-done {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid var(--ink);
+  background: var(--sand-raised);
+}
+
+.import-summary p,
+.import-done p,
+.import-errors p,
+.import-summary ul,
+.import-done ul,
+.import-errors ul {
+  margin: 0;
+}
+
+.import-summary ul,
+.import-done ul,
+.import-errors ul {
+  padding-left: 16px;
+}
+
+.import-note {
+  color: var(--stone-700);
+}
+
+.import-errors code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-actions .share-close {
+  margin-left: auto;
+}

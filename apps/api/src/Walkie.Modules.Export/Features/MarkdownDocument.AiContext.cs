@@ -156,16 +156,26 @@ internal static partial class MarkdownDocument
     }
 
     /// <summary>El contexto como Markdown: primero el propósito, el glosario y los componentes; al final, los vacíos.</summary>
-    public static string RenderAiContext(AiContext c)
-    {
-        var md = new Md();
-        md.Line($"# Contexto para IA: {MarkdownText.Inline(c.Feature.Name)}");
-        md.Blank();
-        md.Line(string.Create(CultureInfo.InvariantCulture,
-            $"> Documento generado por Walkie para dar contexto a un asistente de IA antes de construir. Describe la feature tal como está documentada (versión {c.CanvasVersion} del lienzo, exportado el {c.ExportedAt.UtcDateTime:yyyy-MM-dd HH:mm} UTC). Si algo no está aquí, pregunta en vez de suponer: la sección «Vacíos detectados» lista lo que falta documentar."));
-        md.Blank();
+    public static string RenderAiContext(AiContext c) => RenderAiContext(c, new Md(), 0).ToString();
 
-        md.Line("## Propósito");
+    /// <summary>
+    /// Escribe el contexto de una feature en <paramref name="md"/>. Con <paramref name="depth"/> 1 va dentro del
+    /// contexto de la app: sus títulos bajan un nivel y no lleva la nota de introducción (ya la tiene la app).
+    /// </summary>
+    private static Md RenderAiContext(AiContext c, Md md, int depth)
+    {
+        md.Line(depth == 0
+            ? $"# Contexto para IA: {MarkdownText.Inline(c.Feature.Name)}"
+            : $"{H(1, depth)}Feature: {MarkdownText.Inline(c.Feature.Name)}");
+        md.Blank();
+        if (depth == 0)
+        {
+            md.Line(string.Create(CultureInfo.InvariantCulture,
+            $"> Documento generado por Walkie para dar contexto a un asistente de IA antes de construir. Describe la feature tal como está documentada (versión {c.CanvasVersion} del lienzo, exportado el {c.ExportedAt.UtcDateTime:yyyy-MM-dd HH:mm} UTC). Si algo no está aquí, pregunta en vez de suponer: la sección «Vacíos detectados» lista lo que falta documentar."));
+            md.Blank();
+        }
+
+        md.Line($"{H(2, depth)}Propósito");
         md.Blank();
         md.Line($"App: **{MarkdownText.Inline(c.App.Name)}** · Feature: **{MarkdownText.Inline(c.Feature.Name)}**");
         md.Blank();
@@ -177,10 +187,11 @@ internal static partial class MarkdownDocument
         if (c.Components.Count == 0)
         {
             md.Line("El lienzo está vacío: no hay nada documentado todavía.");
-            return md.ToString();
+            md.Blank();
+            return md;
         }
 
-        md.Line("## Glosario");
+        md.Line($"{H(2, depth)}Glosario");
         md.Blank();
         foreach (var term in c.Glossary)
         {
@@ -189,18 +200,18 @@ internal static partial class MarkdownDocument
         }
 
         md.Blank();
-        md.Line("## Componentes");
+        md.Line($"{H(2, depth)}Componentes");
         md.Blank();
         md.Line("Cada caja del lienzo con su id estable (`id`), que usan las conexiones y los flujos.");
         md.Blank();
         foreach (var component in c.Components)
         {
-            WriteAiComponent(md, component);
+            WriteAiComponent(md, component, depth);
         }
 
         if (c.Connections.Count > 0)
         {
-            md.Line("## Conexiones");
+            md.Line($"{H(2, depth)}Conexiones");
             md.Blank();
             foreach (var e in c.Connections)
             {
@@ -212,16 +223,16 @@ internal static partial class MarkdownDocument
             md.Blank();
         }
 
-        WriteAiFlows(md, "Recorridos (flujos de punta a punta)", [.. c.Flows.Where(f => f.Kind == "flow")]);
-        WriteAiFlows(md, "Tours (cómo se presenta la feature)", [.. c.Flows.Where(f => f.Kind == "guide")]);
+        WriteAiFlows(md, "Recorridos (flujos de punta a punta)", [.. c.Flows.Where(f => f.Kind == "flow")], depth);
+        WriteAiFlows(md, "Tours (cómo se presenta la feature)", [.. c.Flows.Where(f => f.Kind == "guide")], depth);
 
         if (c.Rules.Count > 0)
         {
-            md.Line("## Reglas de negocio");
+            md.Line($"{H(2, depth)}Reglas de negocio");
             md.Blank();
             foreach (var rule in c.Rules)
             {
-                md.Line($"### {MarkdownText.Inline(rule.Title)}");
+                md.Line($"{H(3, depth)}{MarkdownText.Inline(rule.Title)}");
                 md.Blank();
                 if (rule.Expression is { } expression)
                 {
@@ -239,11 +250,11 @@ internal static partial class MarkdownDocument
 
         if (c.Decisions.Count > 0)
         {
-            md.Line("## Decisiones");
+            md.Line($"{H(2, depth)}Decisiones");
             md.Blank();
             foreach (var decision in c.Decisions)
             {
-                md.Line($"### {MarkdownText.Inline(decision.Question)}");
+                md.Line($"{H(3, depth)}{MarkdownText.Inline(decision.Question)}");
                 md.Blank();
                 if (decision.Condition is { } condition)
                 {
@@ -263,7 +274,7 @@ internal static partial class MarkdownDocument
 
         if (c.Relations.Portals.Count > 0 || c.Relations.SharedComponents.Count > 0)
         {
-            md.Line("## Relaciones");
+            md.Line($"{H(2, depth)}Relaciones");
             md.Blank();
             foreach (var portal in c.Relations.Portals)
             {
@@ -280,7 +291,7 @@ internal static partial class MarkdownDocument
             md.Blank();
         }
 
-        md.Line("## Vacíos detectados");
+        md.Line($"{H(2, depth)}Vacíos detectados");
         md.Blank();
         if (c.Gaps.Count == 0)
         {
@@ -296,12 +307,16 @@ internal static partial class MarkdownDocument
             }
         }
 
-        return md.ToString();
+        md.Blank();
+        return md;
     }
 
-    private static void WriteAiComponent(Md md, AiComponent c)
+    /// <summary>Marca de título de nivel <paramref name="level"/>, bajado <paramref name="depth"/> niveles.</summary>
+    private static string H(int level, int depth) => new string('#', level + depth) + " ";
+
+    private static void WriteAiComponent(Md md, AiComponent c, int depth)
     {
-        md.Line($"### {MarkdownText.Inline(c.Title)} ({MarkdownText.Inline(c.Is)})");
+        md.Line($"{H(3, depth)}{MarkdownText.Inline(c.Title)} ({MarkdownText.Inline(c.Is)})");
         md.Blank();
         var facts = new List<string> { $"id: {MarkdownText.Code(c.Id)}" };
         if (c.Group is { } group)
@@ -386,18 +401,18 @@ internal static partial class MarkdownDocument
         }
     }
 
-    private static void WriteAiFlows(Md md, string heading, List<AiFlow> flows)
+    private static void WriteAiFlows(Md md, string heading, List<AiFlow> flows, int depth)
     {
         if (flows.Count == 0)
         {
             return;
         }
 
-        md.Line($"## {heading}");
+        md.Line($"{H(2, depth)}{heading}");
         md.Blank();
         foreach (var flow in flows)
         {
-            md.Line($"### {MarkdownText.Inline(flow.Name)}");
+            md.Line($"{H(3, depth)}{MarkdownText.Inline(flow.Name)}");
             md.Blank();
             if (flow.Steps.Count == 0)
             {

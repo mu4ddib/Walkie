@@ -1,7 +1,7 @@
 # Spec: Exportar e importar
 
 - Issue padre: #137
-- Estado: en curso (tarea 1 de 7 hecha)
+- Estado: en curso (tareas 1 a 5 de 7 hechas)
 
 ## Objetivo
 
@@ -33,22 +33,22 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
   - relaciones entre features (portales) y componentes compartidos del catálogo;
   - **vacíos detectados**: APIs sin contrato, respuestas sin código, nodos sin conexiones, ramas sin destino, pasos de recorrido rotos, para que la IA pregunte en vez de inventar.
 - [x] Además del `.md`, el export trae `<slug>.context.json` con lo mismo en estructura (ids, contratos, flujos, vacíos) para agentes que construyen código; el `.md` se puede copiar al portapapeles y se muestra su tamaño aproximado en tokens.
-- [ ] Dada la página de una app, entonces se puede exportar el contexto de **toda la app** (todas sus features, el catálogo y el mapa) en un solo documento.
+- [x] Dada la página de una app, entonces se puede exportar el contexto de **toda la app** (todas sus features, el catálogo y el mapa) en un solo documento: índice de features con su propósito, mapa (qué feature lleva a cuál por portales), catálogo con dónde se usa cada componente, resumen de vacíos (también los componentes que ningún lienzo usa) y el contexto de cada feature. En Markdown y en JSON (`walkie-app-ai-context.schema.json`).
 - [x] El mismo lienzo guardado genera el mismo texto (orden estable), salvo la fecha.
 
 ### Imagen y PDF
 
-- [ ] Dado el lienzo, entonces «Imagen» descarga un PNG (o SVG) de todo el lienzo o solo de lo visible, con fondo claro, a la resolución elegida (1× / 2×), con las imágenes de las pantallas.
-- [ ] Dado el lienzo, entonces «PDF» descarga un documento con portada (feature, app, fecha), la imagen del lienzo y el contenido del Markdown (componentes, conexiones, flujos, tours), con tablas legibles e imágenes.
+- [x] Dado el lienzo, entonces «Imagen» descarga un PNG (o SVG) de todo el lienzo o solo de lo visible, con fondo claro, a la resolución elegida (1× / 2×), con las imágenes de las pantallas. Se genera en el navegador con lo que hay en el lienzo (también lo no guardado), sin puntos de conexión ni grilla, con las fuentes de la interfaz incrustadas.
+- [x] Dado el lienzo, entonces «PDF» descarga un documento con portada (feature, app, fecha), la imagen del lienzo y el contenido del Markdown (componentes, conexiones, flujos, tours), con tablas legibles e imágenes. Antes guarda los cambios pendientes, así la imagen y el texto coinciden; al final, lo que falta documentar.
 
 ### Archivo de Walkie (importable)
 
-- [ ] Dada una feature, entonces «Archivo de Walkie» descarga `<slug>.walkie` (un `.zip`): `manifest.json` (versión del formato y del schema, app, feature, fecha), `canvas.json` (el grafo según `walkie-graph`), los elementos del catálogo que usa y las imágenes de sus pantallas.
-- [ ] Dada la página de una app, cuando uso «Importar feature» y elijo un `.walkie`, entonces se crea una feature nueva con el mismo lienzo (nodos, conexiones, posiciones, grupos, notas, tours y recorridos) e imágenes; si el nombre ya existe, se le agrega «(importada)».
-- [ ] Los componentes del catálogo se emparejan: si la app ya tiene ese elemento (mismo id), se usa; si no, se crea. La pantalla de importación lo resume antes de confirmar («3 componentes nuevos, 2 existentes, 4 imágenes»).
-- [ ] Un archivo inválido o de una versión no soportada se rechaza con un mensaje que dice qué falla (ruta del error del schema); nada se crea a medias.
-- [ ] Exportar e importar es idempotente: el lienzo importado, exportado de nuevo, da el mismo `canvas.json` (salvo ids de la feature y de las imágenes).
-- [ ] Dada una app, entonces también se puede exportar e importar la app completa (`.walkie` con todas sus features, el catálogo y el mapa).
+- [x] Dada una feature, entonces «Archivo de Walkie» descarga `<slug>.walkie` (un `.zip`): `manifest.json` (versión del formato y del schema, app, feature, fecha; `walkie-package.schema.json`), `features/<id>/canvas.json` (el grafo según `walkie-graph`), `catalog.json` (los elementos del catálogo que usa) e `img/` (las imágenes de sus pantallas). Una lista de features en el manifest y no un solo `canvas.json`: el mismo formato sirve para la app completa.
+- [x] Dada la página de una app, cuando uso «Importar feature» y elijo un `.walkie`, entonces se crea una feature nueva con el mismo lienzo (nodos, conexiones, posiciones, grupos, notas, tours y recorridos) e imágenes; si el nombre ya existe, se le agrega «(importada)».
+- [x] Los componentes del catálogo se emparejan: si la app ya tiene ese elemento (mismo id), se usa; si no, se crea. La pantalla de importación lo resume antes de confirmar («3 componentes nuevos, 2 existentes, 4 imágenes»).
+- [x] Un archivo inválido o de una versión no soportada se rechaza con un mensaje que dice qué falla (ruta del error del schema); nada se crea a medias.
+- [x] Exportar e importar es idempotente: el lienzo importado, exportado de nuevo, da el mismo `canvas.json` (salvo ids de la feature y de las imágenes).
+- [x] Dada una app, entonces también se puede exportar e importar la app completa (`.walkie` con todas sus features, el catálogo y el mapa).
 
 ## Fuera de alcance
 
@@ -61,20 +61,25 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
 
 - Nuevo `packages/schema/walkie-package.schema.json`: el `manifest.json` del archivo (formato, `schemaVersion`, app, features, catálogo, imágenes y su ruta en el `.zip`).
 - Nuevo `packages/schema/walkie-ai-context.schema.json`: el JSON del contexto para IA.
+- Nuevo `packages/schema/walkie-import-summary.schema.json`: la respuesta de importar (features con su nombre final, catálogo nuevo y reutilizado, imágenes y avisos).
 - `walkie-graph` sin cambios.
 
 ## Impacto en la API
 
-- `GET /api/features/{featureId}/export?format=ai|markdown|pdf|walkie` (el actual queda como `markdown`, por defecto).
-- `GET /api/apps/{appId}/export?format=ai|walkie`.
-- `POST /api/apps/{appId}/import` (multipart con el `.walkie`): 201 con las features creadas; 400 con la ruta del error; 413 si supera el tamaño máximo; `dryRun=true` devuelve el resumen sin crear nada.
-- La imagen (PNG/SVG) se genera en el navegador a partir del lienzo (la imagen del lienzo del PDF la sube el navegador al pedirlo, o la API compone el diagrama: se decide en el ADR); el PDF se genera en la API (ADR para elegir la librería y revisar su licencia).
+- `GET /api/features/{featureId}/export?format=ai|ai-json|markdown|walkie` (el actual queda como `markdown`, por defecto).
+- `POST /api/features/{featureId}/export/pdf` (multipart, campo `canvas` opcional: la imagen del lienzo en PNG, hasta 10 MB; 400 si no es PNG o es más grande). Es `POST` y no `?format=pdf` porque lleva la imagen (ADR-0008).
+- `GET /api/apps/{appId}/export?format=ai|ai-json|walkie` (contexto para IA de la app, tarea 2; `walkie`, la app completa con scope `app`: todas las features, todo el catálogo, las imágenes y la distribución del mapa en `map.json`, tarea 7).
+- `POST /api/apps/import` (multipart con el `.walkie`, tarea 7): crea una app nueva con el nombre del archivo («(importada)» si ya hay una así), sus features, todo su catálogo, sus imágenes y el mapa con los ids nuevos; mismos códigos, `dryRun` y compensación que la importación de features (ADR-0009).
+- `POST /api/apps/{appId}/import` (multipart, campo `file`, hasta 50 MB): 201 con el resumen y las features creadas (`walkie-import-summary.schema.json`); 400 con la ruta del error dentro del archivo; 413 si supera el tamaño máximo; 404 si la app no existe; `dryRun=true` devuelve 200 con el resumen sin crear nada. Todo o nada: valida antes de escribir y, si algo falla al escribir, borra lo creado (ADR-0009).
+- La imagen (PNG/SVG) se genera en el navegador a partir del lienzo; el PDF se genera en la API con PDFsharp/MigraDoc 6.2.4 (MIT) y la imagen del lienzo la manda el navegador (ADR-0008).
 
 ## Decisiones
 
 - 2026-11-12, autor: PDF generado en la API; contexto para IA en Markdown y JSON.
 - Al importar se conservan los ids de nodos y conexiones (el lienzo es por feature); la feature y las imágenes reciben ids nuevos.
+- 2026-11-12 (tarea 7): importar una app siempre crea una app nueva (no fusiona con una existente) y trae todo el catálogo, también lo que ningún lienzo usa; el mapa viaja como las posiciones guardadas (`map.json`, sin él si nunca se acomodó) y al importar se descartan las de features o elementos que no vienen. Un `.walkie` de app también se puede importar con «Importar feature»: suma sus features a la app, con el catálogo que usan.
+- 2026-11-12 (tarea 6, ADR-0009): importar escribe por interfaces públicas de cada módulo (`IAppWriter`, `IAssetWriter`, `ICanvasWriter`) y compensa borrando lo creado si algo falla; no hay transacción compartida entre módulos. Un elemento del catálogo que no está en la app se crea con id nuevo; un portal sin destino o una pantalla sin imagen se importan sin esa referencia y con un aviso.
 
 ## Preguntas abiertas
 
-- Librería de PDF y cómo llega la imagen del lienzo al PDF (ADR en la tarea correspondiente).
+- Ninguna (la librería del PDF y la imagen del lienzo las decidió ADR-0008).

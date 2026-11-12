@@ -16,11 +16,22 @@ const targets = [
     imports: ["import type { Database, Http, Resource } from './walkie-graph';"],
   },
   { schema: 'walkie-asset.schema.json', out: 'walkie-asset.ts', name: 'WalkieAsset' },
+  { schema: 'walkie-package.schema.json', out: 'walkie-package.ts', name: 'WalkiePackage' },
+  { schema: 'walkie-import-summary.schema.json', out: 'walkie-import-summary.ts', name: 'WalkieImportSummary' },
   {
     schema: 'walkie-ai-context.schema.json',
     out: 'walkie-ai-context.ts',
     // Sin `imports`: así declara sus propios `$defs` (component, connection, flow) y los del grafo que usa.
     name: 'WalkieAiContext',
+  },
+  {
+    schema: 'walkie-app-ai-context.schema.json',
+    out: 'walkie-app-ai-context.ts',
+    name: 'WalkieAppAiContext',
+    imports: [
+      "import type { Database, Http, Resource } from './walkie-graph';",
+      "import type { WalkieAIContextV0 } from './walkie-ai-context';",
+    ],
   },
   { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },
   { schema: 'walkie-app-map.schema.json', out: 'walkie-app-map.ts', name: 'WalkieAppMap' },

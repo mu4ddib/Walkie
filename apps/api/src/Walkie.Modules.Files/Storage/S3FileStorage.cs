@@ -50,6 +50,9 @@ internal sealed class S3FileStorage : IFileStorage, IDisposable
         }
     }
 
+    public async Task DeleteAsync(string key, CancellationToken cancellationToken) =>
+        await _client.DeleteObjectAsync(_bucket, key, cancellationToken).ConfigureAwait(false);
+
     public async Task EnsureReadyAsync(CancellationToken cancellationToken)
     {
         try

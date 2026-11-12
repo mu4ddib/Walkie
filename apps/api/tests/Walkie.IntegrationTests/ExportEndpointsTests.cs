@@ -165,6 +165,179 @@ public sealed class ExportEndpointsTests(WalkieApiFactory factory)
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
     }
 
+    [Fact]
+    public async Task El_contexto_de_la_app_reune_sus_features_y_su_catalogo_en_markdown_y_json()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var app = await CreateAppAsync(client);
+        var login = await CreateFeatureAsync(client, app, "Iniciar sesión");
+        var transferir = await CreateFeatureAsync(client, app, "Transferir");
+        await SaveAsync(client, login, Graph(null, await CreateItemAsync(client, app), transferir));
+
+        var markdown = await client.GetAsync(new Uri($"/api/apps/{app}/export", UriKind.Relative));
+        var json = await client.GetAsync(new Uri($"/api/apps/{app}/export?format=ai-json", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, markdown.StatusCode);
+        Assert.Equal("text/markdown", markdown.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("banca-de-prueba-contexto-ia.md", markdown.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var text = await markdown.Content.ReadAsStringAsync();
+        Assert.StartsWith("# Contexto para IA: Banca de prueba (app completa)", text, StringComparison.Ordinal);
+        Assert.Contains("- **Iniciar sesión** → **Transferir** (por el portal «Transferir»)", text, StringComparison.Ordinal);
+        Assert.Contains("## Feature: Transferir", text, StringComparison.Ordinal);
+
+        Assert.Equal(HttpStatusCode.OK, json.StatusCode);
+        Assert.Equal("banca-de-prueba.app-context.json", json.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var context = await json.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.AppAiContext, context));
+        Assert.Equal(2, context.GetProperty("features").GetArrayLength());
+        Assert.Equal("Iniciar sesión", context.GetProperty("catalog")[0].GetProperty("usedBy")[0].GetString());
+    }
+
+    [Fact]
+    public async Task El_contexto_de_la_app_responde_400_con_otro_formato_y_404_si_no_existe()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var app = await CreateAppAsync(client);
+
+        var markdownZip = await client.GetAsync(new Uri($"/api/apps/{app}/export?format=markdown", UriKind.Relative));
+        var missing = await client.GetAsync(new Uri($"/api/apps/{Guid.CreateVersion7()}/export", UriKind.Relative));
+        var anonymous = await factory.CreateClient().GetAsync(new Uri($"/api/apps/{app}/export", UriKind.Relative));
+        var doc = await factory.CreateClient().GetStringAsync(new Uri("/openapi/v1.json", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.BadRequest, markdownZip.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Contains("\"/api/apps/{appId}/export\"", doc, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task El_pdf_lleva_la_imagen_del_lienzo_que_manda_el_navegador_y_la_de_la_pantalla()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var app = await CreateAppAsync(client);
+        var feature = await CreateFeatureAsync(client, app, "Iniciar sesión");
+        var asset = await UploadAsync(client, app, TestImages.RealPng(40, 30));
+        await SaveAsync(client, feature, Graph(asset, null, null));
+
+        var response = await PostPdfAsync(client, feature, TestImages.RealPng(800, 450));
+        var withoutCanvas = await PostPdfAsync(client, feature, null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("iniciar-sesion.pdf", response.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var pdf = await response.Content.ReadAsByteArrayAsync();
+        using var doc = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+        Assert.Equal("Iniciar sesión", doc.Info.Title);
+        Assert.Equal(2, Images(doc));
+
+        Assert.Equal(HttpStatusCode.OK, withoutCanvas.StatusCode);
+        using var plain = PdfSharp.Pdf.IO.PdfReader.Open(
+            new MemoryStream(await withoutCanvas.Content.ReadAsByteArrayAsync()), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+        Assert.Equal(1, Images(plain));
+    }
+
+    [Fact]
+    public async Task El_pdf_rechaza_una_imagen_que_no_es_png_o_pasa_de_10_mb_y_responde_404_sin_feature()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client, await CreateAppAsync(client), "Transferir");
+
+        var notPng = await PostPdfAsync(client, feature, TestImages.Create("jpeg", 10, 10));
+        var tooBig = await PostPdfAsync(client, feature, [.. TestImages.RealPng(2, 2), .. new byte[10 * 1024 * 1024]]);
+        var missing = await PostPdfAsync(client, Guid.CreateVersion7(), null);
+        var anonymous = await factory.CreateClient().PostAsync(
+            new Uri($"/api/features/{feature}/export/pdf", UriKind.Relative), new MultipartFormDataContent());
+        var doc = await factory.CreateClient().GetStringAsync(new Uri("/openapi/v1.json", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.BadRequest, notPng.StatusCode);
+        Assert.Contains("canvas", (await notPng.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ValidationProblemDetails>())!.Errors.Keys);
+        Assert.Equal(HttpStatusCode.BadRequest, tooBig.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Contains("\"/api/features/{featureId}/export/pdf\"", doc, StringComparison.Ordinal);
+    }
+
+    private static Task<HttpResponseMessage> PostPdfAsync(HttpClient client, Guid featureId, byte[]? canvas)
+    {
+        var content = new MultipartFormDataContent();
+        if (canvas is not null)
+        {
+            var file = new ByteArrayContent(canvas);
+            file.Headers.ContentType = MediaTypeHeaderValue.Parse("image/png");
+            content.Add(file, "canvas", "lienzo.png");
+        }
+
+        return client.PostAsync(new Uri($"/api/features/{featureId}/export/pdf", UriKind.Relative), content);
+    }
+
+    private static int Images(PdfSharp.Pdf.PdfDocument doc) =>
+        doc.Pages.Cast<PdfSharp.Pdf.PdfPage>()
+            .Select(p => p.Resources.Elements.GetDictionary("/XObject"))
+            .Where(x => x is not null)
+            .Sum(x => x!.Elements.Count);
+
+    [Fact]
+    public async Task El_archivo_walkie_trae_manifest_lienzo_catalogo_usado_e_imagenes_validos()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var app = await CreateAppAsync(client);
+        var response = await client.PostAsJsonAsync(
+            new Uri($"/api/apps/{app}/features", UriKind.Relative), new CreateFeatureRequest("Iniciar sesión", "Entrar con documento."));
+        var feature = (await response.Content.ReadFromJsonAsync<FeatureResponse>())!.Id;
+        var transferir = await CreateFeatureAsync(client, app, "Transferir");
+        var item = await CreateItemAsync(client, app);
+        var image = TestImages.Create("png", 2, 2);
+        var asset = await UploadAsync(client, app, image);
+        var graph = Graph(asset, item, transferir);
+        await SaveAsync(client, feature, graph);
+
+        var export = await client.GetAsync(AiUri(feature, "walkie"));
+
+        Assert.Equal("application/zip", export.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("iniciar-sesion.walkie", export.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var files = await UnzipAsync(export);
+        var imagePath = $"img/{asset}.png";
+        Assert.Equal(["catalog.json", $"features/{feature}/canvas.json", imagePath, "manifest.json"], files.Keys.Order(StringComparer.Ordinal));
+
+        var manifest = System.Text.Json.JsonDocument.Parse(files["manifest.json"]).RootElement;
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.Package, manifest));
+        Assert.Equal("feature", manifest.GetProperty("scope").GetString());
+        var described = Assert.Single(manifest.GetProperty("features").EnumerateArray());
+        Assert.Equal("Iniciar sesión", described.GetProperty("name").GetString());
+        Assert.Equal("Entrar con documento.", described.GetProperty("description").GetString());
+        Assert.Equal(1, described.GetProperty("canvasVersion").GetInt32());
+        Assert.Equal(1, manifest.GetProperty("catalog").GetProperty("count").GetInt32());
+        Assert.Equal(imagePath, manifest.GetProperty("images")[0].GetProperty("path").GetString());
+
+        // El lienzo es el guardado y cumple walkie-graph.
+        var canvas = System.Text.Json.JsonDocument.Parse(files[$"features/{feature}/canvas.json"]).RootElement;
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.Graph, canvas));
+        var saved = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(new Uri($"/api/features/{feature}/canvas", UriKind.Relative));
+        Assert.True(System.Text.Json.JsonElement.DeepEquals(saved, canvas));
+
+        // El catálogo trae solo lo que usa el lienzo, cada elemento según walkie-catalog-item.
+        var catalog = System.Text.Json.JsonDocument.Parse(files["catalog.json"]).RootElement;
+        var used = Assert.Single(catalog.EnumerateArray());
+        Assert.Equal(item, used.GetProperty("id").GetGuid());
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.CatalogItem, used));
+        Assert.Equal(image, files[imagePath]);
+    }
+
+    [Fact]
+    public async Task Sin_componentes_ni_imagenes_el_walkie_trae_un_catalogo_vacio()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client, await CreateAppAsync(client), "Transferir");
+
+        var files = await UnzipAsync(await client.GetAsync(AiUri(feature, "walkie")));
+
+        Assert.Equal(["catalog.json", $"features/{feature}/canvas.json", "manifest.json"], files.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("[]", Encoding.UTF8.GetString(files["catalog.json"]));
+        var manifest = System.Text.Json.JsonDocument.Parse(files["manifest.json"]).RootElement;
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.Package, manifest));
+        Assert.Equal(0, manifest.GetProperty("features")[0].GetProperty("canvasVersion").GetInt32());
+    }
+
     private static Uri AiUri(Guid featureId, string format) =>
         new($"/api/features/{featureId}/export?format={format}", UriKind.Relative);
 

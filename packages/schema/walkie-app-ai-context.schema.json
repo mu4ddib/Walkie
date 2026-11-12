@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-app-ai-context.schema.json",
+  "title": "Walkie app AI context v0",
+  "description": "Contexto de una app completa para darle a una IA (spec exportar-e-importar, tarea 2): el contexto de cada feature (walkie-ai-context), el catálogo compartido con dónde se usa, el mapa de la app (qué feature lleva a cuál) y los vacíos de todo. Lo genera la API desde la última versión guardada de cada lienzo.",
+  "type": "object",
+  "required": ["format", "formatVersion", "app", "exportedAt", "features", "catalog", "map", "gaps"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "walkie-app-ai-context" },
+    "formatVersion": { "const": 0 },
+    "app": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" }
+      }
+    },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "features": {
+      "type": "array",
+      "description": "El contexto de cada feature, por nombre",
+      "items": { "$ref": "walkie-ai-context.schema.json" }
+    },
+    "catalog": {
+      "type": "array",
+      "description": "Componentes compartidos de la app (definición única para todos los lienzos que los usan)",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "is", "title", "usedBy"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "enum": ["api", "service", "database", "resource"] },
+          "is": { "type": "string", "description": "Qué es, en palabras (en un recurso, su subtipo)" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "http": { "$ref": "walkie-graph.schema.json#/$defs/http" },
+          "database": { "$ref": "walkie-graph.schema.json#/$defs/database" },
+          "resource": { "$ref": "walkie-graph.schema.json#/$defs/resource" },
+          "runtime": { "$ref": "walkie-graph.schema.json#/$defs/runtime" },
+          "usedBy": { "type": "array", "items": { "type": "string" }, "description": "Nombres de las features cuyos lienzos lo usan" }
+        }
+      }
+    },
+    "map": {
+      "type": "object",
+      "required": ["links"],
+      "additionalProperties": false,
+      "properties": {
+        "links": {
+          "type": "array",
+          "description": "Qué feature lleva a cuál, por los portales de sus lienzos",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "via"],
+            "additionalProperties": false,
+            "properties": {
+              "from": { "type": "string", "description": "Feature de origen" },
+              "to": { "type": "string", "description": "Feature destino" },
+              "via": { "type": "string", "description": "Título del portal" }
+            }
+          }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "description": "Vacíos de todas las features (con su feature) y del catálogo (componentes que ningún lienzo usa)",
+      "items": {
+        "type": "object",
+        "required": ["kind", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "feature": { "type": "string", "description": "Feature a la que pertenece; sin ella, es del catálogo" },
+          "kind": { "type": "string", "description": "Los de walkie-ai-context más unused-catalog-item" },
+          "elementId": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -20,6 +20,7 @@ public static class CanvasModule
         services.AddScoped<AppMaps>();
         services.AddScoped<Apps.Contracts.ICatalogUsage, CatalogUsage>();
         services.AddScoped<Contracts.ICanvasReader, CanvasReader>();
+        services.AddScoped<Contracts.ICanvasWriter, CanvasWriter>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

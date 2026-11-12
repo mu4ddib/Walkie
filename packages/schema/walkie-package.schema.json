@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-package.schema.json",
+  "title": "Walkie package manifest v0",
+  "description": "manifest.json de un archivo .walkie (spec exportar-e-importar, tareas 5 a 7): un .zip que reconstruye una o varias features en otra app (o en la misma). Lista qué hay en el archivo y dónde: el lienzo de cada feature (features/<id>/canvas.json, según walkie-graph), los elementos del catálogo que usan (catalog.json, cada uno según walkie-catalog-item), las imágenes de sus pantallas (img/) y, en el de una app, la distribución del mapa (map.json).",
+  "type": "object",
+  "required": ["format", "formatVersion", "schemaVersion", "exportedAt", "app", "features", "catalog", "images"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "walkie-package" },
+    "formatVersion": { "const": 0, "description": "Versión de este formato de archivo; un archivo de una versión que la API no conoce se rechaza" },
+    "schemaVersion": { "type": "integer", "minimum": 0, "description": "schemaVersion de walkie-graph de los lienzos que trae" },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "scope": { "enum": ["feature", "app"], "description": "Qué se exportó: una feature o la app completa (sin él, feature)" },
+    "app": {
+      "type": "object",
+      "description": "La app de origen (al importar en otra app, solo informativa)",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" }
+      }
+    },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "canvas", "canvasVersion"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "description": "Id en la app de origen (los portales entre features del archivo lo usan)" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "canvas": { "type": "string", "description": "Ruta del lienzo en el archivo, ej. features/<id>/canvas.json" },
+          "canvasVersion": { "type": "integer", "minimum": 0, "description": "Versión del lienzo exportado (al importar empieza de nuevo)" }
+        }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "required": ["path", "count"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "const": "catalog.json", "description": "Arreglo de elementos del catálogo (walkie-catalog-item) que usan los lienzos del archivo" },
+        "count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "map": {
+      "type": "object",
+      "description": "Solo en un archivo de la app (scope app) cuya distribución del mapa se acomodó: dónde están las posiciones",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "const": "map.json", "description": "Objeto positions de walkie-app-map ($defs/layout): id de feature o catalog:<id> -> { x, y }, con los ids de la app de origen" }
+      }
+    },
+    "images": {
+      "type": "array",
+      "description": "Imágenes de las pantallas: una por asset, aunque varias pantallas la usen",
+      "items": {
+        "type": "object",
+        "required": ["assetId", "path", "contentType"],
+        "additionalProperties": false,
+        "properties": {
+          "assetId": { "type": "string", "format": "uuid", "description": "Id en la app de origen (el assetId de las pantallas)" },
+          "path": { "type": "string", "description": "Ruta en el archivo, ej. img/<assetId>.png" },
+          "contentType": { "enum": ["image/png", "image/jpeg", "image/webp"] }
+        }
+      }
+    }
+  }
+}

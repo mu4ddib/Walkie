@@ -4,6 +4,7 @@ import type { WalkieAssetV0 } from '../schema/walkie-asset';
 import type { WalkieShareV0 } from '../schema/walkie-share';
 import type { WalkieSharedFeatureV0 } from '../schema/walkie-shared-feature';
 import type { Layout, WalkieAppMapV0 } from '../schema/walkie-app-map';
+import type { WalkieImportSummaryV0 } from '../schema/walkie-import-summary';
 
 /** Mapa de una app (`GET /api/apps/{appId}/map`, spec mapa-de-la-app). */
 export type AppMap = WalkieAppMapV0;
@@ -296,20 +297,72 @@ export interface Download {
 /** El `.zip` de la feature (su `.md` e `img/`), con la última versión guardada (spec export-markdown). */
 /**
  * Formatos del export (spec exportar-e-importar): `markdown` es el `.zip` de siempre; `ai`, el contexto para IA en
- * Markdown, y `ai-json`, el mismo contexto en JSON (`packages/schema/walkie-ai-context.schema.json`).
+ * Markdown; `ai-json`, el mismo contexto en JSON (`packages/schema/walkie-ai-context.schema.json`), y `walkie`, el
+ * archivo para reconstruir la feature (`walkie-package.schema.json`).
  */
-export type ExportFormat = 'markdown' | 'ai' | 'ai-json';
+export type ExportFormat = 'markdown' | 'ai' | 'ai-json' | 'walkie';
 
 const EXPORT_FALLBACK_NAMES: Record<ExportFormat, string> = {
   markdown: 'feature.zip',
   ai: 'contexto-ia.md',
   'ai-json': 'feature.context.json',
+  walkie: 'feature.walkie',
 };
 
 export async function exportFeature(token: string, featureId: string, format: ExportFormat = 'markdown'): Promise<Download> {
   const query = format === 'markdown' ? '' : `?format=${format}`;
   const res = await send(`/api/features/${encodeURIComponent(featureId)}/export${query}`, { token });
   return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? EXPORT_FALLBACK_NAMES[format], blob: await res.blob() };
+}
+
+/**
+ * PDF de la feature (spec exportar-e-importar, tarea 4; ADR-0008): la API lo arma con lo guardado y la imagen del
+ * lienzo que se le manda (sin ella, el PDF va sin esa página).
+ */
+export async function exportPdf(token: string, featureId: string, canvas: Blob | null): Promise<Download> {
+  const form = new FormData();
+  if (canvas) form.append('canvas', canvas, 'lienzo.png');
+  const res = await send(`/api/features/${encodeURIComponent(featureId)}/export/pdf`, {
+    token,
+    method: 'POST',
+    body: canvas ? form : undefined,
+  });
+  return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? 'feature.pdf', blob: await res.blob() };
+}
+
+/** Formatos de la app: contexto para IA (`ai`, `ai-json`, tarea 2) o el `.walkie` de la app completa (`walkie`, tarea 7). */
+export type AppExportFormat = 'ai' | 'ai-json' | 'walkie';
+
+const APP_EXPORT_FALLBACK_NAMES: Record<AppExportFormat, string> = {
+  ai: 'app-contexto-ia.md',
+  'ai-json': 'app.app-context.json',
+  walkie: 'app.walkie',
+};
+
+/** Exporta la app completa: contexto para IA (Markdown o JSON) o su archivo `.walkie`. */
+export async function exportApp(token: string, appId: string, format: AppExportFormat = 'ai'): Promise<Download> {
+  const res = await send(`/api/apps/${encodeURIComponent(appId)}/export?format=${format}`, { token });
+  const fallback = APP_EXPORT_FALLBACK_NAMES[format];
+  return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? fallback, blob: await res.blob() };
+}
+
+/** Resumen de importar un `.walkie` (`walkie-import-summary.schema.json`). */
+export type ImportSummary = WalkieImportSummaryV0;
+
+/**
+ * Importa un archivo `.walkie` (spec exportar-e-importar, tareas 6 y 7; ADR-0009): sus features en la app `appId` o,
+ * con `appId` en `null`, como una app nueva. Con `dryRun` solo valida y responde qué crearía; los errores llegan como
+ * `ApiError` (400 con la ruta dentro del archivo, 413 si pasa de 50 MB).
+ */
+export function importPackage(token: string, appId: string | null, file: Blob, dryRun: boolean): Promise<ImportSummary> {
+  const form = new FormData();
+  form.append('file', file, 'archivo.walkie');
+  const path = appId === null ? '/api/apps/import' : `/api/apps/${encodeURIComponent(appId)}/import`;
+  return request(`${path}${dryRun ? '?dryRun=true' : ''}`, {
+    token,
+    method: 'POST',
+    body: form,
+  });
 }
 
 /** `filename*=UTF-8''…` o `filename=…` de un `Content-Disposition`. */

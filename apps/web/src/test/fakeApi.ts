@@ -25,7 +25,14 @@ export function installFakeApi(
   /** Enlaces de solo lectura activos (los revocados salen de la lista, como en la API). */
   const shares = [...(seed.shares ?? [])];
   /** Si se define, el próximo PUT del lienzo responde este estado (ej. 400). */
-  const next_: { putStatus?: number; uploadStatus?: number; exportStatus?: number } = {};
+  const next_: {
+    putStatus?: number;
+    uploadStatus?: number;
+    exportStatus?: number;
+    lastPdfCanvas?: Blob | null;
+    /** Si se define, la próxima importación responde 400 con estos errores (ruta dentro del archivo → mensajes). */
+    importErrors?: Record<string, string[]>;
+  } = {};
   let next = 1;
   const id = () => `00000000-0000-7000-8000-${String(next++).padStart(12, '0')}`;
 
@@ -64,6 +71,18 @@ export function installFakeApi(
         delete next_.exportStatus;
         return json(status, { title: 'Error', status });
       }
+      // PDF (spec exportar-e-importar, tarea 4): POST con la imagen del lienzo opcional; la recuerda para las pruebas.
+      if (parts[4] === 'pdf' && method === 'POST') {
+        const canvas = init?.body instanceof FormData ? init.body.get('canvas') : null;
+        next_.lastPdfCanvas = canvas instanceof Blob ? canvas : null;
+        return new Response('%PDF-1.7', {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(feature.name)}.pdf`,
+          },
+        });
+      }
       // Contexto para IA (spec exportar-e-importar): Markdown o JSON con su nombre, como la API.
       const format = url.searchParams.get('format');
       if (format === 'ai') {
@@ -76,6 +95,12 @@ export function installFakeApi(
         return new Response(JSON.stringify({ format: 'walkie-ai-context', feature: { name: feature.name } }), {
           status: 200,
           headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename=feature.context.json' },
+        });
+      }
+      if (format === 'walkie') {
+        return new Response('walkie', {
+          status: 200,
+          headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename=feature.walkie' },
         });
       }
       return new Response('zip', {
@@ -188,7 +213,90 @@ export function installFakeApi(
     }
 
     if (parts[0] !== 'api' || parts[1] !== 'apps') return notFound();
+
+    // /api/apps/import — importar un .walkie como una app nueva (spec exportar-e-importar, tarea 7). No lee el zip: el
+    // archivo trae la app «Banca móvil» con «Iniciar sesión»; si ya hay una app así, queda «(importada)», como la API.
+    if (parts[2] === 'import' && parts.length === 3 && method === 'POST') {
+      if (next_.importErrors) {
+        const errors = next_.importErrors;
+        delete next_.importErrors;
+        return json(400, { title: 'One or more validation errors occurred.', status: 400, errors });
+      }
+      const dryRun = url.searchParams.get('dryRun') === 'true';
+      const sourceName = 'Banca móvil';
+      const name = apps.some((a) => a.name === sourceName) ? `${sourceName} (importada)` : sourceName;
+      const summary = {
+        dryRun,
+        app: { sourceName, name },
+        features: [{ sourceName: 'Iniciar sesión', name: 'Iniciar sesión' }],
+        newCatalogItems: 2,
+        existingCatalogItems: 0,
+        images: 1,
+        warnings: [] as string[],
+      };
+      if (dryRun) return json(200, summary);
+      const now = new Date(0).toISOString();
+      const created: App = { id: id(), name, createdAt: now, featureCount: 0 };
+      apps.push(created);
+      const feature: Feature = { id: id(), appId: created.id, name: 'Iniciar sesión', description: '', createdAt: now, updatedAt: now };
+      features.push(feature);
+      return json(201, {
+        ...summary,
+        app: { ...summary.app, id: created.id },
+        features: [{ ...summary.features[0], id: feature.id }],
+      });
+    }
+
+    // /api/apps/{appId}/export — contexto para IA (tarea 2) o .walkie (tarea 7) de la app, como la API.
+    if (parts[3] === 'export') {
+      const exported = apps.find((x) => x.id === parts[2]);
+      if (!exported) return notFound();
+      const format = url.searchParams.get('format') ?? 'ai';
+      if (format === 'walkie')
+        return new Response(new Uint8Array([0x50, 0x4b, 0x05, 0x06]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename=banca-movil.walkie' },
+        });
+      return format === 'ai'
+        ? new Response(`# Contexto para IA: ${exported.name} (app completa)\n\nTodas las features.\n`, {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': 'attachment; filename=app-contexto-ia.md' },
+          })
+        : new Response(JSON.stringify({ format: 'walkie-app-ai-context' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename=app.app-context.json' },
+          });
+    }
     const appId = parts[2];
+
+    // /api/apps/{appId}/import — importar un .walkie (spec exportar-e-importar, tarea 6). No lee el zip: el archivo
+    // trae «Iniciar sesión» y, si ya hay una feature con ese nombre, queda «(importada)», como la API.
+    if (parts[3] === 'import' && method === 'POST') {
+      const appId = parts[2]!;
+      if (!apps.some((a) => a.id === appId)) return notFound();
+      if (next_.importErrors) {
+        const errors = next_.importErrors;
+        delete next_.importErrors;
+        return json(400, { title: 'One or more validation errors occurred.', status: 400, errors });
+      }
+      const dryRun = url.searchParams.get('dryRun') === 'true';
+      const sourceName = 'Iniciar sesión';
+      const taken = features.some((f) => f.appId === appId && f.name === sourceName);
+      const name = taken ? `${sourceName} (importada)` : sourceName;
+      const summary = {
+        dryRun,
+        features: [{ sourceName, name }],
+        newCatalogItems: 1,
+        existingCatalogItems: 0,
+        images: 1,
+        warnings: ['«Iniciar sesión»: el portal «Transferir» queda sin destino (la feature no está en el archivo ni en esta app).'],
+      };
+      if (dryRun) return json(200, summary);
+      const now = new Date(0).toISOString();
+      const feature: Feature = { id: id(), appId, name, description: '', createdAt: now, updatedAt: now };
+      features.push(feature);
+      return json(201, { ...summary, features: [{ sourceName, name, id: feature.id }] });
+    }
 
     const withCount = (a: App) => ({ ...a, featureCount: features.filter((f) => f.appId === a.id).length });
 

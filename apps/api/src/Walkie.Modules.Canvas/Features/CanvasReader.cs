@@ -15,4 +15,13 @@ internal sealed class CanvasReader(CanvasDbContext db) : ICanvasReader
             .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         return CanvasHandlers.Parse(graph ?? CanvasHandlers.EmptyGraph);
     }
+
+    public async Task<JsonElement?> MapPositionsAsync(Guid appId, CancellationToken cancellationToken)
+    {
+        var positions = await db.AppMaps.AsNoTracking()
+            .Where(m => m.AppId == appId)
+            .Select(m => m.Positions)
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return positions is null ? null : CanvasHandlers.Parse(positions);
+    }
 }

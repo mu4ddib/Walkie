@@ -9,4 +9,7 @@ public interface ICatalogDirectory
     /// <summary>De <paramref name="itemIds"/>, los elementos que existen en el catálogo de la app (Sharing).</summary>
     Task<IReadOnlyList<CatalogItemResponse>> ItemsOfAppAsync(
         Guid appId, IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
+
+    /// <summary>Todo el catálogo de la app, por id (Export: contexto para IA de la app).</summary>
+    Task<IReadOnlyList<CatalogItemResponse>> AllItemsOfAppAsync(Guid appId, CancellationToken cancellationToken);
 }

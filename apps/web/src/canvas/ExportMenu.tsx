@@ -2,17 +2,26 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 
 /**
  * «Exportar» (spec exportar-e-importar): un menú con lo que se puede exportar, cada opción con una línea de para qué
- * sirve. Hoy: el contexto para IA y el Markdown con imágenes; imagen, PDF y archivo de Walkie llegan en otras tareas.
+ * sirve: el contexto para IA, la imagen del lienzo, el PDF, el Markdown con imágenes y el archivo de Walkie.
  * Flechas recorren, Esc cierra y devuelve el foco al botón.
  */
 export function ExportMenu({
   pending,
   onAiContext,
   onMarkdown,
+  onImage,
+  onPdf,
+  onWalkie,
 }: {
   pending: boolean;
   onAiContext: () => void;
   onMarkdown: () => void;
+  /** Imagen del lienzo (spec exportar-e-importar, tarea 3). */
+  onImage: () => void;
+  /** PDF (tarea 4): guarda lo pendiente, genera la imagen del lienzo y la API arma el documento. */
+  onPdf: () => void;
+  /** Archivo de Walkie (tarea 5): para reconstruir la feature en otra app. */
+  onWalkie: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
@@ -66,16 +75,41 @@ export function ExportMenu({
         {pending ? 'Exportando…' : 'Exportar'}
       </button>
       {open && (
-        <div id={menuId} ref={menu} className="export-menu-popup floating" role="menu" aria-label="Exportar" onKeyDown={onKeyDown}>
+        <div
+          id={menuId}
+          ref={menu}
+          className="export-menu-popup floating"
+          role="menu"
+          aria-label="Exportar"
+          onKeyDown={onKeyDown}
+        >
           <button type="button" role="menuitem" className="export-option" onClick={() => choose(onAiContext)}>
             <span className="export-option-label">Contexto para IA…</span>
             <span className="export-option-help">
               Todo lo documentado, ordenado para que una IA construya sin inventar (Markdown y JSON).
             </span>
           </button>
+          <button type="button" role="menuitem" className="export-option" onClick={() => choose(onImage)}>
+            <span className="export-option-label">Imagen (PNG o SVG)…</span>
+            <span className="export-option-help">
+              Para una presentación, un ticket o un correo: todo el lienzo o lo que se ve.
+            </span>
+          </button>
+          <button type="button" role="menuitem" className="export-option" onClick={() => choose(onPdf)}>
+            <span className="export-option-label">PDF</span>
+            <span className="export-option-help">
+              Documento con portada, el lienzo y tablas, para imprimir o adjuntar. Guarda antes los cambios.
+            </span>
+          </button>
           <button type="button" role="menuitem" className="export-option" onClick={() => choose(onMarkdown)}>
             <span className="export-option-label">Markdown e imágenes (.zip)</span>
             <span className="export-option-help">Documento para el repo o el wiki, con el diagrama y las capturas.</span>
+          </button>
+          <button type="button" role="menuitem" className="export-option" onClick={() => choose(onWalkie)}>
+            <span className="export-option-label">Archivo de Walkie (.walkie)</span>
+            <span className="export-option-help">
+              Para respaldarla o llevarla a otra app: el lienzo, sus componentes y sus imágenes.
+            </span>
           </button>
         </div>
       )}

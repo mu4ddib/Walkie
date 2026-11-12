@@ -48,6 +48,33 @@ describe('lista de apps (/apps)', () => {
     const [, init] = api.fetchMock.mock.calls[0]!;
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer token-de-prueba' });
   });
+  it('«Importar app» crea una app nueva desde un .walkie, con resumen antes de crear (spec exportar-e-importar, tarea 7)', async () => {
+    const api = installFakeApi({ apps: [app], features: [feature] });
+    renderRoute('/apps');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Importar app' }));
+    const dialog = screen.getByRole('dialog', { name: 'Importar app' });
+    const file = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], 'banca-movil.walkie', { type: 'application/zip' });
+    await userEvent.upload(within(dialog).getByLabelText('Archivo .walkie'), file);
+
+    const summary = await within(dialog).findByLabelText('Qué se va a importar');
+    expect(summary).toHaveTextContent('App nueva: Banca móvil (importada) (ya hay una «Banca móvil»)');
+    expect(summary).toHaveTextContent('2 elementos nuevos en el catálogo · 1 imagen');
+    expect(String(api.fetchMock.mock.calls.at(-1)![0])).toMatch(/\/api\/apps\/import\?dryRun=true$/);
+    expect(api.apps).toHaveLength(1);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Importar' }));
+
+    const link = await within(dialog).findByRole('link', { name: 'Banca móvil (importada)' });
+    const created = api.apps.find((a) => a.name === 'Banca móvil (importada)')!;
+    expect(link).toHaveAttribute('href', `/apps/${created.id}`);
+    expect(within(dialog).getByRole('link', { name: 'Iniciar sesión' }).getAttribute('href')).toMatch(
+      new RegExp(`^/apps/${created.id}/features/`),
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
+    const list = screen.getByRole('list', { name: 'Apps' });
+    expect(await within(list).findByRole('link', { name: 'Banca móvil (importada)' })).toBeInTheDocument();
+  });
 });
 
 describe('detalle de app', () => {
@@ -66,6 +93,85 @@ describe('detalle de app', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Crear feature' }));
 
     expect(await within(list).findByRole('link', { name: 'Transferir' })).toBeInTheDocument();
+  });
+
+  it('«Contexto para IA» de la app abre el diálogo con el contexto de todas las features (spec exportar-e-importar)', async () => {
+    const api = installFakeApi({ apps: [app], features: [feature] });
+    renderRoute('/apps/app-1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Contexto para IA' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Contexto para IA de la app' });
+    expect(await within(dialog).findByLabelText('Vista previa del contexto')).toHaveTextContent(
+      'Contexto para IA: Banca móvil (app completa)',
+    );
+    expect(String(api.fetchMock.mock.calls.at(-1)![0])).toMatch(/\/api\/apps\/app-1\/export\?format=ai$/);
+    expect(within(dialog).queryByRole('note')).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('«Importar feature» muestra qué trae el archivo antes de crear y refresca la galería (spec exportar-e-importar)', async () => {
+    const api = installFakeApi({ apps: [app], features: [feature] });
+    renderRoute('/apps/app-1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Importar feature' }));
+    const dialog = screen.getByRole('dialog', { name: 'Importar feature' });
+    const importButton = within(dialog).getByRole('button', { name: 'Importar' });
+    expect(importButton).toBeDisabled();
+
+    const file = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], 'iniciar-sesion.walkie', { type: 'application/zip' });
+    await userEvent.upload(within(dialog).getByLabelText('Archivo .walkie'), file);
+
+    // Primero el resumen (dryRun), sin crear nada.
+    const summary = await within(dialog).findByLabelText('Qué se va a importar');
+    expect(summary).toHaveTextContent('Iniciar sesión (importada)');
+    expect(summary).toHaveTextContent('ya hay una «Iniciar sesión» en esta app');
+    expect(summary).toHaveTextContent('1 elemento nuevo en el catálogo · 1 imagen');
+    expect(within(summary).getByRole('note')).toHaveTextContent('queda sin destino');
+    expect(String(api.fetchMock.mock.calls.at(-1)![0])).toMatch(/\/api\/apps\/app-1\/import\?dryRun=true$/);
+    expect(api.features).toHaveLength(1);
+
+    await userEvent.click(importButton);
+
+    const link = await within(dialog).findByRole('link', { name: 'Iniciar sesión (importada)' });
+    expect(link.getAttribute('href')).toMatch(/^\/apps\/app-1\/features\//);
+    expect(api.features).toHaveLength(2);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
+    const list = screen.getByRole('list', { name: 'Features' });
+    expect(await within(list).findByRole('link', { name: 'Iniciar sesión (importada)' })).toBeInTheDocument();
+  });
+
+  it('«Importar feature» muestra los errores con su ruta dentro del archivo', async () => {
+    const api = installFakeApi({ apps: [app], features: [feature] });
+    api.next.importErrors = { 'features/f1/canvas.json/edges/e1/to': ['La conexión apunta a un nodo que no existe.'] };
+    renderRoute('/apps/app-1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Importar feature' }));
+    const dialog = screen.getByRole('dialog', { name: 'Importar feature' });
+    await userEvent.upload(within(dialog).getByLabelText('Archivo .walkie'), new File(['x'], 'roto.walkie'));
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('features/f1/canvas.json/edges/e1/to');
+    expect(alert).toHaveTextContent('La conexión apunta a un nodo que no existe.');
+    expect(within(dialog).getByRole('button', { name: 'Importar' })).toBeDisabled();
+  });
+
+  it('«Exportar app (.walkie)» descarga el archivo de la app completa (spec exportar-e-importar, tarea 7)', async () => {
+    const api = installFakeApi({ apps: [app], features: [feature] });
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:walkie', revokeObjectURL: vi.fn() }));
+    const saved: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      saved.push(this.download);
+    });
+    renderRoute('/apps/app-1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Exportar app (.walkie)' }));
+
+    await vi.waitFor(() => expect(saved).toEqual(['banca-movil.walkie']));
+    expect(String(api.fetchMock.mock.calls.at(-1)![0])).toMatch(/\/api\/apps\/app-1\/export\?format=walkie$/);
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('avisa si la app no existe', async () => {
