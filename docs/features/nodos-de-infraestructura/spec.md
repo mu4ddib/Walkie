@@ -1,7 +1,7 @@
 # Spec: Nodos de infraestructura
 
 - Issue padre: #136
-- Estado: en curso (tareas 1 y 2 de 3 hechas)
+- Estado: implementada (2026-11-12), verificada por `apps/web/e2e/nodos-de-infraestructura.spec.ts` e `InfrastructureNodesTests`
 
 ## Objetivo
 
@@ -30,8 +30,8 @@ Quien documenta la arquitectura de una feature o de un banco (onboarding técnic
 - [x] Dada la barra de herramientas, entonces hay un botón «Recurso» (con su tecla, la 8) que abre la lista de subtipos con glifo y una línea de qué es; elegir uno lo crea en el centro (o arrastrándolo al lienzo, como los demás). Con teclado: flechas, Enter y Esc (vuelve al botón).
 - [x] Dado un recurso, entonces su caja muestra el glifo y el nombre del subtipo en la cabecera (ej. «Bucket», con un glifo propio en el estilo pixel, como los demás tipos), su título, el proveedor y hasta tres detalles.
 - [x] Dado un recurso personalizado, entonces la cabecera muestra el subtipo escrito por el usuario.
-- [ ] Dado el inspector de un recurso, entonces edita subtipo (cambiarlo conserva título, conexiones y detalles), proveedor, nombre, detalles y notas.
-- [ ] Dada una base de datos, entonces el inspector ofrece el modelo y la caja lo muestra («Base de datos · documental»).
+- [x] Dado el inspector de un recurso, entonces edita subtipo (cambiarlo conserva título, conexiones y detalles), proveedor, nombre, detalles y notas.
+- [x] Dada una base de datos, entonces el inspector ofrece el modelo y la caja lo muestra («Base de datos · documental»).
 
 ### Conexiones
 
@@ -39,9 +39,9 @@ Quien documenta la arquitectura de una feature o de un banco (onboarding técnic
 
 ### Catálogo y resto de Walkie
 
-- [ ] Dado un recurso, entonces «Guardar como componente» funciona como con API, servicio y base de datos, y se reutiliza desde «Componentes».
+- [x] Dado un recurso, entonces «Guardar como componente» funciona como con API, servicio y base de datos, y se reutiliza desde «Componentes».
 - [x] El export a Markdown tiene una sección «Recursos» agrupada por subtipo, con tipo, proveedor, nombre y detalles; el diagrama Mermaid usa la forma adecuada (cilindro para bases y almacenamiento, bandera para colas y tópicos, subrutina para funciones) y el subtipo como etiqueta. El contexto para IA lo hará `exportar-e-importar`.
-- [ ] El mapa de la app, los tours, los grupos, los enlaces compartidos y deshacer funcionan con recursos igual que con cualquier nodo.
+- [x] El mapa de la app, los tours, los grupos, los enlaces compartidos y deshacer funcionan con recursos igual que con cualquier nodo.
 - [x] Lienzos anteriores se abren sin cambios; ningún nodo existente cambia de tipo solo.
 
 ## Fuera de alcance

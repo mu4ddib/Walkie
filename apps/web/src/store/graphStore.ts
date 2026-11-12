@@ -67,7 +67,7 @@ export const STEP_NOTE_MAX_LENGTH = 500;
 export const EDGE_TEXT_MAX_LENGTH = 60;
 
 /** Tipos que pueden vivir en el catálogo de la app (ADR-0002). */
-export const CATALOG_NODE_TYPES: readonly NodeType[] = ['api', 'service', 'database'];
+export const CATALOG_NODE_TYPES: readonly NodeType[] = ['api', 'service', 'database', 'resource'];
 
 export const INPUT_TYPES: readonly InputType[] = ['string', 'number', 'boolean', 'date', 'enum', 'file'];
 export const HTTP_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
@@ -378,7 +378,15 @@ export interface GraphActions {
    */
   convertToLocal(
     id: string,
-    item: { type: NodeType; title: string; description?: string; http?: Node['http']; database?: Node['database'] },
+    item: {
+      type: NodeType;
+      title: string;
+      description?: string;
+      http?: Node['http'];
+      database?: Node['database'];
+      resource?: Node['resource'];
+      runtime?: Node['runtime'];
+    },
   ): void;
   /**
    * Grupo de infraestructura (spec espacio-de-trabajo, criterio 18) con su caja; los `members` (nodos, notas u otros
@@ -680,6 +688,9 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         if (http) next.http = http;
         const database = item.type === 'database' ? normalizeDatabase(item.database) : undefined;
         if (database) next.database = database;
+        // Un recurso siempre lleva su subtipo (schema).
+        if (item.type === 'resource') next.resource = normalizeResource(item.resource ?? { kind: 'custom' });
+        if (item.type === 'service' && item.runtime) next.runtime = item.runtime;
         set((s) => ({ nodes: { ...s.nodes, [id]: next }, dirty: true }));
       },
 

@@ -86,3 +86,26 @@ export function normalizeResource(resource: Resource, fallbackLabel?: string): R
   if (details.length) out.details = details;
   return out;
 }
+
+export type DatabaseModel = NonNullable<NonNullable<import('../schema/walkie-graph').Node['database']>['model']>;
+export type Runtime = NonNullable<import('../schema/walkie-graph').Node['runtime']>;
+
+/** Modelo de datos de una base (`$defs/database.model`). */
+export const DATABASE_MODELS: Record<DatabaseModel, string> = {
+  relational: 'Relacional (tablas)',
+  document: 'Documental (colecciones)',
+  'key-value': 'Clave-valor',
+  'wide-column': 'Columnar',
+  graph: 'Grafo',
+  search: 'Búsqueda',
+  'time-series': 'Series de tiempo',
+};
+
+/** Dónde corre un servicio (`$defs/runtime`). */
+export const RUNTIMES: Record<Runtime, string> = {
+  container: 'Contenedor',
+  vm: 'Máquina virtual',
+  serverless: 'Serverless',
+  managed: 'Servicio gestionado',
+  other: 'Otro',
+};

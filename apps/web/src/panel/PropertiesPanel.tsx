@@ -19,6 +19,8 @@ import { TextField } from './TextField';
 import { ToursSection, type ToursSectionProps } from './ToursSection';
 import { ApiContractEditor } from './contract/ApiContractEditor';
 import { DatabaseEditor } from './contract/DatabaseEditor';
+import { ResourceEditor } from './contract/ResourceEditor';
+import { RuntimeField } from './contract/RuntimeField';
 import { NotesField } from './contract/NotesField';
 import { GroupPanel } from './GroupPanel';
 import { DecisionSection, RuleModeSwitch } from './DecisionSection';
@@ -76,6 +78,8 @@ function NodePanel({ id }: { id: string }) {
   const updateNode = useGraphStore((s) => s.updateNode);
   const setHttp = useGraphStore((s) => s.setHttp);
   const setDatabase = useGraphStore((s) => s.setDatabase);
+  const setResource = useGraphStore((s) => s.setResource);
+  const setRuntime = useGraphStore((s) => s.setRuntime);
   const methodId = useId();
   const { appId } = useCanvasCatalog();
   if (!node) return null;
@@ -149,6 +153,16 @@ function NodePanel({ id }: { id: string }) {
       {node.type === 'database' && (
         <DatabaseEditor value={node.database} onChange={(database) => setDatabase(id, database)} />
       )}
+      {node.type === 'resource' && (
+        <ResourceEditor
+          value={node.resource}
+          // El editor entrega el recurso completo: lo que no trae se quita.
+          onChange={(resource) =>
+            setResource(id, { label: undefined, provider: undefined, name: undefined, details: undefined, ...resource })
+          }
+        />
+      )}
+      {node.type === 'service' && <RuntimeField value={node.runtime} onChange={(runtime) => setRuntime(id, runtime)} />}
       <NotesField node={node} />
       {/* Solo con catálogo (lienzo de una app): el botón llama a la API. */}
       {appId && CATALOG_NODE_TYPES.includes(node.type) && <MoveToCatalog appId={appId} node={node} />}

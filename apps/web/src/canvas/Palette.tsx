@@ -1,11 +1,11 @@
 import { useCallback, useId, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError, type CatalogItem, type CatalogItemType, type NewCatalogItem } from '../api/client';
-import { NODE_LABELS } from '../nodes/nodeMeta';
+import { NODE_LABELS, nodeLabel } from '../nodes/nodeMeta';
 import { CATALOG_TYPES, catalogPath } from '../pages/catalogPaths';
 import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES, RESOURCE_KEY } from './paletteTypes';
 import { ResourcePicker } from './ResourcePicker';
-import type { ResourceKind } from '../nodes/resourceMeta';
+import { RESOURCE_KINDS, normalizeResource, type ResourceKind } from '../nodes/resourceMeta';
 import type { NodeType } from '../store/graphStore';
 import { nodeColors } from '../theme/palette';
 
@@ -206,8 +206,8 @@ function ComponentsPanel({
         </button>
       </header>
       <p className="components-help">
-        APIs, servicios y bases de datos compartidos por todos los lienzos de la app: si cambias su definición, cambia
-        en todos. Arrástralos o haz clic para usarlos.
+        APIs, servicios, bases de datos y recursos compartidos por todos los lienzos de la app: si cambias su
+        definición, cambia en todos. Arrástralos o haz clic para usarlos.
       </p>
       {catalog.items.length > 0 && (
         <>
@@ -243,7 +243,7 @@ function ComponentsPanel({
         <p className="components-empty">
           Aún no hay componentes.{' '}
           {catalog.onCreate ? 'Crea el primero aquí abajo o ' : ''}
-          <Link to={catalogPath(catalog.appId)}>crea APIs, servicios y BD en el catálogo</Link>.
+          <Link to={catalogPath(catalog.appId)}>crea APIs, servicios, BD y recursos en el catálogo</Link>.
         </p>
       ) : (
         <div className="components-list">
@@ -257,8 +257,8 @@ function ComponentsPanel({
               onClick={() => catalog.onAddRef(item)}
               style={{ '--node-color': nodeColors[item.type] } as CSSProperties}
             >
-              <span className="component-kind" aria-hidden="true">
-                {NODE_LABELS[item.type].glyph}
+              <span className="component-kind" aria-hidden="true" title={nodeLabel(item).label}>
+                {nodeLabel(item).glyph}
               </span>
               <span className="component-title">{item.title}</span>
             </button>
@@ -277,10 +277,12 @@ function ComponentsPanel({
 /** "Nuevo componente" sin salir del lienzo (spec espacio-de-trabajo, criterio 10): se crea y queda en el lienzo. */
 function NewComponent({ onCreate }: { onCreate: (item: NewCatalogItem) => Promise<void> }) {
   const [type, setType] = useState<CatalogItemType>('api');
+  const [kind, setKind] = useState<ResourceKind>('storage');
   const [title, setTitle] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const typeId = useId();
+  const kindId = useId();
   const titleId = useId();
 
   async function submit(event: FormEvent) {
@@ -292,7 +294,7 @@ function NewComponent({ onCreate }: { onCreate: (item: NewCatalogItem) => Promis
     setPending(true);
     setError(null);
     try {
-      await onCreate({ type, title: title.trim() });
+      await onCreate({ type, title: title.trim(), resource: type === 'resource' ? normalizeResource({ kind }) : undefined });
       setTitle('');
     } catch (e) {
       setError(e instanceof ApiError ? e.userMessage : 'No se pudo crear el componente.');
@@ -315,6 +317,20 @@ function NewComponent({ onCreate }: { onCreate: (item: NewCatalogItem) => Promis
             </option>
           ))}
         </select>
+        {type === 'resource' && (
+          <>
+            <label className="sr-only" htmlFor={kindId}>
+              Subtipo del recurso
+            </label>
+            <select id={kindId} value={kind} onChange={(e) => setKind(e.target.value as ResourceKind)} disabled={pending}>
+              {RESOURCE_KINDS.map((k) => (
+                <option key={k.kind} value={k.kind}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <label className="sr-only" htmlFor={titleId}>
           Título del componente
         </label>
