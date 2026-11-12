@@ -16,6 +16,7 @@ const targets = [
     imports: ["import type { Database, Http, Resource } from './walkie-graph';"],
   },
   { schema: 'walkie-asset.schema.json', out: 'walkie-asset.ts', name: 'WalkieAsset' },
+  { schema: 'walkie-package.schema.json', out: 'walkie-package.ts', name: 'WalkiePackage' },
   {
     schema: 'walkie-ai-context.schema.json',
     out: 'walkie-ai-context.ts',

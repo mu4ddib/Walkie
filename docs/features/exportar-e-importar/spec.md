@@ -1,7 +1,7 @@
 # Spec: Exportar e importar
 
 - Issue padre: #137
-- Estado: en curso (tareas 1 a 4 de 7 hechas)
+- Estado: en curso (tareas 1 a 5 de 7 hechas)
 
 ## Objetivo
 
@@ -43,7 +43,7 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
 
 ### Archivo de Walkie (importable)
 
-- [ ] Dada una feature, entonces «Archivo de Walkie» descarga `<slug>.walkie` (un `.zip`): `manifest.json` (versión del formato y del schema, app, feature, fecha), `canvas.json` (el grafo según `walkie-graph`), los elementos del catálogo que usa y las imágenes de sus pantallas.
+- [x] Dada una feature, entonces «Archivo de Walkie» descarga `<slug>.walkie` (un `.zip`): `manifest.json` (versión del formato y del schema, app, feature, fecha; `walkie-package.schema.json`), `features/<id>/canvas.json` (el grafo según `walkie-graph`), `catalog.json` (los elementos del catálogo que usa) e `img/` (las imágenes de sus pantallas). Una lista de features en el manifest y no un solo `canvas.json`: el mismo formato sirve para la app completa.
 - [ ] Dada la página de una app, cuando uso «Importar feature» y elijo un `.walkie`, entonces se crea una feature nueva con el mismo lienzo (nodos, conexiones, posiciones, grupos, notas, tours y recorridos) e imágenes; si el nombre ya existe, se le agrega «(importada)».
 - [ ] Los componentes del catálogo se emparejan: si la app ya tiene ese elemento (mismo id), se usa; si no, se crea. La pantalla de importación lo resume antes de confirmar («3 componentes nuevos, 2 existentes, 4 imágenes»).
 - [ ] Un archivo inválido o de una versión no soportada se rechaza con un mensaje que dice qué falla (ruta del error del schema); nada se crea a medias.

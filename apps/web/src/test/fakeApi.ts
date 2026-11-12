@@ -91,6 +91,12 @@ export function installFakeApi(
           headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename=feature.context.json' },
         });
       }
+      if (format === 'walkie') {
+        return new Response('walkie', {
+          status: 200,
+          headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename=feature.walkie' },
+        });
+      }
       return new Response('zip', {
         status: 200,
         headers: {

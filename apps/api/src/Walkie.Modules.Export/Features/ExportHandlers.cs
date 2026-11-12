@@ -128,39 +128,63 @@ internal sealed class ExportHandlers(
 
         // La imagen de cada pantalla, por id de nodo (dos pantallas con la misma imagen la piden una vez).
         var graph = await canvas.GraphOfFeatureAsync(featureId, ct).ConfigureAwait(false);
+        var images = await ImagesAsync(appId, [graph], ct).ConfigureAwait(false);
         var screens = new Dictionary<string, PdfImage>(StringComparer.Ordinal);
-        var byAsset = new Dictionary<Guid, PdfImage?>();
         foreach (var node in graph.GetProperty("nodes").EnumerateObject().Select(n => n.Value))
         {
-            if (node.GetProperty("type").GetString() != "screen"
-                || !node.TryGetProperty("assetId", out var value) || !Guid.TryParse(value.GetString(), out var assetId))
-            {
-                continue;
-            }
-
-            if (!byAsset.TryGetValue(assetId, out var image))
-            {
-                image = null;
-                if (await assets.OpenInAppAsync(appId, assetId, ct).ConfigureAwait(false) is { } stored)
-                {
-                    await using (stored.Content.ConfigureAwait(false))
-                    {
-                        using var bytes = new MemoryStream();
-                        await stored.Content.CopyToAsync(bytes, ct).ConfigureAwait(false);
-                        image = new PdfImage(bytes.ToArray(), stored.ContentType);
-                    }
-                }
-
-                byAsset[assetId] = image;
-            }
-
-            if (image is not null)
+            if (node.GetProperty("type").GetString() == "screen"
+                && node.TryGetProperty("assetId", out var value) && Guid.TryParse(value.GetString(), out var assetId)
+                && images.TryGetValue(assetId, out var image))
             {
                 screens[node.GetProperty("id").GetString()!] = image;
             }
         }
 
         return ($"{ai.Slug}.pdf", MarkdownDocument.RenderPdf(ai.Context, canvasImage, screens));
+    }
+
+    /// <summary>
+    /// Archivo <c>.walkie</c> de una feature (spec exportar-e-importar, tarea 5): su último lienzo guardado, los elementos
+    /// del catálogo que usa y las imágenes de sus pantallas; <c>null</c> si la feature no existe.
+    /// </summary>
+    public async Task<(string FileName, byte[] Content)?> WalkieAsync(Guid featureId, CancellationToken ct)
+    {
+        if (await features.DescribeAsync(featureId, ct).ConfigureAwait(false) is not { } feature)
+        {
+            return null;
+        }
+
+        var graph = await canvas.GraphOfFeatureAsync(featureId, ct).ConfigureAwait(false);
+        var refs = NodeIds(graph, "ref", "catalogId").Keys.ToList();
+        var items = refs.Count == 0 ? [] : await catalog.ItemsOfAppAsync(feature.AppId, refs, ct).ConfigureAwait(false);
+        var images = await ImagesAsync(feature.AppId, [graph], ct).ConfigureAwait(false);
+        var package = new List<PackageFeature> { new(feature.Id, feature.Name, feature.Description, graph) };
+        var list = images.Select(i => new PackageImage(i.Key, i.Value.ContentType, i.Value.Bytes)).ToList();
+
+        var manifest = WalkiePackage.Manifest("feature", feature.AppId, feature.AppName, package, items, list, clock.GetUtcNow());
+        return ($"{Slugs.From(feature.Name)}.walkie", WalkiePackage.Zip(manifest, package, items, list));
+    }
+
+    /// <summary>Las imágenes de las pantallas de los lienzos, por asset (una vez cada una); las que ya no están, fuera.</summary>
+    private async Task<Dictionary<Guid, PdfImage>> ImagesAsync(Guid appId, IEnumerable<JsonElement> graphs, CancellationToken ct)
+    {
+        var images = new Dictionary<Guid, PdfImage>();
+        foreach (var assetId in graphs.SelectMany(g => NodeIds(g, "screen", "assetId").Keys).Distinct().Order())
+        {
+            if (await assets.OpenInAppAsync(appId, assetId, ct).ConfigureAwait(false) is not { } stored)
+            {
+                continue;
+            }
+
+            await using (stored.Content.ConfigureAwait(false))
+            {
+                using var bytes = new MemoryStream();
+                await stored.Content.CopyToAsync(bytes, ct).ConfigureAwait(false);
+                images[assetId] = new PdfImage(bytes.ToArray(), stored.ContentType);
+            }
+        }
+
+        return images;
     }
 
     private static byte[] Zip(string markdownName, string markdown, IEnumerable<(string Path, byte[] Bytes)> images)

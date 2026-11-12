@@ -37,6 +37,12 @@ public static class WalkieSchemas
     /// <summary><c>walkie-ai-context.schema.json</c>: contexto para IA (lo valida la prueba del export, no un request).</summary>
     public static JsonSchema AiContext { get; } = LoadAfterGraph("walkie-ai-context.schema.json");
 
+    /// <summary><c>walkie-package.schema.json</c>: <c>manifest.json</c> de un archivo <c>.walkie</c>.</summary>
+    public static JsonSchema Package { get; } = JsonSchema.FromText(Load("walkie-package.schema.json"), Options);
+
+    /// <summary><c>walkie-catalog-item.schema.json</c>: un elemento del catálogo (en el <c>catalog.json</c> de un <c>.walkie</c>).</summary>
+    public static JsonSchema CatalogItem { get; } = LoadAfterGraph("walkie-catalog-item.schema.json");
+
     /// <summary><c>walkie-app-ai-context.schema.json</c>: contexto para IA de una app (usa el de la feature).</summary>
     public static JsonSchema AppAiContext { get; } = LoadAfter(AiContext, "walkie-app-ai-context.schema.json");
 

@@ -296,14 +296,16 @@ export interface Download {
 /** El `.zip` de la feature (su `.md` e `img/`), con la última versión guardada (spec export-markdown). */
 /**
  * Formatos del export (spec exportar-e-importar): `markdown` es el `.zip` de siempre; `ai`, el contexto para IA en
- * Markdown, y `ai-json`, el mismo contexto en JSON (`packages/schema/walkie-ai-context.schema.json`).
+ * Markdown; `ai-json`, el mismo contexto en JSON (`packages/schema/walkie-ai-context.schema.json`), y `walkie`, el
+ * archivo para reconstruir la feature (`walkie-package.schema.json`).
  */
-export type ExportFormat = 'markdown' | 'ai' | 'ai-json';
+export type ExportFormat = 'markdown' | 'ai' | 'ai-json' | 'walkie';
 
 const EXPORT_FALLBACK_NAMES: Record<ExportFormat, string> = {
   markdown: 'feature.zip',
   ai: 'contexto-ia.md',
   'ai-json': 'feature.context.json',
+  walkie: 'feature.walkie',
 };
 
 export async function exportFeature(token: string, featureId: string, format: ExportFormat = 'markdown'): Promise<Download> {

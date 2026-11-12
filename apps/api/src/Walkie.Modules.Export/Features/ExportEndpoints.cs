@@ -9,7 +9,7 @@ namespace Walkie.Modules.Export.Features;
 internal static class ExportEndpoints
 {
     /// <summary>Formatos de <c>?format=</c>; sin él, <c>markdown</c> (el <c>.zip</c> de siempre).</summary>
-    private static readonly string[] Formats = ["markdown", "ai", "ai-json"];
+    private static readonly string[] Formats = ["markdown", "ai", "ai-json", "walkie"];
 
     public static IEndpointRouteBuilder MapExportEndpoints(this IEndpointRouteBuilder routes)
     {
@@ -19,7 +19,8 @@ internal static class ExportEndpoints
             .WithSummary(
                 "Exporta la última versión guardada. format=markdown (por defecto): .zip con <slug>.md e img/. "
                 + "format=ai: contexto para IA en Markdown (<slug>-contexto-ia.md). "
-                + "format=ai-json: el mismo contexto en JSON (<slug>.context.json, packages/schema/walkie-ai-context.schema.json).")
+                + "format=ai-json: el mismo contexto en JSON (<slug>.context.json, packages/schema/walkie-ai-context.schema.json). "
+                + "format=walkie: archivo para reconstruir la feature (<slug>.walkie: manifest.json según walkie-package, lienzo, catálogo usado e imágenes).")
             .Produces(StatusCodes.Status200OK, contentType: "application/zip")
             .Produces(StatusCodes.Status200OK, contentType: "text/markdown")
             .Produces(StatusCodes.Status200OK, contentType: "application/json");
@@ -64,6 +65,13 @@ internal static class ExportEndpoints
         {
             return await handlers.ExportAsync(featureId, ct).ConfigureAwait(false) is { } export
                 ? TypedResults.File(export.Content, "application/zip", export.FileName)
+                : TypedResults.NotFound();
+        }
+
+        if (format == "walkie")
+        {
+            return await handlers.WalkieAsync(featureId, ct).ConfigureAwait(false) is { } package
+                ? TypedResults.File(package.Content, "application/zip", package.FileName)
                 : TypedResults.NotFound();
         }
 

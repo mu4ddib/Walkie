@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { login, openNewFeature, png, saveStatus, seedCanvas } from './helpers';
+import { login, openNewFeature, png, readZip, saveStatus, seedCanvas } from './helpers';
 
 /**
  * Feature exportar-e-importar (docs/features/exportar-e-importar/spec.md) con API, Keycloak y Postgres reales.
@@ -256,4 +256,39 @@ test('PDF: guarda lo pendiente y descarga el documento con el lienzo y la imagen
   expect(pdf.toString('latin1').match(/\/Subtype\s*\/Image/g)?.length).toBe(2);
   expect(pdf.toString('latin1')).toMatch(/\/MediaBox\s*\[\s*0\s+0\s+841\.8/);
   if (process.env.WALKIE_CAPTURES) await file.saveAs(`${process.env.WALKIE_CAPTURES}/exportar-e-importar-5.pdf`);
+});
+
+test('archivo de Walkie: manifest, lienzo guardado, imagen de la pantalla y catálogo', async ({ page }) => {
+  await login(page);
+  await openNewFeature(page, 'Iniciar sesión');
+  await describeFeature(page, 'Iniciar sesión', 'El cliente entra con su documento.');
+  const image = png(16, 12);
+  const asset = await uploadImage(page, image);
+  await seedCanvas(page, {
+    ...graph(),
+    nodes: { ...graph().nodes, s1: { ...graph().nodes.s1, assetId: asset } },
+  });
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar' }).click();
+  await page.getByRole('menuitem', { name: /^Archivo de Walkie/ }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('iniciar-sesion.walkie');
+
+  const files = readZip(await readFile((await file.path())!));
+  const manifest = JSON.parse(files.get('manifest.json')!.toString('utf8')) as {
+    format: string;
+    scope: string;
+    features: { id: string; name: string; description: string; canvas: string }[];
+    images: { assetId: string; path: string }[];
+    catalog: { count: number };
+  };
+  expect(manifest).toMatchObject({ format: 'walkie-package', scope: 'feature', catalog: { count: 0 } });
+  const [feature] = manifest.features;
+  expect(feature).toMatchObject({ name: 'Iniciar sesión', description: 'El cliente entra con su documento.' });
+  const canvas = JSON.parse(files.get(feature!.canvas)!.toString('utf8')) as { nodes: Record<string, { title: string }> };
+  expect(Object.values(canvas.nodes).map((n) => n.title).sort()).toEqual(['API Auth', 'Auditoría', 'Login']);
+  expect(manifest.images).toEqual([{ assetId: asset, path: `img/${asset}.png`, contentType: 'image/png' }]);
+  expect(files.get(`img/${asset}.png`)!.equals(image)).toBe(true);
+  expect(JSON.parse(files.get('catalog.json')!.toString('utf8'))).toEqual([]);
 });

@@ -95,6 +95,7 @@ describe('Contexto para IA (spec exportar-e-importar)', () => {
       expect.stringMatching(/^Imagen \(PNG o SVG\)…Para una presentación/),
       expect.stringMatching(/^PDFDocumento con portada/),
       expect.stringMatching(/^Markdown e imágenes \(\.zip\)Documento para el repo/),
+      expect.stringMatching(/^Archivo de Walkie \(\.walkie\)Para respaldarla/),
     ]);
     expect(items[0]).toHaveFocus();
     await user.keyboard('{ArrowDown}');
@@ -194,6 +195,20 @@ describe('Imagen del lienzo (spec exportar-e-importar)', () => {
     stop();
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('Archivo de Walkie (spec exportar-e-importar, tarea 5)', () => {
+  it('descarga el .walkie de lo guardado y avisa si había cambios sin guardar', async () => {
+    const { api, user } = await openEditor();
+    await user.click(screen.getByRole('button', { name: 'agregar pantalla' }));
+
+    await user.click(screen.getByRole('button', { name: 'Exportar' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Archivo de Walkie/ }));
+
+    await vi.waitFor(() => expect(saved.map((f) => f.name)).toEqual(['feature.walkie']));
+    expect(String(api.fetchMock.mock.calls.at(-1)![0])).toMatch(/\/export\?format=walkie$/);
+    expect(await screen.findByRole('note')).toHaveTextContent('Se exportó lo guardado');
   });
 });
 

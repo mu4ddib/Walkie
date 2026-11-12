@@ -78,10 +78,10 @@ export function FeatureEditor({
   const pdf = useExportPdf(featureId);
   const [pdfPreparing, setPdfPreparing] = useState(false);
 
-  async function exportNow() {
+  async function exportNow(format: 'markdown' | 'walkie' = 'markdown') {
     setExportedDirty(store.getState().dirty);
     try {
-      const file = await exporter.mutateAsync();
+      const file = await exporter.mutateAsync(format);
       saveFile(file.blob, file.fileName);
     } catch {
       // El error lo muestra `exporter.isError`.
@@ -371,6 +371,7 @@ export function FeatureEditor({
             onMarkdown={() => void exportNow()}
             onImage={() => setImageOpen(true)}
             onPdf={() => void exportPdfNow()}
+            onWalkie={() => void exportNow('walkie')}
           />
           <button type="button" className="pixel-button" onClick={() => setSharing(true)}>
             Compartir

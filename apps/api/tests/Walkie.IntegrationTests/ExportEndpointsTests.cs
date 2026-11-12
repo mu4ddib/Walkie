@@ -276,6 +276,68 @@ public sealed class ExportEndpointsTests(WalkieApiFactory factory)
             .Where(x => x is not null)
             .Sum(x => x!.Elements.Count);
 
+    [Fact]
+    public async Task El_archivo_walkie_trae_manifest_lienzo_catalogo_usado_e_imagenes_validos()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var app = await CreateAppAsync(client);
+        var response = await client.PostAsJsonAsync(
+            new Uri($"/api/apps/{app}/features", UriKind.Relative), new CreateFeatureRequest("Iniciar sesión", "Entrar con documento."));
+        var feature = (await response.Content.ReadFromJsonAsync<FeatureResponse>())!.Id;
+        var transferir = await CreateFeatureAsync(client, app, "Transferir");
+        var item = await CreateItemAsync(client, app);
+        var image = TestImages.Create("png", 2, 2);
+        var asset = await UploadAsync(client, app, image);
+        var graph = Graph(asset, item, transferir);
+        await SaveAsync(client, feature, graph);
+
+        var export = await client.GetAsync(AiUri(feature, "walkie"));
+
+        Assert.Equal("application/zip", export.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("iniciar-sesion.walkie", export.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var files = await UnzipAsync(export);
+        var imagePath = $"img/{asset}.png";
+        Assert.Equal(["catalog.json", $"features/{feature}/canvas.json", imagePath, "manifest.json"], files.Keys.Order(StringComparer.Ordinal));
+
+        var manifest = System.Text.Json.JsonDocument.Parse(files["manifest.json"]).RootElement;
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.Package, manifest));
+        Assert.Equal("feature", manifest.GetProperty("scope").GetString());
+        var described = Assert.Single(manifest.GetProperty("features").EnumerateArray());
+        Assert.Equal("Iniciar sesión", described.GetProperty("name").GetString());
+        Assert.Equal("Entrar con documento.", described.GetProperty("description").GetString());
+        Assert.Equal(1, described.GetProperty("canvasVersion").GetInt32());
+        Assert.Equal(1, manifest.GetProperty("catalog").GetProperty("count").GetInt32());
+        Assert.Equal(imagePath, manifest.GetProperty("images")[0].GetProperty("path").GetString());
+
+        // El lienzo es el guardado y cumple walkie-graph.
+        var canvas = System.Text.Json.JsonDocument.Parse(files[$"features/{feature}/canvas.json"]).RootElement;
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.Graph, canvas));
+        var saved = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(new Uri($"/api/features/{feature}/canvas", UriKind.Relative));
+        Assert.True(System.Text.Json.JsonElement.DeepEquals(saved, canvas));
+
+        // El catálogo trae solo lo que usa el lienzo, cada elemento según walkie-catalog-item.
+        var catalog = System.Text.Json.JsonDocument.Parse(files["catalog.json"]).RootElement;
+        var used = Assert.Single(catalog.EnumerateArray());
+        Assert.Equal(item, used.GetProperty("id").GetGuid());
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.CatalogItem, used));
+        Assert.Equal(image, files[imagePath]);
+    }
+
+    [Fact]
+    public async Task Sin_componentes_ni_imagenes_el_walkie_trae_un_catalogo_vacio()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client, await CreateAppAsync(client), "Transferir");
+
+        var files = await UnzipAsync(await client.GetAsync(AiUri(feature, "walkie")));
+
+        Assert.Equal(["catalog.json", $"features/{feature}/canvas.json", "manifest.json"], files.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("[]", Encoding.UTF8.GetString(files["catalog.json"]));
+        var manifest = System.Text.Json.JsonDocument.Parse(files["manifest.json"]).RootElement;
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.Package, manifest));
+        Assert.Equal(0, manifest.GetProperty("features")[0].GetProperty("canvasVersion").GetInt32());
+    }
+
     private static Uri AiUri(Guid featureId, string format) =>
         new($"/api/features/{featureId}/export?format={format}", UriKind.Relative);
 
