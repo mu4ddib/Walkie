@@ -73,12 +73,16 @@ test('compartir una feature con un enlace de solo lectura y revocarlo', async ({
   await expect(reader).toHaveURL(url);
 
   // El tour funciona como en el editor, sin "Ir a" en el portal (criterios 7 y 8).
-  await reader.getByRole('button', { name: 'Ver tour Primer ingreso' }).click();
+  const shared = reader.getByRole('complementary', { name: 'Tours' });
+  await shared.getByRole('listitem').filter({ hasText: 'Primer ingreso' }).getByRole('button', { name: 'Ver tour' }).click();
   const bar = reader.getByRole('toolbar', { name: 'Tour' });
   await expect(bar.getByRole('status')).toHaveText('Paso 1 de 2');
+  // El panel sigue a la vista con el paso activo resaltado (spec tours-a-escala).
+  await expect(shared.locator('[aria-current="step"]')).toContainText('Login');
   await expect(reader.getByRole('region', { name: 'Paso del tour' })).toContainText('Aquí empieza todo');
   await reader.keyboard.press('ArrowRight');
   await expect(bar.getByRole('status')).toHaveText('Paso 2 de 2');
+  await expect(shared.locator('[aria-current="step"]')).toContainText('Transferir');
   await expect(reader.getByRole('button', { name: /^Ir a/ })).toHaveCount(0);
   await reader.keyboard.press('Escape');
   await expect(bar).toBeHidden();

@@ -26,6 +26,8 @@ export interface ToursSectionProps {
   onLocate?: (step: TourStep) => void;
   /** Reproducción en curso: se muestra ese tour, de solo lectura, con su paso activo. */
   playback?: { tourId: string; step: number; onJump: (step: number) => void } | null;
+  /** Solo lectura (enlace compartido): lista y pasos para leer, localizar y reproducir; nada se edita. */
+  readOnly?: boolean;
 }
 
 /**
@@ -116,6 +118,7 @@ export function ToursSection(props: ToursSectionProps) {
             picking={picking}
             playback={playback ? { step: playback.step, onJump: playback.onJump } : undefined}
             onOpenTour={open}
+            readOnly={props.readOnly}
           />
         ) : (
           <TourList
@@ -125,6 +128,7 @@ export function ToursSection(props: ToursSectionProps) {
             onQuery={(query) => setUi((u) => ({ ...u, query: { ...u.query, [active]: query } }))}
             onOpen={open}
             onPlay={onPlay}
+            readOnly={props.readOnly}
           />
         )}
       </div>

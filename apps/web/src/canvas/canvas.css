@@ -904,21 +904,34 @@ div.pixel-node-image {
   top: 12px;
   right: 12px;
   z-index: 5;
-  width: min(300px, calc(100% - 24px));
+  /* Mismo lugar y ancho que el inspector del editor: el reproductor usa el área que deja libre (`insets`). */
+  width: min(340px, calc(100% - 96px));
   max-height: calc(100% - 24px);
-  overflow: auto;
-  padding: 12px 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-top: 12px;
   background: var(--sand-raised);
   border: 1px solid var(--dune-200);
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-float);
 }
 
-/* Durante un tour o un recorrido el inspector sigue a la vista (spec tours-compactos): muestra la lista de pasos con el
-   activo resaltado. En un enlace de solo lectura, la lista de tours se oculta como antes. */
-.canvas.canvas-touring > .shared-tours {
-  display: none;
+@media (max-width: 900px) {
+  .canvas > .shared-tours {
+    top: auto;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    max-height: 45%;
+  }
 }
+
+.canvas > .shared-tours .tour-detail-head {
+  top: -12px;
+}
+
+/* Durante un tour o un recorrido el panel sigue a la vista (spec tours-compactos; en un enlace, spec tours-a-escala):
+   muestra la lista de pasos con el activo resaltado. */
 
 .react-flow__node.tour-dim {
   opacity: 0.28;

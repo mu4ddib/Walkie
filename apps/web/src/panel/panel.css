@@ -826,10 +826,6 @@ p.edge-contract {
   gap: 10px;
 }
 
-.shared-tours-group + .shared-tours-group {
-  margin-top: 12px;
-}
-
 /* Tours compactos (spec tours-compactos): lista en filas, detalle con cabecera fija, pasos como acordeones y la forma
    de agregar fija abajo. Un solo desplazamiento: el del inspector. */
 .tour-list {
@@ -1264,14 +1260,148 @@ p.edge-contract {
   border-radius: var(--radius-m);
 }
 
-/* En pantallas bajas, menos aire en la cabecera fija. */
+/* Elegir a qué tour pasa un paso (spec tours-a-escala). */
+.tour-step-move {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-top: 1px dashed var(--dune-200);
+  font-size: 12.5px;
+}
+
+.tour-step-move-row {
+  display: flex;
+  gap: 6px;
+}
+
+.tour-step-move-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Nota de un paso en un enlace de solo lectura. */
+.tour-step-note {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13.5px;
+  white-space: pre-wrap;
+}
+
+/* Lista con ventana: lo que no se dibuja ocupa su alto en estos espaciadores. */
+.tour-steps-spacer {
+  flex: none;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+}
+
+/* Ícono que solo aparece cuando un botón se queda sin texto (pantallas bajas). */
+.tour-compact-icon {
+  display: none;
+}
+
+/* El botón de elegir pasos en el lienzo ocupa su propia fila del pie. */
+.tour-add > .tour-pick {
+  justify-self: start;
+}
+
+/* Pantallas bajas (spec tours-a-escala): la cabecera es una sola fila (volver, nombre, pasos, reproducir y «⋯») y el
+   pie una fila compacta. Los textos de los botones quedan para lectores de pantalla: sus nombres no cambian. */
 @media (max-height: 640px) {
   .tour-detail-head {
-    gap: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
     padding: 4px 14px 6px;
+  }
+
+  .tour-detail-head > .tour-back {
+    flex: none;
+    padding: 2px 4px;
+    font-size: 16px;
+    text-decoration: none;
+  }
+
+  .tour-detail-head > .panel-field,
+  .tour-detail-head > .tour-detail-name {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .tour-name-input,
+  .tour-detail-name {
+    padding: 2px 4px;
+    font-size: 14.5px;
+  }
+
+  .tour-detail-bar {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .tour-detail-count {
+    overflow: hidden;
+    margin-right: 0;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tour-detail-head > .tour-order {
+    flex-basis: 100%;
+    font-size: 12px;
   }
 
   .tour-detail-tools {
     display: none;
   }
+
+  /* Con un tour abierto, la ayuda general del inspector sobra. */
+  .properties-panel:has(> .tours-section .tour-editor) > .panel-help {
+    display: none;
+  }
+
+  .tour-compact-hide {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .tour-compact-icon {
+    display: inline;
+  }
+
+  .tour-play,
+  .tour-pick {
+    flex: none;
+    min-width: 32px;
+    padding-inline: 8px;
+  }
+
+  .tour-add {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px 10px;
+  }
+
+  .tour-add-row {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .tour-add > .panel-help {
+    margin: 0;
+    font-size: 12.5px;
+  }
 }
+

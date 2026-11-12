@@ -293,3 +293,50 @@ describe('reproducción', () => {
     expect(onJump).toHaveBeenCalledWith(11);
   });
 });
+
+describe('tours a escala', () => {
+  it('«Mover a otro recorrido…» pasa el paso al final del elegido; Ctrl+Z lo devuelve', async () => {
+    const { s, tourId, call } = setup();
+    const other = s().addFlowTour('Baja', [])!;
+    s().addTour('Guía');
+
+    await menu(1, 'Mover paso 1 a otro recorrido');
+    const form = screen.getByRole('form', { name: 'Mover paso 1' });
+    // Solo destinos compatibles: los otros recorridos (no el tour «Guía»).
+    expect(within(form).getAllByRole('option').map((o) => o.textContent)).toEqual(['Baja']);
+    await userEvent.click(within(form).getByRole('button', { name: 'Mover' }));
+
+    expect(s().tours[tourId]!.steps.map((x) => x.edgeId)).toEqual([call]);
+    expect(s().tours[other]!.steps).toHaveLength(1);
+    expect(screen.getByText('Paso 1 movido al final de «Baja».')).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Mover paso 1' })).not.toBeInTheDocument();
+  });
+
+  it('sin otro destino compatible no se ofrece; Esc cierra el selector', async () => {
+    const { s } = setup();
+    await userEvent.click(screen.getByRole('button', { name: 'Acciones del paso 1' }));
+    expect(screen.queryByRole('menuitem', { name: /Mover paso 1 a otro/ })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+
+    act(() => void s().addFlowTour('Baja', []));
+    await menu(1, 'Mover paso 1 a otro recorrido');
+    expect(screen.getByRole('combobox', { name: /Mover paso 1 al final/ })).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('form', { name: 'Mover paso 1' })).not.toBeInTheDocument();
+  });
+
+  it('con cientos de pasos solo dibuja una parte, con espaciadores y el total para lectores de pantalla', () => {
+    const store = createGraphStore();
+    const s = () => store.getState();
+    const node = s().addNode('screen', { x: 0, y: 0 });
+    const tour = s().addTour('Largo')!;
+    for (let i = 0; i < 300; i++) s().addStep(tour, node, `Nota ${i + 1}`);
+    render(<Harness store={store} initial={tour} />);
+
+    const items = screen.getAllByRole('listitem', { name: /^Paso \d+$/ });
+    expect(items.length).toBeGreaterThan(5);
+    expect(items.length).toBeLessThan(60);
+    expect(items[0]).toHaveAttribute('aria-setsize', '300');
+    expect(document.querySelectorAll('.tour-steps-spacer')).toHaveLength(1);
+  });
+});

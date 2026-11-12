@@ -20,4 +20,4 @@ Basado en `spec.md` (pedido detallado del autor, 2026-11-11). Issue: #132.
 
 ## Estado
 
-Última actualización: 2026-11-11 — feature completa. Limitaciones: no se mueven pasos entre tours; en el enlace de solo lectura la lista de tours sigue siendo la anterior (sin resaltar el paso activo); con cientos de pasos la lista no se virtualiza.
+Última actualización: 2026-11-11 — feature completa. Sus limitaciones (mover pasos entre tours, enlace de solo lectura, cientos de pasos, pantallas bajas) las resuelve `tours-a-escala` (#133).

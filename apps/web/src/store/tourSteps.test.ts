@@ -105,3 +105,57 @@ describe('identidad de los pasos (spec tours-compactos)', () => {
     expect(other.getState().tours.t!.steps.map((x) => x.id)).toEqual(steps.map((x) => x.id));
   });
 });
+
+describe('mover pasos entre tours (spec tours-a-escala)', () => {
+  it('pasa el paso al final del destino con su nota e identidad, en un solo paso del historial', async () => {
+    const { tour, ids } = setup();
+    const other = s().addTour('Otro')!;
+    const [, second] = ids();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(s().moveStepToTour(tour, 1, other)).toBe(second);
+    expect(s().tours[tour]!.steps.map((x) => x.note)).toEqual(['Primero', 'Tercero']);
+    expect(s().tours[other]!.steps).toEqual([expect.objectContaining({ id: second, note: 'Segundo' })]);
+
+    s().undo();
+    expect(s().tours[tour]!.steps.map((x) => x.note)).toEqual(['Primero', 'Segundo', 'Tercero']);
+    expect(s().tours[other]!.steps).toEqual([]);
+  });
+
+  it('inserta en la posición pedida y reemplaza un id que ya exista en el destino', () => {
+    const { tour, a, ids } = setup();
+    const copy = s().duplicateTour(tour)!;
+    const [first] = ids();
+    // Forzar el choque: la copia recibe un paso con el mismo id que el que se mueve.
+    s().loadGraph({
+      ...toGraph(s()),
+      tours: { ...toGraph(s()).tours, [copy]: { ...s().tours[copy]!, steps: [{ id: first!, nodeId: a }] } },
+    });
+    const moved = s().moveStepToTour(tour, 0, copy, 0);
+    expect(moved).not.toBe(first);
+    expect(s().tours[copy]!.steps.map((x) => x.id)).toEqual([moved, first]);
+  });
+
+  it('rechaza destinos incompatibles, el mismo tour o índices fuera de rango', () => {
+    const { tour } = setup();
+    const flow = s().addTour('Recorrido', 'flow')!;
+    const other = s().addTour('Otro')!;
+    expect(s().moveStepToTour(tour, 0, flow)).toBeNull();
+    expect(s().moveStepToTour(tour, 0, tour)).toBeNull();
+    expect(s().moveStepToTour(tour, 9, other)).toBeNull();
+    expect(s().moveStepToTour(tour, 0, other, 5)).toBeNull();
+    expect(s().tours[tour]!.steps).toHaveLength(3);
+  });
+
+  it('un paso de conexión va a otro recorrido', () => {
+    const a = s().addNode('screen', { x: 0, y: 0 });
+    const b = s().addNode('api', { x: 0, y: 0 });
+    const edge = s().connect(a, b)!;
+    const one = s().addFlowTour('Uno', [edge])!;
+    const two = s().addFlowTour('Dos', [])!;
+    const guide = s().addTour('Guía')!;
+    expect(s().moveStepToTour(one, 0, guide)).toBeNull();
+    expect(s().moveStepToTour(one, 0, two)).not.toBeNull();
+    expect(s().tours[two]!.steps[0]!.edgeId).toBe(edge);
+  });
+});
