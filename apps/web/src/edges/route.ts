@@ -73,6 +73,8 @@ export function routeAround(
   target: Port,
   obstacles: readonly Rect[],
   bend?: { x?: number; y?: number },
+  /** Más aire alrededor de las cajas y al salir de los lados (px), para un corredor con varios carriles. */
+  extra = 0,
 ): Point[] | null {
   // Solo importan las cajas cerca de los extremos.
   const close = obstacles.filter(
@@ -84,10 +86,11 @@ export function routeAround(
   );
   // Si el trazo de siempre no atraviesa ninguna caja (sin contar el margen), se deja como está.
   if (!pathHits(defaultRoute(source, target, bend), close)) return null;
-  const near = close.map((r) => pad(r, ROUTE_PADDING));
+  const near = close.map((r) => pad(r, ROUTE_PADDING + extra));
 
-  const start = { x: source.x + DIR[source.side].x * STUB, y: source.y + DIR[source.side].y * STUB };
-  const end = { x: target.x + DIR[target.side].x * STUB, y: target.y + DIR[target.side].y * STUB };
+  const stub = STUB + extra;
+  const start = { x: source.x + DIR[source.side].x * stub, y: source.y + DIR[source.side].y * stub };
+  const end = { x: target.x + DIR[target.side].x * stub, y: target.y + DIR[target.side].y * stub };
   const inside = (p: Point) => near.some((r) => p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h);
   if (inside(start) || inside(end)) return null;
 

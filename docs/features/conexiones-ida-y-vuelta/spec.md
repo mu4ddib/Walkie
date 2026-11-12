@@ -1,7 +1,7 @@
 # Spec: Conexiones de ida y vuelta
 
 - Issue padre: #135
-- Estado: aprobada (2026-11-12)
+- Estado: en curso (tarea 1 de 2 hecha)
 
 ## Objetivo
 
@@ -19,10 +19,10 @@ Quien documenta integraciones (pantalla ↔ API, API ↔ servicio) y quien lee e
 
 ### Trazos
 
-- [ ] Dada una solicitud y su respuesta (`replyTo`) entre el mismo par, en cualquier disposición (en línea, apiladas, en diagonal, con cajas en medio o con un grupo plegado como extremo), entonces los dos trazos van en paralelo, separados al menos 12 px en todo su recorrido, también en los dobleces y en los tramos que rodean cajas.
-- [ ] Dadas varias respuestas a una misma solicitud (ej. 201 y 400), entonces cada una tiene su carril; ninguna comparte tramo con otra ni con la solicitud.
-- [ ] Los extremos se reparten en el lado de cada caja como hoy (`computePorts`): la ida y la vuelta no comparten punto de entrada ni de salida.
-- [ ] Dos conexiones del mismo par que no son solicitud y respuesta siguen viéndose como hoy (sin regresiones en `puertos-de-conexion`).
+- [x] Dada una solicitud y su respuesta (`replyTo`) entre el mismo par, en cualquier disposición (en línea, apiladas, en diagonal, con cajas en medio o con un grupo plegado como extremo), entonces los dos trazos van en paralelo, separados al menos 12 px en todo su recorrido, también en los dobleces y en los tramos que rodean cajas.
+- [x] Dadas varias respuestas a una misma solicitud (ej. 201 y 400), entonces cada una tiene su carril; ninguna comparte tramo con otra ni con la solicitud.
+- [x] Los extremos se reparten en el lado de cada caja como hoy (`computePorts`): la ida y la vuelta no comparten punto de entrada ni de salida.
+- [x] Otras conexiones del mismo par (no solicitud y respuesta) también van en carriles, en vez de compartir tramo; las conexiones de pares distintos se ven como hoy (sin regresiones en `puertos-de-conexion`).
 
 ### Etiquetas
 

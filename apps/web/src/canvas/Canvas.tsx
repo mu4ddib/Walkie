@@ -59,8 +59,9 @@ import {
   setInspectorOpen,
 } from '../workspace/session';
 import { EdgeMarkers } from '../edges/EdgeMarkers';
-import { computePorts, staggerBends } from '../edges/ports';
-import { routeAround, type Point } from '../edges/route';
+import { laneOffsets, laneRoute } from '../edges/lanes';
+import { computePorts, staggerBends, type Side } from '../edges/ports';
+import { defaultRoute, routeAround, type Point } from '../edges/route';
 import { edgeDisplay, edgeDisplayText, interactionEdges } from '../edges/edgeMeta';
 import { NodeMenu } from './NodeMenu';
 import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
@@ -542,6 +543,38 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
       const single = (pairs[pairKey(source, target)] ?? 1) === 1;
       const route = routeAround(p.source, p.target, others, single ? staggered[edge.id] : undefined);
       if (route) routes[edge.id] = route;
+    }
+    // Conexiones entre el mismo par (una solicitud y sus respuestas, u otras): un solo corredor para todas —el de la
+    // primera, rodeando cajas si hace falta— y cada una en su carril, para que no compartan tramos (spec
+    // conexiones-ida-y-vuelta). Las ramas de una decisión ya tienen su doblez propio.
+    const laneEdges = visible.flatMap(({ edge, source, target }) => {
+      const p = ports[edge.id];
+      const branchEdge = !!edge.branch && source === edge.from;
+      return p && !branchEdge && (pairs[pairKey(source, target)] ?? 1) > 1 ? [{ id: edge.id, source, target, ports: p }] : [];
+    });
+    const lanes = laneOffsets(laneEdges);
+    const corridors = new Map<string, { points: Point[]; start: Side; end: Side }>();
+    for (const edge of laneEdges) {
+      const canonical = edge.source < edge.target;
+      const [start, end] = canonical ? [edge.ports.source, edge.ports.target] : [edge.ports.target, edge.ports.source];
+      const key = pairKey(edge.source, edge.target);
+      let base = corridors.get(key);
+      if (!base) {
+        // Si hay que rodear cajas, el corredor deja lugar a todos los carriles del par (más aire y salidas más largas).
+        const widest = Math.max(
+          ...laneEdges.filter((e) => pairKey(e.source, e.target) === key).map((e) => Math.abs(lanes[e.id] ?? 0)),
+        );
+        const others = obstacles.filter((o) => o.id !== edge.source && o.id !== edge.target).map((o) => o.rect);
+        const own =
+          (routes[edge.id] && routeAround(edge.ports.source, edge.ports.target, others, undefined, widest)) ??
+          defaultRoute(edge.ports.source, edge.ports.target);
+        base = { points: canonical ? own : [...own].reverse(), start: start.side, end: end.side };
+        corridors.set(key, base);
+      }
+      // Solo si sale y llega por los mismos lados que el corredor.
+      const lane =
+        base.start === start.side && base.end === end.side ? laneRoute(base.points, start, end, lanes[edge.id] ?? 0) : null;
+      if (lane) routes[edge.id] = canonical ? lane : lane.reverse();
     }
     // Etiquetas de las conexiones de un mismo par: cada una queda cerca de la altura de sus puertos, pero al menos a
     // LABEL_GAP de la anterior (con cajas bajas los puertos quedan más juntos que lo que mide una etiqueta).
