@@ -292,3 +292,45 @@ test('archivo de Walkie: manifest, lienzo guardado, imagen de la pantalla y cat�
   expect(files.get(`img/${asset}.png`)!.equals(image)).toBe(true);
   expect(JSON.parse(files.get('catalog.json')!.toString('utf8'))).toEqual([]);
 });
+
+test('importar: el .walkie exportado reconstruye la feature en otra app, con resumen antes de crear', async ({ page }) => {
+  await login(page);
+  await openNewFeature(page, 'Iniciar sesión');
+  await describeFeature(page, 'Iniciar sesión', 'El cliente entra con su documento.');
+  const asset = await uploadImage(page, png(16, 12));
+  await seedCanvas(page, {
+    ...graph(),
+    nodes: { ...graph().nodes, s1: { ...graph().nodes.s1, assetId: asset } },
+  });
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar' }).click();
+  await page.getByRole('menuitem', { name: /^Archivo de Walkie/ }).click();
+  const walkie = (await (await download).path())!;
+
+  // Otra app, vacía.
+  await page.goto('/apps');
+  const target = `E2E destino ${Date.now()}`;
+  await page.getByLabel('Nueva app').fill(target);
+  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('link', { name: target }).click();
+
+  await page.getByRole('button', { name: 'Importar feature' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Importar feature' });
+  await dialog.getByLabel('Archivo .walkie').setInputFiles(walkie);
+  const summary = dialog.getByLabel('Qué se va a importar');
+  await expect(summary).toContainText('Iniciar sesión');
+  await expect(summary).toContainText('1 imagen');
+  // Nada creado todavía.
+  await expect(page.getByRole('heading', { name: 'Aún no hay features' })).toBeVisible();
+  await capture(page, 'importar-resumen');
+
+  await dialog.getByRole('button', { name: 'Importar' }).click();
+  await dialog.getByRole('link', { name: 'Iniciar sesión' }).click();
+
+  await expect(page.locator('.react-flow')).toBeVisible();
+  for (const title of ['Login', 'API Auth', 'Auditoría']) {
+    await expect(page.locator('.react-flow__node').filter({ hasText: title })).toBeVisible();
+  }
+  // La imagen de la pantalla se subió de nuevo a esta app.
+  await expect(page.locator('.react-flow__node').filter({ hasText: 'Login' }).locator('img')).toBeVisible();
+});

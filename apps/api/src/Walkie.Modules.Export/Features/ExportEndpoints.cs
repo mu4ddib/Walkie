@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -46,8 +48,75 @@ internal static class ExportEndpoints
             .Produces(StatusCodes.Status200OK, contentType: "text/markdown")
             .Produces(StatusCodes.Status200OK, contentType: "application/json");
 
+        routes.MapPost("/api/apps/{appId:guid}/import", Import)
+            .WithTags("Export")
+            .WithName("ImportPackage")
+            .WithSummary(
+                "Importa un archivo .walkie (multipart, campo file, hasta 50 MB; ADR-0009): crea sus features con ids nuevos, "
+                + "el catálogo que usan (el que ya está en la app se reutiliza) y sus imágenes. Todo o nada. Con dryRun=true "
+                + "solo valida y devuelve el resumen. Errores con la ruta dentro del archivo, ej. features/<id>/canvas.json/nodes/<nodo>.")
+            .Accepts<IFormFile>("multipart/form-data")
+            .DisableAntiforgery()
+            // Un poco más que el archivo, por las cabeceras del multipart; el límite del archivo se revisa abajo (413).
+            .WithMetadata(new RequestSizeLimitAttribute(ImportHandlers.MaxFileBytes + (1024 * 1024)))
+            .Produces<ImportSummary>(StatusCodes.Status200OK)
+            .Produces<ImportSummary>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+
         return routes;
     }
+
+    private static async Task<Results<Created<ImportSummary>, Ok<ImportSummary>, NotFound, ValidationProblem, ProblemHttpResult>> Import(
+        Guid appId, bool? dryRun, HttpRequest request, ClaimsPrincipal user, ImportHandlers handlers, CancellationToken ct)
+    {
+        if (request.ContentLength > ImportHandlers.MaxFileBytes + (1024 * 1024))
+        {
+            return TooLarge();
+        }
+
+        IFormFile? file = null;
+        if (request.HasFormContentType && request.ContentLength is not 0)
+        {
+            try
+            {
+                file = (await request.ReadFormAsync(ct).ConfigureAwait(false)).Files.GetFile("file");
+            }
+            catch (InvalidDataException)
+            {
+                file = null;
+            }
+        }
+
+        if (file is null || file.Length == 0)
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["file"] = ["Falta el archivo .walkie (campo file)."],
+            });
+        }
+
+        if (file.Length > ImportHandlers.MaxFileBytes)
+        {
+            return TooLarge();
+        }
+
+        using var bytes = new MemoryStream();
+        await file.CopyToAsync(bytes, ct).ConfigureAwait(false);
+        var userId = user.FindFirstValue("sub") ?? throw new InvalidOperationException("El token no trae el claim sub.");
+        var dry = dryRun ?? false;
+        return await handlers.ImportAsync(appId, bytes.ToArray(), dry, userId, ct).ConfigureAwait(false) switch
+        {
+            ImportResult.Done { Summary: var summary } when dry => TypedResults.Ok(summary),
+            ImportResult.Done { Summary: var summary } => TypedResults.Created($"/api/apps/{appId}/features", summary),
+            ImportResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
+            _ => TypedResults.NotFound(),
+        };
+    }
+
+    private static ProblemHttpResult TooLarge() => TypedResults.Problem(
+        statusCode: StatusCodes.Status413PayloadTooLarge,
+        title: "El archivo es demasiado grande.",
+        detail: "Un archivo .walkie puede pesar hasta 50 MB.");
 
     private static async Task<Results<FileContentHttpResult, NotFound, ValidationProblem>> Export(
         Guid featureId, string? format, ExportHandlers handlers, CancellationToken ct)

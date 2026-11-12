@@ -17,6 +17,7 @@ const targets = [
   },
   { schema: 'walkie-asset.schema.json', out: 'walkie-asset.ts', name: 'WalkieAsset' },
   { schema: 'walkie-package.schema.json', out: 'walkie-package.ts', name: 'WalkiePackage' },
+  { schema: 'walkie-import-summary.schema.json', out: 'walkie-import-summary.ts', name: 'WalkieImportSummary' },
   {
     schema: 'walkie-ai-context.schema.json',
     out: 'walkie-ai-context.ts',

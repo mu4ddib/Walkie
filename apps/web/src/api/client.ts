@@ -4,6 +4,7 @@ import type { WalkieAssetV0 } from '../schema/walkie-asset';
 import type { WalkieShareV0 } from '../schema/walkie-share';
 import type { WalkieSharedFeatureV0 } from '../schema/walkie-shared-feature';
 import type { Layout, WalkieAppMapV0 } from '../schema/walkie-app-map';
+import type { WalkieImportSummaryV0 } from '../schema/walkie-import-summary';
 
 /** Mapa de una app (`GET /api/apps/{appId}/map`, spec mapa-de-la-app). */
 export type AppMap = WalkieAppMapV0;
@@ -334,6 +335,23 @@ export async function exportApp(token: string, appId: string, format: 'ai' | 'ai
   const res = await send(`/api/apps/${encodeURIComponent(appId)}/export?format=${format}`, { token });
   const fallback = format === 'ai' ? 'app-contexto-ia.md' : 'app.app-context.json';
   return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? fallback, blob: await res.blob() };
+}
+
+/** Resumen de importar un `.walkie` (`walkie-import-summary.schema.json`). */
+export type ImportSummary = WalkieImportSummaryV0;
+
+/**
+ * Importa un archivo `.walkie` en la app (spec exportar-e-importar, tarea 6; ADR-0009). Con `dryRun` solo valida y
+ * responde qué crearía; los errores llegan como `ApiError` (400 con la ruta dentro del archivo, 413 si pasa de 50 MB).
+ */
+export function importPackage(token: string, appId: string, file: Blob, dryRun: boolean): Promise<ImportSummary> {
+  const form = new FormData();
+  form.append('file', file, 'feature.walkie');
+  return request(`/api/apps/${encodeURIComponent(appId)}/import${dryRun ? '?dryRun=true' : ''}`, {
+    token,
+    method: 'POST',
+    body: form,
+  });
 }
 
 /** `filename*=UTF-8''…` o `filename=…` de un `Content-Disposition`. */

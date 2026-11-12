@@ -84,6 +84,52 @@ describe('detalle de app', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('«Importar feature» muestra qué trae el archivo antes de crear y refresca la galería (spec exportar-e-importar)', async () => {
+    const api = installFakeApi({ apps: [app], features: [feature] });
+    renderRoute('/apps/app-1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Importar feature' }));
+    const dialog = screen.getByRole('dialog', { name: 'Importar feature' });
+    const importButton = within(dialog).getByRole('button', { name: 'Importar' });
+    expect(importButton).toBeDisabled();
+
+    const file = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], 'iniciar-sesion.walkie', { type: 'application/zip' });
+    await userEvent.upload(within(dialog).getByLabelText('Archivo .walkie'), file);
+
+    // Primero el resumen (dryRun), sin crear nada.
+    const summary = await within(dialog).findByLabelText('Qué se va a importar');
+    expect(summary).toHaveTextContent('Iniciar sesión (importada)');
+    expect(summary).toHaveTextContent('ya hay una «Iniciar sesión» en esta app');
+    expect(summary).toHaveTextContent('1 elemento nuevo en el catálogo · 1 imagen');
+    expect(within(summary).getByRole('note')).toHaveTextContent('queda sin destino');
+    expect(String(api.fetchMock.mock.calls.at(-1)![0])).toMatch(/\/api\/apps\/app-1\/import\?dryRun=true$/);
+    expect(api.features).toHaveLength(1);
+
+    await userEvent.click(importButton);
+
+    const link = await within(dialog).findByRole('link', { name: 'Iniciar sesión (importada)' });
+    expect(link.getAttribute('href')).toMatch(/^\/apps\/app-1\/features\//);
+    expect(api.features).toHaveLength(2);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
+    const list = screen.getByRole('list', { name: 'Features' });
+    expect(await within(list).findByRole('link', { name: 'Iniciar sesión (importada)' })).toBeInTheDocument();
+  });
+
+  it('«Importar feature» muestra los errores con su ruta dentro del archivo', async () => {
+    const api = installFakeApi({ apps: [app], features: [feature] });
+    api.next.importErrors = { 'features/f1/canvas.json/edges/e1/to': ['La conexión apunta a un nodo que no existe.'] };
+    renderRoute('/apps/app-1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Importar feature' }));
+    const dialog = screen.getByRole('dialog', { name: 'Importar feature' });
+    await userEvent.upload(within(dialog).getByLabelText('Archivo .walkie'), new File(['x'], 'roto.walkie'));
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('features/f1/canvas.json/edges/e1/to');
+    expect(alert).toHaveTextContent('La conexión apunta a un nodo que no existe.');
+    expect(within(dialog).getByRole('button', { name: 'Importar' })).toBeDisabled();
+  });
+
   it('avisa si la app no existe', async () => {
     installFakeApi();
     renderRoute('/apps/no-existe');

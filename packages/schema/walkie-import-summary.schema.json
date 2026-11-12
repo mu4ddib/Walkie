@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-import-summary.schema.json",
+  "title": "Walkie import summary v0",
+  "description": "Respuesta de POST /api/apps/{appId}/import (spec exportar-e-importar, tarea 6; ADR-0009): lo que creó la importación de un archivo .walkie o, con dryRun, lo que crearía. Los errores van aparte, como ProblemDetails con la ruta dentro del archivo.",
+  "type": "object",
+  "required": ["dryRun", "features", "newCatalogItems", "existingCatalogItems", "images", "warnings"],
+  "additionalProperties": false,
+  "properties": {
+    "dryRun": { "type": "boolean", "description": "true: solo se validó; no se creó nada" },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sourceName", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "sourceName": { "type": "string", "description": "Nombre en el archivo" },
+          "name": { "type": "string", "description": "Nombre en la app: el mismo o con «(importada)», «(importada 2)»… si ya existe" },
+          "id": { "type": "string", "format": "uuid", "description": "Id de la feature creada (no viene con dryRun)" }
+        }
+      }
+    },
+    "newCatalogItems": { "type": "integer", "minimum": 0, "description": "Elementos del catálogo que se crean (con id nuevo)" },
+    "existingCatalogItems": { "type": "integer", "minimum": 0, "description": "Elementos que ya estaban en la app (mismo id) y se reutilizan" },
+    "images": { "type": "integer", "minimum": 0, "description": "Imágenes de pantallas que se suben" },
+    "warnings": {
+      "type": "array",
+      "description": "Lo que no se pudo conservar tal cual (un portal sin destino, una pantalla sin imagen, una descripción recortada)",
+      "items": { "type": "string" }
+    }
+  }
+}

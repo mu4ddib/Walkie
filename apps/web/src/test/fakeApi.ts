@@ -25,8 +25,14 @@ export function installFakeApi(
   /** Enlaces de solo lectura activos (los revocados salen de la lista, como en la API). */
   const shares = [...(seed.shares ?? [])];
   /** Si se define, el próximo PUT del lienzo responde este estado (ej. 400). */
-  const next_: { putStatus?: number; uploadStatus?: number; exportStatus?: number; lastPdfCanvas?: Blob | null } =
-    {};
+  const next_: {
+    putStatus?: number;
+    uploadStatus?: number;
+    exportStatus?: number;
+    lastPdfCanvas?: Blob | null;
+    /** Si se define, la próxima importación responde 400 con estos errores (ruta dentro del archivo → mensajes). */
+    importErrors?: Record<string, string[]>;
+  } = {};
   let next = 1;
   const id = () => `00000000-0000-7000-8000-${String(next++).padStart(12, '0')}`;
 
@@ -224,6 +230,35 @@ export function installFakeApi(
           });
     }
     const appId = parts[2];
+
+    // /api/apps/{appId}/import — importar un .walkie (spec exportar-e-importar, tarea 6). No lee el zip: el archivo
+    // trae «Iniciar sesión» y, si ya hay una feature con ese nombre, queda «(importada)», como la API.
+    if (parts[3] === 'import' && method === 'POST') {
+      const appId = parts[2]!;
+      if (!apps.some((a) => a.id === appId)) return notFound();
+      if (next_.importErrors) {
+        const errors = next_.importErrors;
+        delete next_.importErrors;
+        return json(400, { title: 'One or more validation errors occurred.', status: 400, errors });
+      }
+      const dryRun = url.searchParams.get('dryRun') === 'true';
+      const sourceName = 'Iniciar sesión';
+      const taken = features.some((f) => f.appId === appId && f.name === sourceName);
+      const name = taken ? `${sourceName} (importada)` : sourceName;
+      const summary = {
+        dryRun,
+        features: [{ sourceName, name }],
+        newCatalogItems: 1,
+        existingCatalogItems: 0,
+        images: 1,
+        warnings: ['«Iniciar sesión»: el portal «Transferir» queda sin destino (la feature no está en el archivo ni en esta app).'],
+      };
+      if (dryRun) return json(200, summary);
+      const now = new Date(0).toISOString();
+      const feature: Feature = { id: id(), appId, name, description: '', createdAt: now, updatedAt: now };
+      features.push(feature);
+      return json(201, { ...summary, features: [{ sourceName, name, id: feature.id }] });
+    }
 
     const withCount = (a: App) => ({ ...a, featureCount: features.filter((f) => f.appId === a.id).length });
 

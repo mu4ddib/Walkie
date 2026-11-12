@@ -37,6 +37,7 @@ import {
   type NewCatalogItem,
   type ShareDays,
   type ExportFormat,
+  importPackage,
 } from './client';
 
 /** Access token de la sesión actual. `AuthGate` garantiza que existe dentro de la app. */
@@ -329,4 +330,23 @@ export function useExportPdf(featureId: string) {
 export function useExportFeature(featureId: string) {
   const token = useToken();
   return useMutation({ mutationFn: (format?: ExportFormat) => exportFeature(token, featureId, format) });
+}
+
+/**
+ * Importar un `.walkie` (spec exportar-e-importar, tarea 6): `dryRun` valida y devuelve el resumen; la importación
+ * real refresca las features, sus miniaturas, el mapa y el catálogo de la app.
+ */
+export function useImportPackage(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, dryRun }: { file: Blob; dryRun: boolean }) => importPackage(token, appId, file, dryRun),
+    onSuccess: (summary) => {
+      if (summary.dryRun) return;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.previews(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.map(appId) });
+    },
+  });
 }

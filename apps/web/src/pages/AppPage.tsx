@@ -11,6 +11,7 @@ import { catalogPath } from './catalogPaths';
 import { mapPath } from '../workspace/paths';
 import { QueryState } from '../ui/QueryState';
 import { AiContextDialog } from '../canvas/AiContextDialog';
+import { ImportDialog } from '../gallery/ImportDialog';
 
 /**
  * Galería de features de una app (spec espacio-de-trabajo, criterios 7 a 9): tarjetas con miniatura,
@@ -27,6 +28,8 @@ export function AppPage() {
   const [sort, setSort] = useState<FeatureSort>('recent');
   // «Contexto para IA de la app» (spec exportar-e-importar, tarea 2).
   const [aiContext, setAiContext] = useState(false);
+  // «Importar feature» desde un archivo .walkie (spec exportar-e-importar, tarea 6).
+  const [importing, setImporting] = useState(false);
 
   const byFeature = useMemo(() => new Map((previews.data ?? []).map((p) => [p.featureId, p])), [previews.data]);
   const shown = useMemo(() => {
@@ -68,9 +71,18 @@ export function AppPage() {
           >
             Contexto para IA
           </button>
+          <button
+            type="button"
+            className="pixel-button is-ghost gallery-map-link"
+            title="Reconstruir una feature desde un archivo .walkie exportado"
+            onClick={() => setImporting(true)}
+          >
+            Importar feature
+          </button>
         </div>
       </header>
       {aiContext && <AiContextDialog target={{ kind: 'app', id: appId }} onClose={() => setAiContext(false)} />}
+      {importing && <ImportDialog appId={appId} onClose={() => setImporting(false)} />}
       <div className="gallery-create">
         <NameForm
           label="Nueva feature"
