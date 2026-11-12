@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { login, openNewFeature, seedCanvas } from './helpers';
+import { login, openNewFeature, png, seedCanvas } from './helpers';
 
 /**
  * Feature exportar-e-importar (docs/features/exportar-e-importar/spec.md) con API, Keycloak y Postgres reales.
@@ -148,4 +148,82 @@ test('contexto para IA de la app: todas sus features, cómo se conectan y el JSO
   expect(ai.format).toBe('walkie-app-ai-context');
   expect(ai.features.map((f) => f.feature.name)).toEqual(['Inicio', 'Transferir']);
   expect(ai.map.links).toEqual([{ from: 'Inicio', to: 'Transferir', via: 'Ir a transferir' }]);
+});
+
+/** Sube una imagen a la app abierta por la API (con el token de la sesión) y devuelve su id. */
+async function uploadImage(page: Page, bytes: Buffer): Promise<string> {
+  const appId = /apps\/([^/?#]+)/.exec(page.url())![1]!;
+  return page.evaluate(
+    async ({ api, appId, data }) => {
+      const key = Object.keys(sessionStorage).find((k) => k.startsWith('oidc.user:'))!;
+      const token = (JSON.parse(sessionStorage.getItem(key)!) as { access_token: string }).access_token;
+      const form = new FormData();
+      form.append('file', new Blob([new Uint8Array(data)], { type: 'image/png' }), 'pantalla.png');
+      const res = await fetch(`${api}/api/apps/${appId}/assets`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      return ((await res.json()) as { id: string }).id;
+    },
+    { api: API, appId, data: [...bytes] },
+  );
+}
+
+/** Ancho y alto de un PNG (cabecera IHDR). */
+const pngSize = (buffer: Buffer) => ({ width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) });
+
+test('imagen del lienzo: PNG de todo el lienzo a 2× y SVG con las cajas y la imagen de la pantalla', async ({ page }) => {
+  await login(page);
+  await openNewFeature(page, 'Iniciar sesión');
+  const asset = await uploadImage(page, png(32, 24));
+  await seedCanvas(page, {
+    ...graph(),
+    nodes: { ...graph().nodes, s1: { ...graph().nodes.s1, assetId: asset } },
+  });
+  await expect(page.locator('.pixel-node img')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Exportar' }).click();
+  await page.getByRole('menuitem', { name: /Imagen \(PNG o SVG\)/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Imagen del lienzo' });
+  await capture(page, '3-imagen');
+
+  // PNG de todo el lienzo a 2×: más ancho que alto (tres cajas en fila) y al doble de su tamaño.
+  const pngDownload = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Descargar imagen' }).click();
+  const pngFile = await pngDownload;
+  expect(pngFile.suggestedFilename()).toBe('iniciar-sesion@2x.png');
+  const pngBytes = await readFile((await pngFile.path())!);
+  if (process.env.WALKIE_CAPTURES) await pngFile.saveAs(`${process.env.WALKIE_CAPTURES}/exportar-e-importar-4-imagen-generada.png`);
+  expect(pngBytes.subarray(1, 4).toString()).toBe('PNG');
+  const size = pngSize(pngBytes);
+  expect(size.width).toBeGreaterThan(size.height);
+  expect(size.width).toBeGreaterThan(1600);
+  await expect(dialog.getByRole('status')).toHaveText('Descargada: iniciar-sesion@2x.png');
+
+  // SVG: vectorial, con los títulos de las cajas, la imagen de la pantalla incrustada y sin puntos de conexión.
+  await dialog.getByRole('radio', { name: /^SVG/ }).check();
+  const svgDownload = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Descargar imagen' }).click();
+  const svgFile = await svgDownload;
+  expect(svgFile.suggestedFilename()).toBe('iniciar-sesion.svg');
+  const svg = await readFile((await svgFile.path())!, 'utf8');
+  expect(svg.startsWith('<svg')).toBe(true);
+  for (const title of ['Login', 'API Auth', 'Auditoría']) expect(svg).toContain(title);
+  expect(svg).toContain('data:image/png;base64');
+  expect(svg).not.toContain('react-flow__handle');
+
+  // Lo visible, en PNG a 1×: del tamaño del lienzo en pantalla.
+  await dialog.getByRole('radio', { name: /^PNG/ }).check();
+  await dialog.getByRole('radio', { name: /^Lo que se ve/ }).check();
+  await dialog.getByRole('radio', { name: /^1×/ }).check();
+  const visibleDownload = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Descargar imagen' }).click();
+  const visibleFile = await visibleDownload;
+  expect(visibleFile.suggestedFilename()).toBe('iniciar-sesion-vista.png');
+  const pane = (await page.locator('.canvas-flow .react-flow').boundingBox())!;
+  expect(pngSize(await readFile((await visibleFile.path())!))).toEqual({
+    width: Math.round(pane.width),
+    height: Math.round(pane.height),
+  });
 });

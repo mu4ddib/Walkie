@@ -1820,3 +1820,71 @@ div.pixel-node-image {
 .ai-context-actions .share-close {
   margin-left: auto;
 }
+
+/* Imagen del lienzo (spec exportar-e-importar, tarea 3): opciones como tarjetas elegibles. */
+.image-export-choice {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.image-export-choice legend {
+  margin-bottom: 6px;
+  color: var(--stone-700);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.image-export-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.image-export-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand);
+  cursor: pointer;
+}
+
+.image-export-option[data-checked] {
+  border-color: var(--spice);
+  background: var(--sand-raised);
+}
+
+.image-export-option:has(input:focus-visible) {
+  outline: 2px solid var(--ibad);
+  outline-offset: 1px;
+}
+
+.image-export-option input {
+  margin-top: 3px;
+  accent-color: var(--spice);
+}
+
+.image-export-option > span {
+  display: grid;
+  gap: 2px;
+}
+
+.image-export-option-label {
+  font-weight: 600;
+}
+
+.image-export-option-help {
+  color: var(--stone-700);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.image-export-status {
+  color: var(--stone-700);
+  font-size: 12.5px;
+}

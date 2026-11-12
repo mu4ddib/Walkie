@@ -5,6 +5,7 @@ import { ApiError } from '../api/client';
 import { useExportFeature, useFetchCanvas, useSaveCanvas } from '../api/hooks';
 import { AiContextDialog } from './AiContextDialog';
 import { ExportMenu } from './ExportMenu';
+import { ImageExportDialog } from './ImageExportDialog';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import type { CanvasCatalog } from '../catalog/catalogContext';
 import { createGraphStore, toGraph } from '../store/graphStore';
@@ -71,6 +72,7 @@ export function FeatureEditor({
   const [exportedDirty, setExportedDirty] = useState(false);
   // «Contexto para IA» (spec exportar-e-importar): abierto o no, y si había cambios sin guardar al abrirlo.
   const [aiContext, setAiContext] = useState<{ dirty: boolean } | null>(null);
+  const [imageOpen, setImageOpen] = useState(false);
 
   async function exportNow() {
     setExportedDirty(store.getState().dirty);
@@ -339,6 +341,7 @@ export function FeatureEditor({
             pending={exporter.isPending}
             onAiContext={() => setAiContext({ dirty: store.getState().dirty })}
             onMarkdown={() => void exportNow()}
+            onImage={() => setImageOpen(true)}
           />
           <button type="button" className="pixel-button" onClick={() => setSharing(true)}>
             Compartir
@@ -357,6 +360,7 @@ export function FeatureEditor({
         </div>
       </header>
       {sharing && <ShareDialog featureId={featureId} onClose={() => setSharing(false)} />}
+      {imageOpen && <ImageExportDialog featureName={location?.featureName} onClose={() => setImageOpen(false)} />}
       {aiContext && (
         <AiContextDialog target={{ kind: 'feature', id: featureId }} dirty={aiContext.dirty} onClose={() => setAiContext(null)} />
       )}

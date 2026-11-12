@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StoreApi } from 'zustand/vanilla';
 import { fileNameOf } from '../api/client';
+import { onCanvasImageRequest } from './canvasImage';
 import type { GraphStore } from '../store/graphStore';
 import { installFakeApi } from '../test/fakeApi';
 import { renderRoute } from '../test/render';
@@ -91,6 +92,7 @@ describe('Contexto para IA (spec exportar-e-importar)', () => {
     const items = screen.getAllByRole('menuitem');
     expect(items.map((i) => i.textContent)).toEqual([
       expect.stringMatching(/^Contexto para IA…Todo lo documentado/),
+      expect.stringMatching(/^Imagen \(PNG o SVG\)…Para una presentación/),
       expect.stringMatching(/^Markdown e imágenes \(\.zip\)Documento para el repo/),
     ]);
     expect(items[0]).toHaveFocus();
@@ -141,6 +143,56 @@ describe('Contexto para IA (spec exportar-e-importar)', () => {
     expect(within(dialog).getByRole('note')).toHaveTextContent('Se exporta lo guardado');
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('No se pudo preparar el contexto.');
     expect(within(dialog).getByRole('button', { name: 'Copiar al portapapeles' })).toBeDisabled();
+  });
+});
+
+describe('Imagen del lienzo (spec exportar-e-importar)', () => {
+  it('elige formato, alcance y resolución, pide la imagen al lienzo y la descarga con su nombre', async () => {
+    const { user } = await openEditor();
+    // El lienzo de la prueba es un mock: atiende el pedido como lo hace `Canvas`.
+    const requests: unknown[] = [];
+    const stop = onCanvasImageRequest(async (options) => {
+      requests.push(options);
+      return new Blob(['imagen'], { type: options.format === 'png' ? 'image/png' : 'image/svg+xml' });
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Exportar' }));
+    await user.click(screen.getByRole('menuitem', { name: /Imagen \(PNG o SVG\)/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Imagen del lienzo' });
+    expect(within(dialog).getByRole('radio', { name: /^PNG/ })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: /^Todo el lienzo/ })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: /^2×/ })).toBeChecked();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Descargar imagen' }));
+    await vi.waitFor(() => expect(saved.map((f) => f.name)).toEqual(['iniciar-sesion@2x.png']));
+    expect(within(dialog).getByRole('status')).toHaveTextContent('Descargada: iniciar-sesion@2x.png');
+
+    // SVG de lo visible: sin opción de resolución.
+    await user.click(within(dialog).getByRole('radio', { name: /^SVG/ }));
+    expect(within(dialog).queryByRole('radio', { name: /^1×/ })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('radio', { name: /^Lo que se ve/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Descargar imagen' }));
+    await vi.waitFor(() => expect(saved.map((f) => f.name)).toContain('iniciar-sesion-vista.svg'));
+    expect(requests).toEqual([
+      { format: 'png', scope: 'all', scale: 2 },
+      { format: 'svg', scope: 'visible', scale: 2 },
+    ]);
+    stop();
+  });
+
+  it('si el lienzo no puede generarla (vacío), lo dice y no descarga', async () => {
+    const { user } = await openEditor();
+    const stop = onCanvasImageRequest(() => Promise.reject(new Error('El lienzo está vacío.')));
+
+    await user.click(screen.getByRole('button', { name: 'Exportar' }));
+    await user.click(screen.getByRole('menuitem', { name: /Imagen/ }));
+    await user.click(screen.getByRole('button', { name: 'Descargar imagen' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('El lienzo está vacío.');
+    expect(saved).toEqual([]);
+    stop();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 

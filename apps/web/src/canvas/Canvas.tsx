@@ -67,6 +67,7 @@ import { defaultRoute, routeAround, type Point } from '../edges/route';
 import { edgeDisplay, edgeDisplayText, interactionEdges } from '../edges/edgeMeta';
 import { NodeMenu } from './NodeMenu';
 import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
+import { captureCanvas, framing, onCanvasImageRequest } from './canvasImage';
 import { EmptyCanvasGuide } from './EmptyCanvasGuide';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { ZoomControls } from './ZoomControls';
@@ -126,7 +127,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
   const { addGroup, moveGroup, resizeGroup, setParent, removeGroup, updateGroup } = useGraphStore((s) => s);
   const { addFlowTour, addEdgeStep } = useGraphStore((s) => s);
   const { undo, redo, beginBatch, endBatch, growGroup, canUndo, canRedo } = useGraphStore((s) => s);
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport, setCenter } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport, setCenter, getNodes, getNodesBounds } = useReactFlow();
   const openFeature = useOpenFeature();
   // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
   // solo si el lienzo ya trae nodos: con uno vacío, React Flow ajustaría el zoom al aparecer el primero
@@ -1146,6 +1147,25 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   });
+
+  // Imagen del lienzo (spec exportar-e-importar, tarea 3): la pide el diálogo de «Exportar» con un evento.
+  useEffect(
+    () =>
+      onCanvasImageRequest(async (options) => {
+        const root = flowRef.current?.querySelector<HTMLElement>('.react-flow');
+        const viewport = root?.querySelector<HTMLElement>('.react-flow__viewport');
+        if (!root || !viewport) throw new Error('No hay un lienzo abierto.');
+        // Fondo claro siempre (la arena de la interfaz), aunque el sistema esté en modo oscuro.
+        const background = getComputedStyle(document.documentElement).getPropertyValue('--sand').trim() || '#f6efe2';
+        if (options.scope === 'visible') {
+          return captureCanvas(root, options, { width: root.clientWidth, height: root.clientHeight }, background);
+        }
+        const visible = getNodes().filter((n) => !n.hidden);
+        if (visible.length === 0) throw new Error('El lienzo está vacío.');
+        return captureCanvas(viewport, options, framing(getNodesBounds(visible)), background);
+      }),
+    [getNodes, getNodesBounds],
+  );
 
   useEffect(() => {
     const open = () => setHelpOpen(true);

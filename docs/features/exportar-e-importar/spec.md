@@ -1,7 +1,7 @@
 # Spec: Exportar e importar
 
 - Issue padre: #137
-- Estado: en curso (tareas 1 y 2 de 7 hechas)
+- Estado: en curso (tareas 1 a 3 de 7 hechas)
 
 ## Objetivo
 
@@ -38,7 +38,7 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
 
 ### Imagen y PDF
 
-- [ ] Dado el lienzo, entonces «Imagen» descarga un PNG (o SVG) de todo el lienzo o solo de lo visible, con fondo claro, a la resolución elegida (1× / 2×), con las imágenes de las pantallas.
+- [x] Dado el lienzo, entonces «Imagen» descarga un PNG (o SVG) de todo el lienzo o solo de lo visible, con fondo claro, a la resolución elegida (1× / 2×), con las imágenes de las pantallas. Se genera en el navegador con lo que hay en el lienzo (también lo no guardado), sin puntos de conexión ni grilla, con las fuentes de la interfaz incrustadas.
 - [ ] Dado el lienzo, entonces «PDF» descarga un documento con portada (feature, app, fecha), la imagen del lienzo y el contenido del Markdown (componentes, conexiones, flujos, tours), con tablas legibles e imágenes.
 
 ### Archivo de Walkie (importable)
