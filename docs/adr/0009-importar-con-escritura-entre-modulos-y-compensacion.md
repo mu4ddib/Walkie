@@ -72,7 +72,7 @@ Si algo falla, `UndoAsync` borra lo creado al revés, sin el token de cancelaci�
 
 - Positivas:
   - cada módulo sigue siendo dueño de sus tablas y de sus reglas: Files reconoce la imagen con `ImageInspector` y Canvas valida el grafo como en el `PUT`;
-  - las interfaces de escritura sirven también para importar la app completa (tarea 7);
+  - las interfaces de escritura sirven también para importar la app completa (tarea 7, `POST /api/apps/import`): se suman `IAppWriter.CreateAppAsync`, `AppNamesAsync` y `DeleteAppAsync`, `ICanvasWriter.ValidateMapPositions`, `CreateMapAsync` y `DeleteMapAsync`, e `ICanvasReader.MapPositionsAsync`; la app se crea primero y, si algo falla, se borra entera (con su mapa);
   - un archivo inválido no escribe nada.
 - Negativas / costos:
   - si el proceso muere entre la primera escritura y el final, puede quedar una importación a medias: no hay recolector de basura;

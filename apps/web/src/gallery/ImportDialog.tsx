@@ -2,15 +2,16 @@ import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router';
 import { ApiError, type ImportSummary } from '../api/client';
 import { useImportPackage } from '../api/hooks';
-import { featurePath } from '../workspace/paths';
+import { appPath, featurePath } from '../workspace/paths';
 import '../share/share.css';
 
 /**
- * «Importar feature» (spec exportar-e-importar, tarea 6): se elige un archivo `.walkie`, la API lo valida sin crear nada
- * (`dryRun`) y se muestra qué va a crear —features con su nombre final, catálogo nuevo y reutilizado, imágenes y avisos—
- * o los errores con su ruta dentro del archivo. «Importar» lo crea todo o nada. Esc o «Cerrar» lo cierran.
+ * «Importar feature» (spec exportar-e-importar, tarea 6) en la app `appId`, o «Importar app» (tarea 7) sin `appId`: se
+ * elige un archivo `.walkie`, la API lo valida sin crear nada (`dryRun`) y se muestra qué va a crear —la app nueva, las
+ * features con su nombre final, catálogo nuevo y reutilizado, imágenes y avisos— o los errores con su ruta dentro del
+ * archivo. «Importar» lo crea todo o nada. Esc o «Cerrar» lo cierran.
  */
-export function ImportDialog({ appId, onClose }: { appId: string; onClose: () => void }) {
+export function ImportDialog({ appId = null, onClose }: { appId?: string | null; onClose: () => void }) {
   const check = useImportPackage(appId);
   const run = useImportPackage(appId);
   const [file, setFile] = useState<File | null>(null);
@@ -43,10 +44,20 @@ export function ImportDialog({ appId, onClose }: { appId: string; onClose: () =>
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id={titleId}>Importar feature</h2>
+        <h2 id={titleId}>{appId === null ? 'Importar app' : 'Importar feature'}</h2>
         <p className="panel-help">
-          Elige un archivo <code>.walkie</code> (se descarga desde «Exportar» en el lienzo). Antes de crear nada se
-          muestra qué trae.
+          {appId === null ? (
+            <>
+              Elige el archivo <code>.walkie</code> de una app (se descarga con «Exportar app» en su página): se crea
+              una app nueva con sus features, su catálogo y su mapa.
+            </>
+          ) : (
+            <>
+              Elige un archivo <code>.walkie</code> (se descarga desde «Exportar» en el lienzo): sus features se suman a
+              esta app.
+            </>
+          )}{' '}
+          Antes de crear nada se muestra qué trae.
         </p>
         {!done && (
           <div className="import-file">
@@ -64,6 +75,11 @@ export function ImportDialog({ appId, onClose }: { appId: string; onClose: () =>
         {preview && !done && !run.error && <Summary summary={preview} />}
         {done && (
           <div role="status" className="import-done">
+            {done.app?.id && (
+              <p>
+                Se creó la app <Link to={appPath(done.app.id)}>{done.app.name}</Link>.
+              </p>
+            )}
             <p>
               {done.features.length === 1
                 ? 'Se importó la feature:'
@@ -71,7 +87,13 @@ export function ImportDialog({ appId, onClose }: { appId: string; onClose: () =>
             </p>
             <ul>
               {done.features.map((f) => (
-                <li key={f.id}>{f.id ? <Link to={featurePath(appId, f.id)}>{f.name}</Link> : f.name}</li>
+                <li key={f.id}>
+                  {f.id && (appId ?? done.app?.id) ? (
+                    <Link to={featurePath((appId ?? done.app?.id)!, f.id)}>{f.name}</Link>
+                  ) : (
+                    f.name
+                  )}
+                </li>
               ))}
             </ul>
           </div>
@@ -100,6 +122,14 @@ function Summary({ summary }: { summary: ImportSummary }) {
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   return (
     <div className="import-summary" aria-label="Qué se va a importar">
+      {summary.app && (
+        <p>
+          App nueva: <strong>{summary.app.name}</strong>
+          {summary.app.name !== summary.app.sourceName && (
+            <span className="import-note"> (ya hay una «{summary.app.sourceName}»)</span>
+          )}
+        </p>
+      )}
       <ul>
         {summary.features.map((f) => (
           <li key={f.sourceName + f.name}>

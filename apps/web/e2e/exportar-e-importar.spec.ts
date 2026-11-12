@@ -334,3 +334,49 @@ test('importar: el .walkie exportado reconstruye la feature en otra app, con res
   // La imagen de la pantalla se subió de nuevo a esta app.
   await expect(page.locator('.react-flow__node').filter({ hasText: 'Login' }).locator('img')).toBeVisible();
 });
+
+test('app completa: «Exportar app» y luego «Importar app» crea otra app con sus features, lienzo e imagen', async ({ page }) => {
+  await login(page);
+  await openNewFeature(page, 'Iniciar sesión');
+  const asset = await uploadImage(page, png(16, 12));
+  await seedCanvas(page, {
+    ...graph(),
+    nodes: { ...graph().nodes, s1: { ...graph().nodes.s1, assetId: asset } },
+  });
+  const appId = /apps\/([^/?#]+)/.exec(page.url())![1]!;
+
+  // Página de la app: una segunda feature y exportar la app completa.
+  await page.goto(`/apps/${appId}`);
+  const appName = (await page.getByRole('heading', { level: 2 }).textContent())!.trim();
+  await page.getByLabel('Nueva feature').fill('Transferir');
+  await page.getByRole('button', { name: 'Crear feature' }).click();
+  await expect(page.getByRole('link', { name: 'Transferir' })).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar app (.walkie)' }).click();
+  const file = await download;
+  const files = readZip(await readFile((await file.path())!));
+  const manifest = JSON.parse(files.get('manifest.json')!.toString('utf8')) as { scope: string; features: unknown[] };
+  expect(manifest.scope).toBe('app');
+  expect(manifest.features).toHaveLength(2);
+
+  // Galería de apps: importar crea una app nueva («(importada)», porque la de origen sigue ahí).
+  await page.goto('/apps');
+  await page.getByRole('button', { name: 'Importar app' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Importar app' });
+  await dialog.getByLabel('Archivo .walkie').setInputFiles((await file.path())!);
+  const summary = dialog.getByLabel('Qué se va a importar');
+  await expect(summary).toContainText(`App nueva: ${appName} (importada)`);
+  await expect(summary).toContainText('Transferir');
+  await capture(page, 'importar-app-resumen');
+  await dialog.getByRole('button', { name: 'Importar' }).click();
+  await dialog.getByRole('link', { name: `${appName} (importada)` }).click();
+
+  await expect(page.getByRole('heading', { name: `${appName} (importada)` })).toBeVisible();
+  const features = page.getByRole('list', { name: 'Features' });
+  await expect(features.getByRole('link', { name: 'Transferir' })).toBeVisible();
+  await features.getByRole('link', { name: 'Iniciar sesión' }).click();
+  for (const title of ['Login', 'API Auth', 'Auditoría']) {
+    await expect(page.locator('.react-flow__node').filter({ hasText: title })).toBeVisible();
+  }
+  await expect(page.locator('.react-flow__node').filter({ hasText: 'Login' }).locator('img')).toBeVisible();
+});

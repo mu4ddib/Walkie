@@ -327,22 +327,33 @@ export function useExportPdf(featureId: string) {
   return useMutation({ mutationFn: (canvas: Blob | null) => exportPdf(token, featureId, canvas) });
 }
 
+/** Archivo `.walkie` de la app completa (spec exportar-e-importar, tarea 7). */
+export function useExportAppPackage(appId: string) {
+  const token = useToken();
+  return useMutation({ mutationFn: () => exportApp(token, appId, 'walkie') });
+}
+
 export function useExportFeature(featureId: string) {
   const token = useToken();
   return useMutation({ mutationFn: (format?: ExportFormat) => exportFeature(token, featureId, format) });
 }
 
 /**
- * Importar un `.walkie` (spec exportar-e-importar, tarea 6): `dryRun` valida y devuelve el resumen; la importación
- * real refresca las features, sus miniaturas, el mapa y el catálogo de la app.
+ * Importar un `.walkie` (spec exportar-e-importar, tareas 6 y 7): en la app `appId` o, con `null`, como una app nueva.
+ * `dryRun` valida y devuelve el resumen; la importación real refresca las apps o las features, sus miniaturas, el mapa
+ * y el catálogo de la app.
  */
-export function useImportPackage(appId: string) {
+export function useImportPackage(appId: string | null) {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ file, dryRun }: { file: Blob; dryRun: boolean }) => importPackage(token, appId, file, dryRun),
     onSuccess: (summary) => {
       if (summary.dryRun) return;
+      if (appId === null) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.apps, exact: true });
+        return;
+      }
       void queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.previews(appId) });

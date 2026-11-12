@@ -165,6 +165,34 @@ internal sealed class ExportHandlers(
         return ($"{Slugs.From(feature.Name)}.walkie", WalkiePackage.Zip(manifest, package, items, list));
     }
 
+    /// <summary>
+    /// Archivo <c>.walkie</c> de la app completa (spec exportar-e-importar, tarea 7): todas sus features con su último
+    /// lienzo, todo el catálogo (también lo que ningún lienzo usa), las imágenes de las pantallas y la distribución del
+    /// mapa si se acomodó; <c>null</c> si la app no existe.
+    /// </summary>
+    public async Task<(string FileName, byte[] Content)?> AppWalkieAsync(Guid appId, CancellationToken ct)
+    {
+        if (await apps.AppNameAsync(appId, ct).ConfigureAwait(false) is not { } appName)
+        {
+            return null;
+        }
+
+        var package = new List<PackageFeature>();
+        foreach (var feature in await features.FeaturesOfAppAsync(appId, ct).ConfigureAwait(false))
+        {
+            var graph = await canvas.GraphOfFeatureAsync(feature.Id, ct).ConfigureAwait(false);
+            package.Add(new PackageFeature(feature.Id, feature.Name, feature.Description, graph));
+        }
+
+        var items = await catalog.AllItemsOfAppAsync(appId, ct).ConfigureAwait(false);
+        var images = await ImagesAsync(appId, package.Select(f => f.Graph), ct).ConfigureAwait(false);
+        var list = images.Select(i => new PackageImage(i.Key, i.Value.ContentType, i.Value.Bytes)).ToList();
+        var map = await canvas.MapPositionsAsync(appId, ct).ConfigureAwait(false);
+
+        var manifest = WalkiePackage.Manifest("app", appId, appName, package, items, list, clock.GetUtcNow(), withMap: map is not null);
+        return ($"{Slugs.From(appName, "app")}.walkie", WalkiePackage.Zip(manifest, package, items, list, map));
+    }
+
     /// <summary>Las imágenes de las pantallas de los lienzos, por asset (una vez cada una); las que ya no están, fuera.</summary>
     private async Task<Dictionary<Guid, PdfImage>> ImagesAsync(Guid appId, IEnumerable<JsonElement> graphs, CancellationToken ct)
     {

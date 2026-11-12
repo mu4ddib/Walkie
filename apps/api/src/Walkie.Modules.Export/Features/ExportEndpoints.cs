@@ -44,7 +44,10 @@ internal static class ExportEndpoints
             .WithSummary(
                 "Contexto para IA de toda la app (cada feature con su último lienzo guardado, el catálogo y el mapa). "
                 + "format=ai (por defecto): Markdown (<slug>-contexto-ia.md). "
-                + "format=ai-json: JSON (<slug>.app-context.json, packages/schema/walkie-app-ai-context.schema.json).")
+                + "format=ai-json: JSON (<slug>.app-context.json, packages/schema/walkie-app-ai-context.schema.json). "
+                + "format=walkie: la app completa para reconstruirla (<slug>.walkie con scope app: todas las features, todo el "
+                + "catálogo, las imágenes y la distribución del mapa en map.json).")
+            .Produces(StatusCodes.Status200OK, contentType: "application/zip")
             .Produces(StatusCodes.Status200OK, contentType: "text/markdown")
             .Produces(StatusCodes.Status200OK, contentType: "application/json");
 
@@ -63,15 +66,80 @@ internal static class ExportEndpoints
             .Produces<ImportSummary>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
+        routes.MapPost("/api/apps/import", ImportApp)
+            .WithTags("Export")
+            .WithName("ImportApp")
+            .WithSummary(
+                "Importa un archivo .walkie como una app nueva (spec exportar-e-importar, tarea 7; ADR-0009): la app se llama "
+                + "como en el archivo (con «(importada)» si ya hay una así) y recibe todas sus features, todo su catálogo, sus "
+                + "imágenes y la distribución del mapa, con ids nuevos. Multipart, campo file, hasta 50 MB. Todo o nada. Con "
+                + "dryRun=true solo valida y devuelve el resumen.")
+            .Accepts<IFormFile>("multipart/form-data")
+            .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(ImportHandlers.MaxFileBytes + (1024 * 1024)))
+            .Produces<ImportSummary>(StatusCodes.Status200OK)
+            .Produces<ImportSummary>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+
         return routes;
     }
 
     private static async Task<Results<Created<ImportSummary>, Ok<ImportSummary>, NotFound, ValidationProblem, ProblemHttpResult>> Import(
         Guid appId, bool? dryRun, HttpRequest request, ClaimsPrincipal user, ImportHandlers handlers, CancellationToken ct)
     {
+        var (file, missing, tooLarge) = await ReadPackageAsync(request, ct).ConfigureAwait(false);
+        if (missing is not null)
+        {
+            return missing;
+        }
+
+        if (file is null)
+        {
+            return tooLarge!;
+        }
+
+        var userId = user.FindFirstValue("sub") ?? throw new InvalidOperationException("El token no trae el claim sub.");
+        var dry = dryRun ?? false;
+        return await handlers.ImportAsync(appId, file, dry, userId, ct).ConfigureAwait(false) switch
+        {
+            ImportResult.Done { Summary: var summary } when dry => TypedResults.Ok(summary),
+            ImportResult.Done { Summary: var summary } => TypedResults.Created($"/api/apps/{appId}/features", summary),
+            ImportResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
+            _ => TypedResults.NotFound(),
+        };
+    }
+
+    private static async Task<Results<Created<ImportSummary>, Ok<ImportSummary>, ValidationProblem, ProblemHttpResult>> ImportApp(
+        bool? dryRun, HttpRequest request, ClaimsPrincipal user, ImportHandlers handlers, CancellationToken ct)
+    {
+        var (file, missing, tooLarge) = await ReadPackageAsync(request, ct).ConfigureAwait(false);
+        if (missing is not null)
+        {
+            return missing;
+        }
+
+        if (file is null)
+        {
+            return tooLarge!;
+        }
+
+        var userId = user.FindFirstValue("sub") ?? throw new InvalidOperationException("El token no trae el claim sub.");
+        var dry = dryRun ?? false;
+        return await handlers.ImportAppAsync(file, dry, userId, ct).ConfigureAwait(false) switch
+        {
+            ImportResult.Done { Summary: var summary } when dry => TypedResults.Ok(summary),
+            ImportResult.Done { Summary: var summary } => TypedResults.Created($"/api/apps/{summary.App!.Id}", summary),
+            ImportResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
+            _ => throw new InvalidOperationException("Importar una app no busca una app existente."),
+        };
+    }
+
+    /// <summary>Los bytes del campo <c>file</c>, o el 400 / 413 que corresponde.</summary>
+    private static async Task<(byte[]? File, ValidationProblem? Invalid, ProblemHttpResult? TooLarge)> ReadPackageAsync(HttpRequest request, CancellationToken ct)
+    {
         if (request.ContentLength > ImportHandlers.MaxFileBytes + (1024 * 1024))
         {
-            return TooLarge();
+            return (null, null, TooLarge());
         }
 
         IFormFile? file = null;
@@ -89,28 +157,20 @@ internal static class ExportEndpoints
 
         if (file is null || file.Length == 0)
         {
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            return (null, TypedResults.ValidationProblem(new Dictionary<string, string[]>
             {
                 ["file"] = ["Falta el archivo .walkie (campo file)."],
-            });
+            }), null);
         }
 
         if (file.Length > ImportHandlers.MaxFileBytes)
         {
-            return TooLarge();
+            return (null, null, TooLarge());
         }
 
         using var bytes = new MemoryStream();
         await file.CopyToAsync(bytes, ct).ConfigureAwait(false);
-        var userId = user.FindFirstValue("sub") ?? throw new InvalidOperationException("El token no trae el claim sub.");
-        var dry = dryRun ?? false;
-        return await handlers.ImportAsync(appId, bytes.ToArray(), dry, userId, ct).ConfigureAwait(false) switch
-        {
-            ImportResult.Done { Summary: var summary } when dry => TypedResults.Ok(summary),
-            ImportResult.Done { Summary: var summary } => TypedResults.Created($"/api/apps/{appId}/features", summary),
-            ImportResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
-            _ => TypedResults.NotFound(),
-        };
+        return (bytes.ToArray(), null, null);
     }
 
     private static ProblemHttpResult TooLarge() => TypedResults.Problem(
@@ -160,12 +220,19 @@ internal static class ExportEndpoints
         Guid appId, string? format, ExportHandlers handlers, CancellationToken ct)
     {
         format ??= "ai";
-        if (format is not ("ai" or "ai-json"))
+        if (format is not ("ai" or "ai-json" or "walkie"))
         {
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["format"] = ["El formato debe ser ai o ai-json."],
+                ["format"] = ["El formato debe ser ai, ai-json o walkie."],
             });
+        }
+
+        if (format == "walkie")
+        {
+            return await handlers.AppWalkieAsync(appId, ct).ConfigureAwait(false) is { } package
+                ? TypedResults.File(package.Content, "application/zip", package.FileName)
+                : TypedResults.NotFound();
         }
 
         if (await handlers.AppAiContextAsync(appId, ct).ConfigureAwait(false) is not { } ai)

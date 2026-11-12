@@ -2,12 +2,23 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-import-summary.schema.json",
   "title": "Walkie import summary v0",
-  "description": "Respuesta de POST /api/apps/{appId}/import (spec exportar-e-importar, tarea 6; ADR-0009): lo que creó la importación de un archivo .walkie o, con dryRun, lo que crearía. Los errores van aparte, como ProblemDetails con la ruta dentro del archivo.",
+  "description": "Respuesta de POST /api/apps/{appId}/import (features en una app) y de POST /api/apps/import (una app nueva) (spec exportar-e-importar, tareas 6 y 7; ADR-0009): lo que creó la importación de un archivo .walkie o, con dryRun, lo que crearía. Los errores van aparte, como ProblemDetails con la ruta dentro del archivo.",
   "type": "object",
   "required": ["dryRun", "features", "newCatalogItems", "existingCatalogItems", "images", "warnings"],
   "additionalProperties": false,
   "properties": {
     "dryRun": { "type": "boolean", "description": "true: solo se validó; no se creó nada" },
+    "app": {
+      "type": "object",
+      "description": "Solo al importar una app (POST /api/apps/import): la app nueva",
+      "required": ["sourceName", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "sourceName": { "type": "string", "description": "Nombre en el archivo" },
+        "name": { "type": "string", "description": "Nombre de la app nueva: el mismo o con «(importada)» si ya hay una con ese nombre" },
+        "id": { "type": "string", "format": "uuid", "description": "Id de la app creada (no viene con dryRun)" }
+      }
+    },
     "features": {
       "type": "array",
       "items": {

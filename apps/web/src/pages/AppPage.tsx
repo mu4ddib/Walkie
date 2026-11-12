@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react';
 import '../gallery/gallery.css';
 import { Link, useParams } from 'react-router';
-import { useApp, useCanvasPreviews, useCreateFeature, useFeatures, useUpdateFeature } from '../api/hooks';
+import {
+  useApp,
+  useCanvasPreviews,
+  useCreateFeature,
+  useExportAppPackage,
+  useFeatures,
+  useUpdateFeature,
+} from '../api/hooks';
+import { saveFile } from '../ui/download';
 import { FeatureCard } from '../gallery/FeatureCard';
 import { GalleryTools } from '../gallery/GalleryTools';
 import { matches, type FeatureSort } from '../gallery/search';
@@ -30,6 +38,8 @@ export function AppPage() {
   const [aiContext, setAiContext] = useState(false);
   // «Importar feature» desde un archivo .walkie (spec exportar-e-importar, tarea 6).
   const [importing, setImporting] = useState(false);
+  // «Exportar app (.walkie)»: la app completa para reconstruirla con «Importar app» (spec exportar-e-importar, tarea 7).
+  const exportApp = useExportAppPackage(appId);
 
   const byFeature = useMemo(() => new Map((previews.data ?? []).map((p) => [p.featureId, p])), [previews.data]);
   const shown = useMemo(() => {
@@ -79,7 +89,21 @@ export function AppPage() {
           >
             Importar feature
           </button>
+          <button
+            type="button"
+            className="pixel-button is-ghost gallery-map-link"
+            title="Todas las features, el catálogo, las imágenes y el mapa en un archivo para reconstruir la app"
+            disabled={exportApp.isPending}
+            onClick={() => exportApp.mutate(undefined, { onSuccess: (file) => saveFile(file.blob, file.fileName) })}
+          >
+            {exportApp.isPending ? 'Exportando…' : 'Exportar app (.walkie)'}
+          </button>
         </div>
+        {exportApp.isError && (
+          <p role="alert" className="save-error">
+            No se pudo exportar la app. Vuelve a intentarlo.
+          </p>
+        )}
       </header>
       {aiContext && <AiContextDialog target={{ kind: 'app', id: appId }} onClose={() => setAiContext(false)} />}
       {importing && <ImportDialog appId={appId} onClose={() => setImporting(false)} />}

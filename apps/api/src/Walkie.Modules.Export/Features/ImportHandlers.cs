@@ -16,7 +16,16 @@ internal sealed record ImportSummary(
     int NewCatalogItems,
     int ExistingCatalogItems,
     int Images,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    ImportedApp? App = null);
+
+/// <summary>La app nueva de una importación de app (tarea 7): su nombre de origen, el final y su id (si ya se creó).</summary>
+internal sealed record ImportedApp(
+    string SourceName,
+    string Name,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    Guid? Id);
 
 /// <summary>Una feature del archivo: su nombre de origen, el que queda en la app y su id (si ya se importó).</summary>
 internal sealed record ImportedFeature(
@@ -71,7 +80,9 @@ internal sealed class ImportHandlers(
             return new ImportResult.Invalid(errors);
         }
 
-        var plan = await PlanAsync(appId, package, errors, ct).ConfigureAwait(false);
+        var existingItems = (await catalog.AllItemsOfAppAsync(appId, ct).ConfigureAwait(false)).Select(i => i.Id).ToHashSet();
+        var existingFeatures = await features.FeatureNamesOfAppAsync(appId, ct).ConfigureAwait(false);
+        var plan = MakePlan(package, existingItems, existingFeatures, allCatalog: false, errors);
         if (errors.Count > 0)
         {
             return new ImportResult.Invalid(errors);
@@ -82,7 +93,113 @@ internal sealed class ImportHandlers(
             return new ImportResult.Done(plan.Summary(dryRun: true, ids: null));
         }
 
-        return await WriteAsync(appId, package, plan, userId, ct).ConfigureAwait(false);
+        var created = new Created();
+        try
+        {
+            if (await WriteAsync(appId, package, plan, created, userId, ct).ConfigureAwait(false) is { } failed)
+            {
+                await UndoAsync(created).ConfigureAwait(false);
+                return new ImportResult.Invalid(failed);
+            }
+        }
+        catch
+        {
+            await UndoAsync(created).ConfigureAwait(false);
+            throw;
+        }
+
+        return new ImportResult.Done(plan.Summary(dryRun: false, ids: created.Features));
+    }
+
+    /// <summary>
+    /// Importar una app completa (spec exportar-e-importar, tarea 7): crea una app nueva con el nombre del archivo
+    /// («(importada)» si ya hay una así), todas sus features, todo su catálogo, sus imágenes y la distribución del mapa.
+    /// Mismas validaciones y la misma compensación que <see cref="ImportAsync"/>; si algo falla, se borra la app entera.
+    /// </summary>
+    public async Task<ImportResult> ImportAppAsync(byte[] file, bool dryRun, string userId, CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var package = Read(file, errors);
+        if (package is null)
+        {
+            return new ImportResult.Invalid(errors);
+        }
+
+        var plan = MakePlan(package, new HashSet<Guid>(), new Dictionary<Guid, string>(), allCatalog: true, errors);
+        if (errors.Count > 0)
+        {
+            return new ImportResult.Invalid(errors);
+        }
+
+        var appNames = new HashSet<string>(await appWriter.AppNamesAsync(ct).ConfigureAwait(false), StringComparer.OrdinalIgnoreCase);
+        var sourceName = package.Manifest.App.Name.Trim();
+        var appName = UniqueName(sourceName.Length == 0 ? "App importada" : sourceName, appNames);
+        if (dryRun)
+        {
+            return new ImportResult.Done(plan.Summary(dryRun: true, ids: null) with
+            {
+                App = new ImportedApp(package.Manifest.App.Name, appName, null),
+            });
+        }
+
+        var created = new Created();
+        Guid appId;
+        try
+        {
+            appId = await appWriter.CreateAppAsync(appName, userId, ct).ConfigureAwait(false);
+            created.App = appId;
+            if (await WriteAsync(appId, package, plan, created, userId, ct).ConfigureAwait(false) is { } failed)
+            {
+                await UndoAsync(created).ConfigureAwait(false);
+                return new ImportResult.Invalid(failed);
+            }
+
+            if (package.Map is { } map && MapPositions(map, created) is { } positions)
+            {
+                await canvasWriter.CreateMapAsync(appId, positions, userId, ct).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            await UndoAsync(created).ConfigureAwait(false);
+            throw;
+        }
+
+        return new ImportResult.Done(plan.Summary(dryRun: false, ids: created.Features) with
+        {
+            App = new ImportedApp(package.Manifest.App.Name, appName, appId),
+        });
+    }
+
+    /// <summary>
+    /// Las posiciones del mapa con los ids de la app nueva (features y <c>catalog:&lt;id&gt;</c>); las de algo que no se
+    /// importó, fuera. <c>null</c> si no queda ninguna.
+    /// </summary>
+    private static JsonElement? MapPositions(JsonElement map, Created created)
+    {
+        var positions = new JsonObject();
+        foreach (var entry in map.EnumerateObject())
+        {
+            var key = entry.Name.StartsWith("catalog:", StringComparison.Ordinal)
+                ? Guid.TryParse(entry.Name["catalog:".Length..], out var item) && created.ItemIds.TryGetValue(item, out var newItem)
+                    ? $"catalog:{newItem}"
+                    : null
+                : Guid.TryParse(entry.Name, out var feature) && created.FeatureIds.TryGetValue(feature, out var newFeature)
+                    ? newFeature.ToString()
+                    : null;
+            if (key is not null)
+            {
+                positions[key] = JsonNode.Parse(entry.Value.GetRawText());
+            }
+        }
+
+        if (positions.Count == 0)
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(positions.ToJsonString());
+        return document.RootElement.Clone();
     }
 
     // ---------- Lectura y validación (sin base) ----------
@@ -91,7 +208,8 @@ internal sealed class ImportHandlers(
         PackageManifest Manifest,
         IReadOnlyList<(PackageManifestFeature Feature, JsonElement Graph)> Features,
         IReadOnlyList<CatalogItemResponse> Catalog,
-        IReadOnlyDictionary<Guid, byte[]> Images);
+        IReadOnlyDictionary<Guid, byte[]> Images,
+        JsonElement? Map);
 
     private Package? Read(byte[] file, Dictionary<string, string[]> errors)
     {
@@ -227,7 +345,22 @@ internal sealed class ImportHandlers(
                 images[image.AssetId] = bytes;
             }
 
-            return errors.Count > 0 ? null : new Package(manifest, graphs, items, images);
+            // La distribución del mapa (solo en el archivo de una app): mismas reglas que al guardarla en la app.
+            JsonElement? map = null;
+            if (manifest.Map is { } mapEntry && ReadJson(entries, mapEntry.Path, errors) is { } positions)
+            {
+                var mapErrors = canvasWriter.ValidateMapPositions(positions, mapEntry.Path);
+                if (mapErrors.Count > 0)
+                {
+                    Merge(errors, new Dictionary<string, string[]>(mapErrors));
+                }
+                else
+                {
+                    map = positions;
+                }
+            }
+
+            return errors.Count > 0 ? null : new Package(manifest, graphs, items, images, map);
         }
     }
 
@@ -346,10 +479,18 @@ internal sealed class ImportHandlers(
             Warnings);
     }
 
-    private async Task<Plan> PlanAsync(Guid appId, Package package, Dictionary<string, string[]> errors, CancellationToken ct)
+    /// <summary>
+    /// Qué se va a crear en una app que ya tiene <paramref name="existingItems"/> y <paramref name="existingFeatures"/>.
+    /// Con <paramref name="allCatalog"/> (una app nueva) se crea todo el catálogo del archivo; si no, solo lo que usan
+    /// los lienzos.
+    /// </summary>
+    private static Plan MakePlan(
+        Package package,
+        HashSet<Guid> existingItems,
+        IReadOnlyDictionary<Guid, string> existingFeatures,
+        bool allCatalog,
+        Dictionary<string, string[]> errors)
     {
-        var existingItems = (await catalog.AllItemsOfAppAsync(appId, ct).ConfigureAwait(false)).Select(i => i.Id).ToHashSet();
-        var existingFeatures = await features.FeatureNamesOfAppAsync(appId, ct).ConfigureAwait(false);
         var packageItems = package.Catalog.Select(i => i.Id).ToHashSet();
         var packageFeatures = package.Features.Select(f => f.Feature.Id).ToHashSet();
         var warnings = new List<string>();
@@ -390,13 +531,16 @@ internal sealed class ImportHandlers(
             plans.Add(new FeaturePlan(feature, graph, name, description));
         }
 
-        // Solo los elementos que algún lienzo usa; los que ya están en la app (misma app de origen) se reutilizan.
+        // Solo los elementos que algún lienzo usa (en una app nueva, todos); los que ya están en la app (misma app de
+        // origen) se reutilizan.
         var used = package.Features.SelectMany(f => Nodes(f.Graph))
             .Where(n => n.Node.GetProperty("type").GetString() == "ref")
             .Select(n => Id(n.Node, "catalogId"))
             .OfType<Guid>()
             .ToHashSet();
-        var newItems = package.Catalog.Where(i => used.Contains(i.Id) && !existingItems.Contains(i.Id)).ToList();
+        var newItems = package.Catalog
+            .Where(i => (allCatalog || used.Contains(i.Id)) && !existingItems.Contains(i.Id))
+            .ToList();
         var reused = used.Count(existingItems.Contains);
         var images = UsedImages(package).Count;
         return new Plan(plans, newItems, reused, images, existingFeatures.Keys.ToHashSet(), warnings);
@@ -437,69 +581,89 @@ internal sealed class ImportHandlers(
 
     // ---------- Escritura con compensación ----------
 
-    private async Task<ImportResult> WriteAsync(Guid appId, Package package, Plan plan, string userId, CancellationToken ct)
+    /// <summary>Lo que lleva creado una importación, para deshacerlo si falla.</summary>
+    private sealed class Created
     {
-        var createdItems = new List<Guid>();
-        var createdImages = new List<Guid>();
-        var createdFeatures = new List<Guid>();
-        var canvases = new List<Guid>();
-        try
-        {
-            var itemIds = new Dictionary<Guid, Guid>();
-            foreach (var item in plan.NewItems)
-            {
-                var id = await appWriter.CreateCatalogItemAsync(appId, item, userId, ct).ConfigureAwait(false);
-                createdItems.Add(id);
-                itemIds[item.Id] = id;
-            }
+        public Guid? App { get; set; }
 
-            var imageIds = new Dictionary<Guid, Guid>();
-            foreach (var (assetId, bytes) in UsedImages(package).OrderBy(i => i.Key))
-            {
-                var id = await assetWriter.StoreAsync(appId, bytes, userId, ct).ConfigureAwait(false)
-                    ?? throw new InvalidOperationException("Una imagen ya validada no se pudo guardar.");
-                createdImages.Add(id);
-                imageIds[assetId] = id;
-            }
+        public List<Guid> Items { get; } = [];
 
-            var featureIds = new Dictionary<Guid, Guid>();
-            foreach (var feature in plan.Features)
-            {
-                var id = await appWriter.CreateFeatureAsync(appId, feature.Name, feature.Description, userId, ct).ConfigureAwait(false);
-                createdFeatures.Add(id);
-                featureIds[feature.Source.Id] = id;
-            }
+        public List<Guid> Images { get; } = [];
 
-            foreach (var feature in plan.Features)
-            {
-                var featureId = featureIds[feature.Source.Id];
-                var graph = Rewrite(feature.Graph, itemIds, imageIds, featureIds, plan.ExistingFeatures);
-                var errors = await canvasWriter.CreateAsync(featureId, graph, userId, ct).ConfigureAwait(false);
-                if (errors.Count > 0)
-                {
-                    await UndoAsync(createdItems, createdImages, createdFeatures, canvases).ConfigureAwait(false);
-                    return new ImportResult.Invalid(errors.ToDictionary(e => feature.Source.Canvas + (e.Key == "/" ? "" : e.Key), e => e.Value));
-                }
+        public List<Guid> Features { get; } = [];
 
-                canvases.Add(featureId);
-            }
-        }
-        catch
-        {
-            await UndoAsync(createdItems, createdImages, createdFeatures, canvases).ConfigureAwait(false);
-            throw;
-        }
+        public List<Guid> Canvases { get; } = [];
 
-        return new ImportResult.Done(plan.Summary(dryRun: false, ids: createdFeatures));
+        /// <summary>Id en el archivo → id creado.</summary>
+        public Dictionary<Guid, Guid> ItemIds { get; } = [];
+
+        /// <summary>Id en el archivo → id creado.</summary>
+        public Dictionary<Guid, Guid> FeatureIds { get; } = [];
     }
 
-    /// <summary>Borra lo creado, al revés; sin el token del pedido (si se canceló, igual hay que deshacer).</summary>
-    private async Task UndoAsync(List<Guid> items, List<Guid> images, List<Guid> createdFeatures, List<Guid> canvases)
+    /// <summary>
+    /// Crea catálogo, imágenes, features y lienzos en la app y anota todo en <paramref name="created"/>; devuelve los
+    /// errores si un lienzo no se pudo guardar (quien llama deshace).
+    /// </summary>
+    private async Task<Dictionary<string, string[]>?> WriteAsync(
+        Guid appId, Package package, Plan plan, Created created, string userId, CancellationToken ct)
     {
-        await canvasWriter.DeleteAsync(canvases, CancellationToken.None).ConfigureAwait(false);
-        await appWriter.DeleteFeaturesAsync(createdFeatures, CancellationToken.None).ConfigureAwait(false);
-        await assetWriter.DeleteAsync(images, CancellationToken.None).ConfigureAwait(false);
-        await appWriter.DeleteCatalogItemsAsync(items, CancellationToken.None).ConfigureAwait(false);
+        foreach (var item in plan.NewItems)
+        {
+            var id = await appWriter.CreateCatalogItemAsync(appId, item, userId, ct).ConfigureAwait(false);
+            created.Items.Add(id);
+            created.ItemIds[item.Id] = id;
+        }
+
+        var imageIds = new Dictionary<Guid, Guid>();
+        foreach (var (assetId, bytes) in UsedImages(package).OrderBy(i => i.Key))
+        {
+            var id = await assetWriter.StoreAsync(appId, bytes, userId, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Una imagen ya validada no se pudo guardar.");
+            created.Images.Add(id);
+            imageIds[assetId] = id;
+        }
+
+        foreach (var feature in plan.Features)
+        {
+            var id = await appWriter.CreateFeatureAsync(appId, feature.Name, feature.Description, userId, ct).ConfigureAwait(false);
+            created.Features.Add(id);
+            created.FeatureIds[feature.Source.Id] = id;
+        }
+
+        foreach (var feature in plan.Features)
+        {
+            var featureId = created.FeatureIds[feature.Source.Id];
+            var graph = Rewrite(feature.Graph, created.ItemIds, imageIds, created.FeatureIds, plan.ExistingFeatures);
+            var errors = await canvasWriter.CreateAsync(featureId, graph, userId, ct).ConfigureAwait(false);
+            if (errors.Count > 0)
+            {
+                return errors.ToDictionary(e => feature.Source.Canvas + (e.Key == "/" ? "" : e.Key), e => e.Value);
+            }
+
+            created.Canvases.Add(featureId);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Borra lo creado, al revés; sin el token del pedido (si se canceló, igual hay que deshacer). En una app nueva,
+    /// borrar la app se lleva sus features y su catálogo.
+    /// </summary>
+    private async Task UndoAsync(Created created)
+    {
+        await canvasWriter.DeleteAsync(created.Canvases, CancellationToken.None).ConfigureAwait(false);
+        await assetWriter.DeleteAsync(created.Images, CancellationToken.None).ConfigureAwait(false);
+        if (created.App is { } appId)
+        {
+            await canvasWriter.DeleteMapAsync(appId, CancellationToken.None).ConfigureAwait(false);
+            await appWriter.DeleteAppAsync(appId, CancellationToken.None).ConfigureAwait(false);
+            return;
+        }
+
+        await appWriter.DeleteFeaturesAsync(created.Features, CancellationToken.None).ConfigureAwait(false);
+        await appWriter.DeleteCatalogItemsAsync(created.Items, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>

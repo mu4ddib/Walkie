@@ -330,10 +330,19 @@ export async function exportPdf(token: string, featureId: string, canvas: Blob |
   return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? 'feature.pdf', blob: await res.blob() };
 }
 
-/** Contexto para IA de toda la app (spec exportar-e-importar, tarea 2): `ai` (Markdown) o `ai-json`. */
-export async function exportApp(token: string, appId: string, format: 'ai' | 'ai-json' = 'ai'): Promise<Download> {
+/** Formatos de la app: contexto para IA (`ai`, `ai-json`, tarea 2) o el `.walkie` de la app completa (`walkie`, tarea 7). */
+export type AppExportFormat = 'ai' | 'ai-json' | 'walkie';
+
+const APP_EXPORT_FALLBACK_NAMES: Record<AppExportFormat, string> = {
+  ai: 'app-contexto-ia.md',
+  'ai-json': 'app.app-context.json',
+  walkie: 'app.walkie',
+};
+
+/** Exporta la app completa: contexto para IA (Markdown o JSON) o su archivo `.walkie`. */
+export async function exportApp(token: string, appId: string, format: AppExportFormat = 'ai'): Promise<Download> {
   const res = await send(`/api/apps/${encodeURIComponent(appId)}/export?format=${format}`, { token });
-  const fallback = format === 'ai' ? 'app-contexto-ia.md' : 'app.app-context.json';
+  const fallback = APP_EXPORT_FALLBACK_NAMES[format];
   return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? fallback, blob: await res.blob() };
 }
 
@@ -341,13 +350,15 @@ export async function exportApp(token: string, appId: string, format: 'ai' | 'ai
 export type ImportSummary = WalkieImportSummaryV0;
 
 /**
- * Importa un archivo `.walkie` en la app (spec exportar-e-importar, tarea 6; ADR-0009). Con `dryRun` solo valida y
- * responde qué crearía; los errores llegan como `ApiError` (400 con la ruta dentro del archivo, 413 si pasa de 50 MB).
+ * Importa un archivo `.walkie` (spec exportar-e-importar, tareas 6 y 7; ADR-0009): sus features en la app `appId` o,
+ * con `appId` en `null`, como una app nueva. Con `dryRun` solo valida y responde qué crearía; los errores llegan como
+ * `ApiError` (400 con la ruta dentro del archivo, 413 si pasa de 50 MB).
  */
-export function importPackage(token: string, appId: string, file: Blob, dryRun: boolean): Promise<ImportSummary> {
+export function importPackage(token: string, appId: string | null, file: Blob, dryRun: boolean): Promise<ImportSummary> {
   const form = new FormData();
-  form.append('file', file, 'feature.walkie');
-  return request(`/api/apps/${encodeURIComponent(appId)}/import${dryRun ? '?dryRun=true' : ''}`, {
+  form.append('file', file, 'archivo.walkie');
+  const path = appId === null ? '/api/apps/import' : `/api/apps/${encodeURIComponent(appId)}/import`;
+  return request(`${path}${dryRun ? '?dryRun=true' : ''}`, {
     token,
     method: 'POST',
     body: form,

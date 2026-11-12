@@ -295,7 +295,7 @@ public sealed class ImportEndpointsTests(WalkieApiFactory factory)
     }
 
     /// <summary>Guarda el primer lienzo y hace fallar el segundo, como si otro lo hubiera guardado antes.</summary>
-    private sealed class FailingSecondCanvas(ICanvasWriter inner) : ICanvasWriter
+    internal sealed class FailingSecondCanvas(ICanvasWriter inner) : ICanvasWriter
     {
         private int _calls;
 
@@ -309,6 +309,14 @@ public sealed class ImportEndpointsTests(WalkieApiFactory factory)
 
         public Task DeleteAsync(IReadOnlyCollection<Guid> featureIds, CancellationToken cancellationToken) =>
             inner.DeleteAsync(featureIds, cancellationToken);
+
+        public IReadOnlyDictionary<string, string[]> ValidateMapPositions(JsonElement positions, string prefix) =>
+            inner.ValidateMapPositions(positions, prefix);
+
+        public Task CreateMapAsync(Guid appId, JsonElement positions, string userId, CancellationToken cancellationToken) =>
+            inner.CreateMapAsync(appId, positions, userId, cancellationToken);
+
+        public Task DeleteMapAsync(Guid appId, CancellationToken cancellationToken) => inner.DeleteMapAsync(appId, cancellationToken);
     }
 
     private async Task<int> AssetCountAsync(Guid appId)

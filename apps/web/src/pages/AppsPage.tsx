@@ -8,6 +8,7 @@ import { NameForm } from '../ui/NameForm';
 import { QueryState } from '../ui/QueryState';
 import { useStartWorkspace } from '../workspace/useStartWorkspace';
 import { appPath } from '../workspace/paths';
+import { ImportDialog } from '../gallery/ImportDialog';
 
 /** Galería de apps (spec espacio-de-trabajo, criterios 8 y 9): tarjetas con su cantidad de features. */
 export function AppsPage() {
@@ -15,14 +16,29 @@ export function AppsPage() {
   const create = useCreateApp();
   const { sample } = useStartWorkspace();
   const [query, setQuery] = useState('');
+  // «Importar app» desde el .walkie de una app (spec exportar-e-importar, tarea 7).
+  const [importing, setImporting] = useState(false);
   const shown = (apps.data ?? []).filter((a) => matches(a.name, query));
 
   return (
     <section className="page gallery-page">
       <header className="gallery-head">
         <h2>Apps</h2>
-        <p className="gallery-lead">Cada app es un producto que documentas: reúne sus features y un catálogo compartido.</p>
+        <p className="gallery-lead">
+          Cada app es un producto que documentas: reúne sus features y un catálogo compartido.
+        </p>
+        <div className="gallery-head-actions">
+          <button
+            type="button"
+            className="pixel-button is-ghost gallery-map-link"
+            title="Crear una app desde el archivo .walkie de otra (features, catálogo, imágenes y mapa)"
+            onClick={() => setImporting(true)}
+          >
+            Importar app
+          </button>
+        </div>
       </header>
+      {importing && <ImportDialog onClose={() => setImporting(false)} />}
       <div className="gallery-create">
         <NameForm
           label="Nueva app"
@@ -40,12 +56,7 @@ export function AppsPage() {
             Una app agrupa los flujos de un producto, por ejemplo la banca móvil. Créala arriba o carga el ejemplo para
             ver un lienzo ya armado.
           </p>
-          <button
-            type="button"
-            className="pixel-button"
-            disabled={sample.isPending}
-            onClick={() => sample.mutate()}
-          >
+          <button type="button" className="pixel-button" disabled={sample.isPending} onClick={() => sample.mutate()}>
             Cargar el ejemplo
           </button>
           {sample.isError && <p role="alert">No se pudo crear el ejemplo.</p>}
@@ -60,9 +71,7 @@ export function AppsPage() {
                 <h3 className="app-card-title">
                   <Link to={appPath(app.id)}>{app.name}</Link>
                 </h3>
-                <p className="app-card-meta">
-                  {app.featureCount === 1 ? '1 feature' : `${app.featureCount} features`}
-                </p>
+                <p className="app-card-meta">{app.featureCount === 1 ? '1 feature' : `${app.featureCount} features`}</p>
               </li>
             ))}
           </ul>

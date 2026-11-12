@@ -17,6 +17,18 @@ public interface ICanvasWriter
     /// </summary>
     Task<IReadOnlyDictionary<string, string[]>> CreateAsync(Guid featureId, JsonElement graph, string userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Errores de unas posiciones del mapa (<c>positions</c> de <c>walkie-app-map</c>) con <paramref name="prefix"/>
+    /// delante; vacío si son válidas.
+    /// </summary>
+    IReadOnlyDictionary<string, string[]> ValidateMapPositions(JsonElement positions, string prefix);
+
+    /// <summary>Guarda la primera distribución del mapa de una app nueva (versión 1).</summary>
+    Task CreateMapAsync(Guid appId, JsonElement positions, string userId, CancellationToken cancellationToken);
+
+    /// <summary>Borra la distribución del mapa de la app (deshacer una importación de app).</summary>
+    Task DeleteMapAsync(Guid appId, CancellationToken cancellationToken);
+
     /// <summary>Borra los lienzos de esas features (deshacer una importación).</summary>
     Task DeleteAsync(IReadOnlyCollection<Guid> featureIds, CancellationToken cancellationToken);
 }

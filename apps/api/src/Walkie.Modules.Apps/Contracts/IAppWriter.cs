@@ -7,6 +7,15 @@ namespace Walkie.Modules.Apps.Contracts;
 /// </summary>
 public interface IAppWriter
 {
+    /// <summary>Crea una app vacía (nombre ya dentro de su límite) y devuelve su id: importar una app (tarea 7).</summary>
+    Task<Guid> CreateAppAsync(string name, string userId, CancellationToken cancellationToken);
+
+    /// <summary>Nombres de todas las apps, para no repetir uno al importar.</summary>
+    Task<IReadOnlyList<string>> AppNamesAsync(CancellationToken cancellationToken);
+
+    /// <summary>Borra la app con sus features y su catálogo (deshacer una importación de app).</summary>
+    Task DeleteAppAsync(Guid appId, CancellationToken cancellationToken);
+
     /// <summary>Crea la feature (nombre y descripción ya dentro de sus límites) y devuelve su id.</summary>
     Task<Guid> CreateFeatureAsync(Guid appId, string name, string? description, string userId, CancellationToken cancellationToken);
 

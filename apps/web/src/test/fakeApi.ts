@@ -214,11 +214,49 @@ export function installFakeApi(
 
     if (parts[0] !== 'api' || parts[1] !== 'apps') return notFound();
 
-    // /api/apps/{appId}/export — contexto para IA de la app (spec exportar-e-importar, tarea 2), como la API.
+    // /api/apps/import — importar un .walkie como una app nueva (spec exportar-e-importar, tarea 7). No lee el zip: el
+    // archivo trae la app «Banca móvil» con «Iniciar sesión»; si ya hay una app así, queda «(importada)», como la API.
+    if (parts[2] === 'import' && parts.length === 3 && method === 'POST') {
+      if (next_.importErrors) {
+        const errors = next_.importErrors;
+        delete next_.importErrors;
+        return json(400, { title: 'One or more validation errors occurred.', status: 400, errors });
+      }
+      const dryRun = url.searchParams.get('dryRun') === 'true';
+      const sourceName = 'Banca móvil';
+      const name = apps.some((a) => a.name === sourceName) ? `${sourceName} (importada)` : sourceName;
+      const summary = {
+        dryRun,
+        app: { sourceName, name },
+        features: [{ sourceName: 'Iniciar sesión', name: 'Iniciar sesión' }],
+        newCatalogItems: 2,
+        existingCatalogItems: 0,
+        images: 1,
+        warnings: [] as string[],
+      };
+      if (dryRun) return json(200, summary);
+      const now = new Date(0).toISOString();
+      const created: App = { id: id(), name, createdAt: now, featureCount: 0 };
+      apps.push(created);
+      const feature: Feature = { id: id(), appId: created.id, name: 'Iniciar sesión', description: '', createdAt: now, updatedAt: now };
+      features.push(feature);
+      return json(201, {
+        ...summary,
+        app: { ...summary.app, id: created.id },
+        features: [{ ...summary.features[0], id: feature.id }],
+      });
+    }
+
+    // /api/apps/{appId}/export — contexto para IA (tarea 2) o .walkie (tarea 7) de la app, como la API.
     if (parts[3] === 'export') {
       const exported = apps.find((x) => x.id === parts[2]);
       if (!exported) return notFound();
       const format = url.searchParams.get('format') ?? 'ai';
+      if (format === 'walkie')
+        return new Response(new Uint8Array([0x50, 0x4b, 0x05, 0x06]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename=banca-movil.walkie' },
+        });
       return format === 'ai'
         ? new Response(`# Contexto para IA: ${exported.name} (app completa)\n\nTodas las features.\n`, {
             status: 200,

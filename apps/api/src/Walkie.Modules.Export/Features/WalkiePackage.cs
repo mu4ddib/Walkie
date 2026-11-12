@@ -16,12 +16,14 @@ internal sealed record PackageImage(Guid AssetId, string ContentType, byte[] Byt
 /// Archivo <c>.walkie</c> (spec exportar-e-importar, tareas 5 a 7): un <c>.zip</c> con <c>manifest.json</c>
 /// (<c>packages/schema/walkie-package.schema.json</c>), el lienzo de cada feature en <c>features/&lt;id&gt;/canvas.json</c>
 /// (<c>walkie-graph</c>), los elementos del catálogo que usan en <c>catalog.json</c> (<c>walkie-catalog-item</c>) y las
-/// imágenes de sus pantallas en <c>img/</c>. Una lista de features, no una sola: el mismo formato sirve para una app.
+/// imágenes de sus pantallas en <c>img/</c>. Una lista de features, no una sola: el mismo formato sirve para una app, que
+/// además trae todo su catálogo y, si se acomodó, la distribución del mapa en <c>map.json</c> (tarea 7).
 /// </summary>
 internal static class WalkiePackage
 {
     public const string ManifestPath = "manifest.json";
     public const string CatalogPath = "catalog.json";
+    public const string MapPath = "map.json";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -47,7 +49,8 @@ internal static class WalkiePackage
         IReadOnlyList<PackageFeature> features,
         IReadOnlyList<CatalogItemResponse> catalog,
         IReadOnlyList<PackageImage> images,
-        DateTimeOffset exportedAt) =>
+        DateTimeOffset exportedAt,
+        bool withMap = false) =>
         new(
             "walkie-package",
             0,
@@ -62,14 +65,16 @@ internal static class WalkiePackage
                 CanvasPath(f.Id),
                 f.Graph.TryGetProperty("version", out var v) && v.TryGetInt32(out var n) ? n : 0))],
             new PackageCatalog(CatalogPath, catalog.Count),
-            [.. images.Select(i => new PackageManifestImage(i.AssetId, ImagePath(i.AssetId, i.ContentType), i.ContentType))]);
+            [.. images.Select(i => new PackageManifestImage(i.AssetId, ImagePath(i.AssetId, i.ContentType), i.ContentType))],
+            withMap ? new PackageMap(MapPath) : null);
 
-    /// <summary>Los bytes del <c>.zip</c>: manifest, lienzos, catálogo e imágenes, en orden estable.</summary>
+    /// <summary>Los bytes del <c>.zip</c>: manifest, lienzos, catálogo, mapa (si hay) e imágenes, en orden estable.</summary>
     public static byte[] Zip(
         PackageManifest manifest,
         IReadOnlyList<PackageFeature> features,
         IReadOnlyList<CatalogItemResponse> catalog,
-        IReadOnlyList<PackageImage> images)
+        IReadOnlyList<PackageImage> images,
+        JsonElement? mapPositions = null)
     {
         using var buffer = new MemoryStream();
         using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
@@ -81,6 +86,11 @@ internal static class WalkiePackage
             }
 
             Write(zip, CatalogPath, JsonSerializer.SerializeToUtf8Bytes(catalog.OrderBy(i => i.Id), Json));
+            if (manifest.Map is not null && mapPositions is { } positions)
+            {
+                Write(zip, MapPath, JsonSerializer.SerializeToUtf8Bytes(positions, Json));
+            }
+
             foreach (var image in images.OrderBy(i => i.AssetId))
             {
                 Write(zip, ImagePath(image.AssetId, image.ContentType), image.Bytes);
@@ -106,7 +116,11 @@ internal sealed record PackageManifest(
     PackageApp App,
     IReadOnlyList<PackageManifestFeature> Features,
     PackageCatalog Catalog,
-    IReadOnlyList<PackageManifestImage> Images);
+    IReadOnlyList<PackageManifestImage> Images,
+    PackageMap? Map = null);
+
+/// <summary>Dónde está la distribución del mapa en el archivo de una app.</summary>
+internal sealed record PackageMap(string Path);
 
 internal sealed record PackageApp(Guid Id, string Name);
 
