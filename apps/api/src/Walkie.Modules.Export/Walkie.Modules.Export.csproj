@@ -12,6 +12,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- PDF (spec exportar-e-importar, tarea 4; ADR-0008). Fijado en 6.2.4, la última MIT: desde 6.5.0 es AGPL. -->
+    <PackageReference Include="PDFsharp-MigraDoc" Version="[6.2.4]" />
+    <!-- PDFsharp 6.2.4 trae System.Security.Cryptography.Pkcs 8.0.1 (vulnerable: NU1902/NU1903); se fuerza la parcheada. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IBM Plex (SIL OFL 1.1, ver Fonts/OFL.txt): PDFsharp no usa fuentes del sistema en Linux. -->
+    <EmbeddedResource Include="Fonts\*.ttf" LogicalName="Walkie.Fonts.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 

@@ -5,6 +5,7 @@ import {
   createApp,
   createShare,
   exportApp,
+  exportPdf,
   exportFeature,
   getSharedAssetBlob,
   getSharedFeature,
@@ -317,6 +318,12 @@ export function useAiContextExport(target: AiContextTarget) {
     mutationFn: (format: 'ai' | 'ai-json') =>
       target.kind === 'app' ? exportApp(token, target.id, format) : exportFeature(token, target.id, format),
   });
+}
+
+/** PDF de la feature con la imagen del lienzo (o sin ella). */
+export function useExportPdf(featureId: string) {
+  const token = useToken();
+  return useMutation({ mutationFn: (canvas: Blob | null) => exportPdf(token, featureId, canvas) });
 }
 
 export function useExportFeature(featureId: string) {

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { login, openNewFeature, png, seedCanvas } from './helpers';
+import { login, openNewFeature, png, saveStatus, seedCanvas } from './helpers';
 
 /**
  * Feature exportar-e-importar (docs/features/exportar-e-importar/spec.md) con API, Keycloak y Postgres reales.
@@ -226,4 +226,34 @@ test('imagen del lienzo: PNG de todo el lienzo a 2× y SVG con las cajas y la im
     width: Math.round(pane.width),
     height: Math.round(pane.height),
   });
+});
+
+test('PDF: guarda lo pendiente y descarga el documento con el lienzo y la imagen de la pantalla', async ({ page }) => {
+  await login(page);
+  await openNewFeature(page, 'Iniciar sesión');
+  const asset = await uploadImage(page, png(32, 24));
+  await seedCanvas(page, {
+    ...graph(),
+    nodes: { ...graph().nodes, s1: { ...graph().nodes.s1, assetId: asset } },
+  });
+  await expect(page.locator('.pixel-node img')).toBeVisible();
+
+  // Un cambio sin guardar: el PDF lo guarda antes, así la imagen y el texto coinciden.
+  await page.locator('.react-flow__node').filter({ hasText: 'API Auth' }).click();
+  await page.getByRole('complementary', { name: 'Propiedades' }).getByLabel('Título').fill('API de autenticación');
+  await expect(saveStatus(page)).toHaveText('Sin guardar');
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar' }).click();
+  await page.getByRole('menuitem', { name: /^PDF/ }).click();
+  const file = await download;
+  await expect(saveStatus(page)).toHaveText('Guardado');
+
+  expect(file.suggestedFilename()).toBe('iniciar-sesion.pdf');
+  const pdf = await readFile((await file.path())!);
+  expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
+  // Dos imágenes: el lienzo (página apaisada) y la pantalla.
+  expect(pdf.toString('latin1').match(/\/Subtype\s*\/Image/g)?.length).toBe(2);
+  expect(pdf.toString('latin1')).toMatch(/\/MediaBox\s*\[\s*0\s+0\s+841\.8/);
+  if (process.env.WALKIE_CAPTURES) await file.saveAs(`${process.env.WALKIE_CAPTURES}/exportar-e-importar-5.pdf`);
 });

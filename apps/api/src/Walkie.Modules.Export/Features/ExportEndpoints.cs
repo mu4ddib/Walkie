@@ -24,6 +24,17 @@ internal static class ExportEndpoints
             .Produces(StatusCodes.Status200OK, contentType: "text/markdown")
             .Produces(StatusCodes.Status200OK, contentType: "application/json");
 
+        routes.MapPost("/api/features/{featureId:guid}/export/pdf", ExportPdf)
+            .WithTags("Export")
+            .WithName("ExportFeaturePdf")
+            .WithSummary(
+                "PDF de la última versión guardada (ADR-0008): portada, lienzo, componentes con sus tablas, conexiones, "
+                + "recorridos, tours y pendientes. Multipart con el campo opcional canvas: la imagen del lienzo (PNG, hasta 10 MB) "
+                + "que genera el navegador. Sin ella, el PDF va sin la página del lienzo.")
+            .Accepts<IFormFile>("multipart/form-data")
+            .DisableAntiforgery()
+            .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
+
         routes.MapGet("/api/apps/{appId:guid}/export", ExportApp)
             .WithTags("Export")
             .WithName("ExportApp")
@@ -93,4 +104,56 @@ internal static class ExportEndpoints
     }
 
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
+
+    /// <summary>Tamaño máximo de la imagen del lienzo (bytes).</summary>
+    private const long CanvasImageMaxBytes = 10 * 1024 * 1024;
+
+    private static async Task<Results<FileContentHttpResult, NotFound, ValidationProblem>> ExportPdf(
+        Guid featureId, HttpRequest request, ExportHandlers handlers, CancellationToken ct)
+    {
+        // Sin cuerpo, o con un multipart sin partes (no se pudo generar la imagen), el PDF va sin la página del lienzo.
+        IFormFile? canvas = null;
+        if (request.HasFormContentType && request.ContentLength is not 0)
+        {
+            try
+            {
+                canvas = (await request.ReadFormAsync(ct).ConfigureAwait(false)).Files.GetFile("canvas");
+            }
+            catch (InvalidDataException)
+            {
+                canvas = null;
+            }
+        }
+
+        PdfImage? image = null;
+        if (canvas is not null)
+        {
+            if (canvas.Length > CanvasImageMaxBytes)
+            {
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["canvas"] = ["La imagen del lienzo no puede pasar de 10 MB."],
+                });
+            }
+
+            using var bytes = new MemoryStream();
+            await canvas.CopyToAsync(bytes, ct).ConfigureAwait(false);
+            // Se reconoce por el contenido (la firma de PNG), no por el nombre ni el tipo que dice el navegador.
+            if (!bytes.ToArray().AsSpan().StartsWith(PngSignature))
+            {
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["canvas"] = ["La imagen del lienzo tiene que ser PNG."],
+                });
+            }
+
+            image = new PdfImage(bytes.ToArray(), "image/png");
+        }
+
+        return await handlers.PdfAsync(featureId, image, ct).ConfigureAwait(false) is { } pdf
+            ? TypedResults.File(pdf.Content, "application/pdf", pdf.FileName)
+            : TypedResults.NotFound();
+    }
+
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 }

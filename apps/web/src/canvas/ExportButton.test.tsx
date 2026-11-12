@@ -93,6 +93,7 @@ describe('Contexto para IA (spec exportar-e-importar)', () => {
     expect(items.map((i) => i.textContent)).toEqual([
       expect.stringMatching(/^Contexto para IA…Todo lo documentado/),
       expect.stringMatching(/^Imagen \(PNG o SVG\)…Para una presentación/),
+      expect.stringMatching(/^PDFDocumento con portada/),
       expect.stringMatching(/^Markdown e imágenes \(\.zip\)Documento para el repo/),
     ]);
     expect(items[0]).toHaveFocus();
@@ -193,6 +194,37 @@ describe('Imagen del lienzo (spec exportar-e-importar)', () => {
     stop();
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('PDF (spec exportar-e-importar, tarea 4)', () => {
+  it('guarda lo pendiente, manda la imagen del lienzo a la API y descarga el PDF', async () => {
+    const { api, user } = await openEditor();
+    const stop = onCanvasImageRequest(async () => new Blob(['png'], { type: 'image/png' }));
+    await user.click(screen.getByRole('button', { name: 'agregar pantalla' }));
+
+    await user.click(screen.getByRole('button', { name: 'Exportar' }));
+    await user.click(screen.getByRole('menuitem', { name: /^PDF/ }));
+
+    await vi.waitFor(() => expect(saved.map((f) => f.name)).toEqual(['Iniciar sesión.pdf']));
+    // Primero se guardó (el lienzo de la API ya tiene la pantalla) y luego se pidió el PDF con la imagen.
+    expect(Object.values(api.canvases['feat-1']!.nodes)).toHaveLength(1);
+    const calls = api.fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${new URL(String(url)).pathname}`);
+    expect(calls.indexOf('PUT /api/features/feat-1/canvas')).toBeLessThan(calls.indexOf('POST /api/features/feat-1/export/pdf'));
+    expect(api.next.lastPdfCanvas).toBeInstanceOf(Blob);
+    stop();
+  });
+
+  it('sin imagen del lienzo (vacío), pide el PDF igual, sin ella', async () => {
+    const { api, user } = await openEditor();
+    const stop = onCanvasImageRequest(() => Promise.reject(new Error('El lienzo está vacío.')));
+
+    await user.click(screen.getByRole('button', { name: 'Exportar' }));
+    await user.click(screen.getByRole('menuitem', { name: /^PDF/ }));
+
+    await vi.waitFor(() => expect(saved.map((f) => f.name)).toEqual(['Iniciar sesión.pdf']));
+    expect(api.next.lastPdfCanvas).toBeNull();
+    stop();
   });
 });
 

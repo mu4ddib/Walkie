@@ -312,6 +312,21 @@ export async function exportFeature(token: string, featureId: string, format: Ex
   return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? EXPORT_FALLBACK_NAMES[format], blob: await res.blob() };
 }
 
+/**
+ * PDF de la feature (spec exportar-e-importar, tarea 4; ADR-0008): la API lo arma con lo guardado y la imagen del
+ * lienzo que se le manda (sin ella, el PDF va sin esa página).
+ */
+export async function exportPdf(token: string, featureId: string, canvas: Blob | null): Promise<Download> {
+  const form = new FormData();
+  if (canvas) form.append('canvas', canvas, 'lienzo.png');
+  const res = await send(`/api/features/${encodeURIComponent(featureId)}/export/pdf`, {
+    token,
+    method: 'POST',
+    body: canvas ? form : undefined,
+  });
+  return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? 'feature.pdf', blob: await res.blob() };
+}
+
 /** Contexto para IA de toda la app (spec exportar-e-importar, tarea 2): `ai` (Markdown) o `ai-json`. */
 export async function exportApp(token: string, appId: string, format: 'ai' | 'ai-json' = 'ai'): Promise<Download> {
   const res = await send(`/api/apps/${encodeURIComponent(appId)}/export?format=${format}`, { token });

@@ -2,8 +2,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 
 /**
  * «Exportar» (spec exportar-e-importar): un menú con lo que se puede exportar, cada opción con una línea de para qué
- * sirve. Hoy: el contexto para IA, la imagen del lienzo y el Markdown con imágenes; PDF y archivo de Walkie llegan en
- * otras tareas.
+ * sirve: el contexto para IA, la imagen del lienzo, el PDF y el Markdown con imágenes; el archivo de Walkie llega en
+ * otra tarea.
  * Flechas recorren, Esc cierra y devuelve el foco al botón.
  */
 export function ExportMenu({
@@ -11,12 +11,15 @@ export function ExportMenu({
   onAiContext,
   onMarkdown,
   onImage,
+  onPdf,
 }: {
   pending: boolean;
   onAiContext: () => void;
   onMarkdown: () => void;
   /** Imagen del lienzo (spec exportar-e-importar, tarea 3). */
   onImage: () => void;
+  /** PDF (tarea 4): guarda lo pendiente, genera la imagen del lienzo y la API arma el documento. */
+  onPdf: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
@@ -88,6 +91,12 @@ export function ExportMenu({
             <span className="export-option-label">Imagen (PNG o SVG)…</span>
             <span className="export-option-help">
               Para una presentación, un ticket o un correo: todo el lienzo o lo que se ve.
+            </span>
+          </button>
+          <button type="button" role="menuitem" className="export-option" onClick={() => choose(onPdf)}>
+            <span className="export-option-label">PDF</span>
+            <span className="export-option-help">
+              Documento con portada, el lienzo y tablas, para imprimir o adjuntar. Guarda antes los cambios.
             </span>
           </button>
           <button type="button" role="menuitem" className="export-option" onClick={() => choose(onMarkdown)}>

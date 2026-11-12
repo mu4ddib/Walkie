@@ -210,6 +210,72 @@ public sealed class ExportEndpointsTests(WalkieApiFactory factory)
         Assert.Contains("\"/api/apps/{appId}/export\"", doc, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task El_pdf_lleva_la_imagen_del_lienzo_que_manda_el_navegador_y_la_de_la_pantalla()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var app = await CreateAppAsync(client);
+        var feature = await CreateFeatureAsync(client, app, "Iniciar sesión");
+        var asset = await UploadAsync(client, app, TestImages.RealPng(40, 30));
+        await SaveAsync(client, feature, Graph(asset, null, null));
+
+        var response = await PostPdfAsync(client, feature, TestImages.RealPng(800, 450));
+        var withoutCanvas = await PostPdfAsync(client, feature, null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("iniciar-sesion.pdf", response.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var pdf = await response.Content.ReadAsByteArrayAsync();
+        using var doc = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+        Assert.Equal("Iniciar sesión", doc.Info.Title);
+        Assert.Equal(2, Images(doc));
+
+        Assert.Equal(HttpStatusCode.OK, withoutCanvas.StatusCode);
+        using var plain = PdfSharp.Pdf.IO.PdfReader.Open(
+            new MemoryStream(await withoutCanvas.Content.ReadAsByteArrayAsync()), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+        Assert.Equal(1, Images(plain));
+    }
+
+    [Fact]
+    public async Task El_pdf_rechaza_una_imagen_que_no_es_png_o_pasa_de_10_mb_y_responde_404_sin_feature()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client, await CreateAppAsync(client), "Transferir");
+
+        var notPng = await PostPdfAsync(client, feature, TestImages.Create("jpeg", 10, 10));
+        var tooBig = await PostPdfAsync(client, feature, [.. TestImages.RealPng(2, 2), .. new byte[10 * 1024 * 1024]]);
+        var missing = await PostPdfAsync(client, Guid.CreateVersion7(), null);
+        var anonymous = await factory.CreateClient().PostAsync(
+            new Uri($"/api/features/{feature}/export/pdf", UriKind.Relative), new MultipartFormDataContent());
+        var doc = await factory.CreateClient().GetStringAsync(new Uri("/openapi/v1.json", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.BadRequest, notPng.StatusCode);
+        Assert.Contains("canvas", (await notPng.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ValidationProblemDetails>())!.Errors.Keys);
+        Assert.Equal(HttpStatusCode.BadRequest, tooBig.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Contains("\"/api/features/{featureId}/export/pdf\"", doc, StringComparison.Ordinal);
+    }
+
+    private static Task<HttpResponseMessage> PostPdfAsync(HttpClient client, Guid featureId, byte[]? canvas)
+    {
+        var content = new MultipartFormDataContent();
+        if (canvas is not null)
+        {
+            var file = new ByteArrayContent(canvas);
+            file.Headers.ContentType = MediaTypeHeaderValue.Parse("image/png");
+            content.Add(file, "canvas", "lienzo.png");
+        }
+
+        return client.PostAsync(new Uri($"/api/features/{featureId}/export/pdf", UriKind.Relative), content);
+    }
+
+    private static int Images(PdfSharp.Pdf.PdfDocument doc) =>
+        doc.Pages.Cast<PdfSharp.Pdf.PdfPage>()
+            .Select(p => p.Resources.Elements.GetDictionary("/XObject"))
+            .Where(x => x is not null)
+            .Sum(x => x!.Elements.Count);
+
     private static Uri AiUri(Guid featureId, string format) =>
         new($"/api/features/{featureId}/export?format={format}", UriKind.Relative);
 

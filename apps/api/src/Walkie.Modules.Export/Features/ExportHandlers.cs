@@ -114,6 +114,55 @@ internal sealed class ExportHandlers(
         return (Slugs.From(appName, "app"), context);
     }
 
+    /// <summary>
+    /// PDF de la última versión guardada (spec exportar-e-importar, tarea 4; ADR-0008), con la imagen del lienzo que manda
+    /// el navegador (si la hay) y las imágenes de las pantallas; <c>null</c> si la feature no existe.
+    /// </summary>
+    public async Task<(string FileName, byte[] Content)?> PdfAsync(Guid featureId, PdfImage? canvasImage, CancellationToken ct)
+    {
+        if (await AiContextAsync(featureId, ct).ConfigureAwait(false) is not { } ai
+            || await features.AppOfFeatureAsync(featureId, ct).ConfigureAwait(false) is not { } appId)
+        {
+            return null;
+        }
+
+        // La imagen de cada pantalla, por id de nodo (dos pantallas con la misma imagen la piden una vez).
+        var graph = await canvas.GraphOfFeatureAsync(featureId, ct).ConfigureAwait(false);
+        var screens = new Dictionary<string, PdfImage>(StringComparer.Ordinal);
+        var byAsset = new Dictionary<Guid, PdfImage?>();
+        foreach (var node in graph.GetProperty("nodes").EnumerateObject().Select(n => n.Value))
+        {
+            if (node.GetProperty("type").GetString() != "screen"
+                || !node.TryGetProperty("assetId", out var value) || !Guid.TryParse(value.GetString(), out var assetId))
+            {
+                continue;
+            }
+
+            if (!byAsset.TryGetValue(assetId, out var image))
+            {
+                image = null;
+                if (await assets.OpenInAppAsync(appId, assetId, ct).ConfigureAwait(false) is { } stored)
+                {
+                    await using (stored.Content.ConfigureAwait(false))
+                    {
+                        using var bytes = new MemoryStream();
+                        await stored.Content.CopyToAsync(bytes, ct).ConfigureAwait(false);
+                        image = new PdfImage(bytes.ToArray(), stored.ContentType);
+                    }
+                }
+
+                byAsset[assetId] = image;
+            }
+
+            if (image is not null)
+            {
+                screens[node.GetProperty("id").GetString()!] = image;
+            }
+        }
+
+        return ($"{ai.Slug}.pdf", MarkdownDocument.RenderPdf(ai.Context, canvasImage, screens));
+    }
+
     private static byte[] Zip(string markdownName, string markdown, IEnumerable<(string Path, byte[] Bytes)> images)
     {
         using var buffer = new MemoryStream();

@@ -1,7 +1,7 @@
 # Spec: Exportar e importar
 
 - Issue padre: #137
-- Estado: en curso (tareas 1 a 3 de 7 hechas)
+- Estado: en curso (tareas 1 a 4 de 7 hechas)
 
 ## Objetivo
 
@@ -39,7 +39,7 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
 ### Imagen y PDF
 
 - [x] Dado el lienzo, entonces «Imagen» descarga un PNG (o SVG) de todo el lienzo o solo de lo visible, con fondo claro, a la resolución elegida (1× / 2×), con las imágenes de las pantallas. Se genera en el navegador con lo que hay en el lienzo (también lo no guardado), sin puntos de conexión ni grilla, con las fuentes de la interfaz incrustadas.
-- [ ] Dado el lienzo, entonces «PDF» descarga un documento con portada (feature, app, fecha), la imagen del lienzo y el contenido del Markdown (componentes, conexiones, flujos, tours), con tablas legibles e imágenes.
+- [x] Dado el lienzo, entonces «PDF» descarga un documento con portada (feature, app, fecha), la imagen del lienzo y el contenido del Markdown (componentes, conexiones, flujos, tours), con tablas legibles e imágenes. Antes guarda los cambios pendientes, así la imagen y el texto coinciden; al final, lo que falta documentar.
 
 ### Archivo de Walkie (importable)
 
@@ -65,10 +65,11 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
 
 ## Impacto en la API
 
-- `GET /api/features/{featureId}/export?format=ai|markdown|pdf|walkie` (el actual queda como `markdown`, por defecto).
+- `GET /api/features/{featureId}/export?format=ai|ai-json|markdown|walkie` (el actual queda como `markdown`, por defecto).
+- `POST /api/features/{featureId}/export/pdf` (multipart, campo `canvas` opcional: la imagen del lienzo en PNG, hasta 10 MB; 400 si no es PNG o es más grande). Es `POST` y no `?format=pdf` porque lleva la imagen (ADR-0008).
 - `GET /api/apps/{appId}/export?format=ai|ai-json` (contexto para IA de la app, hecho en la tarea 2; `walkie` llega con la tarea 7).
 - `POST /api/apps/{appId}/import` (multipart con el `.walkie`): 201 con las features creadas; 400 con la ruta del error; 413 si supera el tamaño máximo; `dryRun=true` devuelve el resumen sin crear nada.
-- La imagen (PNG/SVG) se genera en el navegador a partir del lienzo (la imagen del lienzo del PDF la sube el navegador al pedirlo, o la API compone el diagrama: se decide en el ADR); el PDF se genera en la API (ADR para elegir la librería y revisar su licencia).
+- La imagen (PNG/SVG) se genera en el navegador a partir del lienzo; el PDF se genera en la API con PDFsharp/MigraDoc 6.2.4 (MIT) y la imagen del lienzo la manda el navegador (ADR-0008).
 
 ## Decisiones
 
@@ -77,4 +78,4 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
 
 ## Preguntas abiertas
 
-- Librería de PDF y cómo llega la imagen del lienzo al PDF (ADR en la tarea correspondiente).
+- Ninguna (la librería del PDF y la imagen del lienzo las decidió ADR-0008).

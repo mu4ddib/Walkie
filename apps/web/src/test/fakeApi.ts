@@ -25,7 +25,8 @@ export function installFakeApi(
   /** Enlaces de solo lectura activos (los revocados salen de la lista, como en la API). */
   const shares = [...(seed.shares ?? [])];
   /** Si se define, el próximo PUT del lienzo responde este estado (ej. 400). */
-  const next_: { putStatus?: number; uploadStatus?: number; exportStatus?: number } = {};
+  const next_: { putStatus?: number; uploadStatus?: number; exportStatus?: number; lastPdfCanvas?: Blob | null } =
+    {};
   let next = 1;
   const id = () => `00000000-0000-7000-8000-${String(next++).padStart(12, '0')}`;
 
@@ -63,6 +64,18 @@ export function installFakeApi(
         const status = next_.exportStatus;
         delete next_.exportStatus;
         return json(status, { title: 'Error', status });
+      }
+      // PDF (spec exportar-e-importar, tarea 4): POST con la imagen del lienzo opcional; la recuerda para las pruebas.
+      if (parts[4] === 'pdf' && method === 'POST') {
+        const canvas = init?.body instanceof FormData ? init.body.get('canvas') : null;
+        next_.lastPdfCanvas = canvas instanceof Blob ? canvas : null;
+        return new Response('%PDF-1.7', {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(feature.name)}.pdf`,
+          },
+        });
       }
       // Contexto para IA (spec exportar-e-importar): Markdown o JSON con su nombre, como la API.
       const format = url.searchParams.get('format');
