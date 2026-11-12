@@ -60,6 +60,36 @@ internal sealed class ExportHandlers(
         return ($"{slug}.zip", Zip($"{slug}.md", markdown, images.Values));
     }
 
+    /// <summary>
+    /// Contexto para IA de la última versión guardada (spec exportar-e-importar, tarea 1) y el slug para los nombres de
+    /// archivo; <c>null</c> si la feature no existe. Sin imágenes: es texto para un modelo de lenguaje.
+    /// </summary>
+    public async Task<(string Slug, AiContext Context)?> AiContextAsync(Guid featureId, CancellationToken ct)
+    {
+        if (await features.DescribeAsync(featureId, ct).ConfigureAwait(false) is not { } feature)
+        {
+            return null;
+        }
+
+        var graph = await canvas.GraphOfFeatureAsync(featureId, ct).ConfigureAwait(false);
+        var refs = NodeIds(graph, "ref", "catalogId").Keys.ToList();
+        var items = refs.Count == 0 ? [] : await catalog.ItemsOfAppAsync(feature.AppId, refs, ct).ConfigureAwait(false);
+        var featureNames = NodeIds(graph, "portal", "targetFeatureId").Count == 0
+            ? new Dictionary<Guid, string>()
+            : await features.FeatureNamesOfAppAsync(feature.AppId, ct).ConfigureAwait(false);
+
+        var context = MarkdownDocument.BuildAiContext(new AiContextInput(
+            feature.Id,
+            feature.AppName,
+            feature.Name,
+            feature.Description,
+            graph,
+            items.ToDictionary(i => i.Id),
+            featureNames,
+            clock.GetUtcNow()));
+        return (Slugs.From(feature.Name), context);
+    }
+
     private static byte[] Zip(string markdownName, string markdown, IEnumerable<(string Path, byte[] Bytes)> images)
     {
         using var buffer = new MemoryStream();

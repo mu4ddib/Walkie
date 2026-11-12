@@ -15,11 +15,14 @@ internal static partial class MarkdownText
     public static string Block(string text) =>
         string.Join("  \n", text.ReplaceLineEndings("\n").Split('\n').Select(EscapeLine));
 
-    /// <summary>Bloque de código con una cerca más larga que cualquier racha de comillas invertidas del texto.</summary>
-    public static string CodeBlock(string text)
+    /// <summary>
+    /// Bloque de código con una cerca más larga que cualquier racha de comillas invertidas del texto; con
+    /// <paramref name="language"/> (ej. <c>json</c>), resaltado.
+    /// </summary>
+    public static string CodeBlock(string text, string language = "")
     {
         var fence = new string('`', Math.Max(3, LongestRun(text, '`') + 1));
-        return $"{fence}\n{text.ReplaceLineEndings("\n")}\n{fence}";
+        return $"{fence}{language}\n{text.ReplaceLineEndings("\n")}\n{fence}";
     }
 
     /// <summary>Código en línea (<c>GET /ruta</c>), con tantas comillas como haga falta.</summary>

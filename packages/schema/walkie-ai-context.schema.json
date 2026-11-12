@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-ai-context.schema.json",
+  "title": "Walkie AI context v0",
+  "description": "Contexto de una feature para darle a una IA antes de construir (spec exportar-e-importar, tarea 1): lo mismo que el Markdown «Contexto para IA», en estructura. Lo genera la API desde la última versión guardada del lienzo; no se importa (para reconstruir está el archivo .walkie).",
+  "type": "object",
+  "required": ["format", "formatVersion", "app", "feature", "exportedAt", "canvasVersion", "glossary", "components", "connections", "flows", "rules", "decisions", "relations", "gaps"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "walkie-ai-context" },
+    "formatVersion": { "const": 0 },
+    "app": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": { "name": { "type": "string" } }
+    },
+    "feature": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "description": { "type": "string", "description": "Propósito de la feature (su descripción en Walkie)" }
+      }
+    },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "canvasVersion": { "type": "integer", "minimum": 0 },
+    "glossary": {
+      "type": "array",
+      "description": "Nombres que usa el lienzo y qué es cada uno (cajas, grupos, tours y recorridos), en orden alfabético",
+      "items": {
+        "type": "object",
+        "required": ["term", "is"],
+        "additionalProperties": false,
+        "properties": {
+          "term": { "type": "string" },
+          "is": { "type": "string", "description": "Qué es, en palabras: «API», «Cola», «Grupo (backend)», «Recorrido»…" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "description": "Cada caja del lienzo con su id estable, su tipo efectivo (un componente del catálogo, el de su elemento) y su detalle completo",
+      "items": { "$ref": "#/$defs/component" }
+    },
+    "connections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/connection" }
+    },
+    "flows": {
+      "type": "array",
+      "description": "Tours (guide: el guía presenta cajas) y recorridos (flow: conexiones en orden, de punta a punta)",
+      "items": { "$ref": "#/$defs/flow" }
+    },
+    "rules": {
+      "type": "array",
+      "description": "Reglas de negocio (nodos rule que no son decisiones) con los inputs que validan",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "validates"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "expression": { "type": "string" },
+          "validates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["screen", "input"],
+              "additionalProperties": false,
+              "properties": { "screen": { "type": "string" }, "input": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "question", "branches"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "question": { "type": "string" },
+          "condition": { "type": "string" },
+          "branches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["label", "to"],
+              "additionalProperties": false,
+              "properties": {
+                "label": { "type": "string" },
+                "to": { "type": "array", "items": { "type": "string" }, "description": "Títulos de los destinos de esa salida (vacío: sin destino)" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "relations": {
+      "type": "object",
+      "required": ["portals", "sharedComponents"],
+      "additionalProperties": false,
+      "properties": {
+        "portals": {
+          "type": "array",
+          "description": "Desde dónde se pasa a otra feature de la app",
+          "items": {
+            "type": "object",
+            "required": ["from", "toFeature"],
+            "additionalProperties": false,
+            "properties": {
+              "from": { "type": "string", "description": "Título del portal" },
+              "toFeature": { "type": ["string", "null"], "description": "Nombre actual de la feature destino; null si no tiene o ya no existe" }
+            }
+          }
+        },
+        "sharedComponents": {
+          "type": "array",
+          "description": "Componentes del catálogo de la app que usa este lienzo (su definición es compartida con otros lienzos)",
+          "items": {
+            "type": "object",
+            "required": ["catalogId", "title", "type"],
+            "additionalProperties": false,
+            "properties": {
+              "catalogId": { "type": "string" },
+              "title": { "type": "string" },
+              "type": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "description": "Vacíos detectados: lo que falta documentar, para que la IA pregunte en vez de inventar",
+      "items": {
+        "type": "object",
+        "required": ["kind", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "api-without-contract",
+              "api-without-responses",
+              "request-without-response",
+              "response-without-status",
+              "isolated-node",
+              "branch-without-target",
+              "broken-flow-step",
+              "missing-catalog-item",
+              "portal-without-target",
+              "database-without-structure"
+            ]
+          },
+          "elementId": { "type": "string", "description": "Caja o conexión a la que se refiere" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "required": ["id", "type", "is", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "description": "Tipo efectivo: actor, screen, rule, api, service, database, resource, portal (un ref, el de su elemento)" },
+        "is": { "type": "string", "description": "Qué es, en palabras (en un recurso, su subtipo; en una regla, «Decisión» si lo es)" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "notes": { "type": "string" },
+        "group": { "type": "string", "description": "Ruta del grupo que lo contiene (ej. «AWS › Pagos»)" },
+        "catalogId": { "type": "string", "description": "Si es un componente compartido del catálogo" },
+        "http": { "$ref": "walkie-graph.schema.json#/$defs/http" },
+        "database": { "$ref": "walkie-graph.schema.json#/$defs/database" },
+        "resource": { "$ref": "walkie-graph.schema.json#/$defs/resource" },
+        "runtime": { "$ref": "walkie-graph.schema.json#/$defs/runtime" },
+        "expression": { "type": "string" },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "type"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "required": { "type": "boolean" },
+              "options": { "type": "array", "items": { "type": "string" } },
+              "rules": { "type": "array", "items": { "type": "string" }, "description": "Títulos de las reglas que lo validan" }
+            }
+          }
+        },
+        "targetFeature": { "type": ["string", "null"], "description": "Portal: nombre actual de la feature destino" }
+      }
+    },
+    "connection": {
+      "type": "object",
+      "required": ["id", "from", "to", "kind", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "from": { "type": "string", "description": "Id de la caja de origen" },
+        "to": { "type": "string", "description": "Id de la caja de destino" },
+        "kind": { "type": "string" },
+        "text": { "type": "string", "description": "La conexión en palabras: «Login → API Auth (llama · POST /sesiones)»" },
+        "label": { "type": "string" },
+        "when": { "type": "string" },
+        "branch": { "type": "string", "description": "Etiqueta de la salida de la decisión de origen" },
+        "status": { "type": "integer" },
+        "replyTo": { "type": "string", "description": "Id de la solicitud a la que responde" },
+        "outcome": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "required": ["id", "name", "kind", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "kind": { "enum": ["guide", "flow"] },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["n", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "n": { "type": "integer", "minimum": 1 },
+              "text": { "type": "string", "description": "El paso en palabras: la caja o «Origen → Destino (tipo)»" },
+              "nodeId": { "type": "string" },
+              "edgeId": { "type": "string" },
+              "note": { "type": "string" },
+              "broken": { "type": "boolean", "description": "La caja o la conexión del paso ya no existe" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -20,7 +20,7 @@ internal sealed record ExportInput(
 /// Mermaid, una sección por tipo de caja, conexiones y tours. Función pura y con orden estable: el mismo grafo
 /// da el mismo texto salvo la fecha de exportación.
 /// </summary>
-internal static class MarkdownDocument
+internal static partial class MarkdownDocument
 {
     /// <summary>Secciones por tipo, en el orden de la spec (criterio 5); los <c>ref</c> van en la de su elemento.</summary>
     private static readonly (string Type, string Heading, string Label)[] Sections =

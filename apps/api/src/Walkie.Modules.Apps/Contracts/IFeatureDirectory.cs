@@ -18,4 +18,5 @@ public interface IFeatureDirectory
     Task<FeatureSummary?> DescribeAsync(Guid featureId, CancellationToken cancellationToken);
 }
 
-public sealed record FeatureSummary(Guid Id, Guid AppId, string AppName, string Name);
+/// <summary>La feature con su app; <c>Description</c> es su propósito (lo usa el contexto para IA).</summary>
+public sealed record FeatureSummary(Guid Id, Guid AppId, string AppName, string Name, string? Description = null);

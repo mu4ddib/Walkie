@@ -34,6 +34,7 @@ import {
   type CatalogItemChanges,
   type NewCatalogItem,
   type ShareDays,
+  type ExportFormat,
 } from './client';
 
 /** Access token de la sesión actual. `AuthGate` garantiza que existe dentro de la app. */
@@ -307,5 +308,5 @@ export function useSharedFeature(shareToken: string) {
 /** Descarga el `.zip` del export de la feature (no cambia nada en la API). */
 export function useExportFeature(featureId: string) {
   const token = useToken();
-  return useMutation({ mutationFn: () => exportFeature(token, featureId) });
+  return useMutation({ mutationFn: (format?: ExportFormat) => exportFeature(token, featureId, format) });
 }

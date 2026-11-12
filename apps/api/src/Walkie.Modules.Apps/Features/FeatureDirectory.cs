@@ -23,6 +23,6 @@ internal sealed class FeatureDirectory(AppsDbContext db) : IFeatureDirectory
 
     public async Task<FeatureSummary?> DescribeAsync(Guid featureId, CancellationToken cancellationToken) =>
         await db.Features.Where(f => f.Id == featureId)
-            .Join(db.Apps, f => f.AppId, a => a.Id, (f, a) => new FeatureSummary(f.Id, a.Id, a.Name, f.Name))
+            .Join(db.Apps, f => f.AppId, a => a.Id, (f, a) => new FeatureSummary(f.Id, a.Id, a.Name, f.Name, f.Description))
             .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 }
