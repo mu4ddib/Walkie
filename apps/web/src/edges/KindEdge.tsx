@@ -42,6 +42,11 @@ export type WalkieFlowEdge = FlowEdge<{
   bendX?: number;
   /** Camino que esquiva cajas (spec puertos-de-conexion, tarea 4); sin él, el escalón de siempre. */
   route?: Point[];
+  /**
+   * Centro de la etiqueta cuando la coloca `Canvas` (conexiones de un mismo par en carriles: spec
+   * conexiones-ida-y-vuelta); `joined` la une a las del par en una etiqueta compuesta.
+   */
+  labelAt?: { x: number; y: number; joined?: 'start' | 'middle' | 'end' };
   /** y en la que dobla el trazo (conexiones que comparten un lado de arriba o de abajo). */
   bendY?: number;
   /**
@@ -88,10 +93,11 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
   // Si hay que esquivar cajas, el trazo es el camino calculado y la etiqueta va a mitad de su largo.
   const routed = data?.route ? polylinePath(data.route) : null;
   const path = routed?.d ?? stepPath;
-  const labelX = routed?.labelX ?? stepLabelX;
-  const labelY = routed?.labelY ?? stepLabelY;
+  const placed = data?.labelAt;
+  const labelX = placed?.x ?? routed?.labelX ?? stepLabelX;
+  const labelY = placed?.y ?? routed?.labelY ?? stepLabelY;
   const kinds = SELECTABLE_KINDS.includes(kind) ? SELECTABLE_KINDS : [kind, ...SELECTABLE_KINDS];
-  const offset = data?.labelOffset ?? 0;
+  const offset = placed ? 0 : (data?.labelOffset ?? 0);
 
   return (
     <>
@@ -113,6 +119,7 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
           data-selected={selected || undefined}
           data-branch={display.branch || undefined}
           data-edge-id={id}
+          data-joined={placed?.joined}
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY + offset}px)` }}
         >
           {data?.step !== undefined && (

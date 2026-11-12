@@ -1,7 +1,7 @@
 # Spec: Conexiones de ida y vuelta
 
 - Issue padre: #135
-- Estado: en curso (tarea 1 de 2 hecha)
+- Estado: implementada (2026-11-12), verificada por `apps/web/e2e/conexiones-ida-y-vuelta.spec.ts`, `lanes.test.ts` y `labels.test.ts`
 
 ## Objetivo
 
@@ -26,13 +26,13 @@ Quien documenta integraciones (pantalla ↔ API, API ↔ servicio) y quien lee e
 
 ### Etiquetas
 
-- [ ] Dado el par, entonces sus etiquetas nunca se superponen: cada una queda sobre su propio trazo, separadas al menos `LABEL_GAP`.
-- [ ] Si no hay lugar para las dos (trazo corto), se muestran juntas en una sola etiqueta compuesta («llama · POST /cuentas ⇄ responde 201»); cada mitad se puede seleccionar por separado y lleva su propio estilo.
-- [ ] Pasar el puntero o seleccionar una de las dos resalta solo esa, con su animación de sentido.
+- [x] Dado el par, entonces sus etiquetas nunca se superponen: cada una queda sobre su propio trazo, separadas al menos `LABEL_GAP`.
+- [x] Si no hay lugar para las dos (trazo corto), se muestran juntas en una sola etiqueta compuesta («llama · POST /cuentas ⇄ responde 201»), arriba o abajo del trazo si a mitad tapa una caja; cada mitad se puede seleccionar por separado y lleva su propio estilo.
+- [x] Pasar el puntero o seleccionar una de las dos resalta solo esa, con su animación de sentido.
 
 ### Verificación
 
-- [ ] Un E2E siembra el par en cuatro disposiciones (horizontal, vertical, diagonal y rodeando una caja) y comprueba que las cajas de las etiquetas no se intersectan y que los trazos no comparten segmentos; guarda capturas con `WALKIE_CAPTURES`.
+- [x] Un E2E siembra el par en cuatro disposiciones (horizontal, vertical, diagonal y rodeando una caja, más un par muy cercano) y comprueba que las cajas de las etiquetas no se intersectan y que los trazos no comparten segmentos; guarda capturas con `WALKIE_CAPTURES`.
 
 ## Fuera de alcance
 

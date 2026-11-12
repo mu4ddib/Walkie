@@ -13,7 +13,7 @@ Basado en `spec.md` (aprobada el 2026-11-12). Issue padre: #135.
 Cada tarea cabe en una sesión y en un PR.
 
 1. [x] (#138) Carriles paralelos: hoy `KindEdge` ignora `laneOffset` cuando hay `ports` o `route`. Calcular, para cada par solicitud/respuestas (`replyTo`), un desplazamiento perpendicular por carril que se aplique a los puertos, a los dobleces (`staggerBends`) y al corredor de `routeAround`. Pruebas unitarias: ningún segmento compartido en las cuatro disposiciones.
-2. [ ] (#139) Etiquetas: colocar cada una sobre su trazo con separación `LABEL_GAP`; si el trazo es corto, una etiqueta compuesta con dos mitades seleccionables. E2E con cuatro disposiciones (cajas de etiquetas que no se intersectan, trazos sin segmentos compartidos) y capturas; CHANGELOG y `CLAUDE.md`.
+2. [x] (#139) Etiquetas: colocar cada una sobre su trazo con separación `LABEL_GAP`; si el trazo es corto, una etiqueta compuesta con dos mitades seleccionables. E2E con cuatro disposiciones (cajas de etiquetas que no se intersectan, trazos sin segmentos compartidos) y capturas; CHANGELOG y `CLAUDE.md`.
 
 ## Pruebas
 
@@ -23,4 +23,4 @@ Cada tarea cabe en una sesión y en un PR.
 
 ## Estado
 
-Última actualización: 2026-11-12 — tarea 1 hecha: `edges/lanes.ts` (`laneOffsets`, `laneRoute`) y un corredor por par en `Canvas` (con más aire si rodea cajas: `routeAround(…, extra)`). Las etiquetas siguen a mitad de cada trazo, separadas por `LABEL_GAP` (pueden quedar sobre una caja): eso es la tarea 2.
+Última actualización: 2026-11-12 — feature completa. Tarea 1: `edges/lanes.ts` y un corredor por par en `Canvas`. Tarea 2: `edges/labels.ts` (`placePairLabels`: cada etiqueta sobre su trazo, de la mitad hacia los extremos, sin tocar otras ni cajas; si no hay lugar, compuesta con `data-joined`, corrida arriba o abajo si tapa algo). El tamaño de la etiqueta se estima por su texto (`labelSize`), no se mide.

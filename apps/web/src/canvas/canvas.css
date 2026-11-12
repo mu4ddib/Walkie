@@ -840,6 +840,19 @@ div.pixel-node-image {
   white-space: nowrap;
 }
 
+/* Etiqueta compuesta de un par (spec conexiones-ida-y-vuelta): cada parte es la de su conexión; «⇄» va en el hueco. */
+.kind-edge-label[data-joined='middle']::before,
+.kind-edge-label[data-joined='end']::before {
+  content: '⇄';
+  position: absolute;
+  top: 50%;
+  left: -14px;
+  transform: translateY(-50%);
+  color: var(--stone-500);
+  font-size: 12px;
+  pointer-events: none;
+}
+
 .kind-edge-when {
   font-family: var(--font-mono);
   font-weight: 500;

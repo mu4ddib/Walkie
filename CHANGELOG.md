@@ -5,7 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- Conexiones de ida y vuelta, tarea 1 (spec `conexiones-ida-y-vuelta`, #138): una solicitud y su respuesta (o cualquier par de conexiones entre las mismas cajas) ya no comparten tramo cuando las cajas no están enfrentadas o hay que rodear otra: el par sigue un solo corredor y cada conexión va en su carril, a 16 px de la vecina, sin cruzarse ni tocar cajas. Varias respuestas a una solicitud, un carril cada una.
+- Conexiones de ida y vuelta (spec `conexiones-ida-y-vuelta`, #135): una solicitud y su respuesta (o cualquier par de conexiones entre las mismas cajas) ya no comparten tramo cuando las cajas no están enfrentadas o hay que rodear otra: el par sigue un solo corredor y cada conexión va en su carril, a 16 px de la vecina, sin cruzarse ni tocar cajas; varias respuestas, un carril cada una (#138). Sus etiquetas van cada una sobre su trazo sin pisarse ni tapar cajas; si no hay lugar, se juntan en una etiqueta compuesta «llama ⇄ responde 201» donde cada parte sigue siendo la de su conexión (#139).
 - Tours a escala (spec `tours-a-escala`, #133):
   - **Enlace de solo lectura:** usa la misma lista compacta (pestañas, filas, búsqueda) y abre cada tour para leer sus pasos y localizarlos, sin editar nada. Al reproducir, el panel sigue a la vista con el paso activo resaltado (tocar otro salta a él) y el reproductor usa el área libre.
   - **Mover pasos entre tours:** «Mover a otro tour…» (o «recorrido») en el «⋯» del paso lo pasa al final del elegido, con su nota; solo se ofrecen destinos compatibles y se deshace con Ctrl+Z (`moveStepToTour`).

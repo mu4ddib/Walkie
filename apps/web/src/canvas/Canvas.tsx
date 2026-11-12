@@ -59,6 +59,7 @@ import {
   setInspectorOpen,
 } from '../workspace/session';
 import { EdgeMarkers } from '../edges/EdgeMarkers';
+import { labelSize, placePairLabels, type PlacedLabel } from '../edges/labels';
 import { laneOffsets, laneRoute } from '../edges/lanes';
 import { computePorts, staggerBends, type Side } from '../edges/ports';
 import { defaultRoute, routeAround, type Point } from '../edges/route';
@@ -575,6 +576,45 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
       const lane =
         base.start === start.side && base.end === end.side ? laneRoute(base.points, start, end, lanes[edge.id] ?? 0) : null;
       if (lane) routes[edge.id] = canonical ? lane : lane.reverse();
+      // Cajas enfrentadas: el corredor es una recta y cada conexión ya va derecha desde su puerto (en su carril).
+      else if (base.points.length > 0 && !routes[edge.id]) routes[edge.id] = defaultRoute(edge.ports.source, edge.ports.target);
+    }
+    // Etiquetas de los pares en carriles: cada una sobre su trazo, sin pisar otras etiquetas ni cajas; si no hay
+    // lugar, una etiqueta compuesta (spec conexiones-ida-y-vuelta, tarea 2).
+    const displayOf = (edge: (typeof visible)[number]['edge']) => {
+      const branch = edge.branch ? graphNodes[edge.from]?.branches?.find((b) => b.id === edge.branch) : undefined;
+      const targetNode = graphNodes[edge.to];
+      return edgeDisplay(edge, {
+        branchLabel: branch?.label,
+        targetHttp: targetNode && (refTarget(targetNode, catalog.items)?.http ?? targetNode.http),
+      });
+    };
+    const pairLabels: Record<string, PlacedLabel> = {};
+    const takenLabels: Rect[] = [];
+    const laneGroups = new Map<string, typeof laneEdges>();
+    for (const e of laneEdges) {
+      if (!routes[e.id]) continue;
+      const key = pairKey(e.source, e.target);
+      laneGroups.set(key, [...(laneGroups.get(key) ?? []), e]);
+    }
+    for (const list of laneGroups.values()) {
+      // Primero la solicitud (así la compuesta se lee «llama ⇄ responde»), después por carril.
+      const isResponse = (id: string) => (graphEdges[id]?.kind === 'response' ? 1 : 0);
+      const ordered = [...list].sort((a, b) => isResponse(a.id) - isResponse(b.id) || (lanes[a.id] ?? 0) - (lanes[b.id] ?? 0));
+      const items = ordered.map((e) => ({
+        id: e.id,
+        points: routes[e.id]!,
+        size: (() => {
+          const d = displayOf(graphEdges[e.id]!);
+          return labelSize(edgeDisplayText(d), { step: flowSteps.has(e.id), code: d.code !== undefined });
+        })(),
+      }));
+      const placedHere = placePairLabels(items, obstacles.map((o) => o.rect), takenLabels);
+      for (const item of items) {
+        const at = placedHere[item.id]!;
+        pairLabels[item.id] = at;
+        takenLabels.push({ x: at.x - item.size.w / 2, y: at.y - item.size.h / 2, w: item.size.w, h: item.size.h });
+      }
     }
     // Etiquetas de las conexiones de un mismo par: cada una queda cerca de la altura de sus puertos, pero al menos a
     // LABEL_GAP de la anterior (con cajas bajas los puertos quedan más juntos que lo que mide una etiqueta).
@@ -582,7 +622,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
     const byPair: Record<string, { id: string; y: number }[]> = {};
     for (const { edge, source, target } of visible) {
       const p = ports[edge.id];
-      if (!p || (pairs[pairKey(source, target)] ?? 1) < 2) continue;
+      if (!p || (pairs[pairKey(source, target)] ?? 1) < 2 || pairLabels[edge.id]) continue;
       (byPair[pairKey(source, target)] ??= []).push({ id: edge.id, y: (p.source.y + p.target.y) / 2 });
     }
     for (const list of Object.values(byPair)) {
@@ -604,13 +644,8 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
       const gap = count > 1 ? Math.min(LANE_GAP, Math.max(GRID, room / (count - 1))) : 0;
       const backward =
         from && to && to.x + to.w + BACKWARD_GAP <= from.x ? { sourceX: from.x, targetX: to.x + to.w } : undefined;
-      const sourceNode = graphNodes[edge.from];
-      const targetNode = graphNodes[edge.to];
-      const branch = edge.branch ? sourceNode?.branches?.find((b) => b.id === edge.branch) : undefined;
-      const display = edgeDisplay(edge, {
-        branchLabel: branch?.label,
-        targetHttp: targetNode && (refTarget(targetNode, catalog.items)?.http ?? targetNode.http),
-      });
+      const branch = edge.branch ? graphNodes[edge.from]?.branches?.find((b) => b.id === edge.branch) : undefined;
+      const display = displayOf(edge);
       const step = preview ? preview.ids.indexOf(edge.id) : -1;
       const flowBadge = flowSteps.get(edge.id)?.map((i) => i + 1).join('·');
       return {
@@ -632,6 +667,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
           bendX: count === 1 ? (bends.get(edge.id) ?? staggered[edge.id]?.x) : undefined,
           bendY: count === 1 ? staggered[edge.id]?.y : undefined,
           route: routes[edge.id],
+          labelAt: pairLabels[edge.id],
           ports: ports[edge.id] && {
             source: branch && source === edge.from ? undefined : ports[edge.id]!.source,
             target: ports[edge.id]!.target,
