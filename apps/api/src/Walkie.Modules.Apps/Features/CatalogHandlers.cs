@@ -45,7 +45,7 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
             UpdatedBy = userId,
             UpdatedAt = now,
         };
-        Apply(item, request.Description, request.Http, request.Database);
+        Apply(item, request.Description, request.Http, request.Database, request.Resource, request.Runtime);
         db.CatalogItems.Add(item);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return ToResponse(item);
@@ -79,13 +79,18 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
             });
         }
 
+        if (OnlyOnErrors(item.Type, request) is { } invalid)
+        {
+            return new UpdateResult.Invalid(invalid);
+        }
+
         if (request.Version != item.Version)
         {
             return new UpdateResult.Conflict(item.Version);
         }
 
         item.Title = request.Title.Trim();
-        Apply(item, request.Description, request.Http, request.Database);
+        Apply(item, request.Description, request.Http, request.Database, request.Resource, request.Runtime);
         item.Version++;
         item.UpdatedBy = userId;
         item.UpdatedAt = clock.GetUtcNowForDb();
@@ -146,12 +151,33 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
             .ToListAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>Recurso y runtime según el tipo guardado (el request de actualización no trae el tipo).</summary>
+    private static Dictionary<string, string[]>? OnlyOnErrors(string type, UpdateCatalogItemRequest request)
+    {
+        if (!CatalogRules.IsEmpty(request.Resource) && type != "resource")
+        {
+            return new() { ["Resource"] = [CatalogRules.ResourceOnlyOnResource] };
+        }
+
+        if (CatalogRules.IsEmpty(request.Resource) && type == "resource")
+        {
+            return new() { ["Resource"] = [CatalogRules.ResourceRequired] };
+        }
+
+        return !string.IsNullOrWhiteSpace(request.Runtime) && type != "service"
+            ? new() { ["Runtime"] = [CatalogRules.RuntimeOnlyOnService] }
+            : null;
+    }
+
     /// <summary>Textos recortados; vacío = sin valor (así la respuesta no trae campos vacíos). El contrato ya cumple el schema.</summary>
-    private static void Apply(CatalogItem item, string? description, JsonElement? http, JsonElement? database)
+    private static void Apply(
+        CatalogItem item, string? description, JsonElement? http, JsonElement? database, JsonElement? resource, string? runtime)
     {
         item.Description = Clean(description);
         item.Http = CatalogRules.IsEmpty(http) ? null : http!.Value.GetRawText();
         item.Database = CatalogRules.IsEmpty(database) ? null : database!.Value.GetRawText();
+        item.Resource = CatalogRules.IsEmpty(resource) ? null : resource!.Value.GetRawText();
+        item.Runtime = Clean(runtime);
     }
 
     private static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
@@ -164,7 +190,9 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
         item.Description,
         Parse(item.Http),
         item.Version,
-        Parse(item.Database));
+        Parse(item.Database),
+        Parse(item.Resource),
+        item.Runtime);
 
     private static JsonElement? Parse(string? json)
     {

@@ -83,6 +83,15 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("http");
 
+                    b.Property<string>("Resource")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("resource");
+
+                    b.Property<string>("Runtime")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("runtime");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(120)

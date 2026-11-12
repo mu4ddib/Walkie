@@ -31,6 +31,7 @@ internal static class MarkdownDocument
         ("api", "APIs", "API"),
         ("service", "Servicios", "Servicio"),
         ("database", "Bases de datos", "Base de datos"),
+        ("resource", "Recursos", "Recurso"),
         ("portal", "Portales", "Portal"),
         ("ref", "Referencias sin elemento", "Referencia"),
     ];
@@ -44,6 +45,50 @@ internal static class MarkdownDocument
         ["uses"] = "usa",
         ["reads"] = "lee",
         ["writes"] = "escribe",
+    };
+
+    /// <summary>Subtipos de un recurso (spec nodos-de-infraestructura), en el orden en que se agrupan.</summary>
+    private static readonly (string Kind, string Label)[] ResourceKinds =
+    [
+        ("storage", "Almacenamiento de objetos"),
+        ("function", "Función"),
+        ("queue", "Cola"),
+        ("topic", "Tópico o bus de eventos"),
+        ("cache", "Caché"),
+        ("cdn", "CDN"),
+        ("gateway", "Balanceador o API gateway"),
+        ("secret", "Secreto o configuración"),
+        ("scheduler", "Programador"),
+        ("custom", "Personalizado"),
+    ];
+
+    private static readonly Dictionary<string, string> Providers = new(StringComparer.Ordinal)
+    {
+        ["aws"] = "AWS",
+        ["azure"] = "Azure",
+        ["gcp"] = "Google Cloud",
+        ["on-premise"] = "On-premise",
+        ["other"] = "Otro proveedor",
+    };
+
+    private static readonly Dictionary<string, string> DatabaseModels = new(StringComparer.Ordinal)
+    {
+        ["relational"] = "relacional",
+        ["document"] = "documental",
+        ["key-value"] = "clave-valor",
+        ["wide-column"] = "columnar",
+        ["graph"] = "grafo",
+        ["search"] = "búsqueda",
+        ["time-series"] = "series de tiempo",
+    };
+
+    private static readonly Dictionary<string, string> Runtimes = new(StringComparer.Ordinal)
+    {
+        ["container"] = "contenedor",
+        ["vm"] = "máquina virtual",
+        ["serverless"] = "serverless",
+        ["managed"] = "servicio gestionado",
+        ["other"] = "otro",
     };
 
     private static readonly Dictionary<string, string> AuthTypes = new(StringComparer.Ordinal)
@@ -244,8 +289,8 @@ internal static class MarkdownDocument
         md.Line("flowchart LR");
         foreach (var node in nodes)
         {
-            var label = MarkdownText.Mermaid($"{SectionLabel(node.Section)}: {node.Title}");
-            md.Line($"  {node.Key}{Shape(node.Section, label)}");
+            var label = MarkdownText.Mermaid($"{KindLabel(node)}: {node.Title}");
+            md.Line($"  {node.Key}{Shape(node, label)}");
         }
 
         // Cada grupo es un subgraph con sus nodos (Mermaid los mueve adentro).
@@ -307,6 +352,17 @@ internal static class MarkdownDocument
         if (node.Database is { ValueKind: JsonValueKind.Object } database)
         {
             WriteDatabase(md, database);
+        }
+
+        if (node.Resource is { ValueKind: JsonValueKind.Object } resource)
+        {
+            WriteResource(md, resource);
+        }
+
+        if (node.Section == "service" && node.Runtime is { Length: > 0 } runtime)
+        {
+            md.Line($"Corre en: {Runtimes.GetValueOrDefault(runtime, runtime)}");
+            md.Blank();
         }
 
         if (node.Section == "portal")
@@ -455,9 +511,68 @@ internal static class MarkdownDocument
     }
 
     /// <summary>Estructura de una base: motor, base, schemas y tablas con campos y relaciones (criterio 14).</summary>
+    /// <summary>Subtipo (o el nombre del personalizado), proveedor y nombre; los detalles en una tabla clave/valor.</summary>
+    private static void WriteResource(Md md, JsonElement resource)
+    {
+        var facts = new List<string> { $"Tipo: {MarkdownText.Inline(ResourceLabel(resource))}" };
+        if (Text(resource, "provider") is { Length: > 0 } provider)
+        {
+            facts.Add($"Proveedor: {Providers.GetValueOrDefault(provider, provider)}");
+        }
+
+        if (Text(resource, "name") is { Length: > 0 } name)
+        {
+            facts.Add($"Nombre: {MarkdownText.Code(name)}");
+        }
+
+        md.Line(string.Join(" · ", facts));
+        md.Blank();
+
+        if (!resource.TryGetProperty("details", out var details) || details.ValueKind != JsonValueKind.Array
+            || details.GetArrayLength() == 0)
+        {
+            return;
+        }
+
+        md.Line("| Detalle | Valor |");
+        md.Line("| --- | --- |");
+        foreach (var detail in details.EnumerateArray())
+        {
+            md.Line($"| {MarkdownText.Inline(Text(detail, "key") ?? string.Empty)} | {MarkdownText.Inline(Text(detail, "value") ?? string.Empty)} |");
+        }
+
+        md.Blank();
+    }
+
+    /// <summary>Nombre del subtipo de un recurso: el de la lista o, si es personalizado, el que escribió el usuario.</summary>
+    private static string ResourceLabel(JsonElement resource)
+    {
+        var kind = Text(resource, "kind") ?? "custom";
+        return kind == "custom" && Text(resource, "label") is { Length: > 0 } label
+            ? label
+            : ResourceKinds.FirstOrDefault(k => k.Kind == kind).Label ?? kind;
+    }
+
+    /// <summary>Posición del subtipo en <see cref="ResourceKinds"/>: los recursos se agrupan por subtipo.</summary>
+    private static int ResourceOrder(ExportNode node)
+    {
+        if (node.Resource is not { ValueKind: JsonValueKind.Object } resource)
+        {
+            return 0;
+        }
+
+        var index = Array.FindIndex(ResourceKinds, k => k.Kind == Text(resource, "kind"));
+        return index < 0 ? ResourceKinds.Length : index;
+    }
+
     private static void WriteDatabase(Md md, JsonElement database)
     {
         var facts = new List<string>();
+        if (Text(database, "model") is { Length: > 0 } model)
+        {
+            facts.Add($"Modelo: {DatabaseModels.GetValueOrDefault(model, model)}");
+        }
+
         if (Text(database, "engine") is { Length: > 0 } engine)
         {
             facts.Add($"Motor: {MarkdownText.Inline(engine)}");
@@ -598,7 +713,7 @@ internal static class MarkdownDocument
 
             foreach (var member in group.Members)
             {
-                md.Line($"- {MarkdownText.Inline(member.Title)} ({SectionLabel(member.Section)})");
+                md.Line($"- {MarkdownText.Inline(member.Title)} ({MarkdownText.Inline(KindLabel(member))})");
             }
 
             md.Blank();
@@ -688,16 +803,27 @@ internal static class MarkdownDocument
         return string.Join(' ', new[] { method, path }.Where(p => !string.IsNullOrWhiteSpace(p)));
     }
 
-    private static string Shape(string section, string label) => section switch
-    {
-        "actor" => $"((\"{label}\"))",
-        "rule" => $"{{{{\"{label}\"}}}}",
-        "database" => $"[(\"{label}\")]",
-        "portal" => $"[/\"{label}\"/]",
-        _ => $"[\"{label}\"]",
-    };
+    /// <summary>Forma en Mermaid: cilindro para bases y almacenamiento, bandera para colas y tópicos, subrutina para funciones.</summary>
+    private static string Shape(ExportNode node, string label) =>
+        (node.Section, node.Resource is { ValueKind: JsonValueKind.Object } r ? Text(r, "kind") : null) switch
+        {
+            ("actor", _) => $"((\"{label}\"))",
+            ("rule", _) => $"{{{{\"{label}\"}}}}",
+            ("database", _) or ("resource", "storage") => $"[(\"{label}\")]",
+            ("resource", "queue" or "topic") => $">\"{label}\"]",
+            ("resource", "function") => $"[[\"{label}\"]]",
+            ("resource", _) => $"(\"{label}\")",
+            ("portal", _) => $"[/\"{label}\"/]",
+            _ => $"[\"{label}\"]",
+        };
 
     private static string SectionLabel(string section) => Sections.First(s => s.Type == section).Label;
+
+    /// <summary>Qué es una caja: su tipo o, en un recurso, su subtipo (ej. «Cola»).</summary>
+    private static string KindLabel(ExportNode node) =>
+        node.Section == "resource" && node.Resource is { ValueKind: JsonValueKind.Object } resource
+            ? ResourceLabel(resource)
+            : SectionLabel(node.Section);
 
     /// <summary>Ancla de GitHub para un título: minúsculas y espacios como guiones.</summary>
     private static string Anchor(string heading) =>
@@ -713,6 +839,7 @@ internal static class MarkdownDocument
         var nodes = input.Graph.GetProperty("nodes").EnumerateObject()
             .Select(p => ToNode(p.Value, input.Catalog))
             .OrderBy(n => order.GetValueOrDefault(n.Section, int.MaxValue))
+            .ThenBy(ResourceOrder)
             .ThenBy(n => n.Title, StringComparer.OrdinalIgnoreCase)
             .ThenBy(n => n.Title, StringComparer.Ordinal)
             .ThenBy(n => n.Id, StringComparer.Ordinal)
@@ -738,6 +865,8 @@ internal static class MarkdownDocument
         {
             Http = http.ValueKind == JsonValueKind.Object ? http : null,
             Database = json.TryGetProperty("database", out var d) && d.ValueKind == JsonValueKind.Object ? d : null,
+            Resource = json.TryGetProperty("resource", out var r) && r.ValueKind == JsonValueKind.Object ? r : null,
+            Runtime = Text(json, "runtime"),
         };
 
         if (type != "ref")
@@ -755,6 +884,8 @@ internal static class MarkdownDocument
                 Path = item.HttpPath,
                 Http = item.Http,
                 Database = item.Database,
+                Resource = item.Resource,
+                Runtime = item.Runtime,
                 FromCatalog = true,
             }
             : node;
@@ -896,6 +1027,12 @@ internal static class MarkdownDocument
 
         /// <summary>Estructura (del nodo o de su elemento del catálogo).</summary>
         public JsonElement? Database { get; init; }
+
+        /// <summary>Subtipo y detalles de un recurso (del nodo o de su elemento del catálogo).</summary>
+        public JsonElement? Resource { get; init; }
+
+        /// <summary>Dónde corre un servicio (del nodo o de su elemento del catálogo).</summary>
+        public string? Runtime { get; init; }
 
         public string? String(string property) => Text(Json, property);
     }

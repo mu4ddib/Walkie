@@ -9,7 +9,10 @@ internal sealed class CatalogItem
     public const int TitleMaxLength = 120;
     public const int TextMaxLength = 2000;
 
-    public static readonly string[] Types = ["api", "service", "database"];
+    public static readonly string[] Types = ["api", "service", "database", "resource"];
+
+    /// <summary>Dónde corre un servicio: el <c>enum</c> de <c>$defs/runtime</c> del grafo.</summary>
+    public static readonly string[] Runtimes = ["container", "vm", "serverless", "managed", "other"];
 
     public Guid Id { get; init; } = Guid.CreateVersion7();
     public Guid AppId { get; init; }
@@ -22,6 +25,12 @@ internal sealed class CatalogItem
 
     /// <summary>Estructura (<c>$defs/database</c> del grafo) como <c>jsonb</c>. Solo en <c>database</c>.</summary>
     public string? Database { get; set; }
+
+    /// <summary>Subtipo y detalles (<c>$defs/resource</c> del grafo) como <c>jsonb</c>. Solo (y siempre) en <c>resource</c>.</summary>
+    public string? Resource { get; set; }
+
+    /// <summary>Dónde corre (<c>$defs/runtime</c>). Solo en <c>service</c>.</summary>
+    public string? Runtime { get; set; }
 
     /// <summary>Concurrencia optimista: un guardado con versión vieja responde 409.</summary>
     public int Version { get; set; } = 1;

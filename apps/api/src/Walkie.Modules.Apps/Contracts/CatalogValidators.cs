@@ -12,7 +12,7 @@ internal sealed class CreateCatalogItemRequestValidator : AbstractValidator<Crea
     {
         RuleFor(r => r.Type)
             .Must(t => CatalogItem.Types.Contains(t))
-            .WithMessage("El tipo debe ser api, service o database.");
+            .WithMessage("El tipo debe ser api, service, database o resource.");
         RuleFor(r => r.Title).ValidTitle();
         RuleFor(r => r.Description).ValidText();
         RuleFor(r => r.Http).MatchesSchema(WalkieSchemas.Http);
@@ -23,6 +23,17 @@ internal sealed class CreateCatalogItemRequestValidator : AbstractValidator<Crea
         RuleFor(r => r.Database)
             .Must(CatalogRules.IsEmpty).When(r => r.Type != "database")
             .WithMessage(CatalogRules.DatabaseOnlyOnDatabase);
+        RuleFor(r => r.Resource).MatchesSchema(WalkieSchemas.Resource);
+        RuleFor(r => r.Resource)
+            .Must(CatalogRules.IsEmpty).When(r => r.Type != "resource")
+            .WithMessage(CatalogRules.ResourceOnlyOnResource);
+        RuleFor(r => r.Resource)
+            .Must(r => !CatalogRules.IsEmpty(r)).When(r => r.Type == "resource")
+            .WithMessage(CatalogRules.ResourceRequired);
+        RuleFor(r => r.Runtime).ValidRuntime();
+        RuleFor(r => r.Runtime)
+            .Must(string.IsNullOrWhiteSpace).When(r => r.Type != "service")
+            .WithMessage(CatalogRules.RuntimeOnlyOnService);
     }
 }
 
@@ -34,6 +45,8 @@ internal sealed class UpdateCatalogItemRequestValidator : AbstractValidator<Upda
         RuleFor(r => r.Description).ValidText();
         RuleFor(r => r.Http).MatchesSchema(WalkieSchemas.Http);
         RuleFor(r => r.Database).MatchesSchema(WalkieSchemas.Database);
+        RuleFor(r => r.Resource).MatchesSchema(WalkieSchemas.Resource);
+        RuleFor(r => r.Runtime).ValidRuntime();
         RuleFor(r => r.Version).GreaterThanOrEqualTo(1).WithMessage("La versión debe ser 1 o más.");
     }
 }
@@ -42,6 +55,14 @@ internal static class CatalogRules
 {
     public const string HttpOnlyOnApi = "Solo los elementos api tienen contrato.";
     public const string DatabaseOnlyOnDatabase = "Solo los elementos database tienen estructura.";
+    public const string ResourceOnlyOnResource = "Solo los elementos resource tienen subtipo de recurso.";
+    public const string ResourceRequired = "Un recurso necesita su subtipo.";
+    public const string RuntimeOnlyOnService = "Solo los servicios dicen dónde corren.";
+
+    public static IRuleBuilderOptions<T, string?> ValidRuntime<T>(this IRuleBuilder<T, string?> rule) =>
+        rule
+            .Must(runtime => string.IsNullOrWhiteSpace(runtime) || CatalogItem.Runtimes.Contains(runtime))
+            .WithMessage($"Dónde corre debe ser {string.Join(", ", CatalogItem.Runtimes)}.");
 
     /// <summary>Sin valor: ausente, <c>null</c> u objeto vacío.</summary>
     public static bool IsEmpty(JsonElement? value) =>

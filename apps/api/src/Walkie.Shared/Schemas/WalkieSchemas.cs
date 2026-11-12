@@ -6,7 +6,7 @@ namespace Walkie.Shared.Schemas;
 
 /// <summary>
 /// Schemas de <c>packages/schema</c> embebidos (fuente de verdad, sin copia). El grafo valida los lienzos (Canvas) y sus
-/// definiciones <c>http</c> y <c>database</c> validan también la definición compartida del catálogo (Apps).
+/// definiciones <c>http</c>, <c>database</c>, <c>resource</c> y <c>runtime</c> validan también la definición compartida del catálogo (Apps).
 /// </summary>
 public static class WalkieSchemas
 {
@@ -24,6 +24,12 @@ public static class WalkieSchemas
 
     /// <summary><c>$defs/database</c> del grafo: estructura de una base de datos.</summary>
     public static JsonSchema Database { get; } = Definition("database");
+
+    /// <summary><c>$defs/resource</c> del grafo: subtipo y detalles de un recurso de infraestructura.</summary>
+    public static JsonSchema Resource { get; } = Definition("resource");
+
+    /// <summary><c>$defs/runtime</c> del grafo: dónde corre un servicio.</summary>
+    public static JsonSchema Runtime { get; } = Definition("runtime");
 
     /// <summary><c>walkie-app-map.schema.json</c>: mapa de una app.</summary>
     public static JsonSchema AppMap { get; } = JsonSchema.FromText(Load("walkie-app-map.schema.json"), Options);

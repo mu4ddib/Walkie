@@ -8,6 +8,8 @@ export const NODE_LABELS: Record<Node['type'], { label: string; glyph: string }>
   actor: { label: 'Actor', glyph: 'o/' },
   rule: { label: 'Regla', glyph: '§' },
   service: { label: 'Servicio', glyph: '{ }' },
+  // Recurso de infraestructura (spec nodos-de-infraestructura); cada subtipo tendrá su glifo (tarea 2).
+  resource: { label: 'Recurso', glyph: '<#>' },
   ref: { label: 'Referencia', glyph: '->' },
   portal: { label: 'Portal', glyph: '@' },
 };

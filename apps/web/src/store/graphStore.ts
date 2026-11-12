@@ -158,6 +158,7 @@ export const DEFAULT_TITLES: Record<NodeType, string> = {
   actor: 'Actor',
   rule: 'Regla',
   service: 'Servicio',
+  resource: 'Recurso',
   ref: 'Referencia',
   portal: 'Portal',
 };
