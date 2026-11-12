@@ -13,7 +13,7 @@ const targets = [
     schema: 'walkie-catalog-item.schema.json',
     out: 'walkie-catalog-item.ts',
     name: 'WalkieCatalogItem',
-    imports: ["import type { Database, Http } from './walkie-graph';"],
+    imports: ["import type { Database, Http, Resource } from './walkie-graph';"],
   },
   { schema: 'walkie-asset.schema.json', out: 'walkie-asset.ts', name: 'WalkieAsset' },
   { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },

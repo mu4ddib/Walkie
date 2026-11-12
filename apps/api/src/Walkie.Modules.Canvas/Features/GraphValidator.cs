@@ -45,6 +45,8 @@ internal sealed class GraphValidator
             OnlyOn(node, "targetFeatureId", "portal", "Solo los portales tienen feature destino.", errors);
             OnlyOn(node, "http", "api", "Solo las API tienen contrato.", errors);
             OnlyOn(node, "database", "database", "Solo las bases de datos tienen estructura.", errors);
+            OnlyOn(node, "resource", "resource", "Solo los recursos tienen subtipo de recurso.", errors);
+            OnlyOn(node, "runtime", "service", "Solo los servicios dicen dónde corren.", errors);
             OnlyOn(node, "mode", "rule", "Solo una regla puede ser una decisión.", errors);
             BranchErrors(node, errors);
             if (node.Value.TryGetProperty("groupId", out var groupId) && !groupIds.Contains(groupId.GetString()!))

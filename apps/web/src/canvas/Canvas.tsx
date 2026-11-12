@@ -15,7 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import type { StoreApi } from 'zustand/vanilla';
 import type { CatalogItem, NewCatalogItem } from '../api/client';
-import { CatalogContext, effectiveType, portalTarget, refTarget, type CanvasCatalog } from '../catalog/catalogContext';
+import { CatalogContext, effectiveResource, effectiveType, portalTarget, refTarget, type CanvasCatalog } from '../catalog/catalogContext';
 import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
 import { nodeTypes } from '../nodes/nodeTypes';
@@ -47,7 +47,8 @@ import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { useGraphStore } from '../store/useGraphStore';
 import { GRID, palette } from '../theme/palette';
 import { Palette } from './Palette';
-import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES } from './paletteTypes';
+import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_RESOURCE_MIME, PALETTE_TYPES, RESOURCE_KEY } from './paletteTypes';
+import { RESOURCE_KINDS, type ResourceKind } from '../nodes/resourceMeta';
 import { useOpenFeature } from './useOpenFeature';
 import {
   getEdgeMotion,
@@ -120,7 +121,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
   const graphEdges = useGraphStore((s) => s.edges);
   const groups = useGraphStore((s) => s.groups);
   const stickyNotes = useGraphStore((s) => s.stickyNotes);
-  const { addNode, addRef, moveNode, removeNode, connect, removeEdge, duplicateNode } = useGraphStore((s) => s);
+  const { addNode, addResource, addRef, moveNode, removeNode, connect, removeEdge, duplicateNode } = useGraphStore((s) => s);
   const { addStickyNote, moveStickyNote, removeStickyNote, duplicateStickyNote } = useGraphStore((s) => s);
   const { addGroup, moveGroup, resizeGroup, setParent, removeGroup, updateGroup } = useGraphStore((s) => s);
   const { addFlowTour, addEdgeStep } = useGraphStore((s) => s);
@@ -160,6 +161,8 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
   const [toursTab, setToursTab] = useState<TourKind>('guide');
   // Estado de interfaz de la sección de tours (pasos abiertos, búsquedas, desplazamiento): nunca va al store.
   const [toursUi, setToursUi] = useState<ToursUi>(EMPTY_TOURS_UI);
+  // Lista de subtipos de recurso de la barra (tecla 8): estado de interfaz, no del documento.
+  const [resourcesOpen, setResourcesOpen] = useState(false);
   // «Localizar en lienzo»: el nodo o la conexión de un paso se resalta un momento.
   const [flash, setFlash] = useState<string | null>(null);
   useEffect(() => {
@@ -975,7 +978,10 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
       const target = graphNodes[c.target];
       const kind =
         source && target
-          ? defaultEdgeKind(effectiveType(source, catalog.items), effectiveType(target, catalog.items))
+          ? defaultEdgeKind(effectiveType(source, catalog.items), effectiveType(target, catalog.items), {
+              from: effectiveResource(source, catalog.items)?.kind,
+              to: effectiveResource(target, catalog.items)?.kind,
+            })
           : undefined;
       // Desde el punto de una salida de decisión, la conexión nace como esa rama.
       connect(c.source, c.target, kind, { branch: c.sourceHandle });
@@ -1072,8 +1078,12 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
     if (locked) return;
     const type = event.dataTransfer.getData(PALETTE_MIME) as NodeType;
     const item = catalog.items[event.dataTransfer.getData(PALETTE_REF_MIME)];
+    const kind = event.dataTransfer.getData(PALETTE_RESOURCE_MIME) as ResourceKind;
     if (PALETTE_TYPES.includes(type)) addAt((p) => addNode(type, p), event.clientX, event.clientY);
-    else if (item) addAt((p) => addRef(item, p), event.clientX, event.clientY);
+    else if (RESOURCE_KINDS.some((k) => k.kind === kind)) {
+      setResourcesOpen(false);
+      addAt((p) => addResource(kind, p), event.clientX, event.clientY);
+    } else if (item) addAt((p) => addRef(item, p), event.clientX, event.clientY);
   }
 
   /** Agrega en el centro visible; cada alta seguida se corre un poco para no apilar cajas. */
@@ -1121,7 +1131,8 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
       const digit = Number(event.key);
       if (!readOnly && Number.isInteger(digit) && digit >= 1 && digit <= PALETTE_TYPES.length) {
         addAtCenter((p) => addNode(PALETTE_TYPES[digit - 1]!, p));
-      } else if (event.key === '+' || event.key === '=') void zoomIn();
+      } else if (!readOnly && event.key === RESOURCE_KEY) setResourcesOpen((open) => !open);
+      else if (event.key === '+' || event.key === '=') void zoomIn();
       else if (event.key === '-') void zoomOut();
       else if (event.key === '0') void fitView({ padding: fitPadding, duration: 200 });
       else if (!readOnly && event.key.toLowerCase() === 'i') toggleInspector();
@@ -1344,6 +1355,11 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             onAdd={(type) => addAtCenter((p) => addNode(type, p))}
             onAddGroup={createGroup}
             onAddNote={addNote}
+            resources={{
+              open: resourcesOpen,
+              onOpenChange: setResourcesOpen,
+              onPick: (kind) => addAtCenter((p) => addResource(kind, p)),
+            }}
             catalog={paletteCatalog}
           />
         )}

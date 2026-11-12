@@ -13,11 +13,15 @@ import {
 import { removeAt, replaceAt } from './lists';
 import { AddButton, Check, Choice, Field, Row, Section } from './rows';
 import { useDraft } from './useDraft';
+import { DATABASE_MODELS, type DatabaseModel } from '../../nodes/resourceMeta';
+
+const MODELS = Object.keys(DATABASE_MODELS) as DatabaseModel[];
 
 const KEYS = Object.keys(KEY_LABELS) as NonNullable<DbField['key']>[];
 
 /**
- * Estructura de una base de datos (spec espacio-de-trabajo, criterio 14): motor, base, schemas y tablas o colecciones
+ * Estructura de una base de datos (spec espacio-de-trabajo, criterio 14): modelo (spec nodos-de-infraestructura), motor,
+ * base, schemas y tablas o colecciones
  * con campos (tipo, clave, nulo) y relaciones. Sirve para un nodo y para la definición del catálogo.
  */
 export function DatabaseEditor({
@@ -33,6 +37,14 @@ export function DatabaseEditor({
   return (
     <div className="contract" aria-label="Estructura de la base de datos" role="group">
       <div className="contract-grid">
+        <Choice
+          label="Modelo"
+          value={db.model}
+          options={MODELS}
+          labels={DATABASE_MODELS}
+          empty="—"
+          onChange={(model) => set({ ...db, model })}
+        />
         <Field label="Motor" value={db.engine} maxLength={LIMITS.type} placeholder="PostgreSQL" onChange={(engine) => set({ ...db, engine })} />
         <Field label="Base" value={db.name} maxLength={LIMITS.name} placeholder="core" onChange={(name) => set({ ...db, name })} />
         <Field

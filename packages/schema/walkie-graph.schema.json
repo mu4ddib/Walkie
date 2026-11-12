@@ -61,7 +61,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "type": {
-          "enum": ["actor", "screen", "rule", "api", "service", "database", "ref", "portal"]
+          "enum": ["actor", "screen", "rule", "api", "service", "database", "resource", "ref", "portal"]
         },
         "title": { "type": "string", "maxLength": 120 },
         "description": { "type": "string", "maxLength": 2000 },
@@ -103,12 +103,22 @@
         },
         "http": { "$ref": "#/$defs/http" },
         "database": { "$ref": "#/$defs/database" },
+        "resource": { "$ref": "#/$defs/resource", "description": "Qué recurso de infraestructura es (solo resource)" },
+        "runtime": { "$ref": "#/$defs/runtime", "description": "Dónde corre (solo service)" },
         "catalogId": { "type": "string", "minLength": 1, "description": "Elemento del catálogo de la app (ref)" },
         "targetFeatureId": { "type": "string", "format": "uuid", "description": "Feature destino de la misma app (portal); en un portal, title guarda su último nombre conocido" },
         "groupId": { "$ref": "#/$defs/id", "description": "Grupo de infraestructura que lo contiene" }
       },
-      "if": { "properties": { "type": { "const": "ref" } } },
-      "then": { "required": ["catalogId"], "description": "En un ref, title guarda el último título conocido del elemento" }
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "ref" } } },
+          "then": { "required": ["catalogId"], "description": "En un ref, title guarda el último título conocido del elemento" }
+        },
+        {
+          "if": { "properties": { "type": { "const": "resource" } } },
+          "then": { "required": ["resource"], "description": "Un recurso declara su subtipo" }
+        }
+      ]
     },
     "edge": {
       "type": "object",
@@ -263,6 +273,10 @@
       "additionalProperties": false,
       "properties": {
         "engine": { "type": "string", "maxLength": 60, "description": "Ej. PostgreSQL, Oracle, MongoDB" },
+        "model": {
+          "enum": ["relational", "document", "key-value", "wide-column", "graph", "search", "time-series"],
+          "description": "Modelo de datos: relacional (tablas), documental (colecciones), clave-valor, columnar, grafo, búsqueda o series de tiempo"
+        },
         "name": { "type": "string", "maxLength": 120 },
         "schemas": {
           "type": "array",
@@ -315,6 +329,42 @@
           }
         }
       }
+    },
+    "resource": {
+      "type": "object",
+      "description": "Recurso de infraestructura (nodo resource o elemento del catálogo, spec nodos-de-infraestructura, ADR-0007): un subtipo de una lista cerrada o uno personalizado con nombre libre",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["storage", "function", "queue", "topic", "cache", "cdn", "gateway", "secret", "scheduler", "custom"],
+          "description": "storage: almacenamiento de objetos (bucket); function: función serverless; queue: cola; topic: tópico o bus de eventos; cache; cdn; gateway: balanceador o API gateway; secret: secreto o configuración; scheduler: programador (cron); custom: label dice qué es"
+        },
+        "label": { "type": "string", "minLength": 1, "maxLength": 40, "description": "Nombre del subtipo personalizado (solo con kind custom), ej. Step Functions" },
+        "provider": { "enum": ["aws", "azure", "gcp", "on-premise", "other"] },
+        "name": { "type": "string", "maxLength": 120, "description": "Nombre del recurso en su plataforma (ej. el del bucket o la cola)" },
+        "details": {
+          "type": "array",
+          "maxItems": 30,
+          "description": "Configuración relevante como pares clave/valor (ej. retención: 7 días, runtime: node20)",
+          "items": {
+            "type": "object",
+            "required": ["key", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "key": { "type": "string", "minLength": 1, "maxLength": 40 },
+              "value": { "type": "string", "maxLength": 200 }
+            }
+          }
+        }
+      },
+      "if": { "properties": { "kind": { "const": "custom" } } },
+      "then": { "required": ["label"] },
+      "else": { "not": { "required": ["label"] } }
+    },
+    "runtime": {
+      "enum": ["container", "vm", "serverless", "managed", "other"],
+      "description": "Dónde corre un servicio: contenedor, máquina virtual, serverless, servicio gestionado u otro"
     },
     "group": {
       "type": "object",

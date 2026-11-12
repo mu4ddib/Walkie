@@ -4,13 +4,16 @@ import { ApiError, type CatalogItem } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, useCatalogUsages, useUpdateCatalogItem } from '../api/hooks';
 import { refTarget, useCanvasCatalog } from '../catalog/catalogContext';
-import { NODE_LABELS } from '../nodes/nodeMeta';
+import { NODE_LABELS, nodeLabel } from '../nodes/nodeMeta';
+import { RUNTIMES, normalizeResource, providerLabel } from '../nodes/resourceMeta';
 import { catalogPath } from '../pages/catalogPaths';
 import type { Node } from '../schema/walkie-graph';
 import { HTTP_METHODS, TEXT_MAX_LENGTH, TITLE_MAX_LENGTH, type HttpMethod } from '../store/graphStore';
 import { normalizeDatabase, normalizeHttp } from '../contracts/contracts';
 import { ApiContractEditor } from './contract/ApiContractEditor';
 import { DatabaseEditor } from './contract/DatabaseEditor';
+import { ResourceEditor } from './contract/ResourceEditor';
+import { RuntimeField } from './contract/RuntimeField';
 import { useGraphStore } from '../store/useGraphStore';
 
 /**
@@ -36,7 +39,7 @@ export function RefPanel({ node }: { node: Node }) {
     );
   }
 
-  const meta = NODE_LABELS[item.type];
+  const meta = nodeLabel(item);
   return (
     <>
       <h3>
@@ -87,6 +90,8 @@ function DefinitionForm({
   // Auth, parámetros, request y respuestas (el método y la ruta van arriba, en sus campos).
   const [contract, setContract] = useState(item.http);
   const [database, setDatabase] = useState(item.database);
+  const [resource, setResource] = useState(item.resource);
+  const [runtime, setRuntime] = useState(item.runtime);
   const [localError, setLocalError] = useState<string | null>(null);
   const ids = { title: useId(), description: useId(), method: useId(), path: useId() };
   const changed =
@@ -95,7 +100,9 @@ function DefinitionForm({
     method !== (item.http?.method ?? '') ||
     path.trim() !== (item.http?.path ?? '') ||
     JSON.stringify(normalizeHttp(httpOf(contract, method, path))) !== JSON.stringify(normalizeHttp(item.http)) ||
-    JSON.stringify(normalizeDatabase(database)) !== JSON.stringify(normalizeDatabase(item.database));
+    JSON.stringify(normalizeDatabase(database)) !== JSON.stringify(normalizeDatabase(item.database)) ||
+    JSON.stringify(resource) !== JSON.stringify(item.resource) ||
+    runtime !== item.runtime;
 
   function save(event: FormEvent) {
     event.preventDefault();
@@ -109,6 +116,8 @@ function DefinitionForm({
       description: description.trim() || undefined,
       http: item.type === 'api' ? normalizeHttp(httpOf(contract, method, path)) : undefined,
       database: item.type === 'database' ? normalizeDatabase(database) : undefined,
+      resource: item.type === 'resource' ? normalizeResource(resource ?? { kind: 'custom' }) : undefined,
+      runtime: item.type === 'service' ? runtime : undefined,
       version: item.version,
     });
   }
@@ -162,6 +171,8 @@ function DefinitionForm({
       )}
       {item.type === 'api' && <ApiContractEditor value={contract} onChange={setContract} />}
       {item.type === 'database' && <DatabaseEditor value={database} onChange={setDatabase} />}
+      {item.type === 'resource' && <ResourceEditor value={resource} onChange={setResource} />}
+      {item.type === 'service' && <RuntimeField value={runtime} onChange={setRuntime} />}
       <Usages itemId={item.id} />
       <div className="definition-actions">
         <button type="submit" className="pixel-button is-primary" disabled={!changed || update.isPending}>
@@ -241,6 +252,20 @@ function ReadOnlyDefinition({ item }: { item: CatalogItem }) {
             <dd>{http}</dd>
           </>
         )}
+        {item.resource && (
+          <>
+            <dt>Recurso</dt>
+            <dd>
+              {[nodeLabel(item).label, providerLabel(item.resource.provider), item.resource.name].filter(Boolean).join(' · ')}
+            </dd>
+          </>
+        )}
+        {item.runtime && (
+          <>
+            <dt>Dónde corre</dt>
+            <dd>{RUNTIMES[item.runtime]}</dd>
+          </>
+        )}
       </dl>
     </section>
   );
@@ -270,6 +295,8 @@ function InThisCanvas({ appId, node, item }: { appId: string; node: Node; item: 
                 description: item.description,
                 http: item.http,
                 database: item.database,
+                resource: item.resource,
+                runtime: item.runtime,
               })
             }
           >

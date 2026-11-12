@@ -19,6 +19,7 @@ export const nodeColors: Record<Node['type'], string> = {
   api: '#c4502b',
   service: '#3f8358',
   database: '#4d6485',
+  resource: '#2f7f86',
   ref: '#857867',
   portal: '#ad3f7c',
 };

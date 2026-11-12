@@ -167,6 +167,7 @@ export function normalizeDatabase(d: Database | undefined): Database | undefined
     .filter((t): t is DbTable => !!t);
   return compact({
     engine: text(d.engine, LIMITS.type),
+    model: d.model,
     name: text(d.name, LIMITS.name),
     schemas: d.schemas?.map((s) => text(s, LIMITS.name)).filter((s): s is string => !!s),
     tables,

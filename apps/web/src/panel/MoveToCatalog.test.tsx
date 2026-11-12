@@ -31,6 +31,24 @@ function renderPanel(setup: (s: GraphStore) => string, appId = 'app-1') {
 }
 
 describe('Guardar como componente', () => {
+  it('un recurso pasa con su subtipo y detalles, y un servicio con dónde corre (spec nodos-de-infraestructura)', async () => {
+    const api = installFakeApi({ apps: [app] });
+    const { store, nodeId } = renderPanel((s) => {
+      const id = s.addResource('queue', { x: 0, y: 0 });
+      s.setResource(id, { provider: 'aws', details: [{ key: 'retención', value: '4 días' }] });
+      return id;
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar como componente' }));
+
+    await vi.waitFor(() => expect(store.getState().nodes[nodeId]?.type).toBe('ref'));
+    expect(api.catalog[0]).toMatchObject({
+      type: 'resource',
+      title: 'Cola',
+      resource: { kind: 'queue', provider: 'aws', details: [{ key: 'retención', value: '4 días' }] },
+    });
+  });
+
   it('crea el elemento con los datos del nodo y lo convierte en ref', async () => {
     const api = installFakeApi({ apps: [app] });
     const { store, nodeId } = renderPanel((s) => {

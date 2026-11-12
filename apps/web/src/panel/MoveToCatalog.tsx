@@ -21,6 +21,8 @@ export function MoveToCatalog({ appId, node }: { appId: string; node: Node }) {
         description: node.description,
         http: node.type === 'api' ? node.http : undefined,
         database: node.type === 'database' ? node.database : undefined,
+        resource: node.type === 'resource' ? node.resource : undefined,
+        runtime: node.type === 'service' ? node.runtime : undefined,
       });
       convertToRef(node.id, item.id);
     } catch {

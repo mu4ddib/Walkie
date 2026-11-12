@@ -64,6 +64,30 @@ describe('catálogo de la app', () => {
     ]);
   });
 
+  it('crea un recurso con su subtipo y edita su definición (spec nodos-de-infraestructura)', async () => {
+    const api = installFakeApi({ apps: [app] });
+    renderRoute('/apps/app-1/catalog');
+    const form = await screen.findByRole('form', { name: 'Nuevo elemento' });
+
+    await userEvent.selectOptions(within(form).getByLabelText('Tipo'), 'resource');
+    await userEvent.selectOptions(within(form).getByLabelText('Subtipo'), 'queue');
+    await userEvent.type(within(form).getByLabelText('Título'), 'Pagos pendientes');
+    await userEvent.click(within(form).getByRole('button', { name: 'Crear elemento' }));
+
+    const detail = await screen.findByRole('complementary', { name: 'Detalle del elemento' });
+    expect(await within(detail).findByRole('heading', { name: /Cola/ })).toBeInTheDocument();
+    expect(api.catalog[0]).toMatchObject({ type: 'resource', resource: { kind: 'queue' } });
+
+    await userEvent.selectOptions(within(detail).getByLabelText('Proveedor'), 'aws');
+    await userEvent.type(within(detail).getByLabelText('Nombre del recurso'), 'pagos-pendientes');
+    await userEvent.click(within(detail).getByRole('button', { name: 'Guardar' }));
+
+    expect(await within(detail).findByText('Guardado')).toBeInTheDocument();
+    expect(api.catalog[0]).toMatchObject({ resource: { kind: 'queue', provider: 'aws', name: 'pagos-pendientes' }, version: 2 });
+    // En la lista, el subtipo junto al título.
+    expect(screen.getByRole('region', { name: 'Recurso' })).toHaveTextContent('Pagos pendientes Cola');
+  });
+
   it('edita y guarda una API; con versión vieja ofrece recargar', async () => {
     const api = installFakeApi({ apps: [app], catalog: [consultar] });
     renderRoute('/apps/app-1/catalog/item-1');

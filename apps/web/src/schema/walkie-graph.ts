@@ -1,5 +1,65 @@
 /* Generado desde packages/schema/walkie-graph.schema.json. No editar a mano: `pnpm gen:schema`. */
 
+export type Node = {
+  id: Id;
+  type: 'actor' | 'screen' | 'rule' | 'api' | 'service' | 'database' | 'resource' | 'ref' | 'portal';
+  title: string;
+  description?: string;
+  /**
+   * Responsabilidades o notas (actor, pantalla, regla, servicio, portal)
+   */
+  notes?: string;
+  /**
+   * Imagen adjunta (solo screen); id de walkie-asset
+   */
+  assetId?: string;
+  inputs?: {
+    name: string;
+    type: 'string' | 'number' | 'boolean' | 'date' | 'enum' | 'file';
+    required?: boolean;
+    /**
+     * Opciones de un input enum (solo para type enum)
+     */
+    options?: string[];
+    ruleIds?: Id[];
+  }[];
+  /**
+   * Regla en lenguaje natural o pseudo-código (rule); en una decisión, la condición que se evalúa
+   */
+  expression?: string;
+  /**
+   * Modo de un nodo rule: ausente documenta una validación o restricción; decision es una bifurcación con salidas (branches)
+   */
+  mode?: 'decision';
+  /**
+   * Salidas de una decisión (solo rule con mode decision); una conexión las referencia con branch
+   *
+   * @maxItems 24
+   */
+  branches?: {
+    id: Id;
+    label: string;
+  }[];
+  http?: Http;
+  database?: Database;
+  resource?: Resource;
+  /**
+   * Dónde corre (solo service)
+   */
+  runtime?: 'container' | 'vm' | 'serverless' | 'managed' | 'other';
+  /**
+   * Elemento del catálogo de la app (ref)
+   */
+  catalogId?: string;
+  /**
+   * Feature destino de la misma app (portal); en un portal, title guarda su último nombre conocido
+   */
+  targetFeatureId?: string;
+  /**
+   * UUID v7 generado en el cliente
+   */
+  groupId?: string;
+};
 /**
  * UUID v7 generado en el cliente
  */
@@ -56,61 +116,6 @@ export interface WalkieCanvasGraphV0 {
    * Los grupos guardan su grupo padre en parentId y las notas su grupo en groupId. Sin este campo (lienzos anteriores) la jerarquía se infiere por contención al abrir el lienzo
    */
   groupNesting?: 'explicit';
-}
-export interface Node {
-  id: Id;
-  type: 'actor' | 'screen' | 'rule' | 'api' | 'service' | 'database' | 'ref' | 'portal';
-  title: string;
-  description?: string;
-  /**
-   * Responsabilidades o notas (actor, pantalla, regla, servicio, portal)
-   */
-  notes?: string;
-  /**
-   * Imagen adjunta (solo screen); id de walkie-asset
-   */
-  assetId?: string;
-  inputs?: {
-    name: string;
-    type: 'string' | 'number' | 'boolean' | 'date' | 'enum' | 'file';
-    required?: boolean;
-    /**
-     * Opciones de un input enum (solo para type enum)
-     */
-    options?: string[];
-    ruleIds?: Id[];
-  }[];
-  /**
-   * Regla en lenguaje natural o pseudo-código (rule); en una decisión, la condición que se evalúa
-   */
-  expression?: string;
-  /**
-   * Modo de un nodo rule: ausente documenta una validación o restricción; decision es una bifurcación con salidas (branches)
-   */
-  mode?: 'decision';
-  /**
-   * Salidas de una decisión (solo rule con mode decision); una conexión las referencia con branch
-   *
-   * @maxItems 24
-   */
-  branches?: {
-    id: Id;
-    label: string;
-  }[];
-  http?: Http;
-  database?: Database;
-  /**
-   * Elemento del catálogo de la app (ref)
-   */
-  catalogId?: string;
-  /**
-   * Feature destino de la misma app (portal); en un portal, title guarda su último nombre conocido
-   */
-  targetFeatureId?: string;
-  /**
-   * UUID v7 generado en el cliente
-   */
-  groupId?: string;
 }
 /**
  * Contrato de una API (nodo api o elemento del catálogo)
@@ -191,6 +196,10 @@ export interface Database {
    * Ej. PostgreSQL, Oracle, MongoDB
    */
   engine?: string;
+  /**
+   * Modelo de datos: relacional (tablas), documental (colecciones), clave-valor, columnar, grafo, búsqueda o series de tiempo
+   */
+  model?: 'relational' | 'document' | 'key-value' | 'wide-column' | 'graph' | 'search' | 'time-series';
   name?: string;
   /**
    * @maxItems 50
@@ -225,6 +234,33 @@ export interface Database {
       references: string;
       description?: string;
     }[];
+  }[];
+}
+/**
+ * Qué recurso de infraestructura es (solo resource)
+ */
+export interface Resource {
+  /**
+   * storage: almacenamiento de objetos (bucket); function: función serverless; queue: cola; topic: tópico o bus de eventos; cache; cdn; gateway: balanceador o API gateway; secret: secreto o configuración; scheduler: programador (cron); custom: label dice qué es
+   */
+  kind: 'storage' | 'function' | 'queue' | 'topic' | 'cache' | 'cdn' | 'gateway' | 'secret' | 'scheduler' | 'custom';
+  /**
+   * Nombre del subtipo personalizado (solo con kind custom), ej. Step Functions
+   */
+  label?: string;
+  provider?: 'aws' | 'azure' | 'gcp' | 'on-premise' | 'other';
+  /**
+   * Nombre del recurso en su plataforma (ej. el del bucket o la cola)
+   */
+  name?: string;
+  /**
+   * Configuración relevante como pares clave/valor (ej. retención: 7 días, runtime: node20)
+   *
+   * @maxItems 30
+   */
+  details?: {
+    key: string;
+    value: string;
   }[];
 }
 export interface Edge {

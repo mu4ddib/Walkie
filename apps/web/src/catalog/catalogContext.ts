@@ -54,6 +54,11 @@ export function refTarget(node: Node, items: Record<string, CatalogItem>): Catal
   return node.type === 'ref' && node.catalogId ? items[node.catalogId] : undefined;
 }
 
+/** Recurso con el que se comporta un nodo (el de su elemento si es un `ref`; spec nodos-de-infraestructura). */
+export function effectiveResource(node: Node, items: Record<string, CatalogItem>): Node['resource'] {
+  return refTarget(node, items)?.resource ?? node.resource;
+}
+
 /** Tipo con el que se comporta un nodo: un `ref` actúa como su elemento (criterio 9). */
 export function effectiveType(node: Node, items: Record<string, CatalogItem>): NodeType {
   return refTarget(node, items)?.type ?? node.type;

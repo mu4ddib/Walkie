@@ -14,6 +14,8 @@ public sealed class MarkdownExportTests
     private static readonly Guid Asset = Guid.Parse("0198f0c0-1111-7000-8000-000000000001");
     private static readonly Guid Item = Guid.Parse("0198f0c0-2222-7000-8000-000000000002");
     private static readonly Guid Transferir = Guid.Parse("0198f0c0-3333-7000-8000-000000000003");
+    /// <summary>Recursos en el orden de sus subtipos: almacenamiento, función, cola y personalizado.</summary>
+    private static readonly string[] ResourceHeadings = ["### Comprobantes", "### Firmar", "### Pagos pendientes", "### Orquestador"];
     private static readonly DateTimeOffset ExportedAt = new(2026, 11, 8, 15, 4, 0, TimeSpan.Zero);
 
     [Fact]
@@ -424,6 +426,60 @@ public sealed class MarkdownExportTests
         Assert.Contains("- [Recorridos](#recorridos)", markdown, StringComparison.Ordinal);
         Assert.Contains("## Recorridos\n\n### Alta", markdown, StringComparison.Ordinal);
         Assert.Contains("### Usuarios (Backend)\n\nDentro de **AWS**.", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Los_recursos_salen_agrupados_por_subtipo_con_detalles_y_su_forma_en_el_diagrama()
+    {
+        var graph = Graph();
+        var nodes = graph["nodes"]!.AsObject();
+        nodes["r1"] = new JsonObject
+        {
+            ["id"] = "r1", ["type"] = "resource", ["title"] = "Pagos pendientes",
+            ["resource"] = JsonNode.Parse("""
+                { "kind": "queue", "provider": "aws", "name": "pagos-pendientes",
+                  "details": [{ "key": "retención", "value": "4 días" }] }
+                """),
+        };
+        nodes["r2"] = new JsonObject
+        {
+            ["id"] = "r2", ["type"] = "resource", ["title"] = "Comprobantes",
+            ["resource"] = JsonNode.Parse("""{ "kind": "storage", "provider": "azure" }"""),
+        };
+        nodes["r3"] = new JsonObject
+        {
+            ["id"] = "r3", ["type"] = "resource", ["title"] = "Orquestador",
+            ["resource"] = JsonNode.Parse("""{ "kind": "custom", "label": "Step Functions" }"""),
+        };
+        nodes["f1"] = new JsonObject
+        {
+            ["id"] = "f1", ["type"] = "resource", ["title"] = "Firmar",
+            ["resource"] = JsonNode.Parse("""{ "kind": "function" }"""),
+        };
+        nodes["sv"] = new JsonObject { ["id"] = "sv", ["type"] = "service", ["title"] = "Pagos", ["runtime"] = "container" };
+        nodes["db"] = new JsonObject
+        {
+            ["id"] = "db", ["type"] = "database", ["title"] = "Sesiones",
+            ["database"] = JsonNode.Parse("""{ "engine": "Redis", "model": "key-value" }"""),
+        };
+
+        var markdown = MarkdownDocument.Render(Input(graph));
+
+        Assert.Contains("- [Recursos](#recursos)", markdown, StringComparison.Ordinal);
+        // Agrupados por subtipo (almacenamiento, función, cola… personalizado), no por título.
+        var order = ResourceHeadings.Select(h => markdown.IndexOf(h, StringComparison.Ordinal)).ToArray();
+        Assert.All(order, i => Assert.True(i > 0));
+        Assert.Equal(order.Order(), order);
+        Assert.Contains("Tipo: Cola · Proveedor: AWS · Nombre: `pagos-pendientes`", markdown, StringComparison.Ordinal);
+        Assert.Contains("| Detalle | Valor |\n| --- | --- |\n| retención | 4 días |", markdown, StringComparison.Ordinal);
+        Assert.Contains("Tipo: Step Functions", markdown, StringComparison.Ordinal);
+        Assert.Contains("Corre en: contenedor", markdown, StringComparison.Ordinal);
+        Assert.Contains("Modelo: clave-valor", markdown, StringComparison.Ordinal);
+        // Diagrama: cilindro, bandera y subrutina, con el subtipo como etiqueta.
+        Assert.Contains("[(\"Almacenamiento de objetos: Comprobantes\")]", markdown, StringComparison.Ordinal);
+        Assert.Contains(">\"Cola: Pagos pendientes\"]", markdown, StringComparison.Ordinal);
+        Assert.Contains("[[\"Función: Firmar\"]]", markdown, StringComparison.Ordinal);
+        Assert.Contains("(\"Step Functions: Orquestador\")", markdown, StringComparison.Ordinal);
     }
 
     private static ExportInput Input(JsonObject graph)

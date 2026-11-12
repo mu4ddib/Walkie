@@ -9,11 +9,13 @@
   "properties": {
     "id": { "type": "string", "format": "uuid", "description": "Generado por la API" },
     "appId": { "type": "string", "format": "uuid" },
-    "type": { "enum": ["api", "service", "database"] },
+    "type": { "enum": ["api", "service", "database", "resource"] },
     "title": { "type": "string", "minLength": 1, "maxLength": 120 },
     "description": { "type": "string", "maxLength": 2000 },
     "http": { "$ref": "walkie-graph.schema.json#/$defs/http", "description": "Contrato (solo type api)" },
     "database": { "$ref": "walkie-graph.schema.json#/$defs/database", "description": "Estructura (solo type database)" },
+    "resource": { "$ref": "walkie-graph.schema.json#/$defs/resource", "description": "Subtipo y detalles (solo type resource; obligatorio en él)" },
+    "runtime": { "$ref": "walkie-graph.schema.json#/$defs/runtime", "description": "Dónde corre (solo type service)" },
     "version": { "type": "integer", "minimum": 1, "description": "Versión para concurrencia optimista" }
   }
 }

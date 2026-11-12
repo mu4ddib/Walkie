@@ -10,11 +10,14 @@ import {
   useDeleteCatalogItem,
   useUpdateCatalogItem,
 } from '../api/hooks';
-import { NODE_LABELS } from '../nodes/nodeMeta';
+import { NODE_LABELS, nodeLabel } from '../nodes/nodeMeta';
+import { RESOURCE_KINDS, normalizeResource, type ResourceKind } from '../nodes/resourceMeta';
 import { HTTP_METHODS, TEXT_MAX_LENGTH, TITLE_MAX_LENGTH, type HttpMethod } from '../store/graphStore';
 import { normalizeDatabase, normalizeHttp } from '../contracts/contracts';
 import { ApiContractEditor } from '../panel/contract/ApiContractEditor';
 import { DatabaseEditor } from '../panel/contract/DatabaseEditor';
+import { ResourceEditor } from '../panel/contract/ResourceEditor';
+import { RuntimeField } from '../panel/contract/RuntimeField';
 import '../panel/panel.css';
 import { QueryState } from '../ui/QueryState';
 import { CATALOG_TYPES, catalogPath } from './catalogPaths';
@@ -90,6 +93,7 @@ function ItemGroup({
             {item.http && (item.http.method || item.http.path) && (
               <span className="catalog-http"> {[item.http.method, item.http.path].filter(Boolean).join(' ')}</span>
             )}
+            {item.resource && <span className="catalog-http"> {nodeLabel(item).label}</span>}
           </li>
         ))}
       </ul>
@@ -101,6 +105,7 @@ function CreateItemForm({ appId }: { appId: string }) {
   const create = useCreateCatalogItem(appId);
   const navigate = useNavigate();
   const [type, setType] = useState<CatalogItemType>('api');
+  const [kind, setKind] = useState<ResourceKind>('storage');
   const [title, setTitle] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -113,7 +118,8 @@ function CreateItemForm({ appId }: { appId: string }) {
     }
     setLocalError(null);
     try {
-      const item = await create.mutateAsync({ type, title: clean });
+      const resource = type === 'resource' ? normalizeResource({ kind }) : undefined;
+      const item = await create.mutateAsync({ type, title: clean, resource });
       setTitle('');
       void navigate(catalogPath(appId, item.id));
     } catch {
@@ -135,6 +141,18 @@ function CreateItemForm({ appId }: { appId: string }) {
           ))}
         </select>
       </label>
+      {type === 'resource' && (
+        <label>
+          Subtipo
+          <select value={kind} onChange={(e) => setKind(e.target.value as ResourceKind)}>
+            {RESOURCE_KINDS.map((k) => (
+              <option key={k.kind} value={k.kind}>
+                {k.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label>
         Título
         <input value={title} maxLength={TITLE_MAX_LENGTH} onChange={(e) => setTitle(e.target.value)} />
@@ -190,7 +208,9 @@ function ItemEditor({
   const [path, setPath] = useState(item.http?.path ?? '');
   const [contract, setContract] = useState(item.http);
   const [database, setDatabase] = useState(item.database);
-  const meta = NODE_LABELS[item.type];
+  const [resource, setResource] = useState(item.resource);
+  const [runtime, setRuntime] = useState(item.runtime);
+  const meta = nodeLabel(item);
   const conflict = update.error instanceof ApiError && update.error.status === 409;
 
   function save(event: FormEvent) {
@@ -200,6 +220,8 @@ function ItemEditor({
       description: description.trim() || undefined,
       http: item.type === 'api' ? normalizeHttp({ ...contract, method: method || undefined, path }) : undefined,
       database: item.type === 'database' ? normalizeDatabase(database) : undefined,
+      resource: item.type === 'resource' ? normalizeResource(resource ?? { kind: 'custom' }) : undefined,
+      runtime: item.type === 'service' ? runtime : undefined,
       version: item.version,
     });
   }
@@ -248,6 +270,8 @@ function ItemEditor({
       )}
       {item.type === 'api' && <ApiContractEditor value={contract} onChange={setContract} />}
       {item.type === 'database' && <DatabaseEditor value={database} onChange={setDatabase} />}
+      {item.type === 'resource' && <ResourceEditor value={resource} onChange={setResource} />}
+      {item.type === 'service' && <RuntimeField value={runtime} onChange={setRuntime} />}
       <div className="catalog-actions">
         <button type="submit" className="pixel-button" disabled={update.isPending}>
           Guardar

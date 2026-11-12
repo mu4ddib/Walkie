@@ -1,7 +1,7 @@
 # Spec: Nodos de infraestructura
 
 - Issue padre: #136
-- Estado: aprobada (2026-11-12)
+- Estado: implementada (2026-11-12), verificada por `apps/web/e2e/nodos-de-infraestructura.spec.ts` e `InfrastructureNodesTests`
 
 ## Objetivo
 
@@ -27,22 +27,22 @@ Quien documenta la arquitectura de una feature o de un banco (onboarding técnic
 
 ### Crear y ver
 
-- [ ] Dada la barra de herramientas, entonces hay un botón «Recurso» (con su tecla, la 8) que abre la lista de subtipos con glifo y una línea de qué es; elegir uno lo crea en el centro (o arrastrándolo al lienzo, como los demás).
-- [ ] Dado un recurso, entonces su caja muestra el glifo y el nombre del subtipo en la cabecera (ej. «Bucket», con un glifo propio en el estilo pixel, como los demás tipos), su título, el proveedor y hasta tres detalles.
-- [ ] Dado un recurso personalizado, entonces la cabecera muestra el subtipo escrito por el usuario.
-- [ ] Dado el inspector de un recurso, entonces edita subtipo (cambiarlo conserva título, conexiones y detalles), proveedor, nombre, detalles y notas.
-- [ ] Dada una base de datos, entonces el inspector ofrece el modelo y la caja lo muestra («Base de datos · documental»).
+- [x] Dada la barra de herramientas, entonces hay un botón «Recurso» (con su tecla, la 8) que abre la lista de subtipos con glifo y una línea de qué es; elegir uno lo crea en el centro (o arrastrándolo al lienzo, como los demás). Con teclado: flechas, Enter y Esc (vuelve al botón).
+- [x] Dado un recurso, entonces su caja muestra el glifo y el nombre del subtipo en la cabecera (ej. «Bucket», con un glifo propio en el estilo pixel, como los demás tipos), su título, el proveedor y hasta tres detalles.
+- [x] Dado un recurso personalizado, entonces la cabecera muestra el subtipo escrito por el usuario.
+- [x] Dado el inspector de un recurso, entonces edita subtipo (cambiarlo conserva título, conexiones y detalles), proveedor, nombre, detalles y notas.
+- [x] Dada una base de datos, entonces el inspector ofrece el modelo y la caja lo muestra («Base de datos · documental»).
 
 ### Conexiones
 
-- [ ] Dado un recurso, entonces el tipo de conexión por defecto sigue su naturaleza: hacia una cola o tópico, `event`; hacia un bucket o caché, `writes`; desde ellos, `reads`; hacia una función, `request` (invocación); el resto, `uses`. Siempre se puede cambiar.
+- [x] Dado un recurso, entonces el tipo de conexión por defecto sigue su naturaleza: hacia o desde una cola o tópico, `event`; hacia un bucket o caché, `writes`; desde ellos, `reads`; hacia una función o un gateway, `request` (invocación); el resto, `uses`. Vale también para un `ref` a un recurso del catálogo. Siempre se puede cambiar.
 
 ### Catálogo y resto de Walkie
 
-- [ ] Dado un recurso, entonces «Guardar como componente» funciona como con API, servicio y base de datos, y se reutiliza desde «Componentes».
-- [ ] El export a Markdown (y el contexto para IA) tienen una sección «Recursos» agrupada por subtipo; el diagrama Mermaid usa la forma adecuada (cilindro para bases y buckets, etc.).
-- [ ] El mapa de la app, los tours, los grupos, los enlaces compartidos y deshacer funcionan con recursos igual que con cualquier nodo.
-- [ ] Lienzos anteriores se abren sin cambios; ningún nodo existente cambia de tipo solo.
+- [x] Dado un recurso, entonces «Guardar como componente» funciona como con API, servicio y base de datos, y se reutiliza desde «Componentes».
+- [x] El export a Markdown tiene una sección «Recursos» agrupada por subtipo, con tipo, proveedor, nombre y detalles; el diagrama Mermaid usa la forma adecuada (cilindro para bases y almacenamiento, bandera para colas y tópicos, subrutina para funciones) y el subtipo como etiqueta. El contexto para IA lo hará `exportar-e-importar`.
+- [x] El mapa de la app, los tours, los grupos, los enlaces compartidos y deshacer funcionan con recursos igual que con cualquier nodo.
+- [x] Lienzos anteriores se abren sin cambios; ningún nodo existente cambia de tipo solo.
 
 ## Fuera de alcance
 
@@ -54,15 +54,15 @@ Quien documenta la arquitectura de una feature o de un banco (onboarding técnic
 ## Impacto en el modelo
 
 `packages/schema/walkie-graph.schema.json`:
-- `node.type` agrega `resource`; nuevos campos `resourceKind` (enum, incluye `custom`), `resourceLabel` (subtipo personalizado, ≤ 40), `provider` (enum), `resourceName` (≤ 120), `details` (≤ 30 pares `{ key ≤ 40, value ≤ 200 }`).
-- `database.model` (enum) y `service.runtime` (enum), opcionales.
-- `walkie-catalog-item.schema.json`: `type` agrega `resource` con los mismos campos.
-- Requiere un ADR («tipos de nodo de infraestructura»): por qué un tipo con subtipos y no un tipo por recurso.
+- `node.type` agrega `resource`, que lleva (obligatorio) el objeto `resource` = `$defs/resource`: `kind` (`storage`, `function`, `queue`, `topic`, `cache`, `cdn`, `gateway`, `secret`, `scheduler`, `custom`), `label` (≤ 40, solo y siempre con `custom`), `provider` (`aws`, `azure`, `gcp`, `on-premise`, `other`), `name` (≤ 120) y `details` (≤ 30 pares `{ key ≤ 40, value ≤ 200 }`). Un objeto y no campos sueltos: así el catálogo lo reutiliza con `$ref`, como `http` y `database`.
+- `$defs/database.model` (`relational`, `document`, `key-value`, `wide-column`, `graph`, `search`, `time-series`) y `runtime` en el nodo = `$defs/runtime` (`container`, `vm`, `serverless`, `managed`, `other`), opcionales.
+- `walkie-catalog-item.schema.json`: `type` agrega `resource`, con `resource` y `runtime` por `$ref`.
+- ADR-0007: un tipo con subtipos y no un tipo por recurso.
 
 ## Impacto en la API
 
-- `GraphValidator`: valida los campos nuevos (solo en `resource`, `resourceLabel` solo con `custom`, límites).
-- Catálogo: acepta `type: resource`.
+- `GraphValidator`: el schema valida los campos y límites; la integridad suma `resource` solo en nodos `resource` y `runtime` solo en `service`.
+- Catálogo: acepta `type: resource` (con `resource` obligatorio) y `runtime` en servicios; columnas `resource` (`jsonb`) y `runtime` (migración `CatalogResourceAndRuntime`).
 - Export: sección «Recursos». Sin endpoints nuevos.
 
 ## Decisiones
