@@ -7,6 +7,7 @@ import { normalizeDatabase, normalizeEdgeData, normalizeEdgeRequest, normalizeHt
 import { canNest, descendantsOf, inferHierarchy, isInside, ownerOf } from './hierarchy';
 import { History, sameSnapshot, snapshotOf, type Snapshot } from './history';
 import { tourKind, type TourKind } from '../tours/flows';
+import { normalizeResource, resourceEdgeKind, resourceKindMeta, type ResourceKind } from '../nodes/resourceMeta';
 
 /** Tours con `kind` explícito (los anteriores, deducido de sus pasos). */
 function withKinds(tours: Record<string, Tour>): Record<string, Tour> {
@@ -163,8 +164,17 @@ export const DEFAULT_TITLES: Record<NodeType, string> = {
   portal: 'Portal',
 };
 
-/** Tipo de conexión por defecto según el par (spec, criterio 5). Otros pares: `uses`. */
-export function defaultEdgeKind(from: NodeType, to: NodeType): EdgeKind {
+/**
+ * Tipo de conexión por defecto según el par (spec, criterio 5). Otros pares: `uses`. Con un recurso en un extremo
+ * (spec nodos-de-infraestructura), su subtipo manda: hacia una cola, `event`; hacia un bucket, `writes`…
+ */
+export function defaultEdgeKind(
+  from: NodeType,
+  to: NodeType,
+  resources: { from?: ResourceKind; to?: ResourceKind } = {},
+): EdgeKind {
+  const byResource = resourceEdgeKind(from === 'resource' ? resources.from : undefined, to === 'resource' ? resources.to : undefined);
+  if (byResource) return byResource;
   if (from === 'screen' && to === 'screen') return 'navigation';
   if (from === 'screen' && to === 'portal') return 'navigation';
   if (from === 'screen' && to === 'api') return 'request';
@@ -342,6 +352,19 @@ export const GROUP_PADDING = { side: GRID * 3, top: GRID * 7, bottom: GRID * 3 }
 export interface GraphActions {
   loadGraph(graph: WalkieCanvasGraphV0): void;
   addNode(type: NodeType, position: Position): string;
+  /**
+   * Recurso de infraestructura del subtipo `kind` (spec nodos-de-infraestructura): su título es el del subtipo; uno
+   * personalizado lleva `label` (o «Recurso»).
+   */
+  addResource(kind: ResourceKind, position: Position, label?: string): string;
+  /**
+   * Cambia el recurso de un nodo `resource` (subtipo, nombre del personalizado, proveedor, nombre y detalles),
+   * normalizado. Cambiar el subtipo conserva título, conexiones y detalles; al pasar a personalizado, el nombre del
+   * subtipo anterior queda como su nombre.
+   */
+  setResource(id: string, patch: Partial<NonNullable<Node['resource']>>): void;
+  /** Dónde corre un servicio (`undefined` lo quita). Solo `service`. */
+  setRuntime(id: string, runtime: Node['runtime'] | undefined): void;
   /** Nodo `ref` a un elemento del catálogo; `title` guarda su título como último conocido. */
   addRef(item: { id: string; title: string }, position: Position): string;
   /**
@@ -582,6 +605,8 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
       },
 
       addNode: (type, position) => {
+        // Un recurso necesita su subtipo (schema): sin él, uno personalizado.
+        if (type === 'resource') return get().addResource('custom', position);
         const id = newId();
         set((s) => ({
           nodes: {
@@ -595,6 +620,38 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           dirty: true,
         }));
         return id;
+      },
+
+      addResource: (kind, position, label) => {
+        const id = newId();
+        const resource = normalizeResource({ kind, label });
+        const title = kind === 'custom' ? resource.label! : resourceKindMeta(kind).label;
+        set((s) => ({
+          nodes: { ...s.nodes, [id]: { id, type: 'resource', title, resource } },
+          layout: { ...s.layout, [id]: { x: snap(position.x), y: snap(position.y) } },
+          dirty: true,
+        }));
+        return id;
+      },
+
+      setResource: (id, patch) => {
+        const node = get().nodes[id];
+        if (!node || node.type !== 'resource') return;
+        const current = node.resource ?? { kind: 'custom' as const };
+        const next = { ...current, ...patch };
+        // Al pasar a personalizado sin nombre, se queda con el del subtipo que tenía.
+        const fallback = current.kind === 'custom' ? current.label : resourceKindMeta(current.kind).label;
+        const resource = normalizeResource(next, fallback);
+        putNode({ ...node, resource });
+      },
+
+      setRuntime: (id, runtime) => {
+        const node = get().nodes[id];
+        if (!node || node.type !== 'service') return;
+        const next = { ...node };
+        if (runtime) next.runtime = runtime;
+        else delete next.runtime;
+        putNode(next);
       },
 
       addRef: (item, position) => {
@@ -1013,7 +1070,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           id,
           from,
           to,
-          kind: kind ?? defaultEdgeKind(source.type, target.type),
+          kind: kind ?? defaultEdgeKind(source.type, target.type, { from: source.resource?.kind, to: target.resource?.kind }),
         };
         if (init?.branch && source.branches?.some((b) => b.id === init.branch)) edge.branch = init.branch;
         set((s) => ({ edges: { ...s.edges, [id]: edge }, dirty: true }));

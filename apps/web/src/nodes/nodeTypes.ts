@@ -14,6 +14,7 @@ export const nodeTypes: NodeTypes = {
   actor: PixelNode,
   rule: PixelNode,
   service: PixelNode,
+  resource: PixelNode,
   ref: PixelNode,
   portal: PixelNode,
   // Grupos de infraestructura (no son nodos del grafo: viven en `groups`).

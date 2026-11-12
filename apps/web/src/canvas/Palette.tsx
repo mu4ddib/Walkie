@@ -1,9 +1,11 @@
-import { useId, useMemo, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react';
+import { useCallback, useId, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError, type CatalogItem, type CatalogItemType, type NewCatalogItem } from '../api/client';
 import { NODE_LABELS } from '../nodes/nodeMeta';
 import { CATALOG_TYPES, catalogPath } from '../pages/catalogPaths';
-import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES } from './paletteTypes';
+import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES, RESOURCE_KEY } from './paletteTypes';
+import { ResourcePicker } from './ResourcePicker';
+import type { ResourceKind } from '../nodes/resourceMeta';
 import type { NodeType } from '../store/graphStore';
 import { nodeColors } from '../theme/palette';
 
@@ -13,6 +15,8 @@ interface PaletteProps {
   onAddGroup?: () => void;
   /** "Nota" (tecla N): una nota adhesiva en el centro, lista para escribir. */
   onAddNote?: () => void;
+  /** "Recurso" (tecla 8): la lista de subtipos, abierta o no (la abre también el lienzo con la tecla). */
+  resources?: { open: boolean; onOpenChange: (open: boolean) => void; onPick: (kind: ResourceKind) => void };
   /** Panel "Componentes" (catálogo de la app); sin él la barra solo trae los tipos. */
   catalog?: {
     appId: string;
@@ -28,9 +32,21 @@ interface PaletteProps {
  * (clic lo pone en el centro, arrastre donde lo sueltes, teclas 1–7) y el panel "Componentes" con
  * el catálogo compartido de la app.
  */
-export function Palette({ onAdd, onAddGroup, onAddNote, catalog }: PaletteProps) {
+export function Palette({ onAdd, onAddGroup, onAddNote, resources, catalog }: PaletteProps) {
   const [componentsOpen, setComponentsOpen] = useState(false);
   const panelId = useId();
+  const resourcesId = useId();
+  const resourceButton = useRef<HTMLButtonElement>(null);
+  const onResourcesOpenChange = resources?.onOpenChange;
+  const closeResources = useCallback(
+    (refocus: boolean) => {
+      onResourcesOpenChange?.(false);
+      if (refocus) resourceButton.current?.focus();
+    },
+    [onResourcesOpenChange],
+  );
+  // Un panel a la vez junto a la barra.
+  const showComponents = componentsOpen && !resources?.open;
 
   function onDragStart(event: DragEvent, mime: string, value: string) {
     event.dataTransfer.setData(mime, value);
@@ -61,6 +77,29 @@ export function Palette({ onAdd, onAddGroup, onAddNote, catalog }: PaletteProps)
             </span>
           </button>
         ))}
+        {resources && (
+          <button
+            ref={resourceButton}
+            type="button"
+            className="toolbar-tool"
+            aria-label="Recurso"
+            aria-haspopup="menu"
+            aria-expanded={resources.open}
+            aria-controls={resources.open ? resourcesId : undefined}
+            aria-keyshortcuts={RESOURCE_KEY}
+            data-tip={`Recurso: bucket, función, cola… · ${RESOURCE_KEY}`}
+            data-resource-trigger
+            onClick={() => resources.onOpenChange(!resources.open)}
+            style={{ '--node-color': nodeColors.resource } as CSSProperties}
+          >
+            <span className="toolbar-glyph" aria-hidden="true">
+              {NODE_LABELS.resource.glyph}
+            </span>
+            <span className="toolbar-key" aria-hidden="true">
+              {RESOURCE_KEY}
+            </span>
+          </button>
+        )}
         {onAddGroup && (
           <button
             type="button"
@@ -102,10 +141,13 @@ export function Palette({ onAdd, onAddGroup, onAddNote, catalog }: PaletteProps)
               type="button"
               className="toolbar-tool toolbar-components"
               aria-label="Componentes"
-              aria-expanded={componentsOpen}
+              aria-expanded={showComponents}
               aria-controls={panelId}
               data-tip="Componentes del catálogo"
-              onClick={() => setComponentsOpen((open) => !open)}
+              onClick={() => {
+                setComponentsOpen((open) => !open);
+                resources?.onOpenChange(false);
+              }}
             >
               <span className="toolbar-glyph" aria-hidden="true">
                 ◇
@@ -114,7 +156,17 @@ export function Palette({ onAdd, onAddGroup, onAddNote, catalog }: PaletteProps)
           </>
         )}
       </nav>
-      {catalog && componentsOpen && (
+      {resources?.open && (
+        <ResourcePicker
+          id={resourcesId}
+          onPick={(kind) => {
+            resources.onPick(kind);
+            resources.onOpenChange(false);
+          }}
+          onClose={closeResources}
+        />
+      )}
+      {catalog && showComponents && (
         <ComponentsPanel
           id={panelId}
           catalog={catalog}

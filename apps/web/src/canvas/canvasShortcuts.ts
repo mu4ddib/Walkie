@@ -1,6 +1,7 @@
 /** Atajos del lienzo (spec espacio-de-trabajo, criterio 5); el diálogo de ayuda se arma con esta lista. */
 export const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ['1', '…', '7'], label: 'Agregar un nodo del tipo de la barra (en el centro)' },
+  { keys: ['8'], label: 'Recurso de infraestructura: elegir bucket, función, cola, caché… (flechas y Enter)' },
   { keys: ['G'], label: 'Agrupar: rodea las cajas seleccionadas con un grupo (o crea uno vacío)' },
   { keys: ['N'], label: 'Nota adhesiva: una anotación del lienzo, lista para escribir' },
   { keys: ['Clic'], label: 'Seleccionar una caja o una conexión: sus propiedades se editan en el inspector' },

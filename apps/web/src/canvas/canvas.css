@@ -144,6 +144,76 @@
 }
 
 /* Panel "Componentes" (catálogo) */
+/* Lista de subtipos de recurso (spec nodos-de-infraestructura): junto a la barra, como «Componentes». */
+.resource-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 300px;
+  max-height: 100%;
+  padding: 10px;
+  overflow: auto;
+}
+
+.resource-picker-help {
+  margin: 0 2px 4px;
+  color: var(--stone-700);
+  font-size: 12.5px;
+}
+
+.resource-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-left: 3px solid var(--node-color);
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.resource-option:hover,
+.resource-option:focus-visible {
+  background: var(--dune-100);
+}
+
+.resource-option:focus-visible {
+  outline: 2px solid var(--ibad);
+  outline-offset: 1px;
+}
+
+.resource-option-glyph {
+  flex: none;
+  width: 32px;
+  color: var(--node-color);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.resource-option-text {
+  display: grid;
+  min-width: 0;
+}
+
+.resource-option-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.resource-option-help {
+  color: var(--stone-700);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .components-panel {
   display: flex;
   flex-direction: column;

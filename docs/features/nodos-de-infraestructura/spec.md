@@ -1,7 +1,7 @@
 # Spec: Nodos de infraestructura
 
 - Issue padre: #136
-- Estado: en curso (tarea 1 de 3 hecha)
+- Estado: en curso (tareas 1 y 2 de 3 hechas)
 
 ## Objetivo
 
@@ -27,15 +27,15 @@ Quien documenta la arquitectura de una feature o de un banco (onboarding técnic
 
 ### Crear y ver
 
-- [ ] Dada la barra de herramientas, entonces hay un botón «Recurso» (con su tecla, la 8) que abre la lista de subtipos con glifo y una línea de qué es; elegir uno lo crea en el centro (o arrastrándolo al lienzo, como los demás).
-- [ ] Dado un recurso, entonces su caja muestra el glifo y el nombre del subtipo en la cabecera (ej. «Bucket», con un glifo propio en el estilo pixel, como los demás tipos), su título, el proveedor y hasta tres detalles.
-- [ ] Dado un recurso personalizado, entonces la cabecera muestra el subtipo escrito por el usuario.
+- [x] Dada la barra de herramientas, entonces hay un botón «Recurso» (con su tecla, la 8) que abre la lista de subtipos con glifo y una línea de qué es; elegir uno lo crea en el centro (o arrastrándolo al lienzo, como los demás). Con teclado: flechas, Enter y Esc (vuelve al botón).
+- [x] Dado un recurso, entonces su caja muestra el glifo y el nombre del subtipo en la cabecera (ej. «Bucket», con un glifo propio en el estilo pixel, como los demás tipos), su título, el proveedor y hasta tres detalles.
+- [x] Dado un recurso personalizado, entonces la cabecera muestra el subtipo escrito por el usuario.
 - [ ] Dado el inspector de un recurso, entonces edita subtipo (cambiarlo conserva título, conexiones y detalles), proveedor, nombre, detalles y notas.
 - [ ] Dada una base de datos, entonces el inspector ofrece el modelo y la caja lo muestra («Base de datos · documental»).
 
 ### Conexiones
 
-- [ ] Dado un recurso, entonces el tipo de conexión por defecto sigue su naturaleza: hacia una cola o tópico, `event`; hacia un bucket o caché, `writes`; desde ellos, `reads`; hacia una función, `request` (invocación); el resto, `uses`. Siempre se puede cambiar.
+- [x] Dado un recurso, entonces el tipo de conexión por defecto sigue su naturaleza: hacia o desde una cola o tópico, `event`; hacia un bucket o caché, `writes`; desde ellos, `reads`; hacia una función o un gateway, `request` (invocación); el resto, `uses`. Vale también para un `ref` a un recurso del catálogo. Siempre se puede cambiar.
 
 ### Catálogo y resto de Walkie
 

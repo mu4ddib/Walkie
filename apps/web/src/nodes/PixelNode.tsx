@@ -15,6 +15,7 @@ import {
   preview,
 } from './nodeContent';
 import { nodeLabel } from './nodeMeta';
+import { MAX_VISIBLE_DETAILS, providerLabel } from './resourceMeta';
 import { NodeImage } from './NodeImage';
 
 export type WalkieFlowNode = FlowNode<{
@@ -41,6 +42,8 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
         description: target.description,
         http: target.http,
         database: target.database,
+        resource: target.resource,
+        runtime: target.runtime,
       }
     : node;
   // Un `portal` muestra el nombre actual de su feature destino (spec imagenes-portal, criterio 7).
@@ -126,9 +129,25 @@ function NodeContent({ node }: { node: Node }) {
 
   const detail = node.type === 'api' ? httpSummary(node.http) : node.type === 'database' ? databaseSummary(node.database) : '';
 
+  const resource = node.type === 'resource' ? node.resource : undefined;
+  const where = resource && [providerLabel(resource.provider), resource.name].filter(Boolean).join(' · ');
+  const details = preview(resource?.details ?? [], MAX_VISIBLE_DETAILS);
+
   return (
     <>
       {http && <div className="pixel-node-http">{http}</div>}
+      {where && <div className="pixel-node-detail">{where}</div>}
+      {details.shown.length > 0 && (
+        <ul className="pixel-node-list pixel-node-details" aria-label="Detalles">
+          {details.shown.map((d, i) => (
+            <li key={i}>
+              {d.key}
+              <span className="pixel-node-muted">: {d.value}</span>
+            </li>
+          ))}
+          {details.more > 0 && <li className="pixel-node-muted">{moreLabel(details.more)}</li>}
+        </ul>
+      )}
       {detail && <div className="pixel-node-detail">{detail}</div>}
       {node.description && <p className="pixel-node-description">{node.description}</p>}
       {inputs.shown.length > 0 && (
