@@ -121,3 +121,32 @@ test('inspector del recurso, guardarlo como componente y reutilizarlo; runtime d
   await page.locator('.react-flow__node', { hasText: 'Base de datos' }).click();
   await expect(inspector.getByLabel('Modelo')).toHaveValue('document');
 });
+
+// Pantallas bajas (ej. MacBook de 14" con la ventana del navegador): la lista de «Recurso» no puede quedar debajo de la
+// barra de zoom; se desplaza dentro de su panel y el último subtipo se alcanza y se elige.
+for (const viewport of [
+  { width: 1512, height: 860 },
+  { width: 1280, height: 600 },
+]) {
+  test(`la lista de «Recurso» no queda bajo el zoom a ${viewport.width}×${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await login(page);
+    await openNewFeature(page, 'Infraestructura');
+
+    await page.getByRole('button', { name: 'Recurso', exact: true }).click();
+    const menu = page.getByRole('menu', { name: 'Recursos' });
+    const zoom = (await page.getByRole('group', { name: 'Zoom' }).boundingBox())!;
+    const box = (await menu.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(zoom.y);
+
+    const last = menu.getByRole('menuitem', { name: /^Personalizado/ });
+    await last.scrollIntoViewIfNeeded();
+    const item = (await last.boundingBox())!;
+    expect(item.y + item.height).toBeLessThanOrEqual(zoom.y);
+    await capture(page, `lista-${viewport.width}x${viewport.height}`);
+
+    await last.click();
+    await expect(menu).toBeHidden();
+    await expect(kindOf(page, 0)).toHaveText(/Personalizado|Recurso/);
+  });
+}
