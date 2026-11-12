@@ -13,7 +13,7 @@ apps/api/
     Walkie.Modules.Tours/
     Walkie.Modules.Files/  # imágenes en S3 (RustFS en desarrollo), ADR-0004
     Walkie.Modules.Sharing/ # enlaces de solo lectura (token con hash), ADR-0005
-    Walkie.Modules.Export/ # export a Markdown (.zip), sin tablas
+    Walkie.Modules.Export/ # export a Markdown (.zip) y contexto para IA (Markdown y JSON), sin tablas
     Walkie.Shared/         # tipos comunes, resultados, errores
   tests/
     Walkie.IntegrationTests/  # xUnit + Testcontainers (Postgres real)
@@ -21,7 +21,7 @@ apps/api/
 
 ## Estado actual
 
-Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared`, `Walkie.Modules.Apps` (apps, features, catálogo con versión), `Walkie.Modules.Canvas` (lienzo `jsonb` + `version`), `Walkie.Modules.Files` (imágenes: datos en `files.assets`, bytes en S3; ADR-0004), `Walkie.Modules.Sharing` (enlaces de solo lectura en `sharing.shares`; ADR-0005), `Walkie.Modules.Export` (`GET /api/features/{featureId}/export`: el `.zip` con el Markdown de una feature y sus imágenes; sin tablas) y `Walkie.IntegrationTests` (WebApplicationFactory + Testcontainers). Tours se crea cuando una tarea lo necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
+Existen `Walkie.Api` (host, `/api/health`, `/api/me`, auth JWT, ProblemDetails, CORS, OpenAPI), `Walkie.Shared`, `Walkie.Modules.Apps` (apps, features, catálogo con versión), `Walkie.Modules.Canvas` (lienzo `jsonb` + `version`), `Walkie.Modules.Files` (imágenes: datos en `files.assets`, bytes en S3; ADR-0004), `Walkie.Modules.Sharing` (enlaces de solo lectura en `sharing.shares`; ADR-0005), `Walkie.Modules.Export` (`GET /api/features/{featureId}/export`: el `.zip` con el Markdown de una feature y sus imágenes; con `?format=ai` o `ai-json`, el contexto para IA; sin tablas) y `Walkie.IntegrationTests` (WebApplicationFactory + Testcontainers). Tours se crea cuando una tarea lo necesite. Los proyectos comparten `Directory.Build.props` (warnings como errores, analizadores recomendados).
 
 ## Convenciones
 
@@ -72,6 +72,7 @@ Ya costaron tiempo; no las repitas.
 - **Tokens de enlaces (ADR-0005)**: 256 bits con `RandomNumberGenerator` en base64url (`System.Buffers.Text.Base64Url`); en la base solo `SHA256.HashData` (`bytea`, índice único). Nunca guardes ni registres el token.
 - **Generador del export (`MarkdownDocument`)**: función pura y determinista (orden por sección, título e id; `\n` como salto de línea; fecha en UTC con `CultureInfo.InvariantCulture`). Todo texto del usuario pasa por `MarkdownText` (`Inline`, `Block`, `Code`, `CodeBlock`, `Mermaid`): sin eso, un `|` rompe una tabla o una comilla rompe el diagrama. Se prueba sin base (`MarkdownExportTests`, sin la colección `ApiTestGroup`). Código dentro de una celda de tabla: `CodeCell` (escapa `|`, que en GitHub corta la tabla aunque esté entre comillas invertidas). Los grupos van como `subgraph gN` después de declarar los nodos (Mermaid los mueve adentro).
 - **Campos del catálogo según el tipo al editar**: `UpdateCatalogItemRequest` no trae el tipo, así que lo que depende de él (`http` solo en `api`, `resource` obligatorio en `resource`, `runtime` solo en `service`) lo revisa `CatalogHandlers.UpdateAsync` con el tipo guardado, no el validador.
+- **Contexto para IA (`MarkdownDocument.AiContext.cs`)**: `MarkdownDocument` es `partial`; el contexto reutiliza sus lectores del grafo (`ReadNodes`, `ReadEdges`, `ReadGroups`, `EdgeText`…), así dice lo mismo que el `.md` del export. De un solo modelo (`AiContext`) salen el JSON (camelCase, nulos fuera, acentos sin escapar: `AiContextJson`) y el Markdown (`RenderAiContext`). `AiContextTests` valida el JSON contra `WalkieSchemas.AiContext`; si cambias el modelo, cambia `walkie-ai-context.schema.json` en el mismo PR.
 - **Tabla nueva**: actualiza la lista de `PersistenceTests.Las_migraciones_crean_las_tablas_de_cada_modulo`.
 - **Endpoints en un módulo**: el `.csproj` necesita `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Validación con `.WithValidation<TRequest>()` (`Walkie.Shared.Validation`); los validadores pueden ser `internal` (se registran con `includeInternalTypes: true`).
 

@@ -13,7 +13,7 @@ Basado en `spec.md` (aprobada el 2026-11-12). Issue padre: #137.
 
 Cada tarea cabe en una sesión y en un PR.
 
-1. [ ] (#143) Contexto para IA de una feature: schema del JSON, `format=ai` (`.md` + `.context.json`), vacíos detectados, menú «Exportar» con todas las opciones (las que aún no existen, ocultas) y copiar al portapapeles con tamaño en tokens.
+1. [x] (#143) Contexto para IA de una feature: schema del JSON, `format=ai` (`.md` + `.context.json`), vacíos detectados, menú «Exportar» con todas las opciones (las que aún no existen, ocultas) y copiar al portapapeles con tamaño en tokens.
 2. [ ] (#144) Contexto para IA de la app completa: `GET /api/apps/{appId}/export?format=ai` y la acción en la página de la app.
 3. [ ] (#145) Imagen del lienzo (PNG/SVG) en el navegador: todo o lo visible, 1× / 2×, con imágenes de pantallas.
 4. [ ] (#146) PDF en la API: ADR de la librería, portada, lienzo, componentes, conexiones, flujos y tours.
@@ -29,4 +29,4 @@ Cada tarea cabe en una sesión y en un PR.
 
 ## Estado
 
-Última actualización: 2026-11-12 — spec aprobada, issues creados; sigue la tarea 1.
+Última actualización: 2026-11-12 — tarea 1 hecha: `walkie-ai-context.schema.json`, `GET /api/features/{id}/export?format=ai|ai-json` (el modelo `AiContext` en `MarkdownDocument.AiContext.cs`, del que salen el JSON y el Markdown; vacíos detectados en 10 tipos), menú «Exportar» (`ExportMenu`) y diálogo «Contexto para IA» (`AiContextDialog`: vista previa, tokens aproximados, copiar y descargar). Sigue la tarea 2 (contexto de la app completa).

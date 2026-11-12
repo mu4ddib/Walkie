@@ -1,7 +1,7 @@
 # Spec: Exportar e importar
 
 - Issue padre: #137
-- Estado: aprobada (2026-11-12)
+- Estado: en curso (tarea 1 de 7 hecha)
 
 ## Objetivo
 
@@ -21,20 +21,20 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
 
 ### Menú «Exportar»
 
-- [ ] Dado el editor, cuando abro «Exportar», entonces elijo entre: Contexto para IA, Markdown (el actual), Imagen, PDF y Archivo de Walkie; cada opción dice en una línea para qué sirve. Como hoy, se exporta lo guardado y se avisa si hay cambios pendientes.
+- [ ] Dado el editor, cuando abro «Exportar», entonces elijo entre: Contexto para IA, Markdown (el actual), Imagen, PDF y Archivo de Walkie; cada opción dice en una línea para qué sirve. Como hoy, se exporta lo guardado y se avisa si hay cambios pendientes. (Tarea 1: el menú con Contexto para IA y Markdown; las demás opciones se suman con sus tareas.)
 
 ### Contexto para IA
 
-- [ ] Dado un lienzo, entonces el contexto es un único `.md` pensado para un modelo de lenguaje:
+- [x] Dado un lienzo, entonces el contexto es un único `.md` pensado para un modelo de lenguaje:
   - propósito de la feature y de la app, y glosario de los nombres que usa;
   - inventario de componentes con id estable, tipo, responsabilidad y contrato completo (API: endpoints, parámetros, request, respuestas y errores; base: modelo y estructura; recurso: subtipo y detalles);
   - flujos de punta a punta en orden: cada recorrido como pasos numerados («Pantalla Login → POST /sesiones en API Auth → 201 / 401…») y cada decisión con sus ramas;
   - reglas de negocio con los inputs que validan;
   - relaciones entre features (portales) y componentes compartidos del catálogo;
   - **vacíos detectados**: APIs sin contrato, respuestas sin código, nodos sin conexiones, ramas sin destino, pasos de recorrido rotos, para que la IA pregunte en vez de inventar.
-- [ ] Además del `.md`, el export trae `<slug>.context.json` con lo mismo en estructura (ids, contratos, flujos, vacíos) para agentes que construyen código; el `.md` se puede copiar al portapapeles y se muestra su tamaño aproximado en tokens.
+- [x] Además del `.md`, el export trae `<slug>.context.json` con lo mismo en estructura (ids, contratos, flujos, vacíos) para agentes que construyen código; el `.md` se puede copiar al portapapeles y se muestra su tamaño aproximado en tokens.
 - [ ] Dada la página de una app, entonces se puede exportar el contexto de **toda la app** (todas sus features, el catálogo y el mapa) en un solo documento.
-- [ ] El mismo lienzo guardado genera el mismo texto (orden estable), salvo la fecha.
+- [x] El mismo lienzo guardado genera el mismo texto (orden estable), salvo la fecha.
 
 ### Imagen y PDF
 

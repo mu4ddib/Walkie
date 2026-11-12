@@ -57,6 +57,7 @@ test('exportar una feature documentada a un .zip con su Markdown e imágenes', a
   // Exportar baja <slug>.zip (criterios 1 y 9).
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Exportar' }).click();
+  await page.getByRole('menuitem', { name: /Markdown e imágenes/ }).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('iniciar-sesion.zip');
   const files = readZip(await readFile((await file.path())!));
@@ -92,6 +93,7 @@ test('exportar una feature documentada a un .zip con su Markdown e imágenes', a
   await field(page, 'Título').fill('Regla cambiada');
   const second = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Exportar' }).click();
+  await page.getByRole('menuitem', { name: /Markdown e imágenes/ }).click();
   const unsaved = readZip(await readFile((await (await second).path())!)).get('iniciar-sesion.md')!.toString('utf8');
   await expect(page.getByRole('note').filter({ hasText: 'Se exportó lo guardado' })).toBeVisible();
   expect(unsaved).toContain('### Documento válido');

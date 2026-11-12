@@ -118,6 +118,56 @@ public sealed class ExportEndpointsTests(WalkieApiFactory factory)
         Assert.Contains("\"/api/features/{featureId}/export\"", doc, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task El_contexto_para_IA_sale_en_markdown_y_en_json_con_el_proposito_de_la_feature()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var app = await CreateAppAsync(client);
+        var response = await client.PostAsJsonAsync(
+            new Uri($"/api/apps/{app}/features", UriKind.Relative),
+            new CreateFeatureRequest("Iniciar sesión", "El cliente entra con su documento y clave."));
+        var feature = (await response.Content.ReadFromJsonAsync<FeatureResponse>())!.Id;
+        await SaveAsync(client, feature, Graph(null, await CreateItemAsync(client, app), null));
+
+        var markdown = await client.GetAsync(AiUri(feature, "ai"));
+        var json = await client.GetAsync(AiUri(feature, "ai-json"));
+
+        Assert.Equal(HttpStatusCode.OK, markdown.StatusCode);
+        Assert.Equal("text/markdown", markdown.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("iniciar-sesion-contexto-ia.md", markdown.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var text = await markdown.Content.ReadAsStringAsync();
+        Assert.StartsWith("# Contexto para IA: Iniciar sesión", text, StringComparison.Ordinal);
+        Assert.Contains("El cliente entra con su documento y clave.", text, StringComparison.Ordinal);
+        Assert.Contains("### Consultar cliente (API)", text, StringComparison.Ordinal);
+
+        Assert.Equal(HttpStatusCode.OK, json.StatusCode);
+        Assert.Equal("application/json", json.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("iniciar-sesion.context.json", json.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var context = await json.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.AiContext, context));
+        Assert.Equal(feature, context.GetProperty("feature").GetProperty("id").GetGuid());
+        Assert.Equal("El cliente entra con su documento y clave.", context.GetProperty("feature").GetProperty("description").GetString());
+        Assert.Contains(context.GetProperty("gaps").EnumerateArray(), g => g.GetProperty("kind").GetString() == "request-without-response");
+    }
+
+    [Fact]
+    public async Task Un_formato_desconocido_responde_400_y_una_feature_inexistente_404()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var feature = await CreateFeatureAsync(client, await CreateAppAsync(client), "Transferir");
+
+        var unknown = await client.GetAsync(AiUri(feature, "pdf-gigante"));
+        var missing = await client.GetAsync(AiUri(Guid.CreateVersion7(), "ai"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
+        var problem = await unknown.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ValidationProblemDetails>();
+        Assert.Contains("format", problem!.Errors.Keys);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    private static Uri AiUri(Guid featureId, string format) =>
+        new($"/api/features/{featureId}/export?format={format}", UriKind.Relative);
+
     /// <summary>Pantalla (con imagen si se da), <c>ref</c> a un elemento del catálogo y portal (si se dan), conectados.</summary>
     private static JsonObject Graph(Guid? asset, Guid? item, Guid? target)
     {

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router';
 import { useStore } from 'zustand';
 import { ApiError } from '../api/client';
 import { useExportFeature, useFetchCanvas, useSaveCanvas } from '../api/hooks';
+import { AiContextDialog } from './AiContextDialog';
+import { ExportMenu } from './ExportMenu';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import type { CanvasCatalog } from '../catalog/catalogContext';
 import { createGraphStore, toGraph } from '../store/graphStore';
@@ -67,6 +69,8 @@ export function FeatureEditor({
   const exporter = useExportFeature(featureId);
   // Se exporta lo guardado (spec export-markdown, criterio 1): con cambios pendientes, se avisa.
   const [exportedDirty, setExportedDirty] = useState(false);
+  // «Contexto para IA» (spec exportar-e-importar): abierto o no, y si había cambios sin guardar al abrirlo.
+  const [aiContext, setAiContext] = useState<{ dirty: boolean } | null>(null);
 
   async function exportNow() {
     setExportedDirty(store.getState().dirty);
@@ -331,15 +335,11 @@ export function FeatureEditor({
           )}
         </div>
         <div className="workspace-actions">
-          <button
-            type="button"
-            className="pixel-button is-ghost"
-            onClick={() => void exportNow()}
-            disabled={exporter.isPending}
-            data-tip="Baja un .zip con el documento Markdown y las imágenes"
-          >
-            {exporter.isPending ? 'Exportando…' : 'Exportar'}
-          </button>
+          <ExportMenu
+            pending={exporter.isPending}
+            onAiContext={() => setAiContext({ dirty: store.getState().dirty })}
+            onMarkdown={() => void exportNow()}
+          />
           <button type="button" className="pixel-button" onClick={() => setSharing(true)}>
             Compartir
           </button>
@@ -357,6 +357,9 @@ export function FeatureEditor({
         </div>
       </header>
       {sharing && <ShareDialog featureId={featureId} onClose={() => setSharing(false)} />}
+      {aiContext && (
+        <AiContextDialog featureId={featureId} dirty={aiContext.dirty} onClose={() => setAiContext(null)} />
+      )}
       {status.kind === 'conflict' && (
         <div role="alertdialog" aria-labelledby="conflict-title" className="conflict-dialog">
           <p id="conflict-title">

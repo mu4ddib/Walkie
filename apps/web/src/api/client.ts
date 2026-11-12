@@ -294,9 +294,22 @@ export interface Download {
 }
 
 /** El `.zip` de la feature (su `.md` e `img/`), con la última versión guardada (spec export-markdown). */
-export async function exportFeature(token: string, featureId: string): Promise<Download> {
-  const res = await send(`/api/features/${encodeURIComponent(featureId)}/export`, { token });
-  return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? 'feature.zip', blob: await res.blob() };
+/**
+ * Formatos del export (spec exportar-e-importar): `markdown` es el `.zip` de siempre; `ai`, el contexto para IA en
+ * Markdown, y `ai-json`, el mismo contexto en JSON (`packages/schema/walkie-ai-context.schema.json`).
+ */
+export type ExportFormat = 'markdown' | 'ai' | 'ai-json';
+
+const EXPORT_FALLBACK_NAMES: Record<ExportFormat, string> = {
+  markdown: 'feature.zip',
+  ai: 'contexto-ia.md',
+  'ai-json': 'feature.context.json',
+};
+
+export async function exportFeature(token: string, featureId: string, format: ExportFormat = 'markdown'): Promise<Download> {
+  const query = format === 'markdown' ? '' : `?format=${format}`;
+  const res = await send(`/api/features/${encodeURIComponent(featureId)}/export${query}`, { token });
+  return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? EXPORT_FALLBACK_NAMES[format], blob: await res.blob() };
 }
 
 /** `filename*=UTF-8''…` o `filename=…` de un `Content-Disposition`. */

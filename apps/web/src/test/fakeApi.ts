@@ -64,6 +64,20 @@ export function installFakeApi(
         delete next_.exportStatus;
         return json(status, { title: 'Error', status });
       }
+      // Contexto para IA (spec exportar-e-importar): Markdown o JSON con su nombre, como la API.
+      const format = url.searchParams.get('format');
+      if (format === 'ai') {
+        return new Response(`# Contexto para IA: ${feature.name}\n\nUn texto de prueba.\n`, {
+          status: 200,
+          headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': 'attachment; filename=contexto-ia.md' },
+        });
+      }
+      if (format === 'ai-json') {
+        return new Response(JSON.stringify({ format: 'walkie-ai-context', feature: { name: feature.name } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename=feature.context.json' },
+        });
+      }
       return new Response('zip', {
         status: 200,
         headers: {
