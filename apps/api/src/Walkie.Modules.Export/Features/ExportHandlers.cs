@@ -9,6 +9,7 @@ namespace Walkie.Modules.Export.Features;
 
 /// <summary>El <c>.zip</c> de una feature: su <c>.md</c> y las imágenes de sus pantallas (spec export-markdown, criterios 2 y 9).</summary>
 internal sealed class ExportHandlers(
+    IAppDirectory apps,
     IFeatureDirectory features,
     ICatalogDirectory catalog,
     ICanvasReader canvas,
@@ -88,6 +89,29 @@ internal sealed class ExportHandlers(
             featureNames,
             clock.GetUtcNow()));
         return (Slugs.From(feature.Name), context);
+    }
+
+    /// <summary>
+    /// Contexto para IA de toda la app (spec exportar-e-importar, tarea 2): cada feature con su último lienzo guardado y
+    /// todo el catálogo; <c>null</c> si la app no existe.
+    /// </summary>
+    public async Task<(string Slug, AppAiContext Context)?> AppAiContextAsync(Guid appId, CancellationToken ct)
+    {
+        if (await apps.AppNameAsync(appId, ct).ConfigureAwait(false) is not { } appName)
+        {
+            return null;
+        }
+
+        var list = await features.FeaturesOfAppAsync(appId, ct).ConfigureAwait(false);
+        var graphs = new List<(FeatureSummary, System.Text.Json.JsonElement)>();
+        foreach (var feature in list)
+        {
+            graphs.Add((feature, await canvas.GraphOfFeatureAsync(feature.Id, ct).ConfigureAwait(false)));
+        }
+
+        var items = await catalog.AllItemsOfAppAsync(appId, ct).ConfigureAwait(false);
+        var context = MarkdownDocument.BuildAppAiContext(new AppAiContextInput(appId, appName, graphs, items, clock.GetUtcNow()));
+        return (Slugs.From(appName, "app"), context);
     }
 
     private static byte[] Zip(string markdownName, string markdown, IEnumerable<(string Path, byte[] Bytes)> images)

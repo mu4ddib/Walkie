@@ -1,17 +1,27 @@
 import { useEffect, useId, useState } from 'react';
-import { useExportFeature } from '../api/hooks';
+import { useAiContextExport, type AiContextTarget } from '../api/hooks';
 import { saveFile } from '../ui/download';
 import { approxTokens } from './aiContext';
 import '../share/share.css';
 
 /**
- * «Contexto para IA» (spec exportar-e-importar, tarea 1): carga el Markdown de la última versión guardada y deja
- * copiarlo al portapapeles o descargarlo, y descargar el mismo contexto en JSON (para agentes). Muestra su tamaño
- * aproximado en tokens. Con cambios sin guardar avisa que no se incluyen. Esc o «Cerrar» lo cierran.
+ * «Contexto para IA» (spec exportar-e-importar, tareas 1 y 2) de una feature o de la app completa: carga el Markdown
+ * de la última versión guardada y deja copiarlo al portapapeles o descargarlo, y descargar el mismo contexto en JSON
+ * (para agentes). Muestra su tamaño aproximado en tokens. Con cambios sin guardar avisa que no se incluyen. Esc o
+ * «Cerrar» lo cierran.
  */
-export function AiContextDialog({ featureId, dirty, onClose }: { featureId: string; dirty: boolean; onClose: () => void }) {
-  const markdown = useExportFeature(featureId);
-  const json = useExportFeature(featureId);
+export function AiContextDialog({
+  target,
+  dirty = false,
+  onClose,
+}: {
+  target: AiContextTarget;
+  dirty?: boolean;
+  onClose: () => void;
+}) {
+  const markdown = useAiContextExport(target);
+  const json = useAiContextExport(target);
+  const app = target.kind === 'app';
   const { mutate: load } = markdown;
   const [text, setText] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -57,10 +67,12 @@ export function AiContextDialog({ featureId, dirty, onClose }: { featureId: stri
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id={titleId}>Contexto para IA</h2>
+        <h2 id={titleId}>{app ? 'Contexto para IA de la app' : 'Contexto para IA'}</h2>
         <p className="panel-help">
-          Propósito, glosario, componentes con su contrato, flujos de punta a punta, reglas, relaciones y lo que falta
-          documentar. Pégalo en un chat antes de pedirle que construya; el JSON sirve a agentes que leen estructura.
+          {app
+            ? 'Todas las features (cada una con su propósito, componentes, flujos y vacíos), el catálogo compartido con dónde se usa y cómo se conectan las features. '
+            : 'Propósito, glosario, componentes con su contrato, flujos de punta a punta, reglas, relaciones y lo que falta documentar. '}
+          Pégalo en un chat antes de pedirle que construya; el JSON sirve a agentes que leen estructura.
         </p>
         {dirty && (
           <p role="note" className="share-warning">

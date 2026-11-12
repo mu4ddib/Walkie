@@ -358,7 +358,7 @@ export function FeatureEditor({
       </header>
       {sharing && <ShareDialog featureId={featureId} onClose={() => setSharing(false)} />}
       {aiContext && (
-        <AiContextDialog featureId={featureId} dirty={aiContext.dirty} onClose={() => setAiContext(null)} />
+        <AiContextDialog target={{ kind: 'feature', id: featureId }} dirty={aiContext.dirty} onClose={() => setAiContext(null)} />
       )}
       {status.kind === 'conflict' && (
         <div role="alertdialog" aria-labelledby="conflict-title" className="conflict-dialog">

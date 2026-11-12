@@ -1,7 +1,7 @@
 # Spec: Exportar e importar
 
 - Issue padre: #137
-- Estado: en curso (tarea 1 de 7 hecha)
+- Estado: en curso (tareas 1 y 2 de 7 hechas)
 
 ## Objetivo
 
@@ -33,7 +33,7 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
   - relaciones entre features (portales) y componentes compartidos del catálogo;
   - **vacíos detectados**: APIs sin contrato, respuestas sin código, nodos sin conexiones, ramas sin destino, pasos de recorrido rotos, para que la IA pregunte en vez de inventar.
 - [x] Además del `.md`, el export trae `<slug>.context.json` con lo mismo en estructura (ids, contratos, flujos, vacíos) para agentes que construyen código; el `.md` se puede copiar al portapapeles y se muestra su tamaño aproximado en tokens.
-- [ ] Dada la página de una app, entonces se puede exportar el contexto de **toda la app** (todas sus features, el catálogo y el mapa) en un solo documento.
+- [x] Dada la página de una app, entonces se puede exportar el contexto de **toda la app** (todas sus features, el catálogo y el mapa) en un solo documento: índice de features con su propósito, mapa (qué feature lleva a cuál por portales), catálogo con dónde se usa cada componente, resumen de vacíos (también los componentes que ningún lienzo usa) y el contexto de cada feature. En Markdown y en JSON (`walkie-app-ai-context.schema.json`).
 - [x] El mismo lienzo guardado genera el mismo texto (orden estable), salvo la fecha.
 
 ### Imagen y PDF
@@ -66,7 +66,7 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
 ## Impacto en la API
 
 - `GET /api/features/{featureId}/export?format=ai|markdown|pdf|walkie` (el actual queda como `markdown`, por defecto).
-- `GET /api/apps/{appId}/export?format=ai|walkie`.
+- `GET /api/apps/{appId}/export?format=ai|ai-json` (contexto para IA de la app, hecho en la tarea 2; `walkie` llega con la tarea 7).
 - `POST /api/apps/{appId}/import` (multipart con el `.walkie`): 201 con las features creadas; 400 con la ruta del error; 413 si supera el tamaño máximo; `dryRun=true` devuelve el resumen sin crear nada.
 - La imagen (PNG/SVG) se genera en el navegador a partir del lienzo (la imagen del lienzo del PDF la sube el navegador al pedirlo, o la API compone el diagrama: se decide en el ADR); el PDF se genera en la API (ADR para elegir la librería y revisar su licencia).
 

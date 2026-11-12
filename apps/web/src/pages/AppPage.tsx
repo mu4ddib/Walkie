@@ -10,6 +10,7 @@ import { NameForm } from '../ui/NameForm';
 import { catalogPath } from './catalogPaths';
 import { mapPath } from '../workspace/paths';
 import { QueryState } from '../ui/QueryState';
+import { AiContextDialog } from '../canvas/AiContextDialog';
 
 /**
  * Galería de features de una app (spec espacio-de-trabajo, criterios 7 a 9): tarjetas con miniatura,
@@ -24,6 +25,8 @@ export function AppPage() {
   const update = useUpdateFeature(appId);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<FeatureSort>('recent');
+  // «Contexto para IA de la app» (spec exportar-e-importar, tarea 2).
+  const [aiContext, setAiContext] = useState(false);
 
   const byFeature = useMemo(() => new Map((previews.data ?? []).map((p) => [p.featureId, p])), [previews.data]);
   const shown = useMemo(() => {
@@ -53,10 +56,21 @@ export function AppPage() {
           <Link to={catalogPath(appId)}>Catálogo de la app</Link>: APIs, servicios y bases de datos compartidos.
         </p>
         {/* Vista adicional (spec mapa-de-la-app): la galería sigue igual. */}
-        <Link className="pixel-button gallery-map-link" to={mapPath(appId)}>
-          ◇ Ver mapa
-        </Link>
+        <div className="gallery-head-actions">
+          <Link className="pixel-button gallery-map-link" to={mapPath(appId)}>
+            ◇ Ver mapa
+          </Link>
+          <button
+            type="button"
+            className="pixel-button is-ghost gallery-map-link"
+            title="Todas las features, el catálogo y el mapa, para darle a una IA antes de construir"
+            onClick={() => setAiContext(true)}
+          >
+            Contexto para IA
+          </button>
+        </div>
       </header>
+      {aiContext && <AiContextDialog target={{ kind: 'app', id: appId }} onClose={() => setAiContext(false)} />}
       <div className="gallery-create">
         <NameForm
           label="Nueva feature"

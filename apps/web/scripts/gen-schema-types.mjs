@@ -22,6 +22,15 @@ const targets = [
     // Sin `imports`: así declara sus propios `$defs` (component, connection, flow) y los del grafo que usa.
     name: 'WalkieAiContext',
   },
+  {
+    schema: 'walkie-app-ai-context.schema.json',
+    out: 'walkie-app-ai-context.ts',
+    name: 'WalkieAppAiContext',
+    imports: [
+      "import type { Database, Http, Resource } from './walkie-graph';",
+      "import type { WalkieAIContextV0 } from './walkie-ai-context';",
+    ],
+  },
   { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },
   { schema: 'walkie-app-map.schema.json', out: 'walkie-app-map.ts', name: 'WalkieAppMap' },
   // Usa `$ref` a otros schemas: sus tipos se importan de su propio archivo en vez de repetirse.

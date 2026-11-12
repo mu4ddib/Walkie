@@ -24,6 +24,16 @@ internal static class ExportEndpoints
             .Produces(StatusCodes.Status200OK, contentType: "text/markdown")
             .Produces(StatusCodes.Status200OK, contentType: "application/json");
 
+        routes.MapGet("/api/apps/{appId:guid}/export", ExportApp)
+            .WithTags("Export")
+            .WithName("ExportApp")
+            .WithSummary(
+                "Contexto para IA de toda la app (cada feature con su último lienzo guardado, el catálogo y el mapa). "
+                + "format=ai (por defecto): Markdown (<slug>-contexto-ia.md). "
+                + "format=ai-json: JSON (<slug>.app-context.json, packages/schema/walkie-app-ai-context.schema.json).")
+            .Produces(StatusCodes.Status200OK, contentType: "text/markdown")
+            .Produces(StatusCodes.Status200OK, contentType: "application/json");
+
         return routes;
     }
 
@@ -51,11 +61,36 @@ internal static class ExportEndpoints
             return TypedResults.NotFound();
         }
 
-        var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         return format == "ai"
             ? TypedResults.File(
-                utf8.GetBytes(MarkdownDocument.RenderAiContext(ai.Context)), "text/markdown; charset=utf-8", $"{ai.Slug}-contexto-ia.md")
+                Utf8.GetBytes(MarkdownDocument.RenderAiContext(ai.Context)), "text/markdown; charset=utf-8", $"{ai.Slug}-contexto-ia.md")
             : TypedResults.File(
-                utf8.GetBytes(MarkdownDocument.AiContextJson(ai.Context)), "application/json; charset=utf-8", $"{ai.Slug}.context.json");
+                Utf8.GetBytes(MarkdownDocument.AiContextJson(ai.Context)), "application/json; charset=utf-8", $"{ai.Slug}.context.json");
     }
+
+    private static async Task<Results<FileContentHttpResult, NotFound, ValidationProblem>> ExportApp(
+        Guid appId, string? format, ExportHandlers handlers, CancellationToken ct)
+    {
+        format ??= "ai";
+        if (format is not ("ai" or "ai-json"))
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["format"] = ["El formato debe ser ai o ai-json."],
+            });
+        }
+
+        if (await handlers.AppAiContextAsync(appId, ct).ConfigureAwait(false) is not { } ai)
+        {
+            return TypedResults.NotFound();
+        }
+
+        return format == "ai"
+            ? TypedResults.File(
+                Utf8.GetBytes(MarkdownDocument.RenderAppAiContext(ai.Context)), "text/markdown; charset=utf-8", $"{ai.Slug}-contexto-ia.md")
+            : TypedResults.File(
+                Utf8.GetBytes(MarkdownDocument.AppAiContextJson(ai.Context)), "application/json; charset=utf-8", $"{ai.Slug}.app-context.json");
+    }
+
+    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 }

@@ -165,6 +165,51 @@ public sealed class ExportEndpointsTests(WalkieApiFactory factory)
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
     }
 
+    [Fact]
+    public async Task El_contexto_de_la_app_reune_sus_features_y_su_catalogo_en_markdown_y_json()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var app = await CreateAppAsync(client);
+        var login = await CreateFeatureAsync(client, app, "Iniciar sesión");
+        var transferir = await CreateFeatureAsync(client, app, "Transferir");
+        await SaveAsync(client, login, Graph(null, await CreateItemAsync(client, app), transferir));
+
+        var markdown = await client.GetAsync(new Uri($"/api/apps/{app}/export", UriKind.Relative));
+        var json = await client.GetAsync(new Uri($"/api/apps/{app}/export?format=ai-json", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, markdown.StatusCode);
+        Assert.Equal("text/markdown", markdown.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("banca-de-prueba-contexto-ia.md", markdown.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var text = await markdown.Content.ReadAsStringAsync();
+        Assert.StartsWith("# Contexto para IA: Banca de prueba (app completa)", text, StringComparison.Ordinal);
+        Assert.Contains("- **Iniciar sesión** → **Transferir** (por el portal «Transferir»)", text, StringComparison.Ordinal);
+        Assert.Contains("## Feature: Transferir", text, StringComparison.Ordinal);
+
+        Assert.Equal(HttpStatusCode.OK, json.StatusCode);
+        Assert.Equal("banca-de-prueba.app-context.json", json.Content.Headers.ContentDisposition!.FileName?.Trim('"'));
+        var context = await json.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Empty(Walkie.Shared.Schemas.WalkieSchemas.Errors(Walkie.Shared.Schemas.WalkieSchemas.AppAiContext, context));
+        Assert.Equal(2, context.GetProperty("features").GetArrayLength());
+        Assert.Equal("Iniciar sesión", context.GetProperty("catalog")[0].GetProperty("usedBy")[0].GetString());
+    }
+
+    [Fact]
+    public async Task El_contexto_de_la_app_responde_400_con_otro_formato_y_404_si_no_existe()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var app = await CreateAppAsync(client);
+
+        var markdownZip = await client.GetAsync(new Uri($"/api/apps/{app}/export?format=markdown", UriKind.Relative));
+        var missing = await client.GetAsync(new Uri($"/api/apps/{Guid.CreateVersion7()}/export", UriKind.Relative));
+        var anonymous = await factory.CreateClient().GetAsync(new Uri($"/api/apps/{app}/export", UriKind.Relative));
+        var doc = await factory.CreateClient().GetStringAsync(new Uri("/openapi/v1.json", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.BadRequest, markdownZip.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Contains("\"/api/apps/{appId}/export\"", doc, StringComparison.Ordinal);
+    }
+
     private static Uri AiUri(Guid featureId, string format) =>
         new($"/api/features/{featureId}/export?format={format}", UriKind.Relative);
 

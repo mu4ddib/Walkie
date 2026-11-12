@@ -102,3 +102,50 @@ test('contexto para IA: vista previa con su tamaño, copiar y descargar el Markd
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
 });
+
+test('contexto para IA de la app: todas sus features, cómo se conectan y el JSON', async ({ page }) => {
+  await login(page);
+  await openNewFeature(page, 'Transferir');
+  const transferir = /features\/([^/?#]+)/.exec(page.url())![1]!;
+  const appUrl = /^(.*\/apps\/[^/]+)/.exec(page.url())![1]!;
+
+  // Una segunda feature que lleva a «Transferir» por un portal.
+  await page.goto(appUrl);
+  await page.getByLabel('Nueva feature').fill('Inicio');
+  await page.getByRole('button', { name: 'Crear feature' }).click();
+  await page.getByRole('link', { name: 'Inicio', exact: true }).click();
+  await describeFeature(page, 'Inicio', 'Lo primero que ve el cliente.');
+  await seedCanvas(page, {
+    schemaVersion: 0,
+    nodes: {
+      s1: { id: 's1', type: 'screen', title: 'Home' },
+      p1: { id: 'p1', type: 'portal', title: 'Ir a transferir', targetFeatureId: transferir },
+    },
+    edges: { e1: { id: 'e1', from: 's1', to: 'p1', kind: 'navigation' } },
+    layout: { s1: { x: 0, y: 0 }, p1: { x: 320, y: 0 } },
+  });
+
+  await page.goto(appUrl);
+  await page.getByRole('button', { name: 'Contexto para IA' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Contexto para IA de la app' });
+  const preview = dialog.getByLabel('Vista previa del contexto');
+  await expect(preview).toContainText('(app completa)');
+  await expect(preview).toContainText('- **Inicio** → **Transferir** (por el portal «Ir a transferir»)');
+  await expect(preview).toContainText('## Feature: Inicio');
+  await expect(preview).toContainText('## Feature: Transferir');
+  await expect(preview).toContainText('Lo primero que ve el cliente.');
+  await capture(page, '2-contexto-ia-app');
+
+  const json = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Descargar JSON' }).click();
+  const file = await json;
+  expect(file.suggestedFilename()).toMatch(/\.app-context\.json$/);
+  const ai = JSON.parse(await readFile((await file.path())!, 'utf8')) as {
+    format: string;
+    features: { feature: { name: string } }[];
+    map: { links: { from: string; to: string }[] };
+  };
+  expect(ai.format).toBe('walkie-app-ai-context');
+  expect(ai.features.map((f) => f.feature.name)).toEqual(['Inicio', 'Transferir']);
+  expect(ai.map.links).toEqual([{ from: 'Inicio', to: 'Transferir', via: 'Ir a transferir' }]);
+});

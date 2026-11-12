@@ -68,6 +68,22 @@ describe('detalle de app', () => {
     expect(await within(list).findByRole('link', { name: 'Transferir' })).toBeInTheDocument();
   });
 
+  it('«Contexto para IA» de la app abre el diálogo con el contexto de todas las features (spec exportar-e-importar)', async () => {
+    const api = installFakeApi({ apps: [app], features: [feature] });
+    renderRoute('/apps/app-1');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Contexto para IA' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Contexto para IA de la app' });
+    expect(await within(dialog).findByLabelText('Vista previa del contexto')).toHaveTextContent(
+      'Contexto para IA: Banca móvil (app completa)',
+    );
+    expect(String(api.fetchMock.mock.calls.at(-1)![0])).toMatch(/\/api\/apps\/app-1\/export\?format=ai$/);
+    expect(within(dialog).queryByRole('note')).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('avisa si la app no existe', async () => {
     installFakeApi();
     renderRoute('/apps/no-existe');

@@ -37,6 +37,9 @@ public static class WalkieSchemas
     /// <summary><c>walkie-ai-context.schema.json</c>: contexto para IA (lo valida la prueba del export, no un request).</summary>
     public static JsonSchema AiContext { get; } = LoadAfterGraph("walkie-ai-context.schema.json");
 
+    /// <summary><c>walkie-app-ai-context.schema.json</c>: contexto para IA de una app (usa el de la feature).</summary>
+    public static JsonSchema AppAiContext { get; } = LoadAfter(AiContext, "walkie-app-ai-context.schema.json");
+
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
         $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",
@@ -72,6 +75,12 @@ public static class WalkieSchemas
         }
 
         return errors.ToDictionary(e => e.Key, e => e.Value.ToArray());
+    }
+
+    private static JsonSchema LoadAfter(JsonSchema dependency, string name)
+    {
+        _ = dependency; // el schema del que usa $refs tiene que estar registrado antes
+        return JsonSchema.FromText(Load(name), Options);
     }
 
     private static JsonSchema LoadAfterGraph(string name)

@@ -188,6 +188,22 @@ export function installFakeApi(
     }
 
     if (parts[0] !== 'api' || parts[1] !== 'apps') return notFound();
+
+    // /api/apps/{appId}/export — contexto para IA de la app (spec exportar-e-importar, tarea 2), como la API.
+    if (parts[3] === 'export') {
+      const exported = apps.find((x) => x.id === parts[2]);
+      if (!exported) return notFound();
+      const format = url.searchParams.get('format') ?? 'ai';
+      return format === 'ai'
+        ? new Response(`# Contexto para IA: ${exported.name} (app completa)\n\nTodas las features.\n`, {
+            status: 200,
+            headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': 'attachment; filename=app-contexto-ia.md' },
+          })
+        : new Response(JSON.stringify({ format: 'walkie-app-ai-context' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename=app.app-context.json' },
+          });
+    }
     const appId = parts[2];
 
     const withCount = (a: App) => ({ ...a, featureCount: features.filter((f) => f.appId === a.id).length });

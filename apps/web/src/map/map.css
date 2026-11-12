@@ -223,8 +223,14 @@
 }
 
 /* «Ver mapa» en la galería: un acceso más, sin mover lo demás. */
-.gallery-map-link {
+.gallery-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 12px;
+}
+
+.gallery-map-link {
   text-decoration: none;
 }
 

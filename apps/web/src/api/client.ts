@@ -312,6 +312,13 @@ export async function exportFeature(token: string, featureId: string, format: Ex
   return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? EXPORT_FALLBACK_NAMES[format], blob: await res.blob() };
 }
 
+/** Contexto para IA de toda la app (spec exportar-e-importar, tarea 2): `ai` (Markdown) o `ai-json`. */
+export async function exportApp(token: string, appId: string, format: 'ai' | 'ai-json' = 'ai'): Promise<Download> {
+  const res = await send(`/api/apps/${encodeURIComponent(appId)}/export?format=${format}`, { token });
+  const fallback = format === 'ai' ? 'app-contexto-ia.md' : 'app.app-context.json';
+  return { fileName: fileNameOf(res.headers.get('Content-Disposition')) ?? fallback, blob: await res.blob() };
+}
+
 /** `filename*=UTF-8''…` o `filename=…` de un `Content-Disposition`. */
 export function fileNameOf(disposition: string | null): string | undefined {
   if (!disposition) return undefined;

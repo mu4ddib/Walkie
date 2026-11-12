@@ -4,6 +4,7 @@ import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
   createApp,
   createShare,
+  exportApp,
   exportFeature,
   getSharedAssetBlob,
   getSharedFeature,
@@ -306,6 +307,18 @@ export function useSharedFeature(shareToken: string) {
 }
 
 /** Descarga el `.zip` del export de la feature (no cambia nada en la API). */
+/** De qué es el contexto para IA: una feature (su lienzo) o la app completa. */
+export type AiContextTarget = { kind: 'feature'; id: string } | { kind: 'app'; id: string };
+
+/** Descarga el contexto para IA de una feature o de la app, en Markdown (`ai`) o JSON (`ai-json`). */
+export function useAiContextExport(target: AiContextTarget) {
+  const token = useToken();
+  return useMutation({
+    mutationFn: (format: 'ai' | 'ai-json') =>
+      target.kind === 'app' ? exportApp(token, target.id, format) : exportFeature(token, target.id, format),
+  });
+}
+
 export function useExportFeature(featureId: string) {
   const token = useToken();
   return useMutation({ mutationFn: (format?: ExportFormat) => exportFeature(token, featureId, format) });

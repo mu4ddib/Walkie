@@ -25,4 +25,13 @@ internal sealed class FeatureDirectory(AppsDbContext db) : IFeatureDirectory
         await db.Features.Where(f => f.Id == featureId)
             .Join(db.Apps, f => f.AppId, a => a.Id, (f, a) => new FeatureSummary(f.Id, a.Id, a.Name, f.Name, f.Description))
             .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<FeatureSummary>> FeaturesOfAppAsync(Guid appId, CancellationToken cancellationToken)
+    {
+        var list = await db.Features.Where(f => f.AppId == appId)
+            .Join(db.Apps, f => f.AppId, a => a.Id, (f, a) => new FeatureSummary(f.Id, a.Id, a.Name, f.Name, f.Description))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        // Orden estable en memoria: el de la base depende de la intercalación.
+        return [.. list.OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ThenBy(f => f.Name, StringComparer.Ordinal).ThenBy(f => f.Id)];
+    }
 }

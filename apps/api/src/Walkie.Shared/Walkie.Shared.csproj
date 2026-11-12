@@ -14,6 +14,7 @@
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-graph.schema.json" LogicalName="walkie-graph.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-app-map.schema.json" LogicalName="walkie-app-map.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-ai-context.schema.json" LogicalName="walkie-ai-context.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-app-ai-context.schema.json" LogicalName="walkie-app-ai-context.schema.json" />
   </ItemGroup>
 
 </Project>
