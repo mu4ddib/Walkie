@@ -54,15 +54,26 @@
 }
 
 /* Barra de herramientas */
+/*
+ * Anclada arriba y abajo (deja libre la franja de la barra de zoom: 12 px + 38 px + aire) para que su alto sea definido:
+ * con solo max-height, el max-height: 100% de «Recurso» y «Componentes» no se resolvía y el panel pasaba por debajo del
+ * zoom en pantallas bajas (ej. un MacBook de 14"). El hueco no recibe el puntero: el lienzo de abajo sigue usable.
+ */
 .toolbar-dock {
   position: absolute;
   top: 12px;
+  bottom: 60px;
   left: 12px;
   z-index: 5;
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  max-height: calc(100% - 72px);
+  pointer-events: none;
+}
+
+.toolbar-dock > * {
+  max-height: 100%;
+  pointer-events: auto;
 }
 
 .toolbar {

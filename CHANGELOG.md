@@ -94,6 +94,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Estructura inicial del repo: documentación, ADR-0001 (stack), ADR-0002 (lienzos por feature), schema del grafo v0, devcontainer, docker-compose, CI y plantillas de GitHub.
 
 ### Fixed
+- Lienzo: en pantallas bajas (ej. MacBook de 14") la lista de «Recurso» y el panel «Componentes» ya no quedan debajo de la barra de zoom: terminan sobre ella y se desplazan, así se alcanza la última opción («Personalizado»).
 - Mapa de la app: las teclas de vista no hacían nada; ahora, como en el lienzo, 0 muestra todo el mapa, + y − acercan y alejan, y Esc quita la selección (no mientras se escribe).
 - Una conexión pantalla → API marcada como "responde" seguía apuntando a la API: ahora el cambio de tipo invierte el sentido cuando lo contradice (y ofrece deshacerlo).
 - El código de una respuesta se escribía en la condición (`[200]`); ahora tiene campo propio y los lienzos anteriores lo muestran como código.
