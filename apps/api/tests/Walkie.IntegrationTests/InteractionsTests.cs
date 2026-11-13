@@ -32,7 +32,7 @@ public sealed class InteractionsTests(WalkieApiFactory factory)
                     "technology": "PostgreSQL",
                     "exchange": { "command": { "language": "sql", "text": "SELECT saldo FROM cuentas WHERE id = :cuenta" },
                                   "params": [ { "name": "cuenta", "type": "string", "example": "001-123" } ],
-                                  "entities": [ "cuentas" ], "timeoutMs": 3000, "retry": "2 veces",
+                                  "entities": [ "cuentas" ], "timeoutMs": 3000, "retries": 2, "retry": "con espera exponencial",
                                   "errors": [ { "code": "TIMEOUT", "description": "La base no responde" } ] } },
             "e3": { "id": "e3", "from": "b", "to": "a", "kind": "response", "replyTo": "e2", "result": { "type": "success" } },
             "e4": { "id": "e4", "from": "b", "to": "a", "kind": "response", "replyTo": "e2",
@@ -108,6 +108,7 @@ public sealed class InteractionsTests(WalkieApiFactory factory)
         Assert.Contains("SELECT saldo FROM cuentas WHERE id = :cuenta", markdown, StringComparison.Ordinal);
         Assert.Contains("  - Entidades: `cuentas`", markdown, StringComparison.Ordinal);
         Assert.Contains("  - Timeout: 3000 ms", markdown, StringComparison.Ordinal);
+        Assert.Contains("  - Reintentos: 2 · con espera exponencial", markdown, StringComparison.Ordinal);
         Assert.Contains("Base Cuentas → API Cuentas (devuelve: resultado vacío)", markdown, StringComparison.Ordinal);
         Assert.Contains("  - Retorno: resultado vacío: La cuenta no existe", markdown, StringComparison.Ordinal);
         Assert.Contains("API Cuentas → Consulta de saldo (responde 200)", markdown, StringComparison.Ordinal);
@@ -157,6 +158,29 @@ public sealed class InteractionsTests(WalkieApiFactory factory)
         Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.AiContext, doc.RootElement));
         Assert.Contains(doc.RootElement.GetProperty("gaps").EnumerateArray(),
             g => g.GetProperty("kind").GetString() == "operation-conflict" && g.GetProperty("elementId").GetString() == "e2");
+    }
+
+    [Fact]
+    public void El_catalogo_de_operaciones_es_uno_cumple_su_schema_y_cubre_el_enum_del_grafo()
+    {
+        using var catalog = JsonDocument.Parse(WalkieSchemas.OperationsCatalog);
+        Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.OperationsCatalogSchema, catalog.RootElement));
+
+        using var graph = JsonDocument.Parse(File.ReadAllText(SchemaPath("walkie-graph.schema.json")));
+        var enumIds = graph.RootElement.GetProperty("$defs").GetProperty("edge").GetProperty("properties")
+            .GetProperty("operation").GetProperty("enum").EnumerateArray().Select(e => e.GetString()!).Order(StringComparer.Ordinal);
+        Assert.Equal(enumIds, EdgeOperations.Ids.Order(StringComparer.Ordinal));
+    }
+
+    private static string SchemaPath(string name)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "packages", "schema")))
+        {
+            dir = dir.Parent;
+        }
+
+        return Path.Combine(dir!.FullName, "packages", "schema", name);
     }
 
     private static ExportInput Input()

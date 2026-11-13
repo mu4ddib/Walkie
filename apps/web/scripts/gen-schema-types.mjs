@@ -33,6 +33,7 @@ const targets = [
       "import type { WalkieAIContextV0 } from './walkie-ai-context';",
     ],
   },
+  { schema: 'walkie-operations.schema.json', out: 'walkie-operations-catalog.ts', name: 'WalkieOperationsCatalog' },
   { schema: 'walkie-module-summary.schema.json', out: 'walkie-module-summary.ts', name: 'WalkieModuleSummary' },
   { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },
   { schema: 'walkie-app-map.schema.json', out: 'walkie-app-map.ts', name: 'WalkieAppMap' },
@@ -78,6 +79,29 @@ for (const target of targets) {
     const current = await readFile(outPath, 'utf8').catch(() => '');
     if (current !== ts) {
       console.error(`src/schema/${target.out} está desactualizado. Ejecuta \`pnpm gen:schema\`.`);
+      stale = true;
+    }
+  } else {
+    await writeFile(outPath, ts);
+    console.log(`Escrito ${outPath}`);
+  }
+}
+
+// Datos (no solo tipos): el catálogo de operaciones de las conexiones (spec interacciones, ADR-0011), la misma fuente
+// que embebe la API. Se escribe con su tipo y los datos tal cual, para que la web no repita nada.
+{
+  const dataPath = fileURLToPath(new URL('../../../packages/schema/walkie-operations.json', import.meta.url));
+  const outPath = fileURLToPath(new URL('../src/schema/walkie-operations.ts', import.meta.url));
+  const data = JSON.parse(await readFile(dataPath, 'utf8'));
+  delete data.$schema;
+  const banner =
+    '/* Generado desde packages/schema/walkie-operations.json. No editar a mano: `pnpm gen:schema`. */\n' +
+    "import type { WalkieOperationsCatalog } from './walkie-operations-catalog';\n\n";
+  const ts = `${banner}export const WALKIE_OPERATIONS: WalkieOperationsCatalog = ${JSON.stringify(data, null, 2)};\n`;
+  if (check) {
+    const current = await readFile(outPath, 'utf8').catch(() => '');
+    if (current !== ts) {
+      console.error('src/schema/walkie-operations.ts está desactualizado. Ejecuta `pnpm gen:schema`.');
       stale = true;
     }
   } else {

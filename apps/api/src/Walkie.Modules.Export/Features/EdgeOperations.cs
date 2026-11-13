@@ -1,69 +1,45 @@
 using System.Text.Json;
+using Walkie.Shared.Schemas;
 
 namespace Walkie.Modules.Export.Features;
 
 /// <summary>
-/// Operaciones de una conexión para el export (spec interacciones, ADR-0011): el mismo catálogo que
-/// <c>apps/web/src/interactions/operations.ts</c> (nombre, verbo y verbo del retorno). La operación es la fuente de
-/// verdad; sin ella, la conexión se describe por su tipo como antes.
+/// Operaciones de una conexión para el export (spec interacciones, ADR-0011). Lee el catálogo único
+/// <c>packages/schema/walkie-operations.json</c> (el mismo del que se genera la web): nombre, verbo, verbo del retorno
+/// y acceso a datos. La operación es la fuente de verdad; sin ella, la conexión se describe por su tipo como antes.
 /// </summary>
 internal static class EdgeOperations
 {
-    private sealed record Operation(string Name, string Verb, string? ReturnVerb, string? Access = null, bool OneWayReturns = false);
+    private sealed record Operation(string Name, string Verb, string? ReturnVerb, string? Access, bool OneWayReturns);
 
-    private static readonly Dictionary<string, Operation> Catalog = new(StringComparer.Ordinal)
-    {
-        ["http.request"] = new("Enviar solicitud HTTP", "llama", "responde"),
-        ["service.invoke"] = new("Invocar", "invoca", "devuelve"),
-        ["db.query"] = new("Consultar", "consulta", "devuelve", "read"),
-        ["db.write"] = new("Escribir", "escribe", "devuelve", "write"),
-        ["db.insert"] = new("Insertar", "inserta", "devuelve", "write"),
-        ["db.update"] = new("Actualizar", "actualiza", "devuelve", "write"),
-        ["db.delete"] = new("Eliminar registros", "elimina", "devuelve", "write"),
-        ["db.procedure"] = new("Ejecutar procedimiento", "ejecuta", "devuelve"),
-        ["cache.get"] = new("Obtener de caché", "obtiene", "devuelve", "read"),
-        ["cache.set"] = new("Guardar en caché", "guarda", "devuelve", "write"),
-        ["cache.delete"] = new("Eliminar de caché", "invalida", "devuelve", "write"),
-        ["storage.read"] = new("Leer objeto", "lee", "devuelve", "read"),
-        ["storage.write"] = new("Escribir objeto", "escribe", "devuelve", "write"),
-        ["storage.list"] = new("Listar objetos", "lista", "devuelve", "read"),
-        ["storage.delete"] = new("Eliminar objeto", "elimina", "devuelve", "write"),
-        ["message.publish"] = new("Publicar", "publica", "confirma", OneWayReturns: true),
-        ["message.deliver"] = new("Entregar", "entrega", "reconoce", OneWayReturns: true),
-        ["message.consume"] = new("Consumir", "consume", "reconoce", OneWayReturns: true),
-        ["message.reply"] = new("Responder (asíncrono)", "responde", null),
-        ["stream.open"] = new("Abrir flujo", "abre flujo", "emite"),
-        ["stream.send"] = new("Enviar mensaje al flujo", "envía", null),
-        ["stream.receive"] = new("Recibir mensaje del flujo", "recibe", null),
-        ["stream.close"] = new("Finalizar flujo", "cierra", null),
-        ["relation.uses"] = new("Usa", "usa", null),
-        ["relation.depends"] = new("Depende de", "depende de", null),
-        ["navigation"] = new("Navegar", "navega", null),
-        ["custom"] = new("Operación personalizada", "opera", "devuelve"),
-    };
+    private static readonly Dictionary<string, Operation> Catalog;
 
-    public static readonly Dictionary<string, string> ResultLabels = new(StringComparer.Ordinal)
-    {
-        ["success"] = "resultado",
-        ["empty"] = "resultado vacío",
-        ["affected"] = "filas afectadas",
-        ["ack"] = "confirmación",
-        ["nack"] = "rechazo",
-        ["hit"] = "hit",
-        ["miss"] = "miss",
-        ["content"] = "contenido",
-        ["error"] = "error",
-        ["message"] = "mensaje",
-        ["end"] = "fin del flujo",
-    };
+    public static readonly Dictionary<string, string> ResultLabels;
 
-    public static readonly Dictionary<string, string> PatternLabels = new(StringComparer.Ordinal)
+    public static readonly Dictionary<string, string> PatternLabels;
+
+    static EdgeOperations()
     {
-        ["request-response"] = "solicitud y respuesta",
-        ["one-way"] = "envío unidireccional",
-        ["pub-sub"] = "publicación / suscripción",
-        ["stream"] = "streaming",
-    };
+        using var doc = JsonDocument.Parse(WalkieSchemas.OperationsCatalog);
+        var root = doc.RootElement;
+        Catalog = root.GetProperty("operations").EnumerateArray().ToDictionary(
+            o => o.GetProperty("id").GetString()!,
+            o => new Operation(
+                o.GetProperty("name").GetString()!,
+                o.GetProperty("verb").GetString()!,
+                o.GetProperty("returns").ValueKind == JsonValueKind.Object
+                    ? o.GetProperty("returns").GetProperty("verb").GetString()
+                    : null,
+                o.TryGetProperty("access", out var access) ? access.GetString() : null,
+                o.TryGetProperty("oneWayReturns", out var oneWay) && oneWay.GetBoolean()),
+            StringComparer.Ordinal);
+        ResultLabels = Labels(root.GetProperty("results"), lower: false);
+        // En una línea de texto («solicitud y respuesta · PostgreSQL») el patrón va en minúsculas.
+        PatternLabels = Labels(root.GetProperty("patterns"), lower: true);
+    }
+
+    /// <summary>Ids del catálogo (la prueba los compara con el enum <c>operation</c> del grafo).</summary>
+    public static IReadOnlyCollection<string> Ids => Catalog.Keys;
 
     /// <summary>Operación explícita de la conexión (<c>operation</c>), o <c>null</c>.</summary>
     public static string? Of(JsonElement edge) =>
@@ -73,7 +49,7 @@ internal static class EdgeOperations
     public static string? Name(JsonElement edge) => Of(edge) switch
     {
         null => null,
-        "custom" => Custom(edge) ?? Catalog["custom"].Name,
+        "custom" => Custom(edge) ?? Catalog["custom"].Name.TrimEnd('…'),
         var id => Catalog.TryGetValue(id, out var op) ? op.Name : id,
     };
 
@@ -105,6 +81,12 @@ internal static class EdgeOperations
             "writes" => "write",
             _ => null,
         };
+
+    private static Dictionary<string, string> Labels(JsonElement labels, bool lower) =>
+        labels.EnumerateObject().ToDictionary(
+            p => p.Name,
+            p => lower ? p.Value.GetString()!.ToLowerInvariant() : p.Value.GetString()!,
+            StringComparer.Ordinal);
 
     private static string? Custom(JsonElement edge) =>
         edge.TryGetProperty("customOperation", out var name) && name.GetString() is { Length: > 0 } text ? text : null;

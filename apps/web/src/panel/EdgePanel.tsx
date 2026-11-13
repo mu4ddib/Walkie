@@ -2,7 +2,15 @@ import { useId, useState } from 'react';
 import { endFamily, interfaceTarget, moduleTarget, refTarget, useCanvasCatalog } from '../catalog/catalogContext';
 import { ModuleEndsSection } from './ModuleEndsSection';
 import { LIMITS, PARAM_LABELS, PARAM_PLACES, normalizeEdgeRequest, type EdgeRequest } from '../contracts/contracts';
-import { edgeDisplay, endpointText, interactionEdges, responseStatus, scenariosOf, statusTone } from '../edges/edgeMeta';
+import {
+  edgeDisplay,
+  endpointText,
+  innerCalls,
+  interactionEdges,
+  responseStatus,
+  scenariosOf,
+  statusTone,
+} from '../edges/edgeMeta';
 import { useChangeEdgeKind } from '../edges/useChangeEdgeKind';
 import { OPERATIONS, effectiveOperation, operationName, patternOf } from '../interactions/operations';
 import { ExchangeSections, OperationField, ReturnTypeFields, ReturnsSection } from './InteractionSections';
@@ -29,7 +37,11 @@ export interface EdgePanelActions {
   /**
    * "Previsualizar interacción": recorre la conexión y el retorno del escenario elegido (o el timeout) en el lienzo.
    */
-  preview?: { activeEdgeId: string | null; onStart: (edgeId: string, scenario?: string) => void; onStop: () => void };
+  preview?: {
+    activeEdgeId: string | null;
+    onStart: (edgeId: string, scenario?: string, chain?: boolean) => void;
+    onStop: () => void;
+  };
   /** Recorridos (spec recorridos-y-grupos, parte 3): crear uno desde esta conexión o abrir los que la usan. */
   flows?: { onCreate: (edgeId: string) => void; onOpen: (tourId: string) => void };
 }
@@ -50,6 +62,8 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
   // Aviso de que el cambio a retorno invirtió el sentido (con su "Deshacer").
   const [reversed, setReversed] = useState(false);
   const [scenario, setScenario] = useState('');
+  // Con lo que ocurre dentro del destino (sus llamadas síncronas): Pantalla → API → BD → API → Pantalla.
+  const [chain, setChain] = useState(true);
   if (!edge) return null;
 
   const from = nodes[edge.from];
@@ -80,7 +94,8 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
   const title = (node: Node | undefined) =>
     node ? (refTarget(node, items)?.title ?? moduleTarget(node, modules)?.name ?? node.title) : '—';
   const scenarios = scenariosOf(edges, id);
-  const exchange = interactionEdges(edges, id, scenario || undefined);
+  const inner = innerCalls(edges, edge.kind === 'response' && edge.replyTo ? edge.replyTo : id);
+  const exchange = interactionEdges(edges, id, scenario || undefined, { chain });
   const previewing = !!preview?.activeEdgeId && exchange.includes(preview.activeEdgeId);
   const defaultLabel = endpointText(edge, targetHttp) || (op ? operationName(edge) : undefined);
   const target = to && (refTarget(to, items)?.database ?? to.database);
@@ -129,12 +144,18 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
                   ? 'Recorre en el lienzo la ida y luego la vuelta'
                   : 'Destaca los extremos y recorre la conexión en el lienzo'
               }
-              onClick={() => (previewing ? preview.onStop() : preview.onStart(id, scenario || undefined))}
+              onClick={() => (previewing ? preview.onStop() : preview.onStart(id, scenario || undefined, chain))}
             >
               {previewing ? '■ Detener' : '▶ Previsualizar interacción'}
             </button>
           )}
         </div>
+        {preview && inner.length > 0 && (
+          <label className="contract-check">
+            <input type="checkbox" checked={chain} onChange={(e) => setChain(e.target.checked)} />
+            Con lo que ocurre dentro ({inner.length === 1 ? '1 llamada' : `${inner.length} llamadas`} de «{title(nodes[inner[0]!.from])}»)
+          </label>
+        )}
         {preview && scenarios.length > 1 && (
           <div className="panel-field">
             <label htmlFor={scenarioId}>Escenario</label>

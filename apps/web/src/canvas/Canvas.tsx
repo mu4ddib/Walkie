@@ -28,7 +28,7 @@ import {
   type CanvasCatalog,
 } from '../catalog/catalogContext';
 import { InterfacePicker, type InterfaceChoice } from '../modules/InterfacePicker';
-import { OPERATIONS, effectiveOperation, suggestOperations, type OperationId } from '../interactions/operations';
+import { OPERATIONS, effectiveOperation, legacyOperation, suggestOperations, type OperationId } from '../interactions/operations';
 import { ExtractModuleDialog } from '../modules/ExtractModuleDialog';
 import { interfaceHandle, interfaceOfHandle, placeableModules } from '../modules/moduleMeta';
 import type { InterfaceRef, Node as GraphNode } from '../schema/walkie-graph';
@@ -83,7 +83,7 @@ import { labelSize, placePairLabels, type PlacedLabel } from '../edges/labels';
 import { laneOffsets, laneRoute } from '../edges/lanes';
 import { computePorts, staggerBends, type Side } from '../edges/ports';
 import { defaultRoute, routeAround, type Point } from '../edges/route';
-import { TIMEOUT_SCENARIO, edgeDisplay, edgeDisplayText, interactionEdges } from '../edges/edgeMeta';
+import { edgeDisplay, edgeDisplayText, previewHint, previewSteps, type PreviewStep } from '../edges/edgeMeta';
 import { NodeMenu } from './NodeMenu';
 import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
 import { captureCanvas, framing, onCanvasImageRequest } from './canvasImage';
@@ -99,6 +99,8 @@ const NODE_SIZE = { width: 184, height: 72 } as const;
 const LANE_GAP = 24;
 /** Lo que dura cada tramo de "Previsualizar interacción" (la ida, luego la vuelta). */
 const PREVIEW_STEP_MS = 1800;
+/** Una espera de timeout se muestra como mucho este tiempo (el valor real va en la pista). */
+const PREVIEW_WAIT_MAX_MS = 5000;
 /** Cuánto se ofrecen las operaciones sugeridas de una conexión recién creada. */
 const SUGGESTION_MS = 12000;
 /** Separación mínima (px) entre las etiquetas de conexiones que unen el mismo par. */
@@ -217,8 +219,10 @@ function CanvasInner({
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   // "Previsualizar interacción": las conexiones del intercambio, en orden (ida y vueltas), y la que se recorre ahora.
   // Con `timeout`, el escenario elegido es que no llega respuesta: se recorre la ida y termina ahí (spec interacciones).
-  const [preview, setPreview] = useState<{ ids: string[]; index: number; timeout?: boolean } | null>(null);
-  const previewId = preview?.ids[preview.index] ?? null;
+  // Tramos de la previsualización (recorrer, esperar, timeout) y las conexiones distintas que toca.
+  const [preview, setPreview] = useState<{ steps: PreviewStep[]; ids: string[]; index: number } | null>(null);
+  const previewStep = preview?.steps[preview.index];
+  const previewId = previewStep?.edgeId ?? null;
   // Modo tour (spec modo-tour) o reproducción de un recorrido: qué tour, en qué paso y fase; el lienzo queda de solo
   // lectura. Es estado de visualización: el store (y el autoguardado) no lo ven.
   const tourAtStart = useGraphStore((s) => (initialPlay ? s.tours[initialPlay.tourId] : undefined));
@@ -296,10 +300,10 @@ function CanvasInner({
   );
 
   const startPreview = useCallback(
-    (edgeId: string, scenario?: string) => {
-      const ids = interactionEdges(graphEdges, edgeId, scenario);
+    (edgeId: string, scenario?: string, chain = true) => {
+      const steps = previewSteps(graphEdges, edgeId, scenario, { chain });
       setSuggestion(null);
-      setPreview(ids.length > 0 ? { ids, index: 0, timeout: scenario === TIMEOUT_SCENARIO || undefined } : null);
+      setPreview(steps.length > 0 ? { steps, ids: [...new Set(steps.map((s) => s.edgeId))], index: 0 } : null);
     },
     [graphEdges],
   );
@@ -308,8 +312,11 @@ function CanvasInner({
   useEffect(() => {
     if (!preview) return;
     const timer = setTimeout(
-      () => setPreview((p) => (p && p.index + 1 < p.ids.length ? { ...p, index: p.index + 1 } : null)),
-      PREVIEW_STEP_MS,
+      () => setPreview((p) => (p && p.index + 1 < p.steps.length ? { ...p, index: p.index + 1 } : null)),
+      // Una espera dura lo que su timeout (acotado); sin `timeoutMs`, lo de un tramo.
+      ((wait) => (wait !== undefined ? Math.min(wait || PREVIEW_STEP_MS, PREVIEW_WAIT_MAX_MS) : PREVIEW_STEP_MS))(
+        preview.steps[preview.index]?.wait,
+      ),
     );
     return () => clearTimeout(timer);
   }, [preview]);
@@ -1194,6 +1201,20 @@ function CanvasInner({
     },
     [connect, graphNodes, catalog.items, catalog.modules, store],
   );
+  // Conexiones anteriores (spec interacciones): las de significado inequívoco reciben su operación al abrir el lienzo
+  // (y cuando llega el catálogo, que decide qué es un `ref`), sin marcar cambios; las ambiguas o contradictorias quedan
+  // para revisar en el inspector.
+  useEffect(() => {
+    const operations: Record<string, OperationId> = {};
+    for (const edge of Object.values(graphEdges)) {
+      if (edge.operation || edge.kind === 'response') continue;
+      const from = endFamily(graphNodes[edge.from], edge.fromInterface, catalog.items, catalog.modules);
+      const to = endFamily(graphNodes[edge.to], edge.toInterface, catalog.items, catalog.modules);
+      const operation = legacyOperation(edge, from, to);
+      if (operation) operations[edge.id] = operation;
+    }
+    if (Object.keys(operations).length > 0) store.getState().migrateOperations(operations);
+  }, [graphEdges, graphNodes, catalog.items, catalog.modules, store]);
   // Sugerencias de operación de la conexión recién creada: se elige con un clic o se ignora (Esc o al rato).
   const [suggestion, setSuggestion] = useState<{ edgeId: string; options: OperationId[] } | null>(null);
   const setOperation = useSetOperation();
@@ -1539,11 +1560,13 @@ function CanvasInner({
               pickFrom ? ` (resaltadas, las que siguen desde «${graphNodes[pickFrom]?.title ?? ''}»)` : ''
             }. Esc termina.`
           : preview && previewEdge?.data?.display
-      ? `Previsualizando${preview.ids.length > 1 ? ` · ${preview.index + 1} de ${preview.ids.length}` : ''}: ${
-          graphNodes[graphEdges[previewEdge.id]!.from]?.title ?? ''
-        } → ${graphNodes[graphEdges[previewEdge.id]!.to]?.title ?? ''} (${edgeDisplayText(previewEdge.data.display)})${
-          preview.timeout && preview.index === preview.ids.length - 1 ? ' · no llega respuesta: termina en timeout' : ''
-        } · Esc termina`
+      ? previewHint(
+          preview.index,
+          preview.steps,
+          graphNodes[graphEdges[previewEdge.id]!.from]?.title ?? '',
+          graphNodes[graphEdges[previewEdge.id]!.to]?.title ?? '',
+          edgeDisplayText(previewEdge.data.display),
+        )
       : readOnly
         ? 'Solo lectura: desplázate, acerca y recorre los tours.'
         : null;

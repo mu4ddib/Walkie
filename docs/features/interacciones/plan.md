@@ -11,6 +11,7 @@ Basado en `spec.md` (aprobada el 2026-11-13). ADR-0011.
 5. [x] Previsualizar por escenario; recorridos con pasos simultáneos y timeout.
 6. [x] Export (Markdown, contexto para IA, PDF).
 7. [x] Pruebas (store, catálogo, migración, inspector, API, E2E) y docs.
+8. [x] Limitaciones de la primera versión: catálogo único en `packages/schema`, migración de conexiones anteriores, cadena completa al previsualizar, timeout y reintentos simulados, caché de rodeos y avisos de sintaxis SQL/gRPC.
 
 ## Estado
 

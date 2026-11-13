@@ -264,6 +264,7 @@ export function normalizeExchange(x: EdgeExchange | undefined): EdgeExchange | u
       })
       .filter((e): e is NonNullable<typeof e> => !!e) as EdgeExchange['errors'],
     timeoutMs: timeout,
+    retries: typeof x.retries === 'number' && Number.isInteger(x.retries) && x.retries >= 0 ? Math.min(x.retries, 10) : undefined,
     retry: text(x.retry, 500),
     channel: text(x.channel, 200),
     message: text(x.message, 120),

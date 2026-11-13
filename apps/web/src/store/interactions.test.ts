@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advance, firstPhase, goTo, stepGroup } from '../tours/flowPlayback';
+import { FLOW_TIMEOUT_MAX_MS, FLOW_TIMING, advance, firstPhase, goTo, phaseDuration, stepGroup } from '../tours/flowPlayback';
 import { stepIssues } from '../tours/flows';
 import { createGraphStore, toGraph } from './graphStore';
 
@@ -44,6 +44,26 @@ describe('operación de una conexión', () => {
     });
     s().updateEdge(id, { exchange: { params: [{ name: '' }] } });
     expect(s().edges[id]!.exchange).toBeUndefined();
+  });
+});
+
+describe('migración de conexiones anteriores', () => {
+  it('fija la operación sin marcar cambios ni sumar un paso al historial; el próximo guardado la lleva', async () => {
+    const { s } = setup();
+    s().loadGraph({
+      schemaVersion: 0,
+      version: 4,
+      nodes: { a: { id: 'a', type: 'api', title: 'A' }, b: { id: 'b', type: 'database', title: 'B' } },
+      edges: { e: { id: 'e', from: 'a', to: 'b', kind: 'reads', data: { operation: 'read', entities: ['cuentas'] } } },
+      layout: { a: { x: 0, y: 0 }, b: { x: 300, y: 0 } },
+    });
+    await tick();
+    s().migrateOperations({ e: 'db.query' });
+    expect(s().edges.e).toMatchObject({ kind: 'request', operation: 'db.query', exchange: { entities: ['cuentas'] } });
+    expect(s().edges.e!.data).toBeUndefined();
+    expect(s().dirty).toBe(false);
+    expect(s().canUndo).toBe(false);
+    expect(toGraph(s()).edges.e!.operation).toBe('db.query');
   });
 });
 
@@ -158,5 +178,16 @@ describe('recorridos: pasos simultáneos y timeout', () => {
     expect(goTo(t, { tourId: tour, step: 0, phase: 'target', mode: 'paused' }, 1).step).toBe(0);
     // Ni el paso simultáneo ni el que sigue desde el destino de cualquiera del grupo son saltos.
     expect(stepIssues(t, s().edges)).toEqual([[], [], []]);
+  });
+
+  it('la espera de un paso con timeout dura su timeoutMs (acotado) y no lo de llegar', () => {
+    const { s, tour } = flow();
+    s().setStepFlags(tour, 2, { timeout: true });
+    const t = s().tours[tour]!;
+    const at = (wait?: number) => phaseDuration(t, { tourId: tour, step: 2, phase: 'target', mode: 'play' }, 1, wait);
+    expect(at()).toBe(FLOW_TIMING.target);
+    expect(at(3000)).toBe(3000);
+    expect(at(60000)).toBe(FLOW_TIMEOUT_MAX_MS);
+    expect(phaseDuration(t, { tourId: tour, step: 1, phase: 'target', mode: 'play' }, 1, 3000)).toBe(FLOW_TIMING.target);
   });
 });

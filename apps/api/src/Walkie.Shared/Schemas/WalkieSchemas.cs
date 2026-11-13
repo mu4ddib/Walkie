@@ -52,6 +52,15 @@ public static class WalkieSchemas
     /// <summary><c>walkie-app-ai-context.schema.json</c>: contexto para IA de una app (usa el de la feature).</summary>
     public static JsonSchema AppAiContext { get; } = LoadAfter(AiContext, "walkie-app-ai-context.schema.json");
 
+    /// <summary><c>walkie-operations.schema.json</c>: forma del catálogo de operaciones de las conexiones.</summary>
+    public static JsonSchema OperationsCatalogSchema { get; } = JsonSchema.FromText(Load("walkie-operations.schema.json"), Options);
+
+    /// <summary>
+    /// <c>walkie-operations.json</c>: el catálogo de operaciones (spec interacciones, ADR-0011), la misma fuente que
+    /// genera la web; el export lo lee de aquí.
+    /// </summary>
+    public static string OperationsCatalog { get; } = Load("walkie-operations.json");
+
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
         $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",

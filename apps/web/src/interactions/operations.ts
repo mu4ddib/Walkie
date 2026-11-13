@@ -1,6 +1,7 @@
 import type { Edge } from '../schema/walkie-graph';
 import type { EdgeKind, NodeType } from '../store/graphStore';
 import type { ResourceKind } from '../nodes/resourceMeta';
+import { WALKIE_OPERATIONS } from '../schema/walkie-operations';
 
 /**
  * Catálogo de operaciones de una conexión (spec interacciones, ADR-0011): la única definición de qué es cada operación
@@ -54,113 +55,15 @@ export interface OperationProfile {
   sections: Section[];
   /** Acceso a datos que implica (para detectar contradicciones con el `data.operation` anterior). */
   access?: 'read' | 'write';
+  /** Admite retorno aunque el patrón sea unidireccional (confirmaciones de mensajería). */
+  oneWayReturns?: boolean;
 }
 
-const RESULT = (types: ResultType[]): ReturnProfile => ({ action: 'Añadir resultado', verb: 'devuelve', types });
-const QUERY: Section[] = ['command', 'params', 'entities', 'result', 'errors', 'policy'];
-const WRITE: Section[] = ['command', 'params', 'entities', 'errors', 'policy'];
-
-const PROFILES: OperationProfile[] = [
-  {
-    id: 'http.request',
-    name: 'Enviar solicitud HTTP',
-    verb: 'llama',
-    group: 'API',
-    patterns: ['request-response', 'one-way'],
-    returns: { action: 'Añadir respuesta', verb: 'responde', types: ['success', 'error'] },
-    sections: ['http', 'result', 'errors', 'policy'],
-  },
-  {
-    id: 'service.invoke',
-    name: 'Invocar',
-    verb: 'invoca',
-    group: 'Servicio o función',
-    patterns: ['request-response', 'one-way'],
-    returns: RESULT(['success', 'error']),
-    sections: ['grpc', 'params', 'result', 'errors', 'policy'],
-  },
-  { id: 'db.query', name: 'Consultar', verb: 'consulta', group: 'Base de datos', patterns: ['request-response'], returns: RESULT(['success', 'empty', 'error']), sections: QUERY, access: 'read' },
-  { id: 'db.write', name: 'Escribir', verb: 'escribe', group: 'Base de datos', patterns: ['request-response'], returns: RESULT(['affected', 'ack', 'error']), sections: WRITE, access: 'write' },
-  { id: 'db.insert', name: 'Insertar', verb: 'inserta', group: 'Base de datos', patterns: ['request-response'], returns: RESULT(['affected', 'ack', 'error']), sections: WRITE, access: 'write' },
-  { id: 'db.update', name: 'Actualizar', verb: 'actualiza', group: 'Base de datos', patterns: ['request-response'], returns: RESULT(['affected', 'error']), sections: WRITE, access: 'write' },
-  { id: 'db.delete', name: 'Eliminar registros', verb: 'elimina', group: 'Base de datos', patterns: ['request-response'], returns: RESULT(['affected', 'error']), sections: WRITE, access: 'write' },
-  {
-    id: 'db.procedure',
-    name: 'Ejecutar procedimiento',
-    verb: 'ejecuta',
-    group: 'Base de datos',
-    patterns: ['request-response'],
-    returns: RESULT(['success', 'empty', 'affected', 'error']),
-    sections: QUERY,
-  },
-  { id: 'cache.get', name: 'Obtener de caché', verb: 'obtiene', group: 'Caché', patterns: ['request-response'], returns: RESULT(['hit', 'miss', 'error']), sections: ['command', 'params', 'result', 'errors', 'policy'], access: 'read' },
-  { id: 'cache.set', name: 'Guardar en caché', verb: 'guarda', group: 'Caché', patterns: ['request-response', 'one-way'], returns: RESULT(['ack', 'error']), sections: ['command', 'params', 'errors', 'policy'], access: 'write' },
-  { id: 'cache.delete', name: 'Eliminar de caché', verb: 'invalida', group: 'Caché', patterns: ['request-response', 'one-way'], returns: RESULT(['ack', 'error']), sections: ['command', 'params', 'errors', 'policy'], access: 'write' },
-  { id: 'storage.read', name: 'Leer objeto', verb: 'lee', group: 'Almacenamiento', patterns: ['request-response'], returns: RESULT(['content', 'miss', 'error']), sections: ['params', 'result', 'errors', 'policy'], access: 'read' },
-  { id: 'storage.write', name: 'Escribir objeto', verb: 'escribe', group: 'Almacenamiento', patterns: ['request-response', 'one-way'], returns: RESULT(['ack', 'error']), sections: ['params', 'errors', 'policy'], access: 'write' },
-  { id: 'storage.list', name: 'Listar objetos', verb: 'lista', group: 'Almacenamiento', patterns: ['request-response'], returns: RESULT(['success', 'empty', 'error']), sections: ['params', 'result', 'errors', 'policy'], access: 'read' },
-  { id: 'storage.delete', name: 'Eliminar objeto', verb: 'elimina', group: 'Almacenamiento', patterns: ['request-response', 'one-way'], returns: RESULT(['ack', 'error']), sections: ['params', 'errors', 'policy'], access: 'write' },
-  {
-    id: 'message.publish',
-    name: 'Publicar',
-    verb: 'publica',
-    group: 'Mensajería',
-    patterns: ['pub-sub', 'one-way'],
-    returns: { action: 'Añadir confirmación del broker', verb: 'confirma', types: ['ack', 'nack'] },
-    sections: ['messaging', 'errors'],
-  },
-  {
-    id: 'message.deliver',
-    name: 'Entregar',
-    verb: 'entrega',
-    group: 'Mensajería',
-    patterns: ['pub-sub', 'one-way'],
-    returns: { action: 'Añadir reconocimiento del consumidor', verb: 'reconoce', types: ['ack', 'nack'] },
-    sections: ['messaging'],
-  },
-  {
-    id: 'message.consume',
-    name: 'Consumir',
-    verb: 'consume',
-    group: 'Mensajería',
-    patterns: ['pub-sub', 'one-way'],
-    returns: { action: 'Añadir reconocimiento', verb: 'reconoce', types: ['ack', 'nack'] },
-    sections: ['messaging'],
-  },
-  {
-    id: 'message.reply',
-    name: 'Responder (asíncrono)',
-    verb: 'responde',
-    group: 'Mensajería',
-    patterns: ['one-way'],
-    returns: null,
-    sections: ['messaging', 'correlation'],
-  },
-  {
-    id: 'stream.open',
-    name: 'Abrir flujo',
-    verb: 'abre flujo',
-    group: 'Streaming',
-    patterns: ['stream'],
-    returns: { action: 'Añadir mensaje del flujo', verb: 'emite', types: ['message', 'end', 'error'] },
-    sections: ['grpc', 'messaging', 'params', 'errors', 'policy'],
-  },
-  { id: 'stream.send', name: 'Enviar mensaje al flujo', verb: 'envía', group: 'Streaming', patterns: ['stream'], returns: null, sections: ['messaging'] },
-  { id: 'stream.receive', name: 'Recibir mensaje del flujo', verb: 'recibe', group: 'Streaming', patterns: ['stream'], returns: null, sections: ['messaging'] },
-  { id: 'stream.close', name: 'Finalizar flujo', verb: 'cierra', group: 'Streaming', patterns: ['stream'], returns: null, sections: [] },
-  { id: 'relation.uses', name: 'Usa', verb: 'usa', group: 'Relación general', patterns: ['one-way'], returns: null, sections: [] },
-  { id: 'relation.depends', name: 'Depende de', verb: 'depende de', group: 'Relación general', patterns: ['one-way'], returns: null, sections: [] },
-  { id: 'navigation', name: 'Navegar', verb: 'navega', group: 'Interfaz', patterns: ['one-way'], returns: null, sections: [] },
-  {
-    id: 'custom',
-    name: 'Operación personalizada…',
-    verb: 'opera',
-    group: 'Otra',
-    patterns: ['request-response', 'one-way', 'pub-sub', 'stream'],
-    returns: { action: 'Añadir retorno', verb: 'devuelve', types: ['success', 'empty', 'affected', 'ack', 'nack', 'hit', 'miss', 'content', 'error', 'message', 'end'] },
-    sections: ['command', 'params', 'entities', 'result', 'errors', 'policy', 'messaging', 'correlation'],
-  },
-];
+/**
+ * Los perfiles salen de `packages/schema/walkie-operations.json` (generado en `src/schema/walkie-operations.ts`): la
+ * misma fuente que usa la API para el export. Aquí solo se tipan.
+ */
+const PROFILES = WALKIE_OPERATIONS.operations as unknown as OperationProfile[];
 
 export const OPERATIONS: Record<OperationId, OperationProfile> = Object.fromEntries(PROFILES.map((p) => [p.id, p])) as Record<
   OperationId,
@@ -169,41 +72,12 @@ export const OPERATIONS: Record<OperationId, OperationProfile> = Object.fromEntr
 export const OPERATION_IDS = PROFILES.map((p) => p.id);
 export const OPERATION_GROUPS = [...new Set(PROFILES.map((p) => p.group))];
 
-export const PATTERN_LABELS: Record<Pattern, string> = {
-  'request-response': 'Solicitud y respuesta',
-  'one-way': 'Envío unidireccional',
-  'pub-sub': 'Publicación / suscripción',
-  stream: 'Streaming',
-};
+export const PATTERN_LABELS = WALKIE_OPERATIONS.patterns as Record<Pattern, string>;
 
-export const RESULT_LABELS: Record<ResultType, string> = {
-  success: 'resultado',
-  empty: 'resultado vacío',
-  affected: 'filas afectadas',
-  ack: 'confirmación',
-  nack: 'rechazo',
-  hit: 'hit',
-  miss: 'miss',
-  content: 'contenido',
-  error: 'error',
-  message: 'mensaje',
-  end: 'fin del flujo',
-};
+export const RESULT_LABELS = WALKIE_OPERATIONS.results as Record<ResultType, string>;
 
 /** Tecnologías habituales por familia (sugerencias del campo; se puede escribir cualquiera). */
-export const TECHNOLOGIES: Record<Family, string[]> = {
-  api: ['HTTP', 'HTTPS', 'GraphQL', 'gRPC', 'SOAP'],
-  service: ['gRPC', 'HTTP', 'AWS Lambda', 'Azure Functions'],
-  database: ['PostgreSQL', 'Oracle', 'SQL Server', 'MySQL', 'MongoDB', 'DynamoDB'],
-  cache: ['Redis', 'Memcached'],
-  storage: ['S3', 'Azure Blob', 'GCS'],
-  messaging: ['AMQP', 'Kafka', 'SQS', 'SNS', 'Service Bus', 'Pub/Sub'],
-  screen: [],
-  actor: [],
-  rule: [],
-  portal: [],
-  other: [],
-};
+export const TECHNOLOGIES = WALKIE_OPERATIONS.technologies as Record<Family, string[]>;
 
 /** Familia de un componente por su tipo efectivo y, en un recurso, su subtipo. */
 export function familyOf(type: NodeType | undefined, resource?: ResourceKind): Family {
@@ -316,6 +190,40 @@ export function effectiveOperation(edge: Pick<Edge, 'kind' | 'operation'>, from:
   return { id: legacy, explicit: false };
 }
 
+/**
+ * Operación inequívoca de una conexión anterior (sin `operation`), para migrarla al abrir el lienzo conservando su
+ * significado: solo cuando el tipo y el destino dicen una sola cosa (un `reads` a una base es «Consultar»). Si el par
+ * admite varias lecturas (un `request` a una base: ¿consulta o escritura?), si su acceso a datos contradice al tipo, si
+ * es un retorno o una rama de decisión, `null`: queda como está, a la vista para revisar.
+ */
+export function legacyOperation(edge: Pick<Edge, 'kind' | 'operation' | 'data' | 'branch'>, from: Family, to: Family): OperationId | null {
+  if (edge.operation || edge.kind === 'response' || edge.branch) return null;
+  if (operationConflict(edge, from, to)) return null;
+  const store = (read: OperationId, write: OperationId) => (edge.kind === 'reads' ? read : write);
+  switch (edge.kind) {
+    case 'navigation':
+      return 'navigation';
+    case 'uses':
+      return 'relation.uses';
+    case 'reads':
+    case 'writes':
+      if (to === 'database') return store('db.query', 'db.write');
+      if (to === 'cache') return store('cache.get', 'cache.set');
+      if (to === 'storage') return store('storage.read', 'storage.write');
+      return null;
+    case 'request':
+      if (to === 'api') return 'http.request';
+      if (to === 'service') return 'service.invoke';
+      return null;
+    case 'event':
+      if (to === 'messaging' && from !== 'messaging') return 'message.publish';
+      if (from === 'messaging' && to !== 'messaging') return 'message.deliver';
+      return null;
+    default:
+      return null;
+  }
+}
+
 export function patternOf(edge: Pick<Edge, 'pattern'>, operation: OperationId): Pattern {
   return edge.pattern ?? OPERATIONS[operation].patterns[0]!;
 }
@@ -324,7 +232,7 @@ export function patternOf(edge: Pick<Edge, 'pattern'>, operation: OperationId): 
 export function returnsOf(operation: OperationId, pattern: Pattern): ReturnProfile | null {
   const profile = OPERATIONS[operation];
   if (!profile.returns) return null;
-  if (pattern === 'one-way' && !operation.startsWith('message.')) return null;
+  if (pattern === 'one-way' && !profile.oneWayReturns) return null;
   return profile.returns;
 }
 

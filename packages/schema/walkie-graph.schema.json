@@ -288,6 +288,7 @@
           }
         },
         "timeoutMs": { "type": "integer", "minimum": 0, "maximum": 86400000, "description": "Cuánto espera quien llama antes de darlo por perdido" },
+        "retries": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Cuántas veces reintenta quien llama tras un timeout (la previsualización simula cada intento)" },
         "retry": { "type": "string", "maxLength": 500, "description": "Política de reintentos documentada" },
         "channel": { "type": "string", "maxLength": 200, "description": "Cola, tópico o canal" },
         "message": { "type": "string", "maxLength": 120, "description": "Tipo o nombre del mensaje" },

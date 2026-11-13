@@ -19,6 +19,8 @@
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-import-summary.schema.json" LogicalName="walkie-import-summary.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-module-summary.schema.json" LogicalName="walkie-module-summary.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-catalog-item.schema.json" LogicalName="walkie-catalog-item.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-operations.schema.json" LogicalName="walkie-operations.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-operations.json" LogicalName="walkie-operations.json" />
   </ItemGroup>
 
 </Project>

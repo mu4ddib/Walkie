@@ -5,7 +5,10 @@ import {
   edgeDisplay,
   edgeDisplayText,
   endpointText,
+  innerCalls,
   interactionEdges,
+  previewHint,
+  previewSteps,
   responseStatus,
   scenariosOf,
   shouldReverse,
@@ -106,5 +109,45 @@ describe('escenarios de una interacción (spec interacciones)', () => {
     });
     expect(edgeDisplay({ kind: 'request', operation: 'db.query' }).main).toBe('consulta');
     expect(edgeDisplay({ kind: 'reads' }).main).toBe('lee');
+  });
+});
+
+describe('previsualizar la cadena completa y el timeout (spec interacciones)', () => {
+  const edges: Record<string, Edge> = {
+    call: { id: 'call', from: 'pantalla', to: 'api', kind: 'request', operation: 'http.request' },
+    query: {
+      id: 'query',
+      from: 'api',
+      to: 'bd',
+      kind: 'request',
+      operation: 'db.query',
+      exchange: { timeoutMs: 3000, retries: 2 },
+    },
+    rows: { id: 'rows', from: 'bd', to: 'api', kind: 'response', replyTo: 'query', result: { type: 'success' } },
+    ok: { id: 'ok', from: 'api', to: 'pantalla', kind: 'response', replyTo: 'call', status: 200 },
+    // Vuelve a quien llamó: no es una llamada interna.
+    back: { id: 'back', from: 'api', to: 'pantalla', kind: 'request' },
+  };
+
+  it('Pantalla → API → BD → API → Pantalla: la llamada interna va entre la ida y la vuelta', () => {
+    expect(innerCalls(edges, 'call').map((e) => e.id)).toEqual(['query']);
+    expect(interactionEdges(edges, 'call', undefined, { chain: true })).toEqual(['call', 'query', 'rows', 'ok']);
+    expect(interactionEdges(edges, 'call')).toEqual(['call', 'ok']);
+    // Desde un retorno, su operación con ese escenario (y su cadena).
+    expect(interactionEdges(edges, 'ok', undefined, { chain: true })).toEqual(['call', 'query', 'rows', 'ok']);
+  });
+
+  it('el timeout simula cada intento con su espera y el último termina por timeout', () => {
+    const steps = previewSteps(edges, 'query', TIMEOUT_SCENARIO);
+    expect(steps).toEqual([
+      { edgeId: 'query', attempt: 1, attempts: 3 },
+      { edgeId: 'query', wait: 3000, attempt: 1, attempts: 3, timeout: undefined },
+      { edgeId: 'query', attempt: 2, attempts: 3 },
+      { edgeId: 'query', wait: 3000, attempt: 2, attempts: 3, timeout: undefined },
+      { edgeId: 'query', attempt: 3, attempts: 3 },
+      { edgeId: 'query', wait: 3000, attempt: 3, attempts: 3, timeout: true },
+    ]);
+    expect(previewHint(1, steps, 'API', 'BD', 'consulta')).toContain('espera respuesta de «BD» · 3000 ms (intento 1 de 3): no llega, reintenta');
+    expect(previewHint(5, steps, 'API', 'BD', 'consulta')).toContain('termina por timeout');
   });
 });

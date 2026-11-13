@@ -812,9 +812,12 @@ internal static partial class MarkdownDocument
             md.Line(string.Create(CultureInfo.InvariantCulture, $"  - Timeout: {ms} ms"));
         }
 
-        if (Text(x, "retry") is { Length: > 0 } retry)
+        var retries = x.TryGetProperty("retries", out var r) && r.TryGetInt32(out var count) ? count : (int?)null;
+        var policy = Text(x, "retry") is { Length: > 0 } retry ? MarkdownText.Inline(retry) : null;
+        if (retries is not null || policy is not null)
         {
-            md.Line($"  - Reintentos: {MarkdownText.Inline(retry)}");
+            var amount = retries is null ? null : string.Create(CultureInfo.InvariantCulture, $"{retries}");
+            md.Line($"  - Reintentos: {string.Join(" · ", new[] { amount, policy }.Where(t => t is not null))}");
         }
 
         var messaging = new List<string>();

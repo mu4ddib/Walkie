@@ -27,6 +27,7 @@ import {
   type Pattern,
   type ResultType,
 } from '../interactions/operations';
+import { grpcIssues, sqlIssues } from '../interactions/syntax';
 import type { Edge, Field as SchemaField } from '../schema/walkie-graph';
 import { EDGE_TEXT_MAX_LENGTH } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
@@ -243,6 +244,13 @@ export function ExchangeSections({
             placeholder="SELECT saldo FROM cuentas WHERE id = :cuenta"
             onChange={(text) => setX({ ...x, command: { language: x.command?.language ?? 'sql', text } })}
           />
+          <SyntaxNotes
+            issues={sqlIssues(
+              x.command?.text ?? '',
+              x.command?.language ?? 'sql',
+              params.map((p) => p.name),
+            )}
+          />
         </Section>
       )}
 
@@ -252,6 +260,7 @@ export function ExchangeSections({
             <Field label="Servicio gRPC" mono value={x.grpc?.service} maxLength={200} placeholder="cuentas.v1.Cuentas" onChange={(service) => setX({ ...x, grpc: { ...x.grpc, service } })} />
             <Field label="Método gRPC" mono value={x.grpc?.method} maxLength={200} placeholder="ObtenerSaldo" onChange={(method) => setX({ ...x, grpc: { ...x.grpc, method } })} />
           </div>
+          <SyntaxNotes issues={grpcIssues(x.grpc?.service, x.grpc?.method)} />
         </Section>
       )}
 
@@ -310,7 +319,7 @@ export function ExchangeSections({
       )}
 
       {sections.has('policy') && (
-        <Section title="Timeout y reintentos" defaultOpen={has(x.timeoutMs, x.retry)}>
+        <Section title="Timeout y reintentos" defaultOpen={has(x.timeoutMs, x.retry, x.retries)}>
           <div className="contract-grid">
             <Field
               label="Timeout (ms)"
@@ -323,7 +332,18 @@ export function ExchangeSections({
                 setX({ ...x, timeoutMs: v.trim() && n > 0 ? n : undefined });
               }}
             />
-            <Field label="Reintentos" wide value={x.retry} maxLength={500} placeholder="3 veces con espera exponencial" onChange={(retry) => setX({ ...x, retry })} />
+            <Field
+              label="Reintentos (cantidad)"
+              mono
+              value={x.retries === undefined ? '' : String(x.retries)}
+              maxLength={2}
+              placeholder="0"
+              onChange={(v) => {
+                const n = Number(v.replace(/\D/g, ''));
+                setX({ ...x, retries: v.trim() && Number.isFinite(n) ? Math.min(n, 10) : undefined });
+              }}
+            />
+            <Field label="Política de reintentos" wide value={x.retry} maxLength={500} placeholder="Con espera exponencial" onChange={(retry) => setX({ ...x, retry })} />
           </div>
         </Section>
       )}
@@ -376,6 +396,18 @@ export function ExchangeSections({
         </section>
       )}
     </>
+  );
+}
+
+/** Avisos de sintaxis (no bloquean): lo que conviene revisar de un query o de un nombre de gRPC. */
+function SyntaxNotes({ issues }: { issues: string[] }) {
+  if (issues.length === 0) return null;
+  return (
+    <ul className="edge-syntax" aria-label="Revisar la sintaxis">
+      {issues.map((issue) => (
+        <li key={issue}>{issue}</li>
+      ))}
+    </ul>
   );
 }
 

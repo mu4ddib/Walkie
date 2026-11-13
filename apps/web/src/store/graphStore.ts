@@ -15,6 +15,7 @@ import { canNest, descendantsOf, inferHierarchy, isInside, ownerOf } from './hie
 import { History, sameSnapshot, snapshotOf, type InterfaceRedirects, type Snapshot } from './history';
 export type { InterfaceRedirects } from './history';
 import { tourKind, type TourKind } from '../tours/flows';
+import { kindFor } from '../interactions/operations';
 import { normalizeResource, resourceEdgeKind, resourceKindMeta, type ResourceKind } from '../nodes/resourceMeta';
 
 /** Tours con `kind` explícito (los anteriores, deducido de sus pasos). */
@@ -562,6 +563,11 @@ export interface GraphActions {
    * primero) y `timeout` termina sin retorno (solo en pasos de conexión). `false` quita la marca.
    */
   setStepFlags(tourId: string, index: number, flags: { parallel?: boolean; timeout?: boolean }): void;
+  /**
+   * Migración de conexiones anteriores (spec interacciones): fija su operación (y el trazo que le corresponde) sin
+   * marcar cambios ni sumar un paso al historial, como `loadGraph` con lo que deduce. Se guarda con el próximo guardado.
+   */
+  migrateOperations(operations: Record<string, NonNullable<Edge['operation']>>): void;
   /** Sube (-1) o baja (+1) un paso; fuera de rango no hace nada. */
   moveStep(tourId: string, index: number, delta: -1 | 1): void;
   removeStep(tourId: string, index: number): void;
@@ -1493,6 +1499,17 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         if (new Set(order).size !== order.length || order.some((i) => !tour.steps[i])) return;
         if (order.every((i, at) => i === at)) return;
         putTour({ ...tour, steps: order.map((i) => tour.steps[i]!) });
+      },
+
+      migrateOperations: (operations) => {
+        const wasDirty = get().dirty;
+        replaying = true;
+        for (const [id, operation] of Object.entries(operations)) {
+          if (!get().edges[id]?.operation) get().updateEdge(id, { operation, kind: kindFor(operation) });
+        }
+        set({ dirty: wasDirty });
+        replaying = false;
+        if (!wasDirty) saved = snapshotOf(get());
       },
 
       setStepFlags: (tourId, index, flags) => {

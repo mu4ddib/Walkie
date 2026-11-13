@@ -84,6 +84,43 @@ export function routeAround(
       r.y < Math.max(source.y, target.y) + SEARCH_MARGIN &&
       r.y + r.h > Math.min(source.y, target.y) - SEARCH_MARGIN,
   );
+  // Mismos extremos y mismas cajas cerca → mismo camino: se reutiliza (editar el inspector o mover una caja lejana no
+  // vuelve a buscar el rodeo de cada conexión). Se entrega una copia: quien la usa puede invertirla.
+  const key = routeKey(source, target, close, bend, extra);
+  const cached = ROUTE_CACHE.get(key);
+  if (cached !== undefined) {
+    ROUTE_CACHE.delete(key);
+    ROUTE_CACHE.set(key, cached);
+    return cached && cached.map((p) => ({ ...p }));
+  }
+  const found = searchRoute(source, target, close, bend, extra);
+  ROUTE_CACHE.set(key, found);
+  if (ROUTE_CACHE.size > ROUTE_CACHE_SIZE) ROUTE_CACHE.delete(ROUTE_CACHE.keys().next().value!);
+  return found && found.map((p) => ({ ...p }));
+}
+
+/** Caminos ya calculados (los más recientes; spec interacciones: el lienzo no repite el A* en cada edición). */
+const ROUTE_CACHE = new Map<string, Point[] | null>();
+const ROUTE_CACHE_SIZE = 4000;
+
+function routeKey(source: Port, target: Port, close: Rect[], bend: { x?: number; y?: number } | undefined, extra: number) {
+  const r = (v: number) => Math.round(v * 10) / 10;
+  const boxes = close.map((b) => `${r(b.x)},${r(b.y)},${r(b.w)},${r(b.h)}`).join(';');
+  return `${r(source.x)},${r(source.y)},${source.side}|${r(target.x)},${r(target.y)},${target.side}|${bend?.x ?? ''},${bend?.y ?? ''}|${extra}|${boxes}`;
+}
+
+/** Cuántos caminos guarda la caché (para las pruebas). */
+export function routeCacheSize(): number {
+  return ROUTE_CACHE.size;
+}
+
+function searchRoute(
+  source: Port,
+  target: Port,
+  close: Rect[],
+  bend: { x?: number; y?: number } | undefined,
+  extra: number,
+): Point[] | null {
   // Si el trazo de siempre no atraviesa ninguna caja (sin contar el margen), se deja como está.
   if (!pathHits(defaultRoute(source, target, bend), close)) return null;
   const near = close.map((r) => pad(r, ROUTE_PADDING + extra));

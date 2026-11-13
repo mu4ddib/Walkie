@@ -41,6 +41,11 @@ const MAX_ZOOM = 1.25;
 export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, onExit }: FlowPlayerProps) {
   const tour = useGraphStore((s) => s.tours[playing.tourId]);
   const edges = useGraphStore((s) => s.edges);
+  /** `timeoutMs` de la operación de un paso que termina en timeout (spec interacciones). */
+  const timeoutOf = (index: number) => {
+    const step = tour?.steps[index];
+    return step?.timeout && step.edgeId ? edges[step.edgeId]?.exchange?.timeoutMs : undefined;
+  };
   const nodes = useGraphStore((s) => s.nodes);
   const { items, modules } = useCanvasCatalog();
   const openModule = useOpenModule();
@@ -57,15 +62,16 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
     };
   }, [getViewport, setViewport]);
 
+  const wait = timeoutOf(playing.step);
   // Las fases avanzan solas mientras se reproduce (o mientras termina el paso elegido a mano).
   useEffect(() => {
     if (playing.mode === 'paused') return;
     const timer = setTimeout(
       () => setPlaying((p) => (p ? advance(tour, p) : p)),
-      phaseDuration(tour, playing, speed),
+      phaseDuration(tour, playing, speed, wait),
     );
     return () => clearTimeout(timer);
-  }, [playing, speed, tour, setPlaying]);
+  }, [playing, speed, tour, setPlaying, wait]);
 
   // Encuadre suave del paso activo (o del recorrido entero).
   const frame = (rect: Rect | null) => {
@@ -238,9 +244,19 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
               <span className="flow-step-number">{i + 1}</span> a la vez: {describe(i)}
             </p>
           ))}
-        {stepGroup(tour, playing.step).some((i) => steps[i]?.timeout) && (
-          <p className="flow-note flow-timeout-note">⏱ No llega respuesta: quien espera termina por timeout.</p>
-        )}
+        {stepGroup(tour, playing.step)
+          .filter((i) => steps[i]?.timeout)
+          .map((i) => {
+            const ms = timeoutOf(i);
+            const retries = (steps[i]?.edgeId && edges[steps[i]!.edgeId!]?.exchange?.retries) || 0;
+            return (
+              <p key={i} className="flow-note flow-timeout-note">
+                ⏱ No llega respuesta: quien espera termina por timeout
+                {ms ? ` tras ${ms.toLocaleString('es')} ms` : ''}
+                {retries ? ` y ${retries === 1 ? '1 reintento' : `${retries} reintentos`}` : ''}.
+              </p>
+            );
+          })}
         {current?.note ? <p className="flow-note">{current.note}</p> : null}
         {inside(current?.edgeId) && (
           // El paso pasa por la interfaz de un módulo con recorrido interno (spec modulos-compartidos, criterio 24).

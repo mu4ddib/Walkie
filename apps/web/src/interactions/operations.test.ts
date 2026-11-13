@@ -6,6 +6,7 @@ import {
   effectiveOperation,
   familyOf,
   kindFor,
+  legacyOperation,
   operationConflict,
   operationVerb,
   returnVerb,
@@ -84,5 +85,22 @@ describe('catálogo de operaciones (spec interacciones)', () => {
     expect(operationVerb({ operation: 'custom', customOperation: 'Concilia' })).toBe('concilia');
     expect(operationVerb({ operation: 'custom' })).toBe('opera');
     expect(operationVerb({})).toBeUndefined();
+  });
+
+  it('migra una conexión anterior solo si su significado es inequívoco', () => {
+    expect(legacyOperation({ kind: 'reads' }, 'api', 'database')).toBe('db.query');
+    expect(legacyOperation({ kind: 'writes' }, 'service', 'storage')).toBe('storage.write');
+    expect(legacyOperation({ kind: 'request' }, 'screen', 'api')).toBe('http.request');
+    expect(legacyOperation({ kind: 'event' }, 'service', 'messaging')).toBe('message.publish');
+    expect(legacyOperation({ kind: 'navigation' }, 'screen', 'screen')).toBe('navigation');
+    // Ambiguas: un request a una base (¿consulta o escritura?), un evento entre servicios, un `reads` a una regla.
+    expect(legacyOperation({ kind: 'request' }, 'api', 'database')).toBeNull();
+    expect(legacyOperation({ kind: 'event' }, 'service', 'service')).toBeNull();
+    expect(legacyOperation({ kind: 'reads' }, 'api', 'rule')).toBeNull();
+    // Contradicción, retorno, rama o ya migrada: no se toca.
+    expect(legacyOperation({ kind: 'reads', data: { operation: 'write' } }, 'api', 'database')).toBeNull();
+    expect(legacyOperation({ kind: 'response' }, 'database', 'api')).toBeNull();
+    expect(legacyOperation({ kind: 'uses', branch: 'si' }, 'rule', 'screen')).toBeNull();
+    expect(legacyOperation({ kind: 'request', operation: 'db.write' }, 'api', 'database')).toBeNull();
   });
 });

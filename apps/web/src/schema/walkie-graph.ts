@@ -455,6 +455,10 @@ export interface Exchange {
    */
   timeoutMs?: number;
   /**
+   * Cuántas veces reintenta quien llama tras un timeout (la previsualización simula cada intento)
+   */
+  retries?: number;
+  /**
    * Política de reintentos documentada
    */
   retry?: string;

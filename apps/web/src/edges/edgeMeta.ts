@@ -183,22 +183,103 @@ export function scenariosOf(edges: Record<string, Edge>, edgeId: string): Scenar
   ];
 }
 
+/** Un tramo de «Previsualizar interacción»: recorrer una conexión, esperar un retorno o terminar por timeout. */
+export interface PreviewStep {
+  edgeId: string;
+  /** Espera de un retorno (ms del `timeoutMs` de la operación, o `undefined` sin esperar). */
+  wait?: number;
+  /** Intento (desde 1) y total de intentos de una operación que termina en timeout. */
+  attempt?: number;
+  attempts?: number;
+  /** Último tramo: quien espera termina por timeout. */
+  timeout?: boolean;
+}
+
+/** Hasta qué profundidad se siguen las llamadas internas (Pantalla → API → Servicio → BD…). */
+const CHAIN_DEPTH = 4;
+
 /**
- * Conexiones que recorre "Previsualizar interacción" a partir de `edgeId`, en orden: la operación, los mensajes de su
- * stream, el retorno del escenario elegido (por defecto el primero; ninguno si es el timeout) y las respuestas
- * asíncronas correlacionadas; desde un retorno, su operación y él; cualquier otra, sola.
+ * Llamadas síncronas que hace el destino de una operación mientras quien llamó espera (spec interacciones): las
+ * operaciones `request` que salen de él, en su orden, sin volver por donde se vino.
  */
-export function interactionEdges(edges: Record<string, Edge>, edgeId: string, scenario?: string): string[] {
+export function innerCalls(edges: Record<string, Edge>, edgeId: string): Edge[] {
+  const edge = edges[edgeId];
+  if (!edge || edge.kind !== 'request') return [];
+  return Object.values(edges).filter((e) => e.from === edge.to && e.kind === 'request' && e.id !== edgeId && e.to !== edge.from);
+}
+
+/**
+ * Tramos de «Previsualizar interacción» a partir de `edgeId`, en orden: la operación, lo que ocurre dentro de su destino
+ * (con `chain`, cada llamada interna con su primer escenario, Pantalla → API → BD → API → Pantalla), los mensajes de
+ * su stream, el retorno del escenario elegido y las respuestas correlacionadas. Con el escenario «timeout», cada
+ * intento (1 + `exchange.retries`) espera su `timeoutMs` y el último termina por timeout. Desde un retorno, su
+ * operación con ese escenario.
+ */
+export function previewSteps(
+  edges: Record<string, Edge>,
+  edgeId: string,
+  scenario?: string,
+  options: { chain?: boolean } = {},
+): PreviewStep[] {
   const edge = edges[edgeId];
   if (!edge) return [];
-  if (edge.kind === 'response') return edge.replyTo && edges[edge.replyTo] ? [edge.replyTo, edgeId] : [edgeId];
-  const returns = Object.values(edges).filter((e) => e.kind === 'response' && e.replyTo === edgeId);
-  if (scenario === TIMEOUT_SCENARIO) return [edgeId];
-  const stream = returns.filter((r) => r.stream).map((r) => r.id);
-  const alternatives = returns.filter((r) => !r.stream);
-  const chosen = alternatives.find((r) => r.id === scenario) ?? alternatives[0];
-  const replies = Object.values(edges)
-    .filter((e) => e.correlatesWith === edgeId && e.id !== edgeId)
-    .map((e) => e.id);
-  return [edgeId, ...stream, ...(chosen ? [chosen.id] : []), ...replies];
+  if (edge.kind === 'response') {
+    return edge.replyTo && edges[edge.replyTo]
+      ? previewSteps(edges, edge.replyTo, edgeId, options)
+      : [{ edgeId }];
+  }
+  const visited = new Set<string>();
+  const expand = (id: string, chosenScenario: string | undefined, depth: number): PreviewStep[] => {
+    visited.add(id);
+    const op = edges[id]!;
+    const inner =
+      options.chain && depth < CHAIN_DEPTH
+        ? innerCalls(edges, id)
+            .filter((e) => !visited.has(e.id))
+            .flatMap((e) => expand(e.id, undefined, depth + 1))
+        : [];
+    const returns = Object.values(edges).filter((e) => e.kind === 'response' && e.replyTo === id);
+    const replies = Object.values(edges)
+      .filter((e) => e.correlatesWith === id && e.id !== id)
+      .map((e): PreviewStep => ({ edgeId: e.id }));
+    if (chosenScenario === TIMEOUT_SCENARIO) {
+      const retries = op.exchange?.retries ?? 0;
+      const attempts = retries + 1;
+      const wait = op.exchange?.timeoutMs;
+      return Array.from({ length: attempts }, (_, i): PreviewStep[] => [
+        { edgeId: id, attempt: i + 1, attempts },
+        ...(i === 0 ? inner : []),
+        { edgeId: id, wait: wait ?? 0, attempt: i + 1, attempts, timeout: i === attempts - 1 || undefined },
+      ]).flat();
+    }
+    const stream = returns.filter((r) => r.stream).map((r): PreviewStep => ({ edgeId: r.id }));
+    const alternatives = returns.filter((r) => !r.stream);
+    const chosen = alternatives.find((r) => r.id === chosenScenario) ?? alternatives[0];
+    return [{ edgeId: id }, ...inner, ...stream, ...(chosen ? [{ edgeId: chosen.id }] : []), ...replies];
+  };
+  return expand(edgeId, scenario, 0);
+}
+
+/** Texto de la pista durante una previsualización: el tramo, la espera de un retorno o el timeout. */
+export function previewHint(index: number, steps: PreviewStep[], from: string, to: string, text: string): string {
+  const step = steps[index]!;
+  const count = steps.length > 1 ? ` · ${index + 1} de ${steps.length}` : '';
+  const attempt = step.attempts && step.attempts > 1 ? ` (intento ${step.attempt} de ${step.attempts})` : '';
+  if (step.wait !== undefined) {
+    const time = step.wait > 0 ? ` · ${step.wait.toLocaleString('es')} ms` : '';
+    return step.timeout
+      ? `Previsualizando${count}: «${from}» no recibe respuesta de «${to}»${time}${attempt}: termina por timeout · Esc termina`
+      : `Previsualizando${count}: «${from}» espera respuesta de «${to}»${time}${attempt}: no llega, reintenta · Esc termina`;
+  }
+  return `Previsualizando${count}: ${from} → ${to} (${text})${attempt} · Esc termina`;
+}
+
+/** Conexiones distintas que recorre una previsualización, en el orden en que aparecen por primera vez. */
+export function interactionEdges(
+  edges: Record<string, Edge>,
+  edgeId: string,
+  scenario?: string,
+  options: { chain?: boolean } = {},
+): string[] {
+  return [...new Set(previewSteps(edges, edgeId, scenario, options).map((step) => step.edgeId))];
 }

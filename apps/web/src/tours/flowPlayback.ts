@@ -44,9 +44,20 @@ export function firstPhase(tour: Tour | undefined, step: number): FlowPhase {
   return tour?.steps[step]?.edgeId ? 'source' : 'target';
 }
 
-/** Lo que dura la fase actual a `speed`. */
-export function phaseDuration(tour: Tour | undefined, p: Playing, speed: number): number {
-  const base = tour?.steps[p.step]?.edgeId ? FLOW_TIMING[p.phase] : FLOW_NODE_MS;
+/** La espera de un paso que termina en timeout se muestra como mucho este tiempo a 1× (el valor real va en el texto). */
+export const FLOW_TIMEOUT_MAX_MS = 6000;
+
+/**
+ * Lo que dura la fase actual a `speed`. En un paso que termina en timeout (spec interacciones), la fase final es la
+ * espera de quien llamó: dura lo que su `timeoutMs` (`wait`, acotado) en vez de lo de llegar.
+ */
+export function phaseDuration(tour: Tour | undefined, p: Playing, speed: number, wait?: number): number {
+  const step = tour?.steps[p.step];
+  const base = !step?.edgeId
+    ? FLOW_NODE_MS
+    : p.phase === 'target' && step.timeout && wait
+      ? Math.min(Math.max(wait, FLOW_TIMING.target), FLOW_TIMEOUT_MAX_MS)
+      : FLOW_TIMING[p.phase];
   return Math.round(base / speed);
 }
 

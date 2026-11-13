@@ -30,12 +30,15 @@ Documentar cada conexión como la interacción técnica que es —una consulta a
 - [x] 11. Borrar una operación deja sus retornos y correlaciones sin vínculo (señalados) y avisa; los pasos de recorrido quedan como hoy (conexión eliminada).
 - [x] 12. Previsualizar una interacción con varias alternativas permite elegir el escenario (o el timeout). En un recorrido, pasos simultáneos (`parallel`) para fan-out y pasos que terminan en timeout.
 - [x] 13. Export (Markdown, contexto para IA, PDF) usa la operación y describe el intercambio; la API valida los campos nuevos y su integridad.
+- [x] 14. Las conexiones anteriores de significado inequívoco reciben su operación al abrir el lienzo (sin marcar cambios); las ambiguas o contradictorias quedan para revisar.
+- [x] 15. Previsualizar sigue la cadena completa (Pantalla → API → BD → API → Pantalla: las llamadas síncronas que hace el destino, con su primer escenario), con la opción de verla sola.
+- [x] 16. El timeout se simula: cada intento (1 + `exchange.retries`) espera su `timeoutMs` (acotado al mostrarlo) al previsualizar, y en un recorrido el paso con timeout espera lo mismo.
+- [x] 17. Un solo catálogo de operaciones (`packages/schema/walkie-operations.json`) para la web y la API; el lienzo reutiliza los rodeos ya calculados en vez de repetir el A* en cada edición; el inspector avisa de descuidos de sintaxis en SQL y gRPC.
 
 ## Fuera de alcance
 
 - Generar un diagrama de secuencia a partir de los recorridos.
-- Validar la sintaxis de un query o de un contrato gRPC.
-- Recalcular solo las conexiones afectadas al editar (el lienzo sigue recalculando los trazos del grafo; se evita cargar contratos que no se inspeccionan).
+- Validar un query o un contrato gRPC contra la base o el `.proto` reales: el inspector solo avisa de descuidos de sintaxis (comillas, paréntesis, parámetros sin documentar, UPDATE/DELETE sin WHERE, nombres de gRPC).
 
 ## Impacto en el modelo
 

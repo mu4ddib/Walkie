@@ -63,8 +63,15 @@ test('Pantalla → API → BD → API → Pantalla: cada tramo con su operación
   await inspector(page).getByLabel('Tecnología').fill('PostgreSQL');
   await inspector(page).locator('summary', { hasText: 'Comando o query' }).click();
   await inspector(page).getByLabel('Comando', { exact: true }).fill('SELECT saldo FROM cuentas WHERE id = :cuenta');
+  // Sin documentar `:cuenta`, se avisa (no bloquea); al agregarlo en «Parámetros», el aviso se va.
+  await expect(inspector(page).getByRole('list', { name: 'Revisar la sintaxis' })).toContainText(':cuenta');
+  await inspector(page).locator('summary', { hasText: 'Parámetros' }).click();
+  await inspector(page).getByRole('button', { name: '+ Parámetro' }).click();
+  await inspector(page).getByLabel('Nombre', { exact: true }).fill('cuenta');
+  await expect(inspector(page).getByRole('list', { name: 'Revisar la sintaxis' })).toHaveCount(0);
   await inspector(page).locator('summary', { hasText: 'Timeout y reintentos' }).click();
   await inspector(page).getByLabel('Timeout (ms)').fill('3000');
+  await inspector(page).getByLabel('Reintentos (cantidad)').fill('1');
   await capture(page, '2-inspector-consulta');
   // Una consulta tiene resultados, no «respuestas».
   await expect(inspector(page).getByRole('button', { name: /Añadir respuesta/ })).toHaveCount(0);
@@ -98,8 +105,25 @@ test('Pantalla → API → BD → API → Pantalla: cada tramo con su operación
   await page.keyboard.press('Escape');
   await scenario.selectOption({ label: 'Timeout (no llega respuesta)' });
   await inspector(page).getByRole('button', { name: '▶ Previsualizar interacción' }).click();
-  await expect(page.locator('.canvas-hint')).toContainText('termina en timeout');
+  // Se simula cada intento: la ida, la espera de su timeout y, tras el último, el timeout.
+  await expect(page.locator('.canvas-hint')).toContainText('espera respuesta de «BD Cuentas» · 3000 ms (intento 1 de 2)', {
+    timeout: 5000,
+  });
+  await expect(page.locator('.canvas-hint')).toContainText('(intento 2 de 2)', { timeout: 8000 });
+  await expect(page.locator('.canvas-hint')).toContainText('termina por timeout', { timeout: 8000 });
   await page.keyboard.press('Escape');
+
+  // Desde la pantalla, la cadena completa: Pantalla → API → BD → API → Pantalla.
+  const callId = await labels(page).filter({ hasText: /^llama$/ }).getAttribute('data-edge-id');
+  await label(page, callId!).click();
+  await expect(inspector(page).getByLabel(/Con lo que ocurre dentro/)).toBeChecked();
+  await inspector(page).getByRole('button', { name: '▶ Previsualizar interacción' }).click();
+  await expect(page.locator('.canvas-hint')).toContainText('Previsualizando · 1 de 4: Saldo → API Cuentas');
+  await expect(page.locator('.canvas-hint')).toContainText('2 de 4: API Cuentas → BD Cuentas', { timeout: 5000 });
+  await expect(page.locator('.canvas-hint')).toContainText('3 de 4: BD Cuentas → API Cuentas', { timeout: 5000 });
+  await expect(page.locator('.canvas-hint')).toContainText('4 de 4: API Cuentas → Saldo (responde 200)', { timeout: 5000 });
+  await page.keyboard.press('Escape');
+  await query.click();
 
   // Invertir la operación invierte también sus retornos (siguen saliendo de quien responde).
   const [, apiId, dbId] = await page.locator('.react-flow__node').evaluateAll((ns) => ns.map((n) => n.getAttribute('data-id')));
