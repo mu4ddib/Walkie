@@ -71,18 +71,18 @@ describe('PropertiesPanel', () => {
     expect(screen.queryByLabelText('Expresión')).not.toBeInTheDocument();
   });
 
-  it('edita tipo, etiqueta y condición de una conexión', async () => {
+  it('edita operación, etiqueta y condición de una conexión', async () => {
     const { store, edgeId } = renderPanel((s) => {
-      const api = s.addNode('api', { x: 0, y: 0 });
       const screenId = s.addNode('screen', { x: 0, y: 0 });
-      return { edgeId: s.connect(api, screenId)! };
+      const other = s.addNode('screen', { x: 0, y: 0 });
+      return { edgeId: s.connect(screenId, other)! };
     });
 
-    await userEvent.selectOptions(screen.getByLabelText('Tipo'), 'navigation');
+    await userEvent.selectOptions(screen.getByLabelText('Operación'), 'navigation');
     await userEvent.type(screen.getByLabelText('Etiqueta'), 'Cliente');
     await userEvent.type(screen.getByLabelText('Condición'), '404');
 
-    expect(store.getState().edges[edgeId]).toMatchObject({ kind: 'navigation', label: 'Cliente', when: '404' });
+    expect(store.getState().edges[edgeId]).toMatchObject({ kind: 'navigation', operation: 'navigation', label: 'Cliente', when: '404' });
   });
 
   it('refleja un cambio del store hecho por otra vía', () => {
@@ -130,7 +130,7 @@ describe('inspector de una conexión', () => {
     expect(summary).toHaveTextContent('llama');
 
     await userEvent.type(screen.getByLabelText('Etiqueta'), 'Alta');
-    await userEvent.selectOptions(screen.getByLabelText('Tipo'), 'response');
+    await userEvent.selectOptions(screen.getByLabelText('Operación'), 'Es el retorno de otra operación');
 
     const edge = store.getState().edges[edgeId]!;
     expect(store.getState().nodes[edge.from]?.type).toBe('api');
@@ -152,7 +152,6 @@ describe('inspector de una conexión', () => {
 
     expect(screen.getByRole('region', { name: 'Solicitud' })).toHaveTextContent('Contrato de la API: POST /creacionUsuario');
     expect(screen.queryByLabelText('Código HTTP')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Operación')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Añadir respuesta 409' }));
     await userEvent.click(screen.getByRole('button', { name: '+ Añadir respuesta' }));
 
@@ -161,7 +160,7 @@ describe('inspector de una conexión', () => {
       ['response', 409],
       ['response', undefined],
     ]);
-    expect(within(screen.getByRole('region', { name: 'Respuestas' })).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(screen.getByRole('region', { name: 'Retornos' })).getAllByRole('listitem')).toHaveLength(2);
   });
 
   it('una respuesta tiene código HTTP propio, solicitud asociada y "qué ocurre después"', async () => {
@@ -182,7 +181,7 @@ describe('inspector de una conexión', () => {
     await userEvent.type(code, '42');
     expect(screen.getByRole('alert')).toHaveTextContent('100 a 599');
     await userEvent.type(code, '2');
-    await userEvent.selectOptions(screen.getByLabelText('Solicitud asociada'), 'Pantalla → API · Alta');
+    await userEvent.selectOptions(screen.getByLabelText('Operación asociada'), 'Pantalla → API · Alta');
     await userEvent.type(screen.getByLabelText('Qué ocurre después'), 'Se navega al inicio');
 
     const edge = store.getState().edges[edgeId]!;

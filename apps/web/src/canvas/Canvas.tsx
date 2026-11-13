@@ -18,6 +18,7 @@ import type { CatalogItem, ModuleSummary, NewCatalogItem } from '../api/client';
 import {
   CatalogContext,
   effectiveResource,
+  endFamily,
   endType,
   interfaceTarget,
   moduleTarget,
@@ -27,6 +28,7 @@ import {
   type CanvasCatalog,
 } from '../catalog/catalogContext';
 import { InterfacePicker, type InterfaceChoice } from '../modules/InterfacePicker';
+import { OPERATIONS, effectiveOperation, suggestOperations, type OperationId } from '../interactions/operations';
 import { ExtractModuleDialog } from '../modules/ExtractModuleDialog';
 import { interfaceHandle, interfaceOfHandle, placeableModules } from '../modules/moduleMeta';
 import type { InterfaceRef, Node as GraphNode } from '../schema/walkie-graph';
@@ -54,11 +56,12 @@ import {
   type Hierarchy,
 } from '../store/hierarchy';
 import { FlowPlayer, type Rect } from '../tours/FlowPlayer';
-import { FLOW_TIMING, firstPhase, goTo, type Playing } from '../tours/flowPlayback';
+import { FLOW_TIMING, firstPhase, goTo, stepGroup, type Playing } from '../tours/flowPlayback';
 import { EMPTY_TOURS_UI, type ToursUi } from '../panel/tours/toursUi';
 import { isFlowTour, lastEnd, suggestOrder, tourNodes, type TourKind, type TourStep } from '../tours/flows';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
-import { useGraphStore } from '../store/useGraphStore';
+import { useGraphStore, useGraphStoreApi } from '../store/useGraphStore';
+import { useSetOperation } from '../edges/useChangeEdgeKind';
 import { GRID, palette } from '../theme/palette';
 import { Palette } from './Palette';
 import { PALETTE_MIME, PALETTE_MODULE_MIME, PALETTE_REF_MIME, PALETTE_RESOURCE_MIME, PALETTE_TYPES, RESOURCE_KEY } from './paletteTypes';
@@ -80,7 +83,7 @@ import { labelSize, placePairLabels, type PlacedLabel } from '../edges/labels';
 import { laneOffsets, laneRoute } from '../edges/lanes';
 import { computePorts, staggerBends, type Side } from '../edges/ports';
 import { defaultRoute, routeAround, type Point } from '../edges/route';
-import { edgeDisplay, edgeDisplayText, interactionEdges } from '../edges/edgeMeta';
+import { TIMEOUT_SCENARIO, edgeDisplay, edgeDisplayText, interactionEdges } from '../edges/edgeMeta';
 import { NodeMenu } from './NodeMenu';
 import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
 import { captureCanvas, framing, onCanvasImageRequest } from './canvasImage';
@@ -96,6 +99,8 @@ const NODE_SIZE = { width: 184, height: 72 } as const;
 const LANE_GAP = 24;
 /** Lo que dura cada tramo de "Previsualizar interacción" (la ida, luego la vuelta). */
 const PREVIEW_STEP_MS = 1800;
+/** Cuánto se ofrecen las operaciones sugeridas de una conexión recién creada. */
+const SUGGESTION_MS = 12000;
 /** Separación mínima (px) entre las etiquetas de conexiones que unen el mismo par. */
 const LABEL_GAP = 26;
 /** Hueco mínimo para que una conexión hacia la izquierda salga por el lado izquierdo en vez de rodear las cajas. */
@@ -149,6 +154,7 @@ function CanvasInner({
   focusCenter: boolean;
   initialPlay?: { tourId: string; step: number };
 }) {
+  const store = useGraphStoreApi();
   const graphNodes = useGraphStore((s) => s.nodes);
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
@@ -210,7 +216,8 @@ function CanvasInner({
   // Menú contextual de una caja o nota (clic derecho): duplicar, editar, eliminar.
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   // "Previsualizar interacción": las conexiones del intercambio, en orden (ida y vueltas), y la que se recorre ahora.
-  const [preview, setPreview] = useState<{ ids: string[]; index: number } | null>(null);
+  // Con `timeout`, el escenario elegido es que no llega respuesta: se recorre la ida y termina ahí (spec interacciones).
+  const [preview, setPreview] = useState<{ ids: string[]; index: number; timeout?: boolean } | null>(null);
   const previewId = preview?.ids[preview.index] ?? null;
   // Modo tour (spec modo-tour) o reproducción de un recorrido: qué tour, en qué paso y fase; el lienzo queda de solo
   // lectura. Es estado de visualización: el store (y el autoguardado) no lo ven.
@@ -226,6 +233,19 @@ function CanvasInner({
   const flowPlaying = !!playing && isFlowTour(playingTour);
   const currentStep = playing ? playingTour?.steps[playing.step] : undefined;
   const currentEdge = currentStep?.edgeId ? graphEdges[currentStep.edgeId] : undefined;
+  // Pasos simultáneos (fan-out, spec interacciones): el paso y los `parallel` que lo siguen se reproducen juntos.
+  const playingStep = playing?.step;
+  const currentEdges = useMemo(
+    () =>
+      playingStep !== undefined && flowPlaying
+        ? stepGroup(playingTour, playingStep).flatMap((i) => {
+            const st = playingTour!.steps[i]!;
+            const edge = st.edgeId ? graphEdges[st.edgeId] : undefined;
+            return edge ? [{ edge, timeout: !!st.timeout }] : [];
+          })
+        : [],
+    [playingStep, flowPlaying, playingTour, graphEdges],
+  );
   const tourNodeId = currentStep?.nodeId;
   const nextTourNodeId = playing ? playingTour?.steps[playing.step + 1]?.nodeId : undefined;
   // Recorrido al que se le agregan pasos tocando conexiones en el lienzo (parte 3).
@@ -276,9 +296,10 @@ function CanvasInner({
   );
 
   const startPreview = useCallback(
-    (edgeId: string) => {
-      const ids = interactionEdges(graphEdges, edgeId);
-      setPreview(ids.length > 0 ? { ids, index: 0 } : null);
+    (edgeId: string, scenario?: string) => {
+      const ids = interactionEdges(graphEdges, edgeId, scenario);
+      setSuggestion(null);
+      setPreview(ids.length > 0 ? { ids, index: 0, timeout: scenario === TIMEOUT_SCENARIO || undefined } : null);
     },
     [graphEdges],
   );
@@ -320,7 +341,14 @@ function CanvasInner({
   );
   // Durante un tour o un recorrido, los grupos que contienen el paso activo se despliegan solo en la vista (no en el
   // grafo); al cambiar de paso o al detener, vuelven a verse como estaban.
-  const activeIds = currentEdge ? [currentEdge.from, currentEdge.to] : tourNodeId ? [tourNodeId] : [];
+  const activeIds =
+    currentEdges.length > 0
+      ? currentEdges.flatMap((c) => [c.edge.from, c.edge.to])
+      : currentEdge
+        ? [currentEdge.from, currentEdge.to]
+        : tourNodeId
+          ? [tourNodeId]
+          : [];
   const activeKey = activeIds.join('|');
   const tempExpanded = useMemo(
     () => new Set(activeKey ? activeKey.split('|').flatMap((id) => ancestorsOf(hierarchy, id)) : []),
@@ -379,10 +407,13 @@ function CanvasInner({
     const previewNodes = new Set(previewEdges.flatMap((e) => [e.from, e.to]));
     /** Reproducción de un recorrido: origen del paso, destino al terminar, participantes y el resto atenuado. */
     const flowClass = (id: string) => {
-      if (currentEdge) {
-        if (id === currentEdge.from && playing!.phase !== 'target') return 'flow-source';
-        if (id === currentEdge.to && playing!.phase === 'target') return 'flow-target';
-        if (id === currentEdge.to) return 'flow-next';
+      if (currentEdges.length > 0) {
+        const target = playing!.phase === 'target';
+        // Un paso que termina en timeout no llega: al final se destaca quien esperaba, no el destino.
+        if (target && currentEdges.some((c) => c.timeout && c.edge.from === id)) return 'flow-source flow-timeout';
+        if (target && currentEdges.some((c) => !c.timeout && c.edge.to === id)) return 'flow-target';
+        if (!target && currentEdges.some((c) => c.edge.from === id)) return 'flow-source';
+        if (currentEdges.some((c) => c.edge.to === id)) return 'flow-next';
       } else if (id === tourNodeId) return 'flow-target';
       return participants.has(id) ? 'flow-member' : 'flow-dim';
     };
@@ -483,7 +514,7 @@ function CanvasInner({
     updateGroup,
     hierarchy,
     flowPlaying,
-    currentEdge,
+    currentEdges,
     participants,
     dropHint,
     flash,
@@ -504,7 +535,8 @@ function CanvasInner({
     const flowClass = (id: string) => {
       const steps = flowSteps.get(id);
       if (flowPlaying) {
-        if (id === currentEdge?.id) return `flow-edge flow-edge-active flow-phase-${playing!.phase}`;
+        const active = currentEdges.find((c) => c.edge.id === id);
+        if (active) return `flow-edge flow-edge-active flow-phase-${playing!.phase}${active.timeout ? ' flow-edge-timeout' : ''}`;
         if (steps?.some((i) => i < playing!.step)) return 'flow-edge flow-edge-done';
         return steps ? 'flow-edge' : 'flow-edge-dim';
       }
@@ -660,6 +692,13 @@ function CanvasInner({
     }
     // Etiquetas de los pares en carriles: cada una sobre su trazo, sin pisar otras etiquetas ni cajas; si no hay
     // lugar, una etiqueta compuesta (spec conexiones-ida-y-vuelta, tarea 2).
+    // Operación efectiva y sugeridas de una conexión seleccionada (selector de su etiqueta; un retorno no tiene).
+    const operationOf = (edge: (typeof visible)[number]['edge']) => {
+      const fromFamily = endFamily(graphNodes[edge.from], edge.fromInterface, catalog.items, catalog.modules);
+      const toFamily = endFamily(graphNodes[edge.to], edge.toInterface, catalog.items, catalog.modules);
+      const effective = effectiveOperation(edge, fromFamily, toFamily);
+      return effective ? { ...effective, suggested: suggestOperations(fromFamily, toFamily) } : undefined;
+    };
     const displayOf = (edge: (typeof visible)[number]['edge']) => {
       const branch = edge.branch ? graphNodes[edge.from]?.branches?.find((b) => b.id === edge.branch) : undefined;
       const targetNode = graphNodes[edge.to];
@@ -683,6 +722,8 @@ function CanvasInner({
           viaInterface?.name ??
           pendingName(targetNode, edge.toInterface) ??
           (edge.kind === 'response' ? undefined : pendingName(graphNodes[edge.from], edge.fromInterface)),
+        // Un retorno dice su verbo según la operación a la que responde (spec interacciones).
+        parent: edge.replyTo ? graphEdges[edge.replyTo] : undefined,
       });
     };
     const pairLabels: Record<string, PlacedLabel> = {};
@@ -769,6 +810,7 @@ function CanvasInner({
             target: ports[edge.id]!.target,
           },
           step: step >= 0 && preview!.ids.length > 1 ? String(step + 1) : flowBadge,
+          operation: selectedEdges.has(edge.id) && !branch ? operationOf(edge) : undefined,
         },
         selected: selectedEdges.has(edge.id),
         className: preview
@@ -790,7 +832,7 @@ function CanvasInner({
     hierarchy,
     flowSteps,
     flowPlaying,
-    currentEdge,
+    currentEdges,
     pickFrom,
     flash,
     catalog.items,
@@ -937,6 +979,16 @@ function CanvasInner({
 
   function warnAffectedFlows(edgeIds: readonly string[]) {
     const affected = Object.values(tours).filter((t) => t.steps.some((step) => step.edgeId && edgeIds.includes(step.edgeId)));
+    // Retornos y respuestas correlacionadas de lo borrado quedan sin vínculo (spec interacciones, criterio 11).
+    const orphans = Object.values(graphEdges).filter(
+      (e) => !edgeIds.includes(e.id) && ((e.replyTo && edgeIds.includes(e.replyTo)) || (e.correlatesWith && edgeIds.includes(e.correlatesWith))),
+    );
+    if (affected.length === 0 && orphans.length > 0) {
+      setNotice(
+        `${orphans.length === 1 ? 'Su retorno quedó' : `Sus ${orphans.length} retornos quedaron`} sin operación asociada: vincúlalos de nuevo o quítalos. Ctrl+Z la recupera.`,
+      );
+      return;
+    }
     if (affected.length === 0) return;
     setNotice(
       `La conexión se usaba en ${affected.map((t) => `«${t.name}»`).join(', ')}: revisa el paso marcado en Tours.`,
@@ -1058,7 +1110,7 @@ function CanvasInner({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [removeEdge, tours],
+    [removeEdge, tours, graphEdges],
   );
 
   /**
@@ -1127,10 +1179,29 @@ function CanvasInner({
             )
           : undefined;
       // Desde el punto de una salida de decisión, la conexión nace como esa rama.
-      connect(c.source, c.target, kind, { branch: c.sourceHandle, ...picked });
+      const id = connect(c.source, c.target, kind, { branch: c.sourceHandle, ...picked });
+      if (!id || !source || !target) return;
+      // Nace con su operación (la fuente de verdad, ADR-0011) y ofrece las otras pertinentes al par (spec interacciones).
+      const fromFamily = endFamily(source, picked.fromInterface, catalog.items, catalog.modules);
+      const toFamily = endFamily(target, picked.toInterface, catalog.items, catalog.modules);
+      const edge = store.getState().edges[id];
+      const operation = edge && effectiveOperation(edge, fromFamily, toFamily);
+      if (operation && !edge.branch) {
+        store.getState().updateEdge(id, { operation: operation.id });
+        const suggested = suggestOperations(fromFamily, toFamily);
+        if (suggested.length > 1) setSuggestion({ edgeId: id, options: suggested });
+      }
     },
-    [connect, graphNodes, catalog.items, catalog.modules],
+    [connect, graphNodes, catalog.items, catalog.modules, store],
   );
+  // Sugerencias de operación de la conexión recién creada: se elige con un clic o se ignora (Esc o al rato).
+  const [suggestion, setSuggestion] = useState<{ edgeId: string; options: OperationId[] } | null>(null);
+  const setOperation = useSetOperation();
+  useEffect(() => {
+    if (!suggestion) return;
+    const timer = setTimeout(() => setSuggestion(null), SUGGESTION_MS);
+    return () => clearTimeout(timer);
+  }, [suggestion]);
   // Conexión soltada sobre (o sacada de) la caja de un módulo: falta elegir la interfaz de cada extremo que lo sea.
   const [pendingConnect, setPendingConnect] = useState<{
     connection: Connection;
@@ -1326,7 +1397,8 @@ function CanvasInner({
         duplicate(ids);
         return;
       }
-      if (event.key === 'Escape' && (preview || menu || pickingTourId)) {
+      if (event.key === 'Escape' && (preview || menu || pickingTourId || suggestion)) {
+        setSuggestion(null);
         setPreview(null);
         setMenu(null);
         setPickingTourId(null);
@@ -1469,7 +1541,9 @@ function CanvasInner({
           : preview && previewEdge?.data?.display
       ? `Previsualizando${preview.ids.length > 1 ? ` · ${preview.index + 1} de ${preview.ids.length}` : ''}: ${
           graphNodes[graphEdges[previewEdge.id]!.from]?.title ?? ''
-        } → ${graphNodes[graphEdges[previewEdge.id]!.to]?.title ?? ''} (${edgeDisplayText(previewEdge.data.display)}) · Esc termina`
+        } → ${graphNodes[graphEdges[previewEdge.id]!.to]?.title ?? ''} (${edgeDisplayText(previewEdge.data.display)})${
+          preview.timeout && preview.index === preview.ids.length - 1 ? ' · no llega respuesta: termina en timeout' : ''
+        } · Esc termina`
       : readOnly
         ? 'Solo lectura: desplázate, acerca y recorre los tours.'
         : null;
@@ -1638,10 +1712,33 @@ function CanvasInner({
         {!readOnly && !playing && empty && (
           <EmptyCanvasGuide onAdd={(type) => addAtCenter((p) => addNode(type, p))} onHelp={() => setHelpOpen(true)} />
         )}
-        {hint && (
-          <p className="canvas-hint" aria-live="polite">
-            {hint}
-          </p>
+        {suggestion && graphEdges[suggestion.edgeId] && !playing && !readOnly && !hint ? (
+          <div className="canvas-hint canvas-suggest" role="toolbar" aria-label="Operaciones sugeridas">
+            <span>Operación:</span>
+            {suggestion.options.map((op) => (
+              <button
+                key={op}
+                type="button"
+                className="pixel-button is-ghost"
+                aria-pressed={graphEdges[suggestion.edgeId]!.operation === op}
+                onClick={() => {
+                  setOperation(suggestion.edgeId, op);
+                  setSuggestion(null);
+                }}
+              >
+                {OPERATIONS[op].name}
+              </button>
+            ))}
+            <button type="button" className="icon-button" aria-label="Cerrar sugerencias" onClick={() => setSuggestion(null)}>
+              ✕
+            </button>
+          </div>
+        ) : (
+          hint && (
+            <p className="canvas-hint" aria-live="polite">
+              {hint}
+            </p>
+          )
         )}
         {menu && !locked && (
           <NodeMenu

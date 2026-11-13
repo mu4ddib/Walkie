@@ -63,11 +63,15 @@ export type StepIssue =
 export function stepIssues(tour: Tour, edges: Record<string, Edge>): StepIssue[][] {
   const played = new Set<string>();
   let previousEnd: string | null = null;
+  let previousStart: string | null = null;
   return tour.steps.map((step) => {
     const issues: StepIssue[] = [];
     if (step.removedEdge) issues.push({ kind: 'removed' });
     const ends = stepEnds(step, edges);
-    if (ends && previousEnd && ends.from !== previousEnd) issues.push({ kind: 'jump', end: previousEnd, start: ends.from });
+    // Un paso simultáneo (fan-out, spec interacciones) sale de donde salió o llegó el anterior: no es un salto.
+    const fanOut = step.parallel && ends && (ends.from === previousStart || ends.from === previousEnd);
+    if (ends && previousEnd && ends.from !== previousEnd && !fanOut) issues.push({ kind: 'jump', end: previousEnd, start: ends.from });
+    if (ends && !step.parallel) previousStart = ends.from;
     const edge = step.edgeId ? edges[step.edgeId] : undefined;
     if (edge?.kind === 'response' && edge.replyTo && edges[edge.replyTo] && !played.has(edge.replyTo)) {
       issues.push({ kind: 'response-first', requestId: edge.replyTo });

@@ -680,6 +680,8 @@ internal static partial class MarkdownDocument
             md.Line($"  - Después: {MarkdownText.Indent(MarkdownText.Block(outcome), 4)}");
         }
 
+        WriteExchange(md, edge);
+
         if (json.TryGetProperty("data", out var data))
         {
             var operation = Text(data, "operation") switch
@@ -705,6 +707,137 @@ internal static partial class MarkdownDocument
             md.Blank();
             md.Line("    " + MarkdownText.Indent(MarkdownText.CodeBlock(example), 4));
             md.Blank();
+        }
+    }
+
+    /// <summary>
+    /// Operación e intercambio de una conexión (spec interacciones): operación, patrón y tecnología; comando,
+    /// parámetros, entidades, contrato del resultado, errores, timeout, reintentos, mensajería y gRPC; en un retorno, su
+    /// tipo y código.
+    /// </summary>
+    private static void WriteExchange(Md md, ExportEdge edge)
+    {
+        var json = edge.Json;
+        var head = new List<string>();
+        if (EdgeOperations.Name(json) is { } name)
+        {
+            head.Add($"operación {MarkdownText.Inline(name)}");
+        }
+
+        if (Text(json, "pattern") is { } pattern)
+        {
+            head.Add(EdgeOperations.PatternLabels.GetValueOrDefault(pattern, pattern));
+        }
+
+        if (Text(json, "technology") is { Length: > 0 } technology)
+        {
+            head.Add(MarkdownText.Inline(technology));
+        }
+
+        if (head.Count > 0)
+        {
+            md.Line($"  - Interacción: {string.Join(" · ", head)}");
+        }
+
+        if (json.TryGetProperty("result", out var result) && Text(result, "type") is { } type)
+        {
+            var line = $"  - Retorno: {EdgeOperations.ResultLabels.GetValueOrDefault(type, type)}";
+            if (Text(result, "code") is { Length: > 0 } code)
+            {
+                line += $" {MarkdownText.Code(code)}";
+            }
+
+            if (Text(result, "description") is { Length: > 0 } description)
+            {
+                line += $": {MarkdownText.Inline(description)}";
+            }
+
+            md.Line(line + (json.TryGetProperty("stream", out var s) && s.ValueKind == JsonValueKind.True ? " (mensaje de un flujo)" : string.Empty));
+        }
+
+        if (!json.TryGetProperty("exchange", out var x))
+        {
+            return;
+        }
+
+        if (Text(x, "description") is { Length: > 0 } what)
+        {
+            md.Line($"  - Qué hace: {MarkdownText.Indent(MarkdownText.Block(what), 4)}");
+        }
+
+        if (x.TryGetProperty("grpc", out var grpc))
+        {
+            md.Line($"  - gRPC: {MarkdownText.Code($"{Text(grpc, "service")}/{Text(grpc, "method")}".Trim('/'))}");
+        }
+
+        if (x.TryGetProperty("command", out var command) && Text(command, "text") is { Length: > 0 } commandText)
+        {
+            md.Line($"  - Comando ({Text(command, "language")}):");
+            md.Blank();
+            md.Line("    " + MarkdownText.Indent(MarkdownText.CodeBlock(commandText), 4));
+            md.Blank();
+        }
+
+        foreach (var p in Items(x, "params"))
+        {
+            var detail = string.Join(" ", new[] { Text(p, "type"), Text(p, "example") is { } ex ? $"= {ex}" : null }.Where(t => t is not null));
+            md.Line($"  - Parámetro: {MarkdownText.Code(Text(p, "name") ?? string.Empty)}{(detail.Length > 0 ? $" {MarkdownText.Code(detail)}" : string.Empty)}");
+        }
+
+        if (Strings(x, "entities") is { Count: > 0 } entities)
+        {
+            md.Line($"  - Entidades: {string.Join(", ", entities.Select(MarkdownText.Code))}");
+        }
+
+        if (x.TryGetProperty("result", out var contract))
+        {
+            var fields = Items(contract, "fields").Select(f => MarkdownText.Code(Text(f, "name") ?? string.Empty)).ToList();
+            var line = "  - Resultado";
+            if (Text(contract, "description") is { Length: > 0 } description)
+            {
+                line += $": {MarkdownText.Inline(description)}";
+            }
+
+            md.Line(fields.Count > 0 ? $"{line} (campos: {string.Join(", ", fields)})" : line);
+        }
+
+        foreach (var error in Items(x, "errors"))
+        {
+            var description = Text(error, "description") is { Length: > 0 } d ? $": {MarkdownText.Inline(d)}" : string.Empty;
+            md.Line($"  - Error {MarkdownText.Code(Text(error, "code") ?? string.Empty)}{description}");
+        }
+
+        if (x.TryGetProperty("timeoutMs", out var timeout) && timeout.TryGetInt32(out var ms))
+        {
+            md.Line(string.Create(CultureInfo.InvariantCulture, $"  - Timeout: {ms} ms"));
+        }
+
+        if (Text(x, "retry") is { Length: > 0 } retry)
+        {
+            md.Line($"  - Reintentos: {MarkdownText.Inline(retry)}");
+        }
+
+        var messaging = new List<string>();
+        void Add(string label, string property)
+        {
+            if (Text(x, property) is { Length: > 0 } value)
+            {
+                messaging.Add($"{label} {MarkdownText.Code(value)}");
+            }
+        }
+
+        Add("canal", "channel");
+        Add("mensaje", "message");
+        Add("correlación", "correlationKey");
+        Add("respuesta en", "replyChannel");
+        if (Strings(x, "acks") is { Count: > 0 } acks)
+        {
+            messaging.Add("confirmaciones: " + string.Join(", ", acks.Select(a => a == "broker" ? "del broker" : "del consumidor")));
+        }
+
+        if (messaging.Count > 0)
+        {
+            md.Line($"  - Mensajería: {string.Join(" · ", messaging)}");
         }
     }
 
@@ -774,20 +907,38 @@ internal static partial class MarkdownDocument
     /// </summary>
     private static string EdgeLabel(ExportEdge edge)
     {
-        var kind = EdgeKinds.GetValueOrDefault(edge.Kind, edge.Kind);
+        // El verbo sale de la operación (spec interacciones, ADR-0011); sin ella, del tipo de siempre.
+        var resultType = edge.Json.TryGetProperty("result", out var result) ? Text(result, "type") : null;
+        var kind = EdgeOperations.Verb(edge.Json)
+            ?? (edge.Kind == "response" ? EdgeOperations.ReturnVerb(edge.ParentOperation, resultType) : null)
+            ?? EdgeKinds.GetValueOrDefault(edge.Kind, edge.Kind);
+        if (edge.Json.TryGetProperty("stream", out var stream) && stream.ValueKind == JsonValueKind.True)
+        {
+            kind += " ⋯";
+        }
+
         var text = BranchLabel(edge) is { } branch ? (edge.Kind == "uses" ? branch : $"{branch} · {kind}") : kind;
         if (edge.Kind == "response" && edge.Json.TryGetProperty("status", out var status) && status.TryGetInt32(out var code))
         {
             text += string.Create(CultureInfo.InvariantCulture, $" {code}");
         }
 
+        var resultText = resultType is null || edge.Json.TryGetProperty("status", out _)
+            ? null
+            : string.Join(' ', new[] { resultType == "error" ? null : EdgeOperations.ResultLabels.GetValueOrDefault(resultType, resultType), Text(result, "code") }
+                .Where(t => !string.IsNullOrEmpty(t)));
+        var http = EdgeOperations.Of(edge.Json) is null or "http.request";
         if (!string.IsNullOrWhiteSpace(edge.Label))
         {
             text += $": {edge.Label}";
         }
-        else if (edge.Kind == "request" && Endpoint(edge) is { Length: > 0 } endpoint)
+        else if (edge.Kind == "request" && http && Endpoint(edge) is { Length: > 0 } endpoint)
         {
             text += $": {endpoint}";
+        }
+        else if (!string.IsNullOrEmpty(resultText))
+        {
+            text += $": {resultText}";
         }
 
         if (!string.IsNullOrWhiteSpace(edge.When))
@@ -910,8 +1061,12 @@ internal static partial class MarkdownDocument
             : node;
     }
 
-    private static List<ExportEdge> ReadEdges(JsonElement graph, Dictionary<string, ExportNode> nodes) =>
-        graph.GetProperty("edges").EnumerateObject()
+    private static List<ExportEdge> ReadEdges(JsonElement graph, Dictionary<string, ExportNode> nodes)
+    {
+        var all = graph.GetProperty("edges");
+        string? ParentOperation(JsonElement e) =>
+            Text(e, "replyTo") is { } parent && all.TryGetProperty(parent, out var request) ? EdgeOperations.Of(request) : null;
+        return all.EnumerateObject()
             .Select(p => p.Value)
             .Where(e => nodes.ContainsKey(e.GetProperty("from").GetString()!) && nodes.ContainsKey(e.GetProperty("to").GetString()!))
             .Select(e => new ExportEdge(
@@ -921,11 +1076,13 @@ internal static partial class MarkdownDocument
                 Text(e, "label"),
                 Text(e, "when"),
                 e.GetProperty("id").GetString()!,
-                e))
+                e,
+                ParentOperation(e)))
             .OrderBy(e => e.From.Key.Length).ThenBy(e => e.From.Key, StringComparer.Ordinal)
             .ThenBy(e => e.To.Key.Length).ThenBy(e => e.To.Key, StringComparer.Ordinal)
             .ThenBy(e => e.Id, StringComparer.Ordinal)
             .ToList();
+    }
 
     /// <summary>Textos de las notas adhesivas (anotaciones del lienzo), en orden de id; las vacías no salen.</summary>
     private static List<string> ReadStickyNotes(JsonElement graph) =>
@@ -1056,8 +1213,10 @@ internal static partial class MarkdownDocument
         public string? String(string property) => Text(Json, property);
     }
 
+    /// <summary>Una conexión; <c>ParentOperation</c> es la operación a la que responde un retorno (su verbo sale de ella).</summary>
     private sealed record ExportEdge(
-        ExportNode From, ExportNode To, string Kind, string? Label, string? When, string Id, JsonElement Json);
+        ExportNode From, ExportNode To, string Kind, string? Label, string? When, string Id, JsonElement Json,
+        string? ParentOperation = null);
 
     private sealed record ExportGroup(
         string Id, string Title, string Kind, List<ExportNode> Members, string Key, string? ParentId = null);

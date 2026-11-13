@@ -118,7 +118,15 @@ internal static partial class MarkdownDocument
             Blank(Text(e.Json, "outcome")),
             Blank(Text(e.Json, "notes")),
             ResolveInterface(e.To, e.Json, "toInterface", modules).Name,
-            ResolveInterface(e.From, e.Json, "fromInterface", modules).Name)).ToList();
+            ResolveInterface(e.From, e.Json, "fromInterface", modules).Name,
+            EdgeOperations.Of(e.Json),
+            EdgeOperations.Name(e.Json),
+            Text(e.Json, "pattern"),
+            Blank(Text(e.Json, "technology")),
+            e.Json.TryGetProperty("exchange", out var exchange) ? exchange.Clone() : null,
+            e.Json.TryGetProperty("result", out var result) ? result.Clone() : null,
+            e.Json.TryGetProperty("stream", out var stream) && stream.ValueKind == JsonValueKind.True ? true : null,
+            Text(e.Json, "correlatesWith"))).ToList();
 
         var rules = nodes
             .Where(n => n.Section == "rule" && n.String("mode") != "decision")
@@ -641,7 +649,9 @@ internal static partial class MarkdownDocument
 
             foreach (var step in flow.Steps)
             {
+                var marks = string.Join(", ", new[] { step.Parallel == true ? "a la vez que el anterior" : null, step.Timeout == true ? "termina en timeout" : null }.Where(m => m is not null));
                 md.Line(string.Create(CultureInfo.InvariantCulture, $"{step.N}. {MarkdownText.Inline(step.Text)}")
+                    + (marks.Length > 0 ? $" ({marks})" : string.Empty)
                     + (step.Note is { } note ? $" — {MarkdownText.Inline(note)}" : string.Empty));
             }
 
@@ -697,8 +707,10 @@ internal static partial class MarkdownDocument
 
             if (Text(step, "edgeId") is { } edgeId)
             {
+                // Fan-out y desenlaces (spec interacciones): a la vez que el anterior, o termina en timeout.
+                bool? Flag(string name) => step.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True ? true : null;
                 return edgeById.TryGetValue(edgeId, out var edge)
-                    ? new AiStep(n, EdgeText(edge, s => s), null, edgeId, note, null)
+                    ? new AiStep(n, EdgeText(edge, s => s), null, edgeId, note, null, Flag("parallel"), Flag("timeout"))
                     : new AiStep(n, "(conexión eliminada)", null, edgeId, note, true);
             }
 
@@ -746,7 +758,9 @@ internal static partial class MarkdownDocument
             }
         }
 
-        foreach (var request in edges.Where(e => e.Kind == "request"))
+        // Una operación que espera retorno (spec interacciones): solicitud HTTP, consulta, invocación…
+        foreach (var request in edges.Where(e => e.Kind == "request"
+            && EdgeOperations.ExpectsReturn(EdgeOperations.Of(e.Json), Text(e.Json, "pattern"))))
         {
             if (!edges.Any(e => e.Kind == "response" && Text(e.Json, "replyTo") == request.Id))
             {
@@ -755,10 +769,24 @@ internal static partial class MarkdownDocument
             }
         }
 
-        foreach (var response in edges.Where(e => e.Kind == "response" && !e.Json.TryGetProperty("status", out _)))
+        // El código HTTP solo falta en la respuesta a una solicitud HTTP; el resto de los retornos dicen su tipo.
+        foreach (var response in edges.Where(e => e.Kind == "response" && !e.Json.TryGetProperty("status", out _)
+            && !e.Json.TryGetProperty("result", out _) && e.ParentOperation is null or "http.request"))
         {
             gaps.Add(new AiGap("response-without-status", response.Id,
                 $"La respuesta {Q(EdgeText(response, s => s))} no tiene código HTTP."));
+        }
+
+        // Tipo y acceso a datos que se contradicen: se señala, no se deduce (spec interacciones, criterio 9).
+        foreach (var edge in edges)
+        {
+            var access = EdgeOperations.Access(edge.Json, edge.Kind);
+            var data = edge.Json.TryGetProperty("data", out var d) ? Text(d, "operation") : null;
+            if (access is not null && data is not null && access != data)
+            {
+                gaps.Add(new AiGap("operation-conflict", edge.Id,
+                    $"La conexión {Q(EdgeText(edge, s => s))} {(access == "read" ? "lee" : "escribe")} según su operación, pero su acceso a datos dice que {(data == "read" ? "lee" : "escribe")}: hay que revisar cuál es."));
+            }
         }
 
         foreach (var node in nodes.Where(n => !edges.Any(e => e.From.Id == n.Id || e.To.Id == n.Id)))
@@ -910,7 +938,15 @@ internal sealed record AiConnection(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Outcome,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Notes,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ToInterface = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FromInterface = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FromInterface = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Operation = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? OperationName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Pattern = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Technology = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Exchange = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Result = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Stream = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? CorrelatesWith = null);
 
 internal sealed record AiFlow(string Id, string Name, string Kind, IReadOnlyList<AiStep> Steps);
 
@@ -920,7 +956,9 @@ internal sealed record AiStep(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? NodeId,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EdgeId,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Note,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Broken);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Broken,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Parallel = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Timeout = null);
 
 internal sealed record AiRule(
     string Id,

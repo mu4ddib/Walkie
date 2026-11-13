@@ -102,7 +102,7 @@ describe('notas y detalle de las conexiones', () => {
     expect(screen.queryByRole('group', { name: 'Contrato de la API' })).not.toBeInTheDocument();
   });
 
-  it('una conexión documenta notas, acceso a datos y un ejemplo propio', async () => {
+  it('una conexión documenta notas, su operación con entidades y un ejemplo propio', async () => {
     const { store, edgeId } = renderPanel((s) => {
       const api = s.addNode('api', { x: 0, y: 0 });
       const db = s.addNode('database', { x: 0, y: 0 });
@@ -110,14 +110,55 @@ describe('notas y detalle de las conexiones', () => {
     });
 
     await userEvent.type(screen.getByLabelText('Notas de la interacción'), 'En una transacción');
-    await userEvent.selectOptions(screen.getByLabelText('Operación'), 'write');
-    await userEvent.type(screen.getByLabelText('Entidades'), 'cuentas, movimientos');
+    await userEvent.selectOptions(screen.getByLabelText('Operación'), 'db.write');
+    await userEvent.type(screen.getByLabelText('Tablas o entidades'), 'cuentas, movimientos');
     await userEvent.type(screen.getByLabelText('Ejemplo de payload'), 'INSERT');
 
     expect(store.getState().edges[edgeId]).toMatchObject({
+      kind: 'request',
+      operation: 'db.write',
       notes: 'En una transacción',
-      data: { operation: 'write', entities: ['cuentas', 'movimientos'] },
+      exchange: { entities: ['cuentas', 'movimientos'] },
       example: 'INSERT',
     });
+    expect(store.getState().edges[edgeId]!.data).toBeUndefined();
+  });
+
+  it('un tipo «lee» con acceso «escribe» se señala y se resuelve eligiendo, sin deducir', async () => {
+    const { store, edgeId } = renderPanel((s) => {
+      const api = s.addNode('api', { x: 0, y: 0 });
+      const db = s.addNode('database', { x: 0, y: 0 });
+      const id = s.connect(api, db, 'reads')!;
+      s.updateEdge(id, { data: { operation: 'write', entities: ['cuentas'] } });
+      return { edgeId: id };
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Necesita revisión');
+    expect(store.getState().edges[edgeId]).toMatchObject({ kind: 'reads', data: { operation: 'write' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Escribir' }));
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(store.getState().edges[edgeId]).toMatchObject({ kind: 'request', operation: 'db.write', exchange: { entities: ['cuentas'] } });
+    expect(store.getState().edges[edgeId]!.data).toBeUndefined();
+  });
+
+  it('una consulta añade sus resultados (no «respuestas») con su tipo', async () => {
+    const { store, edgeId } = renderPanel((s) => {
+      const api = s.addNode('api', { x: 0, y: 0 });
+      const db = s.addNode('database', { x: 0, y: 0 });
+      const id = s.connect(api, db)!;
+      s.updateEdge(id, { operation: 'db.query', kind: 'request' });
+      return { edgeId: id };
+    });
+
+    expect(screen.queryByRole('button', { name: /Añadir respuesta/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '+ Añadir resultado' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Añadir retorno resultado vacío' }));
+
+    const returns = Object.values(store.getState().edges).filter((e) => e.replyTo === edgeId);
+    expect(returns.map((r) => [r.kind, r.from, r.result?.type])).toEqual([
+      ['response', store.getState().edges[edgeId]!.to, 'success'],
+      ['response', store.getState().edges[edgeId]!.to, 'empty'],
+    ]);
   });
 });

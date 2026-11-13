@@ -1462,3 +1462,54 @@ p.edge-contract {
 .module-end + .module-end {
   margin-top: 8px;
 }
+
+/* Interacciones (spec interacciones): contradicción a revisar, tipo de retorno y confirmaciones. */
+.edge-review {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid var(--warn);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--warn) 12%, var(--sand-raised));
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.edge-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.edge-link-type {
+  padding: 0 4px;
+  border-radius: var(--radius-s);
+  background: var(--dune-100);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.edge-link-type[data-error] {
+  background: color-mix(in srgb, var(--danger) 16%, var(--sand-raised));
+  color: var(--danger);
+}
+
+.edge-acks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.edge-acks legend {
+  margin-bottom: 4px;
+  color: var(--stone-700);
+  font-size: 12.5px;
+}
+
+.edge-subtitle {
+  margin: 8px 0 4px;
+  font-size: 12.5px;
+}

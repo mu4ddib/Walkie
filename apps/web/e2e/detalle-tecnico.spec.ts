@@ -53,10 +53,12 @@ test('inspector técnico: contrato, base de datos, notas y conexión recargan id
   await structure.getByLabel('Clave').selectOption('primary');
   await expect(node(page, 1).locator('.pixel-node-detail')).toHaveText('PostgreSQL · 1 tabla');
 
-  // Conexión: acceso a datos y ejemplo (criterio 15).
+  // Conexión: su operación con entidades y ejemplo (criterio 15; spec interacciones).
   await page.locator('.kind-edge-label').click();
-  await inspector.getByLabel('Operación').selectOption('write');
-  await inspector.getByLabel('Entidades').fill('transferencias');
+  await inspector.getByLabel('Operación', { exact: true }).selectOption('db.write');
+  await inspector.locator('summary', { hasText: 'Entidades' }).click();
+  await inspector.getByLabel('Tablas o entidades').fill('transferencias');
+  await inspector.locator('summary', { hasText: 'Ejemplo de payload' }).click();
   await inspector.getByLabel('Ejemplo de payload').fill('{ "monto": 1000 }');
 
   // Guardar y recargar: todo vuelve igual (criterio 17).
@@ -69,7 +71,8 @@ test('inspector técnico: contrato, base de datos, notas y conexión recargan id
   await expect(contract.getByLabel('Nombre', { exact: true })).toHaveValue('X-Canal');
   await expect(contract.getByLabel('Significado').nth(1)).toHaveValue('Saldo insuficiente');
   await page.locator('.kind-edge-label').click();
-  await expect(inspector.getByLabel('Entidades')).toHaveValue('transferencias');
+  await expect(inspector.getByLabel('Operación', { exact: true })).toHaveValue('db.write');
+  await expect(inspector.getByLabel('Tablas o entidades')).toHaveValue('transferencias');
   await expect(inspector.getByLabel('Ejemplo de payload')).toHaveValue('{ "monto": 1000 }');
 
   // El contrato pasa entero al catálogo y se ve en la definición compartida.

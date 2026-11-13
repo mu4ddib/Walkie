@@ -5,7 +5,7 @@ import { useOpenModule } from '../canvas/useOpenModule';
 import { useGraphStore } from '../store/useGraphStore';
 import { FLOW_SPEEDS, setFlowSpeed } from '../workspace/session';
 import { stepSummary } from './flowText';
-import { advance, ended, firstPhase, goTo, phaseDuration, type Playing } from './flowPlayback';
+import { advance, ended, firstPhase, goTo, phaseDuration, stepGroup, type Playing } from './flowPlayback';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 
 export interface Rect {
@@ -100,7 +100,12 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
       return { ...p, mode: 'play' };
     });
   const restart = () => setPlaying((p) => p && { ...p, step: 0, phase: firstPhase(tour, 0), mode: 'play' });
-  const next = () => setPlaying((p) => (p && p.step < last ? goTo(tour, p, p.step + 1) : p));
+  // El siguiente después de los simultáneos del paso (spec interacciones).
+  const next = () =>
+    setPlaying((p) => {
+      const after = p ? stepGroup(tour, p.step).at(-1)! + 1 : 0;
+      return p && after <= last ? goTo(tour, p, after) : p;
+    });
   const previous = () => setPlaying((p) => (p && p.step > 0 ? goTo(tour, p, p.step - 1) : p));
   const jump = (index: number) => setPlaying((p) => p && goTo(tour, p, index));
 
@@ -225,6 +230,17 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
         <p className="flow-route" data-removed={current?.removedEdge ? true : undefined}>
           <span className="flow-step-number">{playing.step + 1}</span> {describe(playing.step)}
         </p>
+        {/* Pasos simultáneos (fan-out) y desenlace por timeout (spec interacciones). */}
+        {stepGroup(tour, playing.step)
+          .slice(1)
+          .map((i) => (
+            <p key={i} className="flow-route flow-route-parallel">
+              <span className="flow-step-number">{i + 1}</span> a la vez: {describe(i)}
+            </p>
+          ))}
+        {stepGroup(tour, playing.step).some((i) => steps[i]?.timeout) && (
+          <p className="flow-note flow-timeout-note">⏱ No llega respuesta: quien espera termina por timeout.</p>
+        )}
         {current?.note ? <p className="flow-note">{current.note}</p> : null}
         {inside(current?.edgeId) && (
           // El paso pasa por la interfaz de un módulo con recorrido interno (spec modulos-compartidos, criterio 24).

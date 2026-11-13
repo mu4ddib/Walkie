@@ -98,6 +98,7 @@ export interface WalkieAIContextV0 {
       | 'api-without-contract'
       | 'api-without-responses'
       | 'request-without-response'
+      | 'operation-conflict'
       | 'response-without-status'
       | 'isolated-node'
       | 'branch-without-target'
@@ -340,6 +341,32 @@ export interface Connection {
   fromInterface?: string;
   outcome?: string;
   notes?: string;
+  /**
+   * Operación de la conexión (spec interacciones): la fuente de verdad del verbo, ej. db.query
+   */
+  operation?: string;
+  /**
+   * Nombre de la operación, ej. «Consultar» o el de una personalizada
+   */
+  operationName?: string;
+  pattern?: 'request-response' | 'one-way' | 'pub-sub' | 'stream';
+  technology?: string;
+  /**
+   * Detalle técnico del intercambio, tal como está en el lienzo ($defs/exchange de walkie-graph)
+   */
+  exchange?: {};
+  /**
+   * Tipo y código de un retorno ($defs/result de walkie-graph)
+   */
+  result?: {};
+  /**
+   * El retorno es un mensaje de un flujo (secuencia), no una alternativa
+   */
+  stream?: boolean;
+  /**
+   * Id de la operación original de una respuesta asíncrona
+   */
+  correlatesWith?: string;
 }
 export interface Flow {
   id: string;
@@ -358,6 +385,14 @@ export interface Flow {
      * La caja o la conexión del paso ya no existe
      */
     broken?: boolean;
+    /**
+     * Ocurre a la vez que el paso anterior (fan-out)
+     */
+    parallel?: boolean;
+    /**
+     * Quien espera no recibe retorno: el paso termina en timeout
+     */
+    timeout?: boolean;
   }[];
 }
 export interface Module {

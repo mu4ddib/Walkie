@@ -63,11 +63,14 @@ export function stepHeading(
     const display = edgeDisplay(edge, {
       branchLabel: branchLabel(edge, nodes),
       targetHttp: to && (refTarget(to, items)?.http ?? to.http),
+      parent: edge.replyTo ? edges[edge.replyTo] : undefined,
     });
+    // Marcas del paso (spec interacciones): simultáneo con el anterior y desenlace por timeout.
+    const flags = [step.parallel ? 'a la vez' : '', step.timeout ? 'timeout' : ''].filter(Boolean).join(', ');
     return {
-      glyph: '⇢',
+      glyph: step.parallel ? '⇉' : '⇢',
       title: `${nodeTitle(nodes[edge.from], items)} → ${nodeTitle(to, items)}`,
-      kind: edgeDisplayText(display),
+      kind: edgeDisplayText(display) + (flags ? ` (${flags})` : ''),
       missing: false,
     };
   }

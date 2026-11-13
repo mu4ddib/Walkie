@@ -3,7 +3,14 @@ import { useStore } from 'zustand';
 import { v7 as uuidv7 } from 'uuid';
 import type { Edge, Group, InterfaceRef, ModuleInterface, Node, StickyNote, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import { GRID } from '../theme/palette';
-import { normalizeDatabase, normalizeEdgeData, normalizeEdgeRequest, normalizeHttp } from '../contracts/contracts';
+import {
+  normalizeDatabase,
+  normalizeEdgeData,
+  normalizeEdgeRequest,
+  normalizeExchange,
+  normalizeHttp,
+  normalizeResult,
+} from '../contracts/contracts';
 import { canNest, descendantsOf, inferHierarchy, isInside, ownerOf } from './hierarchy';
 import { History, sameSnapshot, snapshotOf, type InterfaceRedirects, type Snapshot } from './history';
 export type { InterfaceRedirects } from './history';
@@ -136,6 +143,23 @@ export interface EdgePatch {
   /** Interfaz del módulo de origen o destino (spec modulos-compartidos); `null` la quita (el módulo completo). */
   fromInterface?: InterfaceRef | null;
   toInterface?: InterfaceRef | null;
+  /**
+   * Operación (spec interacciones, ADR-0011): la fuente de verdad del verbo y los retornos. Al fijarla se quita el
+   * `data.operation` anterior (sus entidades pasan al intercambio); `null` vuelve a interpretar la conexión por su tipo.
+   */
+  operation?: Edge['operation'] | null;
+  /** Nombre de la operación personalizada (texto vacío lo quita). */
+  customOperation?: string;
+  pattern?: Edge['pattern'] | null;
+  technology?: string;
+  /** Detalle técnico del intercambio (se normaliza; vacío lo quita). */
+  exchange?: Edge['exchange'] | null;
+  /** Tipo de retorno (solo en un retorno). */
+  result?: Edge['result'] | null;
+  /** Retorno que es parte de un stream (secuencia) y no un escenario alternativo. */
+  stream?: boolean;
+  /** Respuesta asíncrona: la operación original con la que se correlaciona; `null` la desvincula. */
+  correlatesWith?: string | null;
 }
 
 /** Tipo de una interfaz de módulo: ofrece, evento o dependencia requerida. */
@@ -327,12 +351,14 @@ function validStatus(status: number | null | undefined): status is number {
 
 /** Quita `replyTo` de las respuestas cuya solicitud ya no existe. */
 function withoutDanglingReplies(edges: Record<string, Edge>): Record<string, Edge> {
-  if (!Object.values(edges).some((e) => e.replyTo && !edges[e.replyTo])) return edges;
+  const dangling = (e: Edge) => (e.replyTo && !edges[e.replyTo]) || (e.correlatesWith && !edges[e.correlatesWith]);
+  if (!Object.values(edges).some(dangling)) return edges;
   return Object.fromEntries(
     Object.entries(edges).map(([key, e]) => {
-      if (!e.replyTo || edges[e.replyTo]) return [key, e];
+      if (!dangling(e)) return [key, e];
       const copy = { ...e };
-      delete copy.replyTo;
+      if (copy.replyTo && !edges[copy.replyTo]) delete copy.replyTo;
+      if (copy.correlatesWith && !edges[copy.correlatesWith]) delete copy.correlatesWith;
       return [key, copy];
     }),
   );
@@ -480,7 +506,12 @@ export interface GraphActions {
    * Respuesta a una solicitud: conexión `response` en sentido inverso, vinculada con `replyTo`. Una solicitud puede
    * tener varias (éxito, error). Devuelve su id o `null` si `requestId` no es una conexión `request`.
    */
-  addResponse(requestId: string, init?: { status?: number; label?: string }): string | null;
+  /**
+   * Retorno de una operación (spec interacciones): el resultado de una consulta, la respuesta HTTP, la confirmación de
+   * una publicación… En sentido inverso, vinculado por `replyTo`. Cualquier operación que no sea un retorno, una
+   * navegación o una relación general lo admite (el inspector decide cuándo ofrecerlo según la operación).
+   */
+  addResponse(requestId: string, init?: { status?: number; label?: string; result?: Edge['result']; stream?: boolean }): string | null;
   setEdgeKind(id: string, kind: EdgeKind): void;
   /** Tipo, etiqueta (`label`), condición (`when`) y el detalle propio de cada interacción (`EdgePatch`). */
   updateEdge(id: string, patch: EdgePatch): void;
@@ -526,6 +557,11 @@ export interface GraphActions {
   reorderSteps(tourId: string, order: readonly number[]): void;
   /** Nota del paso; vacía la quita. */
   updateStepNote(tourId: string, index: number, note: string): void;
+  /**
+   * Marcas de reproducción de un paso (spec interacciones): `parallel` ocurre a la vez que el anterior (no en el
+   * primero) y `timeout` termina sin retorno (solo en pasos de conexión). `false` quita la marca.
+   */
+  setStepFlags(tourId: string, index: number, flags: { parallel?: boolean; timeout?: boolean }): void;
   /** Sube (-1) o baja (+1) un paso; fuera de rango no hace nada. */
   moveStep(tourId: string, index: number, delta: -1 | 1): void;
   removeStep(tourId: string, index: number): void;
@@ -1159,13 +1195,16 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
 
       addResponse: (requestId, init) => {
         const request = get().edges[requestId];
-        if (!request || request.kind !== 'request') return null;
+        if (!request || request.kind === 'response' || request.kind === 'navigation' || request.kind === 'uses') return null;
         const id = newId();
         let edge: Edge = { id, from: request.to, to: request.from, kind: 'response', replyTo: requestId };
         // La respuesta sale de la misma interfaz a la que llegó la solicitud (y vuelve a la que la hizo).
         if (request.toInterface) edge.fromInterface = request.toInterface;
         if (request.fromInterface) edge.toInterface = request.fromInterface;
         if (validStatus(init?.status)) edge.status = init.status;
+        const result = normalizeResult(init?.result);
+        if (result) edge.result = result;
+        if (init?.stream) edge.stream = true;
         edge = withText(edge, 'label', init?.label, EDGE_TEXT_MAX_LENGTH);
         set((s) => ({ edges: { ...s.edges, [id]: edge }, dirty: true }));
         return id;
@@ -1205,8 +1244,59 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         }
         if (patch.replyTo !== undefined) {
           const target = patch.replyTo ? get().edges[patch.replyTo] : undefined;
-          if (target && target.id !== id && target.kind === 'request') next.replyTo = target.id;
+          const operation = target && target.kind !== 'response' && target.kind !== 'navigation' && target.kind !== 'uses';
+          if (target && target.id !== id && operation) next.replyTo = target.id;
           else if (patch.replyTo === null) delete next.replyTo;
+        }
+        if (patch.correlatesWith !== undefined) {
+          if (patch.correlatesWith && patch.correlatesWith !== id && get().edges[patch.correlatesWith]) {
+            next.correlatesWith = patch.correlatesWith;
+          } else if (patch.correlatesWith === null) delete next.correlatesWith;
+        }
+        if (patch.operation !== undefined) {
+          if (patch.operation && next.kind !== 'response') {
+            next.operation = patch.operation;
+            // La operación pasa a ser la fuente de verdad: el «Lee/Escribe» anterior se va (sus entidades se conservan).
+            if (next.data?.operation) {
+              const entities = next.data.entities;
+              delete next.data;
+              if (entities?.length && !next.exchange?.entities?.length) {
+                next.exchange = normalizeExchange({ ...next.exchange, entities }) ?? next.exchange;
+              }
+              if (entities?.length && !next.exchange) next.data = { entities };
+            }
+          } else if (patch.operation === null) delete next.operation;
+          if (next.operation !== 'custom') delete next.customOperation;
+        }
+        next = withText(next, 'customOperation', patch.customOperation, EDGE_TEXT_MAX_LENGTH);
+        if (next.customOperation && next.operation !== 'custom') delete next.customOperation;
+        if (patch.pattern !== undefined) {
+          if (patch.pattern) next.pattern = patch.pattern;
+          else delete next.pattern;
+        }
+        next = withText(next, 'technology', patch.technology, EDGE_TEXT_MAX_LENGTH);
+        if (patch.exchange !== undefined) {
+          const exchange = normalizeExchange(patch.exchange ?? undefined);
+          if (exchange && next.kind !== 'response') next.exchange = exchange;
+          else delete next.exchange;
+        }
+        if (patch.result !== undefined) {
+          const result = normalizeResult(patch.result ?? undefined);
+          if (result && next.kind === 'response') next.result = result;
+          else delete next.result;
+        }
+        if (patch.stream !== undefined) {
+          if (patch.stream && next.kind === 'response') next.stream = true;
+          else delete next.stream;
+        }
+        // Un retorno no tiene operación propia; una operación no tiene tipo de retorno (schema).
+        if (next.kind === 'response') {
+          delete next.operation;
+          delete next.customOperation;
+          delete next.exchange;
+        } else {
+          delete next.result;
+          delete next.stream;
         }
         if (patch.reverse) {
           next = { ...next, from: edge.to, to: edge.from };
@@ -1229,7 +1319,23 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           } else if (patch.branch === null) delete next.branch;
         }
         if (sameJson(edge, next)) return;
-        set((s) => ({ edges: { ...s.edges, [id]: next }, dirty: true }));
+        // Invertir una operación invierte también sus retornos: siguen yendo en sentido contrario (spec interacciones).
+        const flipped =
+          patch.reverse && next.kind !== 'response'
+            ? Object.fromEntries(
+                Object.values(get().edges)
+                  .filter((e) => e.kind === 'response' && e.replyTo === id)
+                  .map((e) => {
+                    const r: Edge = { ...e, from: e.to, to: e.from };
+                    delete r.fromInterface;
+                    delete r.toInterface;
+                    if (e.toInterface) r.fromInterface = e.toInterface;
+                    if (e.fromInterface) r.toInterface = e.fromInterface;
+                    return [e.id, r];
+                  }),
+              )
+            : {};
+        set((s) => ({ edges: { ...s.edges, ...flipped, [id]: next }, dirty: true }));
       },
 
       removeEdge: (id) => {
@@ -1387,6 +1493,23 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         if (new Set(order).size !== order.length || order.some((i) => !tour.steps[i])) return;
         if (order.every((i, at) => i === at)) return;
         putTour({ ...tour, steps: order.map((i) => tour.steps[i]!) });
+      },
+
+      setStepFlags: (tourId, index, flags) => {
+        const tour = get().tours[tourId];
+        const step = tour?.steps[index];
+        if (!tour || !step) return;
+        const next = { ...step };
+        if (flags.parallel !== undefined && index > 0) {
+          if (flags.parallel) next.parallel = true;
+          else delete next.parallel;
+        }
+        if (flags.timeout !== undefined && (step.edgeId || !flags.timeout)) {
+          if (flags.timeout) next.timeout = true;
+          else delete next.timeout;
+        }
+        if (next.parallel === step.parallel && next.timeout === step.timeout) return;
+        putTour({ ...tour, steps: tour.steps.map((x, i) => (i === index ? next : x)) });
       },
 
       updateStepNote: (tourId, index, note) => {
