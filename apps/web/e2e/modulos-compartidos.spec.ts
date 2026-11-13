@@ -138,6 +138,7 @@ test('un módulo Usuarios reutilizado desde tres features, cada una con su inter
   await expect(moduleBox(page).getByRole('list', { name: 'Interfaces usadas en este lienzo' })).toContainText('Crear usuario');
 
   // El inspector dice a qué interfaz llega y permite cambiarla.
+  await page.locator('.kind-edge-label').click();
   const inspector = page.getByRole('complementary', { name: 'Propiedades' });
   await expect(inspector.getByLabel('Llega a Usuarios')).toHaveValue('ipost');
   await capture(page, '3-conexion');

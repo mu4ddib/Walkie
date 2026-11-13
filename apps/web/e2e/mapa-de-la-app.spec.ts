@@ -121,9 +121,11 @@ test('mapa de la app: features, portales, componentes compartidos, abrir en el l
   await page.mouse.move(before.x + 40, before.y + 20);
   await page.mouse.down();
   await page.mouse.move(before.x + 40, before.y + 220, { steps: 10 });
+  // La espera se registra antes de soltar: el guardado puede responder antes de que la caja termine de moverse.
+  const saved = page.waitForResponse((r) => r.url().endsWith('/map/layout') && r.request().method() === 'PUT');
   await page.mouse.up();
   await expect.poll(async () => (await featureBox(page, 'Login').boundingBox())!.y).toBeGreaterThan(before.y + 100);
-  await page.waitForResponse((r) => r.url().endsWith('/map/layout') && r.request().method() === 'PUT');
+  await saved;
   const moved = (await featureBox(page, 'Login').boundingBox())!;
   const other = (await featureBox(page, 'Conectar cuentas para eventos').boundingBox())!;
   await page.reload();

@@ -1058,11 +1058,7 @@ function CanvasInner({
             )
           : undefined;
       // Desde el punto de una salida de decisión, la conexión nace como esa rama.
-      const id = connect(c.source, c.target, kind, { branch: c.sourceHandle, ...picked });
-      if (id) {
-        setSelectedNodes(new Set());
-        setSelectedEdges(new Set([id]));
-      }
+      connect(c.source, c.target, kind, { branch: c.sourceHandle, ...picked });
     },
     [connect, graphNodes, catalog.items, catalog.modules],
   );

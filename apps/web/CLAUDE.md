@@ -65,6 +65,7 @@ apps/web/e2e/    # Playwright: lienzo-base.spec.ts (gate de la fase 1), panel-pr
 
 ## Trampas conocidas
 
+- **`waitForResponse` después de la acción**: si la respuesta llega antes de registrar la espera, la prueba se cuelga hasta el timeout (le pasaba a `mapa-de-la-app.spec.ts` al acomodar). Guarda la promesa antes de la acción y espérala después.
 - **La caja de un módulo es el `.pixel-node`**: `ModuleNode` pone `pixel-node module-node` en el mismo elemento; en E2E, `.module-node` ya tiene `data-selected` (no busques un `.pixel-node` dentro).
 - **Glifos en Press Start 2P**: la fuente de títulos no tiene `≡` (sale un cuadrado); por eso el módulo usa `[::]`. Prueba un glifo nuevo en una captura antes de usarlo en `.pixel-node-kind`.
 - **Llamar en el render a una función que lee refs** (`banner?.(go)` con `go` de `useCallback` sobre refs) rompe `react-hooks/refs`. Pasa el elemento y entrega la función por contexto (`EditorNavigateContext`).
