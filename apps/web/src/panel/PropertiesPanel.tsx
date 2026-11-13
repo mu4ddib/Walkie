@@ -13,6 +13,8 @@ import { InputsSection, RuleUsages } from './InputsSection';
 import { MoveToCatalog } from './MoveToCatalog';
 import { PortalPanel } from './PortalPanel';
 import { RefPanel } from './RefPanel';
+import { ModulePanel } from './ModulePanel';
+import { ModuleInterfacesOverview, NodeInterfaces } from './InterfacesSection';
 import { ScreenImage } from './ScreenImage';
 import { useCanvasCatalog } from '../catalog/catalogContext';
 import { TextField } from './TextField';
@@ -41,6 +43,7 @@ export function PropertiesPanel({
   preview,
   flows,
   onNest,
+  onExtract,
 }: {
   nodeId: string | null;
   edgeId: string | null;
@@ -50,6 +53,8 @@ export function PropertiesPanel({
   noteId?: string | null;
   /** Meter o sacar algo de un grupo desde su inspector (el lienzo además agranda el grupo si hace falta). */
   onNest?: (id: string, groupId: string | null) => void;
+  /** «Convertir en módulo» desde el inspector de un grupo (spec modulos-compartidos). */
+  onExtract?: (ids: string[]) => void;
   /** Sección "Tours" cuando no hay nada seleccionado (spec modo-tour); sin ella, solo la ayuda. */
   tours?: ToursSectionProps;
 } & EdgePanelActions) {
@@ -60,12 +65,13 @@ export function PropertiesPanel({
       ) : edgeId ? (
         <EdgePanel key={edgeId} id={edgeId} onSelect={onSelect} preview={preview} flows={flows} />
       ) : groupId ? (
-        <GroupPanel key={groupId} id={groupId} onNest={onNest} />
+        <GroupPanel key={groupId} id={groupId} onNest={onNest} onExtract={onExtract} />
       ) : noteId ? (
         <StickyPanel key={noteId} id={noteId} />
       ) : (
         <>
           <p className="panel-help">Selecciona un nodo o una conexión para ver y editar sus propiedades.</p>
+          <ModuleOverview onSelect={onSelect} />
           {tours && <ToursSection {...tours} />}
         </>
       )}
@@ -81,10 +87,11 @@ function NodePanel({ id }: { id: string }) {
   const setResource = useGraphStore((s) => s.setResource);
   const setRuntime = useGraphStore((s) => s.setRuntime);
   const methodId = useId();
-  const { appId } = useCanvasCatalog();
+  const { appId, currentModuleId } = useCanvasCatalog();
   if (!node) return null;
   if (node.type === 'ref') return <RefPanel node={node} />;
   if (node.type === 'portal') return <PortalPanel node={node} />;
+  if (node.type === 'module') return <ModulePanel node={node} />;
   const meta = nodeLabel(node);
   const decision = node.type === 'rule' && node.mode === 'decision';
 
@@ -164,6 +171,8 @@ function NodePanel({ id }: { id: string }) {
       )}
       {node.type === 'service' && <RuntimeField value={node.runtime} onChange={(runtime) => setRuntime(id, runtime)} />}
       <NotesField node={node} />
+      {/* En el lienzo de un módulo, cada caja puede ser una interfaz (spec modulos-compartidos). */}
+      {currentModuleId && <NodeInterfaces node={node} />}
       {/* Solo con catálogo (lienzo de una app): el botón llama a la API. */}
       {appId && CATALOG_NODE_TYPES.includes(node.type) && <MoveToCatalog appId={appId} node={node} />}
     </>
@@ -194,4 +203,10 @@ function StickyPanel({ id }: { id: string }) {
       </button>
     </>
   );
+}
+
+/** En el lienzo de un módulo, sin selección: sus interfaces. */
+function ModuleOverview({ onSelect }: { onSelect?: (target: { nodeId?: string }) => void }) {
+  const { currentModuleId } = useCanvasCatalog();
+  return currentModuleId ? <ModuleInterfacesOverview onSelect={onSelect} /> : null;
 }

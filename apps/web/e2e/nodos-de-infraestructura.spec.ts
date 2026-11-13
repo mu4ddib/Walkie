@@ -95,7 +95,7 @@ test('inspector del recurso, guardarlo como componente y reutilizarlo; runtime d
   await expect(inspector.getByLabel('Nombre del recurso')).toHaveValue('comprobantes-prod');
 
   // Desde «Componentes», filtrado por recursos, se usa de nuevo.
-  await page.getByRole('button', { name: 'Componentes', exact: true }).click();
+  await page.getByRole('button', { name: 'Catálogo', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Catálogo' });
   await panel.getByRole('button', { name: 'Recurso', exact: true }).click();
   await panel.getByRole('button', { name: /Data Lake|Bucket/ }).click();

@@ -40,6 +40,27 @@ export interface WalkieImportSummaryV0 {
     id?: string;
   }[];
   /**
+   * Módulos compartidos del archivo (spec modulos-compartidos): los que se crean y los que ya estaban en la app (mismo id) y se reutilizan
+   */
+  modules?: {
+    /**
+     * Nombre en el archivo
+     */
+    sourceName: string;
+    /**
+     * Nombre en la app
+     */
+    name: string;
+    /**
+     * true: ya estaba en la app y no se crea
+     */
+    reused: boolean;
+    /**
+     * Id del módulo en la app (no viene con dryRun si se crea)
+     */
+    id?: string;
+  }[];
+  /**
    * Elementos del catálogo que se crean (con id nuevo)
    */
   newCatalogItems: number;

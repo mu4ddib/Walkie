@@ -89,7 +89,10 @@ export interface EdgeDisplay {
   branch?: boolean;
 }
 
-export function edgeDisplay(edge: EdgeLike, context: { branchLabel?: string; targetHttp?: Http } = {}): EdgeDisplay {
+export function edgeDisplay(
+  edge: EdgeLike,
+  context: { branchLabel?: string; targetHttp?: Http; interfaceName?: string } = {},
+): EdgeDisplay {
   const style = KIND_STYLES[edge.kind];
   if (context.branchLabel) {
     // La salida sustituye al genérico "usa"; otro tipo (navega, llama…) se conserva detrás.
@@ -107,7 +110,8 @@ export function edgeDisplay(edge: EdgeLike, context: { branchLabel?: string; tar
   const endpoint = edge.label ? '' : endpointText(edge, context.targetHttp);
   return {
     main: KIND_LABELS[edge.kind],
-    detail: edge.label ?? (endpoint || undefined),
+    // A la interfaz de un módulo sin endpoint (un evento, una dependencia), su nombre (spec modulos-compartidos).
+    detail: edge.label ?? (endpoint || context.interfaceName || undefined),
     mono: !edge.label && !!endpoint,
     code,
     when,

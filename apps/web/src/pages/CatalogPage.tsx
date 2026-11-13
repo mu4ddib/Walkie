@@ -21,6 +21,7 @@ import { RuntimeField } from '../panel/contract/RuntimeField';
 import '../panel/panel.css';
 import { QueryState } from '../ui/QueryState';
 import { CATALOG_TYPES, catalogPath } from './catalogPaths';
+import { ModulesSection } from '../modules/ModulesSection';
 
 /**
  * Catálogo de una app (spec catalogo, criterios 1 a 5): lista agrupada por tipo, crear, y el detalle
@@ -59,6 +60,7 @@ export function CatalogPage() {
                 selectedId={itemId}
               />
             ))}
+          <ModulesSection appId={appId} />
         </div>
         {itemId && <ItemDetail key={itemId} appId={appId} itemId={itemId} />}
       </div>

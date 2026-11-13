@@ -1,8 +1,8 @@
-import type { Edge, Group, Node, StickyNote, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
+import type { Edge, Group, ModuleInterface, Node, StickyNote, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 
 /**
  * Historial del lienzo (deshacer y rehacer). Guarda instantáneas del grafo: como el store nunca muta (cada acción
- * crea objetos nuevos solo donde cambia algo), una instantánea son seis referencias y no cuesta copiar nada.
+ * crea objetos nuevos solo donde cambia algo), una instantánea son siete referencias y no cuesta copiar nada.
  * Selección, vista, reproducción y plegados temporales no son del grafo: no entran aquí.
  */
 export interface Snapshot {
@@ -12,9 +12,11 @@ export interface Snapshot {
   tours: Record<string, Tour>;
   groups: Record<string, Group>;
   stickyNotes: Record<string, StickyNote>;
+  /** Interfaces de un módulo (spec modulos-compartidos); vacío en una feature. */
+  interfaces: Record<string, ModuleInterface>;
 }
 
-const FIELDS = ['nodes', 'edges', 'layout', 'tours', 'groups', 'stickyNotes'] as const;
+const FIELDS = ['nodes', 'edges', 'layout', 'tours', 'groups', 'stickyNotes', 'interfaces'] as const;
 
 /** Pasos que se recuerdan; los más viejos se olvidan. */
 export const HISTORY_LIMIT = 100;
@@ -29,6 +31,7 @@ export function snapshotOf(state: Snapshot): Snapshot {
     tours: state.tours,
     groups: state.groups,
     stickyNotes: state.stickyNotes,
+    interfaces: state.interfaces,
   };
 }
 

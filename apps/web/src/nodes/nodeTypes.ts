@@ -1,5 +1,6 @@
 import type { NodeTypes } from '@xyflow/react';
 import { GroupNode } from './GroupNode';
+import { ModuleNode } from './ModuleNode';
 import { PixelNode } from './PixelNode';
 import { StickyNoteNode } from './StickyNoteNode';
 
@@ -17,6 +18,8 @@ export const nodeTypes: NodeTypes = {
   resource: PixelNode,
   ref: PixelNode,
   portal: PixelNode,
+  // Caja de un módulo compartido (spec modulos-compartidos).
+  module: ModuleNode,
   // Grupos de infraestructura (no son nodos del grafo: viven en `groups`).
   infraGroup: GroupNode,
   // Notas adhesivas (anotaciones: viven en `stickyNotes`).

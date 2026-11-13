@@ -1,0 +1,220 @@
+/* Módulos compartidos (spec modulos-compartidos): franja del editor de un módulo, usos y formularios. */
+
+.module-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--dune-200);
+  background: color-mix(in srgb, #7a5a2a 9%, var(--sand));
+  font-size: 13px;
+}
+
+.module-banner-kind {
+  color: #7a5a2a;
+  font-family: var(--font-title);
+  font-size: 8px;
+}
+
+.module-banner-shared {
+  color: var(--stone-700);
+}
+
+.module-banner-note {
+  color: var(--stone-500);
+}
+
+.module-banner .popover-trigger {
+  font-size: 13px;
+}
+
+.module-uses {
+  display: grid;
+  gap: 8px;
+  min-width: 240px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module-uses li {
+  display: grid;
+  gap: 2px;
+}
+
+.module-uses-meta,
+.module-uses-empty,
+.module-shared-note {
+  margin: 0;
+  color: var(--stone-500);
+  font-size: 12px;
+}
+
+.module-details-form {
+  display: grid;
+  gap: 6px;
+  min-width: 280px;
+}
+
+.module-details-form label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Diálogo «Convertir en módulo». */
+.extract-dialog {
+  width: min(720px, 100%);
+}
+
+.extract-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--dune-200);
+  list-style: none;
+  font-size: 13px;
+}
+
+.extract-steps li[aria-current='step'] .link-button {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.extract-steps li[data-done] .link-button::after {
+  content: ' ✓';
+  color: var(--ok);
+}
+
+.extract-section {
+  display: grid;
+  gap: 8px;
+}
+
+.extract-section label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.extract-tree {
+  margin: 0;
+  padding-left: 16px;
+  list-style: none;
+  font-size: 13px;
+}
+
+.extract-tree .extract-tree {
+  border-left: 1px dashed var(--dune-300);
+}
+
+.extract-group {
+  font-weight: 600;
+}
+
+.extract-node-type,
+.extract-tag {
+  color: var(--stone-500);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.extract-tag {
+  margin-left: 6px;
+  color: var(--spice-strong);
+}
+
+.extract-external,
+.extract-interfaces {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.extract-external li,
+.extract-interfaces li {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+}
+
+.extract-interfaces li {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.extract-interfaces li .panel-help {
+  grid-column: 2;
+}
+
+.extract-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.extract-choice label {
+  font-weight: 400;
+}
+
+.extract-notes h3 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+}
+
+.extract-notes ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.extract-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.extract-actions .share-close {
+  margin-left: auto;
+}
+
+/* Módulos en la página del catálogo. */
+.catalog-module-list {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.catalog-module {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 2px solid #7a5a2a;
+  border-left-width: 8px;
+  border-radius: 6px;
+  background: #fffaf1;
+  box-shadow: var(--shadow-pixel);
+}
+
+.catalog-module-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.catalog-module-description {
+  margin: 0;
+  color: var(--stone-700);
+  font-size: 13px;
+}

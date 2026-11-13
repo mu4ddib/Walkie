@@ -1899,3 +1899,277 @@ div.pixel-node-image {
   color: var(--stone-700);
   font-size: 12.5px;
 }
+
+/* ---------- Módulos compartidos (spec modulos-compartidos) ---------- */
+
+/*
+ * La caja de un módulo es un contenedor: marco con una segunda línea interior (sin gradientes) y una banda de
+ * tierra a la izquierda. Su ancho lo da el lienzo (layout.w); la altura, su contenido.
+ */
+.module-node {
+  position: relative;
+  min-width: 208px;
+  max-width: none;
+  width: 100%;
+  border-width: 3px;
+  border-left-width: 8px;
+  box-shadow: var(--shadow-pixel), inset 0 0 0 2px #fffaf1, inset 0 0 0 3px color-mix(in srgb, var(--node-color) 35%, transparent);
+}
+
+.module-node[data-ref='missing'] {
+  border-style: dashed;
+}
+
+.module-node-description {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.module-node-interfaces {
+  margin: 8px 10px 0;
+  padding-top: 6px;
+  border-top: 1px dashed color-mix(in srgb, var(--node-color) 35%, transparent);
+}
+
+.module-node-interfaces ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module-node-interfaces li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 12.5px;
+}
+
+.module-node-interfaces li[data-pending] {
+  color: var(--danger);
+}
+
+.module-node-iface-name {
+  font-weight: 600;
+}
+
+.module-node-iface-sig {
+  color: var(--stone-700);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.module-node-empty {
+  margin: 0;
+  font-size: 12px;
+}
+
+.module-node-actions {
+  display: flex;
+  gap: 12px;
+  margin: 8px 10px 0;
+  font-size: 12.5px;
+}
+
+.module-node-actions .link-button {
+  cursor: pointer;
+}
+
+.module-node-resize {
+  width: 8px !important;
+  border: none !important;
+  background: transparent !important;
+  cursor: ew-resize;
+}
+
+.module-node-popover {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  left: 0;
+  width: max(100%, 288px);
+  max-height: 264px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--dune-300);
+  border-radius: var(--radius-m);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-float);
+  cursor: default;
+}
+
+.module-node-popover ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module-node-popover-help {
+  margin: 8px 0 0;
+  color: var(--stone-500);
+  font-size: 12px;
+}
+
+/* Fila de una interfaz (popover de la caja y selector al conectar). */
+.module-iface-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.module-iface-option > .module-node-iface-sig,
+.module-iface-option > .module-iface-desc {
+  grid-column: 2;
+}
+
+.module-iface-option:hover,
+.module-iface-option[aria-selected='true'] {
+  border-color: var(--dune-300);
+  background: var(--dune-100);
+}
+
+.module-iface-option:focus-visible {
+  outline: 2px solid var(--ibad);
+  outline-offset: 1px;
+}
+
+.module-iface-kind {
+  align-self: start;
+  padding: 1px 4px;
+  border: 1px solid currentcolor;
+  border-radius: 3px;
+  color: var(--stone-700);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.module-iface-kind[data-kind='provides'] {
+  color: var(--ok);
+}
+
+.module-iface-kind[data-kind='event'] {
+  color: var(--warn);
+}
+
+.module-iface-kind[data-kind='requires'] {
+  color: var(--spice-strong);
+}
+
+.module-iface-desc {
+  color: var(--stone-500);
+  font-size: 12px;
+}
+
+.interface-picker {
+  position: absolute;
+  z-index: 30;
+  display: grid;
+  gap: 8px;
+  width: 320px;
+  max-height: min(420px, calc(100% - 16px));
+  padding: 12px;
+  border: 1px solid var(--dune-300);
+  border-radius: var(--radius-m);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-float);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.interface-picker-head {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.interface-picker-head span {
+  color: var(--stone-500);
+  font-size: 12px;
+}
+
+.interface-picker ul {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.interface-picker-empty,
+.interface-picker-foot {
+  margin: 0;
+  color: var(--stone-500);
+  font-size: 12px;
+}
+
+/* Pestañas del catálogo (spec modulos-compartidos, criterio 1). */
+.catalog-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--dune-200);
+}
+
+.catalog-tabs [role='tab'] {
+  padding: 6px 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--stone-700);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.catalog-tabs [role='tab'][aria-selected='true'] {
+  border-bottom-color: var(--spice);
+  color: var(--ink);
+}
+
+.catalog-tabs [role='tab']:focus-visible {
+  outline: 2px solid var(--ibad);
+  outline-offset: -2px;
+}
+
+.catalog-tab-count {
+  color: var(--stone-500);
+  font-weight: 400;
+}
+
+.catalog-tabpanel {
+  display: contents;
+}
+
+.module-item .component-title {
+  display: grid;
+  gap: 2px;
+}
+
+.module-item-meta {
+  overflow: hidden;
+  color: var(--stone-500);
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -18,7 +18,17 @@ internal sealed record ImportSummary(
     int Images,
     IReadOnlyList<string> Warnings,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    ImportedApp? App = null);
+    ImportedApp? App = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<ImportedModule>? Modules = null);
+
+/// <summary>Un módulo compartido del archivo (spec modulos-compartidos): se crea o, si ya está en la app, se reutiliza.</summary>
+internal sealed record ImportedModule(
+    string SourceName,
+    string Name,
+    bool Reused,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    Guid? Id);
 
 /// <summary>La app nueva de una importación de app (tarea 7): su nombre de origen, el final y su id (si ya se creó).</summary>
 internal sealed record ImportedApp(
@@ -82,7 +92,8 @@ internal sealed class ImportHandlers(
 
         var existingItems = (await catalog.AllItemsOfAppAsync(appId, ct).ConfigureAwait(false)).Select(i => i.Id).ToHashSet();
         var existingFeatures = await features.FeatureNamesOfAppAsync(appId, ct).ConfigureAwait(false);
-        var plan = MakePlan(package, existingItems, existingFeatures, allCatalog: false, errors);
+        var existingModules = (await features.ModulesOfAppAsync(appId, ct).ConfigureAwait(false)).ToDictionary(m => m.Id, m => m.Name);
+        var plan = MakePlan(package, existingItems, existingFeatures, existingModules, allCatalog: false, errors);
         if (errors.Count > 0)
         {
             return new ImportResult.Invalid(errors);
@@ -90,7 +101,7 @@ internal sealed class ImportHandlers(
 
         if (dryRun)
         {
-            return new ImportResult.Done(plan.Summary(dryRun: true, ids: null));
+            return new ImportResult.Done(plan.Summary(dryRun: true, ids: null, created: null));
         }
 
         var created = new Created();
@@ -108,7 +119,7 @@ internal sealed class ImportHandlers(
             throw;
         }
 
-        return new ImportResult.Done(plan.Summary(dryRun: false, ids: created.Features));
+        return new ImportResult.Done(plan.Summary(dryRun: false, ids: created.Features, created: created));
     }
 
     /// <summary>
@@ -125,7 +136,7 @@ internal sealed class ImportHandlers(
             return new ImportResult.Invalid(errors);
         }
 
-        var plan = MakePlan(package, new HashSet<Guid>(), new Dictionary<Guid, string>(), allCatalog: true, errors);
+        var plan = MakePlan(package, new HashSet<Guid>(), new Dictionary<Guid, string>(), new Dictionary<Guid, string>(), allCatalog: true, errors);
         if (errors.Count > 0)
         {
             return new ImportResult.Invalid(errors);
@@ -136,7 +147,7 @@ internal sealed class ImportHandlers(
         var appName = UniqueName(sourceName.Length == 0 ? "App importada" : sourceName, appNames);
         if (dryRun)
         {
-            return new ImportResult.Done(plan.Summary(dryRun: true, ids: null) with
+            return new ImportResult.Done(plan.Summary(dryRun: true, ids: null, created: null) with
             {
                 App = new ImportedApp(package.Manifest.App.Name, appName, null),
             });
@@ -165,7 +176,7 @@ internal sealed class ImportHandlers(
             throw;
         }
 
-        return new ImportResult.Done(plan.Summary(dryRun: false, ids: created.Features) with
+        return new ImportResult.Done(plan.Summary(dryRun: false, ids: created.Features, created: created) with
         {
             App = new ImportedApp(package.Manifest.App.Name, appName, appId),
         });
@@ -209,7 +220,13 @@ internal sealed class ImportHandlers(
         IReadOnlyList<(PackageManifestFeature Feature, JsonElement Graph)> Features,
         IReadOnlyList<CatalogItemResponse> Catalog,
         IReadOnlyDictionary<Guid, byte[]> Images,
-        JsonElement? Map);
+        JsonElement? Map,
+        IReadOnlyList<(PackageManifestFeature Module, JsonElement Graph)> Modules)
+    {
+        /// <summary>Los lienzos del archivo, de features y de módulos, con su ruta.</summary>
+        public IEnumerable<(PackageManifestFeature Owner, JsonElement Graph)> AllGraphs =>
+            Features.Select(f => (f.Feature, f.Graph)).Concat(Modules.Select(m => (m.Module, m.Graph)));
+    }
 
     private Package? Read(byte[] file, Dictionary<string, string[]> errors)
     {
@@ -293,6 +310,36 @@ internal sealed class ImportHandlers(
                 graphs.Add((feature, graph));
             }
 
+            // Módulos compartidos (spec modulos-compartidos): sus lienzos se validan igual que los de las features.
+            var modules = new List<(PackageManifestFeature, JsonElement)>();
+            var moduleList = manifest.Modules ?? [];
+            for (var i = 0; i < moduleList.Count; i++)
+            {
+                var module = moduleList[i];
+                if (!seen.Add(module.Id))
+                {
+                    errors[$"{WalkiePackage.ManifestPath}/modules/{i}/id"] = ["Hay dos features o módulos con el mismo id."];
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(module.Name))
+                {
+                    errors[$"{WalkiePackage.ManifestPath}/modules/{i}/name"] = ["El módulo no tiene nombre."];
+                }
+
+                if (ReadJson(entries, module.Canvas, errors) is not { } graph)
+                {
+                    continue;
+                }
+
+                foreach (var (path, messages) in canvasWriter.Validate(graph))
+                {
+                    errors[module.Canvas + (path == "/" ? "" : path)] = messages;
+                }
+
+                modules.Add((module, graph));
+            }
+
             var items = new List<CatalogItemResponse>();
             if (ReadJson(entries, manifest.Catalog.Path, errors) is { } catalogJson)
             {
@@ -360,7 +407,7 @@ internal sealed class ImportHandlers(
                 }
             }
 
-            return errors.Count > 0 ? null : new Package(manifest, graphs, items, images, map);
+            return errors.Count > 0 ? null : new Package(manifest, graphs, items, images, map, modules);
         }
     }
 
@@ -462,21 +509,32 @@ internal sealed class ImportHandlers(
 
     private sealed record FeaturePlan(PackageManifestFeature Source, JsonElement Graph, string Name, string? Description);
 
+    /// <summary>Un módulo del archivo: se crea con <c>Name</c> o, con <c>Reused</c>, ya está en la app con su id.</summary>
+    private sealed record ModulePlan(PackageManifestFeature Source, JsonElement Graph, string Name, string? Description, bool Reused);
+
     private sealed record Plan(
         IReadOnlyList<FeaturePlan> Features,
         IReadOnlyList<CatalogItemResponse> NewItems,
         int ExistingItems,
         int Images,
         IReadOnlySet<Guid> ExistingFeatures,
-        List<string> Warnings)
+        List<string> Warnings,
+        IReadOnlyList<ModulePlan> Modules)
     {
-        public ImportSummary Summary(bool dryRun, List<Guid>? ids) => new(
+        public ImportSummary Summary(bool dryRun, List<Guid>? ids, Created? created) => new(
             dryRun,
             [.. Features.Select((f, i) => new ImportedFeature(f.Source.Name, f.Name, ids?[i]))],
             NewItems.Count,
             ExistingItems,
             Images,
-            Warnings);
+            Warnings,
+            Modules: Modules.Count == 0
+                ? null
+                : [.. Modules.Select(m => new ImportedModule(
+                    m.Source.Name,
+                    m.Name,
+                    m.Reused,
+                    m.Reused ? m.Source.Id : created?.ModuleIds.GetValueOrDefault(m.Source.Id) is { } id && id != Guid.Empty ? id : null))]);
     }
 
     /// <summary>
@@ -488,16 +546,18 @@ internal sealed class ImportHandlers(
         Package package,
         HashSet<Guid> existingItems,
         IReadOnlyDictionary<Guid, string> existingFeatures,
+        IReadOnlyDictionary<Guid, string> existingModules,
         bool allCatalog,
         Dictionary<string, string[]> errors)
     {
+        var packageModules = package.Modules.Select(m => m.Module.Id).ToHashSet();
         var packageItems = package.Catalog.Select(i => i.Id).ToHashSet();
         var packageFeatures = package.Features.Select(f => f.Feature.Id).ToHashSet();
         var warnings = new List<string>();
 
         var takenNames = new HashSet<string>(existingFeatures.Values, StringComparer.OrdinalIgnoreCase);
         var plans = new List<FeaturePlan>();
-        foreach (var (feature, graph) in package.Features)
+        foreach (var (feature, graph) in package.AllGraphs)
         {
             foreach (var (nodeId, node) in Nodes(graph))
             {
@@ -517,8 +577,16 @@ internal sealed class ImportHandlers(
                 {
                     warnings.Add($"«{feature.Name}»: el portal «{Title(node)}» queda sin destino (la feature no está en el archivo ni en esta app).");
                 }
+                else if (type == "module" && Id(node, "moduleId") is { } moduleId
+                         && !packageModules.Contains(moduleId) && !existingModules.ContainsKey(moduleId))
+                {
+                    warnings.Add($"«{feature.Name}»: la caja del módulo «{Title(node)}» queda pendiente (el módulo no está en el archivo ni en esta app).");
+                }
             }
+        }
 
+        foreach (var (feature, graph) in package.Features)
+        {
             var name = UniqueName(feature.Name.Trim(), takenNames);
             takenNames.Add(name);
             var description = feature.Description?.Trim();
@@ -533,7 +601,7 @@ internal sealed class ImportHandlers(
 
         // Solo los elementos que algún lienzo usa (en una app nueva, todos); los que ya están en la app (misma app de
         // origen) se reutilizan.
-        var used = package.Features.SelectMany(f => Nodes(f.Graph))
+        var used = package.AllGraphs.SelectMany(f => Nodes(f.Graph))
             .Where(n => n.Node.GetProperty("type").GetString() == "ref")
             .Select(n => Id(n.Node, "catalogId"))
             .OfType<Guid>()
@@ -543,13 +611,31 @@ internal sealed class ImportHandlers(
             .ToList();
         var reused = used.Count(existingItems.Contains);
         var images = UsedImages(package).Count;
-        return new Plan(plans, newItems, reused, images, existingFeatures.Keys.ToHashSet(), warnings);
+
+        // Un módulo que ya está en la app (mismo id: exportado de ella) se reutiliza; si no, se crea con nombre propio.
+        var moduleNames = new HashSet<string>(existingModules.Values, StringComparer.OrdinalIgnoreCase);
+        var modules = new List<ModulePlan>();
+        foreach (var (module, graph) in package.Modules)
+        {
+            if (existingModules.TryGetValue(module.Id, out var current))
+            {
+                modules.Add(new ModulePlan(module, graph, current, null, Reused: true));
+                continue;
+            }
+
+            var name = UniqueName(module.Name.Trim(), moduleNames);
+            moduleNames.Add(name);
+            var description = module.Description?.Trim();
+            modules.Add(new ModulePlan(module, graph, name, description is { Length: > FeatureDescriptionMaxLength } ? description[..FeatureDescriptionMaxLength] : description, Reused: false));
+        }
+
+        return new Plan(plans, newItems, reused, images, existingFeatures.Keys.ToHashSet(), warnings, modules);
     }
 
     /// <summary>Las imágenes del archivo que alguna pantalla usa (las demás no se suben).</summary>
     private static Dictionary<Guid, byte[]> UsedImages(Package package)
     {
-        var used = package.Features.SelectMany(f => Nodes(f.Graph))
+        var used = package.AllGraphs.SelectMany(f => Nodes(f.Graph))
             .Where(n => n.Node.GetProperty("type").GetString() == "screen")
             .Select(n => Id(n.Node, "assetId"))
             .OfType<Guid>()
@@ -582,7 +668,7 @@ internal sealed class ImportHandlers(
     // ---------- Escritura con compensación ----------
 
     /// <summary>Lo que lleva creado una importación, para deshacerlo si falla.</summary>
-    private sealed class Created
+    internal sealed class Created
     {
         public Guid? App { get; set; }
 
@@ -599,6 +685,12 @@ internal sealed class ImportHandlers(
 
         /// <summary>Id en el archivo → id creado.</summary>
         public Dictionary<Guid, Guid> FeatureIds { get; } = [];
+
+        /// <summary>Módulos creados (no los reutilizados).</summary>
+        public List<Guid> Modules { get; } = [];
+
+        /// <summary>Id en el archivo → id en la app (creado o, si se reutiliza, el mismo).</summary>
+        public Dictionary<Guid, Guid> ModuleIds { get; } = [];
     }
 
     /// <summary>
@@ -624,6 +716,24 @@ internal sealed class ImportHandlers(
             imageIds[assetId] = id;
         }
 
+        foreach (var module in plan.Modules)
+        {
+            if (module.Reused)
+            {
+                created.ModuleIds[module.Source.Id] = module.Source.Id;
+                continue;
+            }
+
+            var id = Guid.CreateVersion7();
+            if (!await appWriter.CreateModuleAsync(appId, id, module.Name, module.Description, userId, ct).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException("No se pudo crear un módulo con un id nuevo.");
+            }
+
+            created.Modules.Add(id);
+            created.ModuleIds[module.Source.Id] = id;
+        }
+
         foreach (var feature in plan.Features)
         {
             var id = await appWriter.CreateFeatureAsync(appId, feature.Name, feature.Description, userId, ct).ConfigureAwait(false);
@@ -631,10 +741,24 @@ internal sealed class ImportHandlers(
             created.FeatureIds[feature.Source.Id] = id;
         }
 
+        // Primero los lienzos de los módulos creados (sus interfaces), después los de las features que los usan.
+        foreach (var module in plan.Modules.Where(m => !m.Reused))
+        {
+            var moduleId = created.ModuleIds[module.Source.Id];
+            var graph = Rewrite(module.Graph, created.ItemIds, imageIds, created.FeatureIds, plan.ExistingFeatures, created.ModuleIds);
+            var errors = await canvasWriter.CreateAsync(moduleId, graph, userId, ct).ConfigureAwait(false);
+            if (errors.Count > 0)
+            {
+                return errors.ToDictionary(e => module.Source.Canvas + (e.Key == "/" ? "" : e.Key), e => e.Value);
+            }
+
+            created.Canvases.Add(moduleId);
+        }
+
         foreach (var feature in plan.Features)
         {
             var featureId = created.FeatureIds[feature.Source.Id];
-            var graph = Rewrite(feature.Graph, created.ItemIds, imageIds, created.FeatureIds, plan.ExistingFeatures);
+            var graph = Rewrite(feature.Graph, created.ItemIds, imageIds, created.FeatureIds, plan.ExistingFeatures, created.ModuleIds);
             var errors = await canvasWriter.CreateAsync(featureId, graph, userId, ct).ConfigureAwait(false);
             if (errors.Count > 0)
             {
@@ -662,7 +786,7 @@ internal sealed class ImportHandlers(
             return;
         }
 
-        await appWriter.DeleteFeaturesAsync(created.Features, CancellationToken.None).ConfigureAwait(false);
+        await appWriter.DeleteFeaturesAsync([.. created.Features, .. created.Modules], CancellationToken.None).ConfigureAwait(false);
         await appWriter.DeleteCatalogItemsAsync(created.Items, CancellationToken.None).ConfigureAwait(false);
     }
 
@@ -676,7 +800,8 @@ internal sealed class ImportHandlers(
         IReadOnlyDictionary<Guid, Guid> items,
         IReadOnlyDictionary<Guid, Guid> images,
         IReadOnlyDictionary<Guid, Guid> packageFeatures,
-        IReadOnlySet<Guid> existingFeatures)
+        IReadOnlySet<Guid> existingFeatures,
+        IReadOnlyDictionary<Guid, Guid>? modules = null)
     {
         var root = JsonNode.Parse(graph.GetRawText())!.AsObject();
         root["version"] = 0;
@@ -698,6 +823,11 @@ internal sealed class ImportHandlers(
                         node.Remove("assetId");
                     }
 
+                    break;
+                // Un módulo del archivo pasa a su id en la app; uno que no está queda pendiente con su id (y su título).
+                case "module" when Guid.TryParse(node["moduleId"]?.GetValue<string>(), out var id)
+                                   && modules is not null && modules.TryGetValue(id, out var module):
+                    node["moduleId"] = module.ToString();
                     break;
                 case "portal" when Guid.TryParse(node["targetFeatureId"]?.GetValue<string>(), out var id):
                     if (packageFeatures.TryGetValue(id, out var imported))

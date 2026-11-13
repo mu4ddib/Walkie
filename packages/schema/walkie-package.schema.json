@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-package.schema.json",
   "title": "Walkie package manifest v0",
-  "description": "manifest.json de un archivo .walkie (spec exportar-e-importar, tareas 5 a 7): un .zip que reconstruye una o varias features en otra app (o en la misma). Lista qué hay en el archivo y dónde: el lienzo de cada feature (features/<id>/canvas.json, según walkie-graph), los elementos del catálogo que usan (catalog.json, cada uno según walkie-catalog-item), las imágenes de sus pantallas (img/) y, en el de una app, la distribución del mapa (map.json).",
+  "description": "manifest.json de un archivo .walkie (spec exportar-e-importar, tareas 5 a 7): un .zip que reconstruye una o varias features en otra app (o en la misma). Lista qué hay en el archivo y dónde: el lienzo de cada feature (features/<id>/canvas.json, según walkie-graph), los elementos del catálogo que usan (catalog.json, cada uno según walkie-catalog-item), las imágenes de sus pantallas (img/), los módulos que usan (modules/<id>/canvas.json) y, en el de una app, la distribución del mapa (map.json).",
   "type": "object",
   "required": ["format", "formatVersion", "schemaVersion", "exportedAt", "app", "features", "catalog", "images"],
   "additionalProperties": false,
@@ -35,6 +35,22 @@
           "description": { "type": "string" },
           "canvas": { "type": "string", "description": "Ruta del lienzo en el archivo, ej. features/<id>/canvas.json" },
           "canvasVersion": { "type": "integer", "minimum": 0, "description": "Versión del lienzo exportado (al importar empieza de nuevo)" }
+        }
+      }
+    },
+    "modules": {
+      "type": "array",
+      "description": "Módulos compartidos que usan los lienzos del archivo, también los que esos contienen (spec modulos-compartidos); en el de una app, todos. Su lienzo trae sus interfaces",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "canvas", "canvasVersion"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "description": "Id en la app de origen (el moduleId de los nodos module)" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "canvas": { "type": "string", "description": "Ruta del lienzo en el archivo, ej. modules/<id>/canvas.json" },
+          "canvasVersion": { "type": "integer", "minimum": 0 }
         }
       }
     },

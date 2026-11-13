@@ -10,5 +10,7 @@ public sealed record CreateFeatureRequest(string Name, string? Description = nul
 /// <summary>Renombrar la feature y editar su descripción (<c>null</c> o vacía la borra).</summary>
 public sealed record UpdateFeatureRequest(string Name, string? Description);
 
+/// <param name="Kind"><c>feature</c> o <c>module</c> (ADR-0010).</param>
 public sealed record FeatureResponse(
-    Guid Id, Guid AppId, string Name, string Description, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    Guid Id, Guid AppId, string Name, string Description, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+    string Kind = "feature");

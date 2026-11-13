@@ -21,7 +21,7 @@ test('componentes: crear en el lienzo, definición compartida y copia independie
 
   // Pagar: "Nuevo componente" lo crea en el catálogo y lo pone en el lienzo (criterio 10).
   await page.getByRole('link', { name: 'Pagar' }).click();
-  await page.getByRole('button', { name: 'Componentes', exact: true }).click();
+  await page.getByRole('button', { name: 'Catálogo', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Catálogo' });
   const create = panel.getByRole('form', { name: 'Nuevo componente' });
   await create.getByLabel('Tipo de componente').selectOption('service');
@@ -37,7 +37,7 @@ test('componentes: crear en el lienzo, definición compartida y copia independie
   // Transferir usa el mismo componente.
   await page.goto(appUrl);
   await page.getByRole('link', { name: 'Transferir' }).click();
-  await page.getByRole('button', { name: 'Componentes', exact: true }).click();
+  await page.getByRole('button', { name: 'Catálogo', exact: true }).click();
   await panel.getByRole('button', { name: /Motor de pagos/ }).click();
   await panel.getByRole('button', { name: 'Cerrar panel' }).click();
   await save(page);

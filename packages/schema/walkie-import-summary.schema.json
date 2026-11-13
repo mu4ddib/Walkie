@@ -32,6 +32,21 @@
         }
       }
     },
+    "modules": {
+      "type": "array",
+      "description": "Módulos compartidos del archivo (spec modulos-compartidos): los que se crean y los que ya estaban en la app (mismo id) y se reutilizan",
+      "items": {
+        "type": "object",
+        "required": ["sourceName", "name", "reused"],
+        "additionalProperties": false,
+        "properties": {
+          "sourceName": { "type": "string", "description": "Nombre en el archivo" },
+          "name": { "type": "string", "description": "Nombre en la app" },
+          "reused": { "type": "boolean", "description": "true: ya estaba en la app y no se crea" },
+          "id": { "type": "string", "format": "uuid", "description": "Id del módulo en la app (no viene con dryRun si se crea)" }
+        }
+      }
+    },
     "newCatalogItems": { "type": "integer", "minimum": 0, "description": "Elementos del catálogo que se crean (con id nuevo)" },
     "existingCatalogItems": { "type": "integer", "minimum": 0, "description": "Elementos que ya estaban en la app (mismo id) y se reutilizan" },
     "images": { "type": "integer", "minimum": 0, "description": "Imágenes de pantallas que se suben" },

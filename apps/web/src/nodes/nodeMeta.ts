@@ -13,6 +13,8 @@ export const NODE_LABELS: Record<Node['type'], { label: string; glyph: string }>
   resource: { label: 'Recurso', glyph: '<#>' },
   ref: { label: 'Referencia', glyph: '->' },
   portal: { label: 'Portal', glyph: '@' },
+  // Referencia a un módulo compartido (spec modulos-compartidos).
+  module: { label: 'Módulo', glyph: '[::]' },
 };
 
 /** Una regla en modo decisión (bifurcación con salidas): mismo tipo y color, otro encabezado. */

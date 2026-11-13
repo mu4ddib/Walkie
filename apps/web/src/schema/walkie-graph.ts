@@ -2,7 +2,7 @@
 
 export type Node = {
   id: Id;
-  type: 'actor' | 'screen' | 'rule' | 'api' | 'service' | 'database' | 'resource' | 'ref' | 'portal';
+  type: 'actor' | 'screen' | 'rule' | 'api' | 'service' | 'database' | 'resource' | 'ref' | 'portal' | 'module';
   title: string;
   description?: string;
   /**
@@ -59,6 +59,17 @@ export type Node = {
    * UUID v7 generado en el cliente
    */
   groupId?: string;
+  /**
+   * Módulo compartido de la misma app (module, ADR-0010); en él, title guarda su último nombre conocido
+   */
+  moduleId?: string;
+  /**
+   * Presentación local de la caja de un módulo (solo module): false oculta esa parte en este lienzo
+   */
+  display?: {
+    description?: boolean;
+    interfaces?: boolean;
+  };
 };
 /**
  * UUID v7 generado en el cliente
@@ -111,6 +122,12 @@ export interface WalkieCanvasGraphV0 {
    */
   stickyNotes?: {
     [k: string]: StickyNote;
+  };
+  /**
+   * Solo en el lienzo de un módulo (spec modulos-compartidos, ADR-0010): mapa id -> interfaz expuesta, el punto por el que las features se conectan al módulo
+   */
+  interfaces?: {
+    [k: string]: ModuleInterface;
   };
   /**
    * Los grupos guardan su grupo padre en parentId y las notas su grupo en groupId. Sin este campo (lienzos anteriores) la jerarquía se infiere por contención al abrir el lienzo
@@ -324,6 +341,22 @@ export interface Edge {
    * Ejemplo de payload de esta interacción; el contrato reutilizable vive en la API
    */
   example?: string;
+  fromInterface?: InterfaceRef;
+  toInterface?: InterfaceRef1;
+}
+/**
+ * Interfaz del módulo de origen (solo si from es un nodo module); sin ella, sale del módulo completo
+ */
+export interface InterfaceRef {
+  id: Id;
+  name: string;
+}
+/**
+ * Interfaz del módulo de destino (solo si to es un nodo module); sin ella, llega al módulo completo
+ */
+export interface InterfaceRef1 {
+  id: Id;
+  name: string;
 }
 /**
  * Recorrido guiado por pasos: sobre nodos (modo tour) o sobre conexiones (recorrido de un flujo)
@@ -397,4 +430,27 @@ export interface StickyNote {
    * UUID v7 generado en el cliente
    */
   groupId?: string;
+}
+/**
+ * Interfaz de un módulo: punto de conexión vinculado a una caja de su lienzo; su contrato es el de esa caja
+ */
+export interface ModuleInterface {
+  /**
+   * UUID v7 generado en el cliente
+   */
+  id: string;
+  name: string;
+  description?: string;
+  /**
+   * provides: API u operación que el módulo ofrece; event: evento que emite o recibe; requires: dependencia que necesita de fuera
+   */
+  kind: 'provides' | 'event' | 'requires';
+  /**
+   * UUID v7 generado en el cliente
+   */
+  nodeId: string;
+  /**
+   * UUID v7 generado en el cliente
+   */
+  tourId?: string;
 }

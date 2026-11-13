@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
-import { effectiveType, refTarget, useCanvasCatalog } from '../catalog/catalogContext';
+import { effectiveType, interfaceTarget, moduleTarget, refTarget, useCanvasCatalog } from '../catalog/catalogContext';
+import { ModuleEndsSection } from './ModuleEndsSection';
 import {
   DATA_OPERATION_LABELS,
   DATA_OPERATIONS,
@@ -61,7 +62,7 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
   const nodes = useGraphStore((s) => s.nodes);
   const updateEdge = useGraphStore((s) => s.updateEdge);
   const changeKind = useChangeEdgeKind();
-  const { items } = useCanvasCatalog();
+  const { items, modules } = useCanvasCatalog();
   const kindId = useId();
   // Aviso de que el cambio de tipo invirtió el sentido (con su "Deshacer").
   const [reversed, setReversed] = useState(false);
@@ -71,11 +72,18 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
   const to = nodes[edge.to];
   const branch = from?.branches?.find((b) => b.id === edge.branch);
   const fromDecision = from?.type === 'rule' && from.mode === 'decision';
-  const targetHttp = to && (refTarget(to, items)?.http ?? to.http);
-  const targetIsApi = !!to && effectiveType(to, items) === 'api';
-  const display = edgeDisplay(edge, { branchLabel: branch?.label, targetHttp });
+  // Hacia la interfaz de un módulo, su contrato (spec modulos-compartidos).
+  const toIface = interfaceTarget(to, edge.toInterface, modules);
+  const targetHttp = toIface
+    ? toIface.method || toIface.path
+      ? { method: toIface.method, path: toIface.path }
+      : undefined
+    : to && (refTarget(to, items)?.http ?? to.http);
+  const targetIsApi = !!to && (toIface ? toIface.nodeType === 'api' : effectiveType(to, items) === 'api');
+  const display = edgeDisplay(edge, { branchLabel: branch?.label, targetHttp, interfaceName: toIface?.name ?? edge.toInterface?.name });
   const kinds = SELECTABLE_KINDS.includes(edge.kind) ? SELECTABLE_KINDS : [edge.kind, ...SELECTABLE_KINDS];
-  const title = (node: Node | undefined) => (node ? (refTarget(node, items)?.title ?? node.title) : '—');
+  const title = (node: Node | undefined) =>
+    node ? (refTarget(node, items)?.title ?? moduleTarget(node, modules)?.name ?? node.title) : '—';
   const exchange = interactionEdges(edges, id);
   const previewing = !!preview?.activeEdgeId && exchange.includes(preview.activeEdgeId);
   const defaultLabel = endpointText(edge, targetHttp);
@@ -145,6 +153,8 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
           </p>
         )}
       </section>
+
+      {(from?.type === 'module' || to?.type === 'module') && <ModuleEndsSection edge={edge} />}
 
       {flows && (
         <section className="panel-section edge-flows" aria-label="Recorridos de la conexión">

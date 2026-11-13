@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useReactFlow, type Viewport } from '@xyflow/react';
-import { useCanvasCatalog } from '../catalog/catalogContext';
+import { interfaceTarget, useCanvasCatalog } from '../catalog/catalogContext';
+import { useOpenModule } from '../canvas/useOpenModule';
 import { useGraphStore } from '../store/useGraphStore';
 import { FLOW_SPEEDS, setFlowSpeed } from '../workspace/session';
 import { stepSummary } from './flowText';
@@ -41,7 +42,8 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
   const tour = useGraphStore((s) => s.tours[playing.tourId]);
   const edges = useGraphStore((s) => s.edges);
   const nodes = useGraphStore((s) => s.nodes);
-  const { items } = useCanvasCatalog();
+  const { items, modules, share } = useCanvasCatalog();
+  const openModule = useOpenModule();
   const { getViewport, setViewport } = useReactFlow();
   const reduced = usePrefersReducedMotion();
   const [follow, setFollow] = useState(true);
@@ -122,6 +124,21 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
   if (!tour) return null;
 
   const describe = (index: number) => stepSummary(steps[index], edges, nodes, items);
+
+  /** Si la conexión del paso llega a (o sale de) una interfaz con recorrido interno, cuál. */
+  const inside = (edgeId: string | undefined) => {
+    const edge = edgeId ? edges[edgeId] : undefined;
+    if (!edge) return null;
+    for (const [nodeId, ref] of [
+      [edge.to, edge.toInterface],
+      [edge.from, edge.fromInterface],
+    ] as const) {
+      const node = nodes[nodeId];
+      const iface = interfaceTarget(node, ref, modules);
+      if (node?.moduleId && iface?.tourId) return { moduleId: node.moduleId, nodeId, tourId: iface.tourId, name: iface.tourName ?? iface.name };
+    }
+    return null;
+  };
 
   const playLabel =
     playing.mode === 'play' ? '⏸ Pausar' : isEnded ? '↺ Reproducir de nuevo' : atStart ? '▶ Reproducir' : '▶ Continuar';
@@ -209,6 +226,22 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
           <span className="flow-step-number">{playing.step + 1}</span> {describe(playing.step)}
         </p>
         {current?.note ? <p className="flow-note">{current.note}</p> : null}
+        {!share && inside(current?.edgeId) && (
+          // El paso pasa por la interfaz de un módulo con recorrido interno (spec modulos-compartidos, criterio 24).
+          <button
+            type="button"
+            className="pixel-button flow-inside"
+            onClick={() => {
+              const target = inside(current?.edgeId)!;
+              openModule(target.moduleId, {
+                nodeId: target.nodeId,
+                play: { tourId: target.tourId, returnTour: playing.tourId, returnStep: playing.step },
+              });
+            }}
+          >
+            [::] Ver dentro del módulo: {inside(current?.edgeId)!.name}
+          </button>
+        )}
         {isEnded && <p className="panel-help">Fin del recorrido.</p>}
       </div>
       {steps.length > 1 && (

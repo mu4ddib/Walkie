@@ -38,6 +38,13 @@ import {
   type ShareDays,
   type ExportFormat,
   importPackage,
+  listModules,
+  createModule,
+  deleteModule,
+  listModuleUsages,
+  reassignInterface,
+  extractModule,
+  type ModuleExtraction,
 } from './client';
 
 /** Access token de la sesión actual. `AuthGate` garantiza que existe dentro de la app. */
@@ -55,6 +62,12 @@ export const queryKeys = {
   map: (appId: string) => ['canvas', 'map', appId] as const,
   canvas: (featureId: string) => ['canvas', featureId] as const,
   catalog: (appId: string) => ['apps', appId, 'catalog'] as const,
+  /**
+   * Resúmenes de los módulos de la app (spec modulos-compartidos): una sola consulta compartida por todas las cajas de
+   * todos los lienzos. Bajo `canvas`: guardar cualquier lienzo (el del módulo o uno que lo usa) la marca vieja.
+   */
+  modules: (appId: string) => ['canvas', 'modules', appId] as const,
+  moduleUsages: (moduleId: string) => ['canvas', 'module-usages', moduleId] as const,
   catalogItem: (itemId: string) => ['catalog', itemId] as const,
   catalogUsages: (itemId: string) => ['catalog', itemId, 'usages'] as const,
   asset: (assetId: string) => ['assets', assetId] as const,
@@ -173,6 +186,9 @@ export function useSaveCanvas(featureId: string) {
       queryClient.setQueryData(queryKeys.canvas(featureId), saved);
       // Las miniaturas de la galería y el "Se usa en" de los componentes cambian con el lienzo.
       void queryClient.invalidateQueries({ queryKey: ['canvas', 'previews'] });
+      // Un módulo guardado cambia su resumen; una feature guardada, sus usos.
+      void queryClient.invalidateQueries({ queryKey: ['canvas', 'modules'] });
+      void queryClient.invalidateQueries({ queryKey: ['canvas', 'module-usages'] });
       void queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === 'catalog' && q.queryKey[2] === 'usages',
       });
@@ -358,6 +374,85 @@ export function useImportPackage(appId: string | null) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.previews(appId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.map(appId) });
+    },
+  });
+}
+
+/** Resúmenes de los módulos compartidos de la app (una consulta para todas sus cajas). */
+export function useModules(appId: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.modules(appId),
+    queryFn: ({ signal }) => listModules(token, appId, signal),
+    enabled: Boolean(appId),
+  });
+}
+
+export function useModuleUsages(moduleId: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.moduleUsages(moduleId ?? ''),
+    queryFn: ({ signal }) => listModuleUsages(token, moduleId!, signal),
+    enabled: Boolean(moduleId),
+  });
+}
+
+/** Refresca lo que depende de los módulos de la app: sus resúmenes, sus usos y los lienzos reescritos. */
+function invalidateModules(queryClient: ReturnType<typeof useQueryClient>, appId: string) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.modules(appId) });
+  void queryClient.invalidateQueries({ queryKey: ['canvas', 'module-usages'] });
+}
+
+export function useCreateModule(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (module: { id?: string; name: string; description?: string }) => createModule(token, appId, module),
+    onSuccess: () => invalidateModules(queryClient, appId),
+  });
+}
+
+export function useDeleteModule(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ moduleId, force }: { moduleId: string; force?: boolean }) => deleteModule(token, moduleId, force),
+    onSuccess: () => invalidateModules(queryClient, appId),
+  });
+}
+
+/** Renombrar o describir un módulo: es una feature de tipo `module` (mismo endpoint). */
+export function useUpdateModule(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ moduleId, changes }: { moduleId: string; changes: FeatureChanges }) => updateFeature(token, moduleId, changes),
+    onSuccess: () => invalidateModules(queryClient, appId),
+  });
+}
+
+export function useReassignInterface(appId: string, moduleId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ interfaceId, to }: { interfaceId: string; to: string | null }) =>
+      reassignInterface(token, moduleId, interfaceId, to),
+    onSuccess: (result) => {
+      invalidateModules(queryClient, appId);
+      // Los lienzos reescritos tienen otra versión: su caché ya no sirve.
+      for (const featureId of result.features) queryClient.removeQueries({ queryKey: queryKeys.canvas(featureId), exact: true });
+    },
+  });
+}
+
+export function useExtractModule(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (extraction: ModuleExtraction) => extractModule(token, appId, extraction),
+    onSuccess: (result, extraction) => {
+      queryClient.setQueryData(queryKeys.canvas(extraction.featureId), result.feature);
+      invalidateModules(queryClient, appId);
     },
   });
 }

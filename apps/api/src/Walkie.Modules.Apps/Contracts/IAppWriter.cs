@@ -19,6 +19,12 @@ public interface IAppWriter
     /// <summary>Crea la feature (nombre y descripción ya dentro de sus límites) y devuelve su id.</summary>
     Task<Guid> CreateFeatureAsync(Guid appId, string name, string? description, string userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Crea un módulo compartido vacío (ADR-0010) con el id que generó el cliente (así reintentar no duplica);
+    /// <c>false</c> si ese id ya existe.
+    /// </summary>
+    Task<bool> CreateModuleAsync(Guid appId, Guid moduleId, string name, string? description, string userId, CancellationToken cancellationToken);
+
     /// <summary>Crea un elemento del catálogo con la definición de <paramref name="source"/> y devuelve su id (nuevo).</summary>
     Task<Guid> CreateCatalogItemAsync(Guid appId, CatalogItemResponse source, string userId, CancellationToken cancellationToken);
 

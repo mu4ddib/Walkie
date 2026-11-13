@@ -12,7 +12,7 @@ Walkie es un lienzo interactivo para documentar apps (pantallas, inputs, reglas,
 
 ## Modelo de dominio (resumen)
 
-App → Catálogo (nodos reutilizables: api, service, database) + Features. Feature → un lienzo (nodos propios: screen, rule, actor; nodos `ref` al catálogo; nodos `portal` a otras features) + Tours. Detalle en `docs/glossary.md`.
+App → Catálogo (nodos reutilizables: api, service, database, resource; y módulos compartidos con lienzo propio e interfaces, ADR-0010) + Features. Feature → un lienzo (nodos propios: screen, rule, actor; nodos `ref` al catálogo; nodos `module` a un módulo; nodos `portal` a otras features) + Tours. Detalle en `docs/glossary.md`.
 
 ## Comandos
 

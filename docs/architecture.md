@@ -12,6 +12,7 @@
 - El grafo de cada feature se guarda como documento `jsonb` con `version` para concurrencia optimista.
 - Una base Postgres con un schema por módulo (`apps`, `canvas`, `files`, `sharing`), cada uno con sus migraciones; sin claves foráneas entre módulos.
 - Los módulos se hablan por interfaces de `Contracts/`: Canvas usa `IFeatureDirectory` e `ICatalogDirectory` de Apps; Apps define `ICatalogUsage` (qué lienzos usan un elemento del catálogo) y Canvas la implementa. Canvas depende de Apps, nunca al revés. Sharing (enlaces, ADR-0005) y Export (documento Markdown) usan `IFeatureDirectory` e `ICatalogDirectory` de Apps, `ICanvasReader` de Canvas e `IAssetDirectory` de Files; nadie depende de ellos.
+- Módulos compartidos (ADR-0010): un módulo es una feature con `kind = module` en Apps (las listas de features lo excluyen) y su lienzo es un lienzo más de Canvas, con `interfaces`. Canvas expone sus resúmenes (`GET /api/apps/{appId}/modules`), usos, reasignar interfaces y convertir una selección en módulo (escribe en Apps con `IAppWriter` y compensa si falla). La web pide un solo resumen por app y carga el lienzo de un módulo solo al abrirlo.
 - Contrato del grafo: `packages/schema/walkie-graph.schema.json`.
 
 ## Preparado para colaboración

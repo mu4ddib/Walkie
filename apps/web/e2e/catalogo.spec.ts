@@ -34,9 +34,9 @@ test('catálogo compartido entre dos lienzos con ref, Mover al catálogo y borra
     await openFeature(page, app, feature);
     await dropNode(page, 'Pantalla', 80, 120);
     // El catálogo está en el panel "Componentes" de la barra de herramientas (spec espacio-de-trabajo).
-    await page.getByRole('button', { name: 'Componentes' }).click();
+    await page.getByRole('button', { name: 'Catálogo', exact: true }).click();
     await dropNode(page, 'Consultar cliente', 400, 120);
-    await page.getByRole('button', { name: 'Componentes' }).click();
+    await page.getByRole('button', { name: 'Catálogo', exact: true }).click();
     await connect(page, 0, 1);
     await page.locator('.react-flow__pane').click({ position: { x: 700, y: 600 } });
     // Sin etiqueta propia, la solicitud muestra el endpoint del contrato del componente.

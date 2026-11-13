@@ -14,8 +14,21 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { StoreApi } from 'zustand/vanilla';
-import type { CatalogItem, NewCatalogItem } from '../api/client';
-import { CatalogContext, effectiveResource, effectiveType, portalTarget, refTarget, type CanvasCatalog } from '../catalog/catalogContext';
+import type { CatalogItem, ModuleSummary, NewCatalogItem } from '../api/client';
+import {
+  CatalogContext,
+  effectiveResource,
+  endType,
+  interfaceTarget,
+  moduleTarget,
+  portalTarget,
+  refTarget,
+  type CanvasCatalog,
+} from '../catalog/catalogContext';
+import { InterfacePicker, type InterfaceChoice } from '../modules/InterfacePicker';
+import { ExtractModuleDialog } from '../modules/ExtractModuleDialog';
+import { placeableModules } from '../modules/moduleMeta';
+import type { InterfaceRef } from '../schema/walkie-graph';
 import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
 import { nodeTypes } from '../nodes/nodeTypes';
@@ -47,9 +60,10 @@ import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { useGraphStore } from '../store/useGraphStore';
 import { GRID, palette } from '../theme/palette';
 import { Palette } from './Palette';
-import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_RESOURCE_MIME, PALETTE_TYPES, RESOURCE_KEY } from './paletteTypes';
+import { PALETTE_MIME, PALETTE_MODULE_MIME, PALETTE_REF_MIME, PALETTE_RESOURCE_MIME, PALETTE_TYPES, RESOURCE_KEY } from './paletteTypes';
 import { RESOURCE_KINDS, type ResourceKind } from '../nodes/resourceMeta';
 import { useOpenFeature } from './useOpenFeature';
+import { useOpenModule } from './useOpenModule';
 import {
   getEdgeMotion,
   getFlowSpeed,
@@ -99,36 +113,55 @@ export function Canvas({
   store,
   catalog = NO_CATALOG,
   focusId,
+  focusCenter = true,
+  initialPlay,
 }: {
   store: StoreApi<GraphStore>;
   catalog?: CanvasCatalog;
   /** Caja con la que se abre el lienzo: seleccionada y centrada (ej. un portal desde el mapa de la app). */
   focusId?: string;
+  /** `false`: la caja se selecciona sin mover la vista (al volver de un módulo, la vista recordada manda). */
+  focusCenter?: boolean;
+  /** Tour o recorrido que se reproduce al abrir, desde un paso (entrar a un módulo o volver de él). */
+  initialPlay?: { tourId: string; step: number };
 }) {
   return (
     <GraphStoreProvider store={store}>
       <CatalogContext.Provider value={catalog}>
         <ReactFlowProvider>
-          <CanvasInner catalog={catalog} focusId={focusId} />
+          <CanvasInner catalog={catalog} focusId={focusId} focusCenter={focusCenter} initialPlay={initialPlay} />
         </ReactFlowProvider>
       </CatalogContext.Provider>
     </GraphStoreProvider>
   );
 }
 
-function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: string }) {
+function CanvasInner({
+  catalog,
+  focusId,
+  focusCenter,
+  initialPlay,
+}: {
+  catalog: CanvasCatalog;
+  focusId?: string;
+  focusCenter: boolean;
+  initialPlay?: { tourId: string; step: number };
+}) {
   const graphNodes = useGraphStore((s) => s.nodes);
   const layout = useGraphStore((s) => s.layout);
   const graphEdges = useGraphStore((s) => s.edges);
   const groups = useGraphStore((s) => s.groups);
   const stickyNotes = useGraphStore((s) => s.stickyNotes);
+  const moduleInterfaces = useGraphStore((s) => s.interfaces);
   const { addNode, addResource, addRef, moveNode, removeNode, connect, removeEdge, duplicateNode } = useGraphStore((s) => s);
+  const { addModuleRef, resizeNode } = useGraphStore((s) => s);
   const { addStickyNote, moveStickyNote, removeStickyNote, duplicateStickyNote } = useGraphStore((s) => s);
   const { addGroup, moveGroup, resizeGroup, setParent, removeGroup, updateGroup } = useGraphStore((s) => s);
   const { addFlowTour, addEdgeStep } = useGraphStore((s) => s);
   const { undo, redo, beginBatch, endBatch, growGroup, canUndo, canRedo } = useGraphStore((s) => s);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport, setCenter, getNodes, getNodesBounds } = useReactFlow();
   const openFeature = useOpenFeature();
+  const openModule = useOpenModule();
   // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
   // solo si el lienzo ya trae nodos: con uno vacío, React Flow ajustaría el zoom al aparecer el primero
   // y los siguientes caerían en otro lugar.
@@ -178,7 +211,12 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
   const previewId = preview?.ids[preview.index] ?? null;
   // Modo tour (spec modo-tour) o reproducción de un recorrido: qué tour, en qué paso y fase; el lienzo queda de solo
   // lectura. Es estado de visualización: el store (y el autoguardado) no lo ven.
-  const [playing, setPlaying] = useState<Playing | null>(null);
+  const tourAtStart = useGraphStore((s) => (initialPlay ? s.tours[initialPlay.tourId] : undefined));
+  const [playing, setPlaying] = useState<Playing | null>(() =>
+    initialPlay && tourAtStart && tourAtStart.steps[initialPlay.step]
+      ? { tourId: initialPlay.tourId, step: initialPlay.step, phase: firstPhase(tourAtStart, initialPlay.step), mode: 'play' }
+      : null,
+  );
   const [flowSpeed, setFlowSpeedState] = useState(getFlowSpeed);
   const tours = useGraphStore((s) => s.tours);
   const playingTour = playing ? tours[playing.tourId] : undefined;
@@ -195,6 +233,8 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
   // Arrastre: a qué grupo iría lo que se arrastra (indicación de la pertenencia resultante) y aviso al soltar.
   const [dropHint, setDropHint] = useState<{ groupId: string | null; text: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // «Convertir en módulo» (spec modulos-compartidos): lo seleccionado que se convierte, con el diálogo abierto.
+  const [extracting, setExtracting] = useState<string[] | null>(null);
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), NOTICE_MS);
@@ -406,6 +446,8 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
       id: node.id,
       type: node.type,
       position: layout[node.id] ?? { x: 0, y: 0 },
+      // La caja de un módulo conserva su ancho en este lienzo (spec modulos-compartidos, criterio 3).
+      width: node.type === 'module' ? layout[node.id]?.w : undefined,
       data: { node, editing: editingId === node.id, onEditDone: stopEditing },
       selected: selectedNodes.has(node.id),
       measured: measured[node.id],
@@ -588,9 +630,18 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
     const displayOf = (edge: (typeof visible)[number]['edge']) => {
       const branch = edge.branch ? graphNodes[edge.from]?.branches?.find((b) => b.id === edge.branch) : undefined;
       const targetNode = graphNodes[edge.to];
+      // Hacia la interfaz de un módulo: su contrato (método y ruta de su caja) o, sin él, su nombre.
+      const toIface = interfaceTarget(targetNode, edge.toInterface, catalog.modules);
+      const fromIface = interfaceTarget(graphNodes[edge.from], edge.fromInterface, catalog.modules);
+      const viaInterface = toIface ?? (edge.kind === 'response' ? undefined : fromIface);
       return edgeDisplay(edge, {
         branchLabel: branch?.label,
-        targetHttp: targetNode && (refTarget(targetNode, catalog.items)?.http ?? targetNode.http),
+        targetHttp: viaInterface
+          ? viaInterface.method || viaInterface.path
+            ? { method: viaInterface.method, path: viaInterface.path }
+            : undefined
+          : targetNode && (refTarget(targetNode, catalog.items)?.http ?? targetNode.http),
+        interfaceName: viaInterface?.name ?? edge.toInterface?.name ?? (edge.kind === 'response' ? undefined : edge.fromInterface?.name),
       });
     };
     const pairLabels: Record<string, PlacedLabel> = {};
@@ -702,6 +753,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
     pickFrom,
     flash,
     catalog.items,
+    catalog.modules,
     collapsedGroups,
     selectedEdges,
     playing,
@@ -769,6 +821,9 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             if (box?.w && box.h) resizeGroup(change.id, { x: change.position.x, y: change.position.y, w: box.w, h: box.h });
           }
         }
+        if (change.type === 'dimensions' && change.resizing && change.dimensions && graphNodes[change.id]?.type === 'module') {
+          resizeNode(change.id, { w: change.dimensions.width });
+        }
         if (change.type === 'dimensions' && isGroup && change.resizing && change.dimensions) {
           const box = layout[change.id];
           if (box) resizeGroup(change.id, { x: box.x, y: box.y, w: change.dimensions.width, h: change.dimensions.height });
@@ -779,6 +834,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
           else if (isNote) removeStickyNote(change.id);
           else {
             warnAffectedFlows(Object.values(graphEdges).filter((e) => e.from === change.id || e.to === change.id).map((e) => e.id));
+            warnRemovedInterfaces(change.id);
             removeNode(change.id);
           }
           setSelectedNodes((s) => toggle(s, change.id, false));
@@ -795,10 +851,21 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [moveNode, removeNode, groups, stickyNotes, layout, moveGroup, resizeGroup, removeGroup, moveStickyNote, removeStickyNote, hierarchy, graphEdges],
+    [moveNode, removeNode, groups, stickyNotes, layout, moveGroup, resizeGroup, removeGroup, moveStickyNote, removeStickyNote, hierarchy, graphEdges, graphNodes, resizeNode, moduleInterfaces],
   );
 
   /** Al borrar conexiones usadas en recorridos, avisa qué recorridos revisar (el paso queda marcado en el editor). */
+  /** Borrar una caja que expone interfaces del módulo las quita: se avisa (Ctrl+Z las recupera). */
+  function warnRemovedInterfaces(nodeId: string) {
+    const gone = Object.values(moduleInterfaces).filter((i) => i.nodeId === nodeId);
+    if (gone.length === 0) return;
+    const names = gone.map((i) => `«${i.name}»`).join(', ');
+    const uses = catalog.currentModuleId ? (catalog.modules?.[catalog.currentModuleId]?.usedBy.length ?? 0) : 0;
+    setNotice(
+      `Se quitó ${gone.length === 1 ? 'la interfaz' : 'las interfaces'} ${names}${uses > 0 ? `: las conexiones de las features que la usan quedarán pendientes al guardar` : ''}. Ctrl+Z la recupera.`,
+    );
+  }
+
   function warnAffectedFlows(edgeIds: readonly string[]) {
     const affected = Object.values(tours).filter((t) => t.steps.some((step) => step.edgeId && edgeIds.includes(step.edgeId)));
     if (affected.length === 0) return;
@@ -971,23 +1038,64 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
   const panelGroupId = single ? (liveGroups[0] ?? null) : null;
   const panelEdgeId = single ? (liveEdges[0] ?? null) : null;
   const panelSelected = Boolean(panelNodeId || panelEdgeId || panelGroupId || panelNoteId);
+  // Convertir en módulo necesita la API (crea el módulo y guarda este lienzo a la vez).
+  const canExtract = !locked && !!catalog.featureId && !!catalog.modules && !!catalog.appId;
 
-  // Un `ref` conecta como su elemento del catálogo (spec catalogo, criterio 9).
-  const onConnect = useCallback(
-    (c: Connection) => {
+  /**
+   * Termina una conexión: un `ref` conecta como su elemento del catálogo (spec catalogo, criterio 9) y el extremo que es
+   * un módulo, como la caja interna de su interfaz (spec modulos-compartidos, criterio 12).
+   */
+  const finishConnect = useCallback(
+    (c: Connection, picked: { fromInterface?: InterfaceRef; toInterface?: InterfaceRef }) => {
       const source = graphNodes[c.source];
       const target = graphNodes[c.target];
       const kind =
         source && target
-          ? defaultEdgeKind(effectiveType(source, catalog.items), effectiveType(target, catalog.items), {
-              from: effectiveResource(source, catalog.items)?.kind,
-              to: effectiveResource(target, catalog.items)?.kind,
-            })
+          ? defaultEdgeKind(
+              endType(source, picked.fromInterface, catalog.items, catalog.modules),
+              endType(target, picked.toInterface, catalog.items, catalog.modules),
+              { from: effectiveResource(source, catalog.items)?.kind, to: effectiveResource(target, catalog.items)?.kind },
+            )
           : undefined;
       // Desde el punto de una salida de decisión, la conexión nace como esa rama.
-      connect(c.source, c.target, kind, { branch: c.sourceHandle });
+      connect(c.source, c.target, kind, { branch: c.sourceHandle, ...picked });
     },
-    [connect, graphNodes, catalog.items],
+    [connect, graphNodes, catalog.items, catalog.modules],
+  );
+  // Conexión soltada sobre (o sacada de) la caja de un módulo: falta elegir la interfaz de cada extremo que lo sea.
+  const [pendingConnect, setPendingConnect] = useState<{
+    connection: Connection;
+    ends: ('from' | 'to')[];
+    picked: { fromInterface?: InterfaceRef; toInterface?: InterfaceRef };
+    x: number;
+    y: number;
+  } | null>(null);
+  const pointer = useRef({ x: 0, y: 0 });
+  const onConnect = useCallback(
+    (c: Connection) => {
+      const withInterfaces = (id: string) => {
+        const node = graphNodes[id];
+        return node?.type === 'module' && (moduleTarget(node, catalog.modules)?.interfaces.length ?? 0) > 0;
+      };
+      const ends = ([['from', c.source], ['to', c.target]] as const).filter(([, id]) => withInterfaces(id)).map(([end]) => end);
+      if (ends.length === 0) return finishConnect(c, {});
+      setPendingConnect({ connection: c, ends: [...ends].reverse(), picked: {}, x: pointer.current.x, y: pointer.current.y });
+    },
+    [graphNodes, catalog.modules, finishConnect],
+  );
+  const pickInterface = useCallback(
+    (choice: InterfaceChoice) => {
+      if (!pendingConnect) return;
+      const [end, ...rest] = pendingConnect.ends;
+      const picked = { ...pendingConnect.picked };
+      if (choice) picked[end === 'from' ? 'fromInterface' : 'toInterface'] = { id: choice.id, name: choice.name };
+      if (rest.length > 0) setPendingConnect({ ...pendingConnect, ends: rest, picked });
+      else {
+        setPendingConnect(null);
+        finishConnect(pendingConnect.connection, picked);
+      }
+    },
+    [pendingConnect, finishConnect],
   );
 
   const addAt = useCallback(
@@ -1080,11 +1188,13 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
     const type = event.dataTransfer.getData(PALETTE_MIME) as NodeType;
     const item = catalog.items[event.dataTransfer.getData(PALETTE_REF_MIME)];
     const kind = event.dataTransfer.getData(PALETTE_RESOURCE_MIME) as ResourceKind;
+    const module = catalog.modules?.[event.dataTransfer.getData(PALETTE_MODULE_MIME)];
     if (PALETTE_TYPES.includes(type)) addAt((p) => addNode(type, p), event.clientX, event.clientY);
     else if (RESOURCE_KINDS.some((k) => k.kind === kind)) {
       setResourcesOpen(false);
       addAt((p) => addResource(kind, p), event.clientX, event.clientY);
     } else if (item) addAt((p) => addRef(item, p), event.clientX, event.clientY);
+    else if (module) addAt((p) => addModuleRef(module, p), event.clientX, event.clientY);
   }
 
   /** Agrega en el centro visible; cada alta seguida se corre un poco para no apilar cajas. */
@@ -1177,12 +1287,12 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
   const focused = useRef(false);
   const focusSize = focusId ? measured[focusId] : undefined;
   useEffect(() => {
-    if (focused.current || !focusId || !focusSize) return;
+    if (focused.current || !focusId || !focusSize || !focusCenter) return;
     const at = layout[focusId];
     if (!at) return;
     focused.current = true;
     void setCenter(at.x + focusSize.width / 2, at.y + focusSize.height / 2, { zoom: 1.1, duration: 300 });
-  }, [focusId, focusSize, layout, setCenter]);
+  }, [focusId, focusSize, layout, setCenter, focusCenter]);
 
   // La vista también se guarda al salir: `onMoveEnd` llega al terminar una animación de zoom, y quien
   // cierra o recarga la página antes perdería el último movimiento.
@@ -1281,6 +1391,15 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
               addAtCenter((p) => addRef(created, p));
             }
           : undefined,
+        // Módulos (spec modulos-compartidos): sin el propio ni los que lo contienen (sería un ciclo de contención).
+        modules: catalog.modules ? placeableModules(catalog.modules, catalog.currentModuleId) : undefined,
+        onAddModule: (module: ModuleSummary) => addAtCenter((p) => addModuleRef(module, p)),
+        onCreateModule: catalog.createModule
+          ? async (module: { name: string; description?: string }) => {
+              const created = await catalog.createModule!(module);
+              addAtCenter((p) => addModuleRef(created, p));
+            }
+          : undefined,
       }
     : undefined;
 
@@ -1308,6 +1427,10 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
           e.dataTransfer.dropEffect = 'move';
         }}
         onDrop={onDrop}
+        onPointerMove={(e) => {
+          const rect = flowRef.current?.getBoundingClientRect();
+          if (rect) pointer.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }}
       >
         <ReactFlow
           nodes={nodes}
@@ -1330,6 +1453,11 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             if (stickyNotes[flowNode.id]) return setEditingId(flowNode.id);
             const node = graphNodes[flowNode.id];
             if (!node || node.type === 'ref') return;
+            // Doble clic en la caja de un módulo abre su lienzo (spec modulos-compartidos, criterio 19).
+            if (node.type === 'module') {
+              if (node.moduleId && catalog.modules?.[node.moduleId]) openModule(node.moduleId, { nodeId: node.id });
+              return;
+            }
             if (node.type === 'portal') {
               const target = portalTarget(node, catalog.features);
               if (target) openFeature(target.id);
@@ -1384,6 +1512,24 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
           />
         )}
         <EdgeMarkers />
+        {pendingConnect &&
+          (() => {
+            const end = pendingConnect.ends[0]!;
+            const node = graphNodes[end === 'from' ? pendingConnect.connection.source : pendingConnect.connection.target];
+            const module = node && moduleTarget(node, catalog.modules);
+            if (!module) return null;
+            return (
+              <InterfacePicker
+                key={end}
+                module={module}
+                end={end}
+                x={pendingConnect.x + 12}
+                y={pendingConnect.y + 12}
+                onPick={pickInterface}
+                onCancel={() => setPendingConnect(null)}
+              />
+            );
+          })()}
         {!playing && (
           <ZoomControls
             fitPadding={fitPadding}
@@ -1412,7 +1558,9 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             editLabel={
               stickyNotes[menu.id]
                 ? 'Editar texto'
-                : graphNodes[menu.id]?.type === 'ref' || graphNodes[menu.id]?.type === 'portal'
+                : graphNodes[menu.id]?.type === 'ref' ||
+                    graphNodes[menu.id]?.type === 'portal' ||
+                    graphNodes[menu.id]?.type === 'module'
                   ? null
                   : 'Editar título'
             }
@@ -1436,6 +1584,29 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             </button>
             <span className="selection-bar-help">Mayús + clic suma o quita</span>
           </div>
+        )}
+        {canExtract && !pickingTourId && liveNodes.length + liveGroups.length + liveNotes.length >= 2 && (
+          <div className="selection-bar floating" role="toolbar" aria-label="Cajas seleccionadas">
+            <span>
+              <strong>{liveNodes.length + liveGroups.length + liveNotes.length}</strong> elementos seleccionados
+            </span>
+            <button type="button" className="pixel-button" onClick={() => setExtracting([...liveGroups, ...liveNodes, ...liveNotes])}>
+              Convertir en módulo…
+            </button>
+            <span className="selection-bar-help">G agrupa · Mayús + clic suma o quita</span>
+          </div>
+        )}
+        {extracting && (
+          <ExtractModuleDialog
+            roots={extracting}
+            onClose={() => setExtracting(null)}
+            onDone={(moduleNodeId, name) => {
+              setExtracting(null);
+              setSelectedNodes(new Set([moduleNodeId]));
+              setSelectedEdges(new Set());
+              setNotice(`Se creó el módulo «${name}». Ctrl+Z devuelve las cajas a este lienzo (el módulo queda en el catálogo).`);
+            }}
+          />
         )}
         {playing && flowPlaying && (
           <FlowPlayer
@@ -1485,6 +1656,7 @@ function CanvasInner({ catalog, focusId }: { catalog: CanvasCatalog; focusId?: s
             preview={{ activeEdgeId: previewId, onStart: startPreview, onStop: stopPreview }}
             flows={{ onCreate: (edgeId) => createFlow([edgeId]), onOpen: openFlow }}
             onNest={nest}
+            onExtract={canExtract ? setExtracting : undefined}
             tours={{
               openTourId,
               onOpen: setOpenTourId,
@@ -1523,3 +1695,4 @@ function toggle(set: ReadonlySet<string>, id: string, on: boolean): ReadonlySet<
   else next.delete(id);
   return next;
 }
+

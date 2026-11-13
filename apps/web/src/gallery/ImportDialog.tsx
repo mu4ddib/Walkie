@@ -147,6 +147,18 @@ function Summary({ summary }: { summary: ImportSummary }) {
         {' · '}
         {plural(summary.images, 'imagen', 'imágenes')}
       </p>
+      {summary.modules && summary.modules.length > 0 && (
+        <p>
+          Módulos:{' '}
+          {summary.modules.map((m, i) => (
+            <span key={m.sourceName + i}>
+              {i > 0 && ', '}
+              <strong>{m.name}</strong>
+              {m.reused ? ' (ya está y se reutiliza)' : ' (nuevo)'}
+            </span>
+          ))}
+        </p>
+      )}
       {summary.warnings.length > 0 && (
         <div role="note" className="share-warning">
           <p>Al importar:</p>

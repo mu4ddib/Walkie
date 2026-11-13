@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import { v7 as uuidv7 } from 'uuid';
-import type { Edge, Group, Node, StickyNote, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
+import type { Edge, Group, InterfaceRef, ModuleInterface, Node, StickyNote, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import { GRID } from '../theme/palette';
 import { normalizeDatabase, normalizeEdgeData, normalizeEdgeRequest, normalizeHttp } from '../contracts/contracts';
 import { canNest, descendantsOf, inferHierarchy, isInside, ownerOf } from './hierarchy';
@@ -132,6 +132,31 @@ export interface EdgePatch {
   request?: Edge['request'] | null;
   /** Invierte el sentido (origen ↔ destino) en el mismo cambio; pierde la salida de decisión, que era del origen. */
   reverse?: boolean;
+  /** Interfaz del módulo de origen o destino (spec modulos-compartidos); `null` la quita (el módulo completo). */
+  fromInterface?: InterfaceRef | null;
+  toInterface?: InterfaceRef | null;
+}
+
+/** Tipo de una interfaz de módulo: ofrece, evento o dependencia requerida. */
+export type InterfaceKind = ModuleInterface['kind'];
+export const INTERFACE_KINDS: readonly InterfaceKind[] = ['provides', 'event', 'requires'];
+export const INTERFACE_NAME_MAX_LENGTH = 60;
+export const INTERFACE_DESCRIPTION_MAX_LENGTH = 500;
+
+/** Cambios de una interfaz; un texto vacío quita la descripción y `tourId: null` el recorrido interno. */
+export interface InterfacePatch {
+  name?: string;
+  description?: string;
+  kind?: InterfaceKind;
+  nodeId?: string;
+  tourId?: string | null;
+}
+
+/** Extremo de conexión que es una caja de módulo: a qué interfaz apunta (o al módulo completo). */
+export interface ConnectInit {
+  branch?: string | null;
+  fromInterface?: InterfaceRef | null;
+  toInterface?: InterfaceRef | null;
 }
 
 export type Branch = NonNullable<Node['branches']>[number];
@@ -162,6 +187,7 @@ export const DEFAULT_TITLES: Record<NodeType, string> = {
   resource: 'Recurso',
   ref: 'Referencia',
   portal: 'Portal',
+  module: 'Módulo',
 };
 
 /**
@@ -337,6 +363,8 @@ export interface GraphState {
   groups: Record<string, Group>;
   /** Notas adhesivas (anotaciones del lienzo), por id; su posición está en `layout` con el mismo id. */
   stickyNotes: Record<string, StickyNote>;
+  /** Interfaces del lienzo de un módulo (spec modulos-compartidos, ADR-0010); vacío en una feature. */
+  interfaces: Record<string, ModuleInterface>;
   /** Versión guardada en el servidor (concurrencia optimista). */
   version: number;
   /** Hay cambios sin guardar. */
@@ -444,7 +472,7 @@ export interface GraphActions {
   /** Copia de la nota, corrida `DUPLICATE_OFFSET`; devuelve su id o `null`. */
   duplicateStickyNote(id: string): string | null;
   /** Crea la conexión; `null` si algún nodo no existe o es el mismo nodo. `branch`: salida de la decisión de origen. */
-  connect(from: string, to: string, kind?: EdgeKind, init?: { branch?: string | null }): string | null;
+  connect(from: string, to: string, kind?: EdgeKind, init?: ConnectInit): string | null;
   /**
    * Respuesta a una solicitud: conexión `response` en sentido inverso, vinculada con `replyTo`. Una solicitud puede
    * tener varias (éxito, error). Devuelve su id o `null` si `requestId` no es una conexión `request`.
@@ -503,6 +531,24 @@ export interface GraphActions {
    * sigue siendo el que se envió (`sent`); si hubo cambios mientras viajaba la petición, siguen pendientes.
    */
   markSaved(version: number, sent?: GraphState): void;
+  /**
+   * Módulos compartidos (spec modulos-compartidos, ADR-0010). `addModuleRef` pone la caja de un módulo (`moduleId` y su
+   * nombre como último conocido); `setModuleDisplay` cambia su presentación en este lienzo; `relinkModule` la apunta a
+   * otro módulo (sus conexiones pasan al módulo completo); `resizeNode` guarda su tamaño en `layout`.
+   */
+  addModuleRef(module: { id: string; name: string }, position: Position): string;
+  setModuleDisplay(id: string, patch: { description?: boolean; interfaces?: boolean }): void;
+  relinkModule(id: string, module: { id: string; name: string }, options?: { keepInterfaces?: boolean }): void;
+  resizeNode(id: string, size: { w: number; h?: number }): void;
+  /** Interfaces del lienzo de un módulo: nombre único (sin distinguir mayúsculas) y una caja existente. */
+  addInterface(init: { name: string; kind: InterfaceKind; nodeId: string; description?: string; tourId?: string }): string | null;
+  updateInterface(id: string, patch: InterfacePatch): void;
+  removeInterface(id: string): void;
+  /**
+   * Reemplaza el grafo entero en un solo paso del historial (no lo olvida, a diferencia de `loadGraph`): convertir una
+   * selección en módulo se deshace con Ctrl+Z.
+   */
+  replaceGraph(graph: WalkieCanvasGraphV0): void;
   /** Deshace el último paso del grafo (spec deshacer-y-cajas). No toca la versión; `dirty` según lo guardado. */
   undo(): void;
   /** Rehace lo último que se deshizo. Un cambio nuevo después de deshacer descarta lo que había para rehacer. */
@@ -526,6 +572,7 @@ const emptyState: GraphState = {
   tours: {},
   groups: {},
   stickyNotes: {},
+  interfaces: {},
   version: 0,
   dirty: false,
   canUndo: false,
@@ -603,6 +650,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           tours: withStepIds(withKinds(graph.tours ?? {}), newId),
           groups: graph.groups ?? {},
           stickyNotes: graph.stickyNotes ?? {},
+          interfaces: graph.interfaces ?? {},
           version: graph.version,
           dirty: false,
           canUndo: false,
@@ -941,7 +989,11 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
                 ]),
               )
             : base;
-          return { nodes, layout, edges, tours, dirty: true };
+          // Las interfaces que exponía la caja dejan de existir (se deshace con Ctrl+Z).
+          const interfaces = Object.values(s.interfaces).some((i) => i.nodeId === id)
+            ? Object.fromEntries(Object.entries(s.interfaces).filter(([, i]) => i.nodeId !== id))
+            : s.interfaces;
+          return { nodes, layout, edges, tours, interfaces, dirty: true };
         });
       },
 
@@ -1084,6 +1136,9 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           kind: kind ?? defaultEdgeKind(source.type, target.type, { from: source.resource?.kind, to: target.resource?.kind }),
         };
         if (init?.branch && source.branches?.some((b) => b.id === init.branch)) edge.branch = init.branch;
+        // Solo el extremo que es un módulo apunta a una de sus interfaces.
+        if (init?.fromInterface && source.type === 'module') edge.fromInterface = cleanInterfaceRef(init.fromInterface);
+        if (init?.toInterface && target.type === 'module') edge.toInterface = cleanInterfaceRef(init.toInterface);
         set((s) => ({ edges: { ...s.edges, [id]: edge }, dirty: true }));
         return id;
       },
@@ -1093,6 +1148,9 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         if (!request || request.kind !== 'request') return null;
         const id = newId();
         let edge: Edge = { id, from: request.to, to: request.from, kind: 'response', replyTo: requestId };
+        // La respuesta sale de la misma interfaz a la que llegó la solicitud (y vuelve a la que la hizo).
+        if (request.toInterface) edge.fromInterface = request.toInterface;
+        if (request.fromInterface) edge.toInterface = request.fromInterface;
         if (validStatus(init?.status)) edge.status = init.status;
         edge = withText(edge, 'label', init?.label, EDGE_TEXT_MAX_LENGTH);
         set((s) => ({ edges: { ...s.edges, [id]: edge }, dirty: true }));
@@ -1139,6 +1197,17 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         if (patch.reverse) {
           next = { ...next, from: edge.to, to: edge.from };
           delete next.branch;
+          delete next.fromInterface;
+          delete next.toInterface;
+          if (edge.toInterface) next.fromInterface = edge.toInterface;
+          if (edge.fromInterface) next.toInterface = edge.fromInterface;
+        }
+        for (const end of ['from', 'to'] as const) {
+          const key = end === 'from' ? 'fromInterface' : 'toInterface';
+          const value = patch[key];
+          if (value === undefined) continue;
+          if (value && get().nodes[next[end]]?.type === 'module') next[key] = cleanInterfaceRef(value);
+          else if (value === null) delete next[key];
         }
         if (patch.branch !== undefined) {
           if (patch.branch && get().nodes[next.from]?.branches?.some((b) => b.id === patch.branch)) {
@@ -1176,7 +1245,16 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
 
       removeTour: (id) => {
         if (!get().tours[id]) return;
-        set((s) => ({ tours: omit(s.tours, id), dirty: true }));
+        set((s) => ({
+          tours: omit(s.tours, id),
+          // El recorrido interno de una interfaz ya no existe.
+          interfaces: Object.values(s.interfaces).some((i) => i.tourId === id)
+            ? Object.fromEntries(
+                Object.entries(s.interfaces).map(([key, i]) => [key, i.tourId === id ? withoutTour(i) : i]),
+              )
+            : s.interfaces,
+          dirty: true,
+        }));
       },
 
       addStep: (tourId, nodeId, note) => {
@@ -1321,6 +1399,111 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         putTour({ ...tour, steps: tour.steps.filter((_, i) => i !== index) });
       },
 
+      addModuleRef: (module, position) => {
+        const id = newId();
+        const title = module.name.trim().slice(0, TITLE_MAX_LENGTH) || DEFAULT_TITLES.module;
+        set((s) => ({
+          nodes: { ...s.nodes, [id]: { id, type: 'module', title, moduleId: module.id } },
+          layout: { ...s.layout, [id]: { x: snap(position.x), y: snap(position.y) } },
+          dirty: true,
+        }));
+        return id;
+      },
+
+      setModuleDisplay: (id, patch) => {
+        const node = get().nodes[id];
+        if (!node || node.type !== 'module') return;
+        // Mostrar es lo de siempre: solo se guarda lo que se oculta.
+        const display = { ...node.display, ...patch };
+        for (const key of ['description', 'interfaces'] as const) if (display[key] !== false) delete display[key];
+        const next: Node = { ...node, display };
+        if (Object.keys(display).length === 0) delete next.display;
+        putNode(next);
+      },
+
+      relinkModule: (id, module, options = {}) => {
+        const node = get().nodes[id];
+        if (!node || node.type !== 'module' || node.moduleId === module.id) return;
+        const title = module.name.trim().slice(0, TITLE_MAX_LENGTH) || node.title;
+        // Una copia independiente conserva los ids de sus interfaces: las conexiones siguen unidas.
+        if (options.keepInterfaces) {
+          putNode({ ...node, moduleId: module.id, title });
+          return;
+        }
+        set((s) => ({
+          nodes: { ...s.nodes, [id]: { ...node, moduleId: module.id, title } },
+          // Las interfaces eran del módulo anterior: las conexiones pasan al módulo completo.
+          edges: Object.fromEntries(
+            Object.entries(s.edges).map(([key, e]) => {
+              if (!(e.from === id && e.fromInterface) && !(e.to === id && e.toInterface)) return [key, e];
+              const copy = { ...e };
+              if (e.from === id) delete copy.fromInterface;
+              if (e.to === id) delete copy.toInterface;
+              return [key, copy];
+            }),
+          ),
+          dirty: true,
+        }));
+      },
+
+      resizeNode: (id, size) => {
+        const at = get().layout[id];
+        if (!at || !get().nodes[id]) return;
+        const next = { ...at, w: snap(Math.max(GRID * 20, size.w)) };
+        if (size.h !== undefined) next.h = snap(Math.max(GRID * 10, size.h));
+        if (next.w === at.w && next.h === at.h) return;
+        set((s) => ({ layout: { ...s.layout, [id]: next }, dirty: true }));
+      },
+
+      addInterface: (init) => {
+        const name = init.name.trim().slice(0, INTERFACE_NAME_MAX_LENGTH);
+        const s = get();
+        if (!name || !s.nodes[init.nodeId] || interfaceNameTaken(s.interfaces, name)) return null;
+        const id = newId();
+        let item: ModuleInterface = { id, name, kind: init.kind, nodeId: init.nodeId };
+        item = withText(item, 'description', init.description, INTERFACE_DESCRIPTION_MAX_LENGTH);
+        if (init.tourId && s.tours[init.tourId]) item.tourId = init.tourId;
+        set((st) => ({ interfaces: { ...st.interfaces, [id]: item }, dirty: true }));
+        return id;
+      },
+
+      updateInterface: (id, patch) => {
+        const s = get();
+        const current = s.interfaces[id];
+        if (!current) return;
+        let next: ModuleInterface = { ...current };
+        if (patch.name !== undefined) {
+          const name = patch.name.trim().slice(0, INTERFACE_NAME_MAX_LENGTH);
+          if (name && !interfaceNameTaken(s.interfaces, name, id)) next.name = name;
+        }
+        if (patch.kind && INTERFACE_KINDS.includes(patch.kind)) next.kind = patch.kind;
+        if (patch.nodeId && s.nodes[patch.nodeId]) next.nodeId = patch.nodeId;
+        next = withText(next, 'description', patch.description, INTERFACE_DESCRIPTION_MAX_LENGTH);
+        if (patch.tourId === null) delete next.tourId;
+        else if (patch.tourId && s.tours[patch.tourId]) next.tourId = patch.tourId;
+        if (sameJson(current, next)) return;
+        set((st) => ({ interfaces: { ...st.interfaces, [id]: next }, dirty: true }));
+      },
+
+      removeInterface: (id) => {
+        if (!get().interfaces[id]) return;
+        set((s) => ({ interfaces: omit(s.interfaces, id), dirty: true }));
+      },
+
+      replaceGraph: (graph) => {
+        const loaded = inferHierarchy(graph);
+        set({
+          nodes: loaded.nodes,
+          edges: loaded.edges,
+          layout: loaded.layout,
+          tours: withStepIds(withKinds(loaded.tours ?? {}), newId),
+          groups: loaded.groups ?? {},
+          stickyNotes: loaded.stickyNotes ?? {},
+          interfaces: loaded.interfaces ?? {},
+          dirty: true,
+        });
+      },
+
       markSaved: (version, sent) => {
         const s = get();
         const unchanged =
@@ -1330,7 +1513,8 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
             s.layout === sent.layout &&
             s.tours === sent.tours &&
             s.groups === sent.groups &&
-            s.stickyNotes === sent.stickyNotes);
+            s.stickyNotes === sent.stickyNotes &&
+            s.interfaces === sent.interfaces);
         saved = snapshotOf(sent ?? s);
         set({ version, dirty: unchanged ? false : s.dirty });
       },
@@ -1409,10 +1593,28 @@ export function toGraph(state: GraphState): WalkieCanvasGraphV0 {
     graph.groupNesting = 'explicit';
   }
   if (Object.keys(state.stickyNotes).length > 0) graph.stickyNotes = state.stickyNotes;
+  if (Object.keys(state.interfaces).length > 0) graph.interfaces = state.interfaces;
   return graph;
 }
 
 /** Hook para leer el store desde componentes. */
 export function useGraph<T>(store: StoreApi<GraphStore>, selector: (s: GraphStore) => T): T {
   return useStore(store, selector);
+}
+
+/** Referencia a una interfaz con el nombre dentro del límite del schema. */
+function cleanInterfaceRef(ref: InterfaceRef): InterfaceRef {
+  return { id: ref.id, name: ref.name.trim().slice(0, INTERFACE_NAME_MAX_LENGTH) };
+}
+
+/** ¿Otra interfaz (no `except`) ya se llama así? Sin distinguir mayúsculas. */
+export function interfaceNameTaken(interfaces: Record<string, ModuleInterface>, name: string, except?: string): boolean {
+  const key = name.trim().toLowerCase();
+  return Object.values(interfaces).some((i) => i.id !== except && i.name.trim().toLowerCase() === key);
+}
+
+function withoutTour(item: ModuleInterface): ModuleInterface {
+  const copy = { ...item };
+  delete copy.tourId;
+  return copy;
 }

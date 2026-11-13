@@ -17,6 +17,7 @@ internal sealed class CanvasHandlers(
     ICatalogDirectory catalog,
     IAssetDirectory assetDirectory,
     GraphValidator validator,
+    ModuleReferences moduleRefs,
     TimeProvider clock)
 {
     /// <summary>Lienzo de una feature que aún no se ha guardado.</summary>
@@ -108,7 +109,9 @@ internal sealed class CanvasHandlers(
 
     /// <summary>
     /// Referencias a otros módulos, todas de la app de la feature (400 si no): <c>catalogId</c> de un <c>ref</c>,
-    /// <c>assetId</c> de una pantalla y <c>targetFeatureId</c> de un <c>portal</c>.
+    /// <c>assetId</c> de una pantalla, <c>targetFeatureId</c> de un <c>portal</c> y <c>moduleId</c> de una referencia
+    /// a módulo (spec modulos-compartidos: un módulo de la app, sin ciclos de contención; solo un módulo tiene
+    /// <c>interfaces</c>).
     /// </summary>
     private async Task<Dictionary<string, string[]>> ReferenceErrorsAsync(Guid featureId, JsonElement graph, CancellationToken ct)
     {
@@ -116,12 +119,24 @@ internal sealed class CanvasHandlers(
         var refs = References(graph, "catalogId");
         var assets = References(graph, "assetId");
         var portals = References(graph, "targetFeatureId");
-        if (refs.Count + assets.Count + portals.Count == 0)
+        var modules = References(graph, "moduleId");
+        var hasInterfaces = graph.TryGetProperty("interfaces", out var interfaces) && interfaces.EnumerateObject().Any();
+        if (refs.Count + assets.Count + portals.Count + modules.Count == 0 && !hasInterfaces)
         {
             return errors;
         }
 
-        var appId = await features.AppOfFeatureAsync(featureId, ct).ConfigureAwait(false) ?? Guid.Empty;
+        var self = await features.DescribeAsync(featureId, ct).ConfigureAwait(false);
+        var appId = self?.AppId ?? Guid.Empty;
+        if (hasInterfaces && self?.Kind != "module")
+        {
+            errors["/interfaces"] = ["Solo el lienzo de un módulo expone interfaces."];
+        }
+
+        if (modules.Count > 0)
+        {
+            await moduleRefs.ErrorsAsync(featureId, appId, self?.Kind == "module", modules, errors, ct).ConfigureAwait(false);
+        }
 
         if (refs.Count > 0)
         {
@@ -146,7 +161,7 @@ internal sealed class CanvasHandlers(
     }
 
     /// <summary>Nodos que tienen la propiedad, con su valor como id (o <c>null</c> si no es un id).</summary>
-    private static List<(string Node, Guid? Id)> References(JsonElement graph, string property) =>
+    internal static List<(string Node, Guid? Id)> References(JsonElement graph, string property) =>
         graph.GetProperty("nodes").EnumerateObject()
             .Where(n => n.Value.TryGetProperty(property, out _))
             .Select(n => (n.Name, Guid.TryParse(n.Value.GetProperty(property).GetString(), out var id) ? id : (Guid?)null))

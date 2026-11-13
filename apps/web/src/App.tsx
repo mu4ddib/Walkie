@@ -10,7 +10,10 @@ import './App.css';
 export function App() {
   const shared = useMatch(SHARED_PATH);
   // El editor y la bienvenida ocupan toda la pantalla y traen su propia barra (spec espacio-de-trabajo).
-  const editor = useMatch('/apps/:appId/features/:featureId');
+  const featureEditor = useMatch('/apps/:appId/features/:featureId');
+  // El lienzo de un módulo compartido usa el mismo editor (spec modulos-compartidos).
+  const moduleEditor = useMatch('/apps/:appId/modules/:moduleId');
+  const editor = featureEditor ?? moduleEditor;
   // El mapa de la app también es un lienzo a pantalla completa con su barra (spec mapa-de-la-app).
   const appMap = useMatch('/apps/:appId/map');
   const home = useMatch('/');
