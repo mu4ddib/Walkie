@@ -1,5 +1,16 @@
 import { vi } from 'vitest';
-import { ASSET_TYPES, SHARE_DAYS, type App, type Asset, type CatalogItem, type Feature, type Share, type SharedFeature } from '../api/client';
+import {
+  ASSET_TYPES,
+  SHARE_DAYS,
+  type App,
+  type Asset,
+  type CatalogItem,
+  type Feature,
+  type ModuleSummary,
+  type ModuleUsage,
+  type Share,
+  type SharedFeature,
+} from '../api/client';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 
 /**
@@ -15,12 +26,54 @@ export function installFakeApi(
     shares?: Share[];
     /** Lo que responde `GET /api/public/shares/{token}` por token (los demás tokens: 404). */
     shared?: Record<string, SharedFeature>;
+    /** Módulos compartidos (spec modulos-compartidos): features de tipo `module`; su lienzo va en `canvases`. */
+    modules?: Feature[];
   } = {},
 ) {
   const apps = [...(seed.apps ?? [])];
   const catalog = [...(seed.catalog ?? [])];
   const assets = new Map<string, { asset: Asset; file: File }>();
-  const features = (seed.features ?? []).map((f) => ({ ...f }));
+  const features = [...(seed.features ?? []), ...(seed.modules ?? []).map((m) => ({ ...m, kind: 'module' as const }))].map(
+    (f) => ({ ...f }),
+  );
+  const isModule = (f: Feature) => f.kind === 'module';
+  const empty = (): WalkieCanvasGraphV0 => ({ schemaVersion: 0, version: 0, nodes: {}, edges: {}, layout: {} });
+  /** Resumen de un módulo como el de la API: interfaces con su caja (y su `ref` resuelto), contenidos y usos. */
+  const summarize = (m: Feature): ModuleSummary => {
+    const graph = canvases[m.id] ?? empty();
+    const interfaces = Object.values(graph.interfaces ?? {})
+      .map((i) => {
+        const node = graph.nodes[i.nodeId];
+        const item = node?.type === 'ref' ? catalog.find((c) => c.id === node.catalogId) : undefined;
+        const http = item?.http ?? node?.http;
+        const tour = i.tourId ? graph.tours?.[i.tourId] : undefined;
+        return {
+          id: i.id,
+          name: i.name,
+          ...(i.description ? { description: i.description } : {}),
+          kind: i.kind,
+          nodeId: i.nodeId,
+          ...(node ? { nodeType: item?.type ?? node.type, nodeTitle: item?.title ?? node.title } : {}),
+          ...(http?.method ? { method: http.method } : {}),
+          ...(http?.path ? { path: http.path } : {}),
+          ...(i.tourId ? { tourId: i.tourId, tourName: tour?.name } : {}),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      id: m.id,
+      appId: m.appId,
+      name: m.name,
+      ...(m.description ? { description: m.description } : {}),
+      version: graph.version,
+      nodes: Object.keys(graph.nodes).length,
+      interfaces,
+      modules: Object.values(graph.nodes).flatMap((n) => (n.type === 'module' && n.moduleId ? [n.moduleId] : [])),
+      usedBy: features
+        .filter((f) => f.appId === m.appId && f.id !== m.id && Object.values(canvases[f.id]?.nodes ?? {}).some((n) => n.moduleId === m.id))
+        .map((f) => f.id),
+    };
+  };
   const canvases: Record<string, WalkieCanvasGraphV0> = { ...seed.canvases };
   /** Enlaces de solo lectura activos (los revocados salen de la lista, como en la API). */
   const shares = [...(seed.shares ?? [])];
@@ -32,6 +85,8 @@ export function installFakeApi(
     lastPdfCanvas?: Blob | null;
     /** Si se define, la próxima importación responde 400 con estos errores (ruta dentro del archivo → mensajes). */
     importErrors?: Record<string, string[]>;
+    /** Si se define, la próxima conversión en módulo responde este estado (ej. 500, 409). */
+    extractStatus?: number;
   } = {};
   let next = 1;
   const id = () => `00000000-0000-7000-8000-${String(next++).padStart(12, '0')}`;
@@ -180,6 +235,80 @@ export function installFakeApi(
       return json(200, canvases[featureId]);
     }
 
+    // /api/modules/{moduleId}[/usages | /interfaces/{id}/reassign] — módulos compartidos, como la API.
+    if (parts[0] === 'api' && parts[1] === 'modules') {
+      const module = features.find((f) => f.id === parts[2] && isModule(f));
+      if (!module) return notFound();
+      const users = features.filter((f) => f.appId === module.appId && f.id !== module.id);
+      const nodesOf = (f: Feature) =>
+        Object.values(canvases[f.id]?.nodes ?? {}).filter((n) => n.type === 'module' && n.moduleId === module.id).map((n) => n.id);
+      if (parts[3] === 'usages') {
+        const usages: ModuleUsage[] = users
+          .filter((f) => nodesOf(f).length > 0)
+          .map((f) => {
+            const nodes = nodesOf(f);
+            return {
+              featureId: f.id,
+              name: f.name,
+              kind: isModule(f) ? 'module' : 'feature',
+              nodes,
+              edges: Object.values(canvases[f.id]!.edges).flatMap((e) =>
+                (['from', 'to'] as const)
+                  .filter((end) => nodes.includes(e[end]))
+                  .map((end) => {
+                    const ref = end === 'from' ? e.fromInterface : e.toInterface;
+                    return { edgeId: e.id, nodeId: e[end], end, interfaceId: ref?.id, interfaceName: ref?.name };
+                  }),
+              ),
+            };
+          });
+        return json(200, usages);
+      }
+      if (parts[3] === 'interfaces' && parts[5] === 'reassign') {
+        const to = (body as { to?: string | null }).to ?? null;
+        const target = to ? canvases[module.id]?.interfaces?.[to] : undefined;
+        if (to && !target) return json(400, { title: 'No se puede reasignar.', errors: { To: ['La interfaz destino no existe.'] } });
+        let count = 0;
+        const changed: string[] = [];
+        for (const f of users) {
+          const graph = canvases[f.id];
+          const nodes = nodesOf(f);
+          if (!graph || nodes.length === 0) continue;
+          let here = 0;
+          const edges = Object.fromEntries(
+            Object.entries(graph.edges).map(([key, e]) => {
+              const copy = { ...e };
+              for (const end of ['from', 'to'] as const) {
+                const field = end === 'from' ? 'fromInterface' : 'toInterface';
+                if (nodes.includes(e[end]) && e[field]?.id === parts[4]) {
+                  if (target) copy[field] = { id: target.id, name: target.name };
+                  else delete copy[field];
+                  here++;
+                }
+              }
+              return [key, copy];
+            }),
+          );
+          if (here > 0) {
+            canvases[f.id] = { ...graph, edges, version: graph.version + 1 };
+            changed.push(f.id);
+            count += here;
+          }
+        }
+        return json(200, { edges: count, features: changed });
+      }
+      if (method === 'DELETE') {
+        const usedBy = summarize(module).usedBy;
+        if (usedBy.length > 0 && url.searchParams.get('force') !== 'true') {
+          return json(409, { title: 'El módulo se usa en otros lienzos.', usedBy });
+        }
+        features.splice(features.indexOf(module), 1);
+        delete canvases[module.id];
+        return new Response(null, { status: 204 });
+      }
+      return json(200, summarize(module));
+    }
+
     // /api/catalog/{itemId}[/usages] — como la API: 404, 409 por versión o por uso, 204 al borrar.
     if (parts[0] === 'api' && parts[1] === 'catalog') {
       const index = catalog.findIndex((i) => i.id === parts[2]);
@@ -298,7 +427,7 @@ export function installFakeApi(
       return json(201, { ...summary, features: [{ sourceName, name, id: feature.id }] });
     }
 
-    const withCount = (a: App) => ({ ...a, featureCount: features.filter((f) => f.appId === a.id).length });
+    const withCount = (a: App) => ({ ...a, featureCount: features.filter((f) => f.appId === a.id && !isModule(f)).length });
 
     if (!appId) {
       if (method === 'GET') return json(200, apps.map(withCount));
@@ -331,6 +460,63 @@ export function installFakeApi(
       };
       assets.set(asset.id, { asset, file });
       return json(201, asset);
+    }
+    // /api/apps/{appId}/modules[/extract] — resúmenes, crear uno vacío y convertir una selección (spec modulos-compartidos).
+    if (parts[3] === 'modules') {
+      if (method === 'GET') return json(200, features.filter((f) => f.appId === appId && isModule(f)).map(summarize));
+      if (parts[4] === 'extract') {
+        const request = JSON.parse(String(init?.body)) as {
+          moduleId: string;
+          name: string;
+          description?: string;
+          module: WalkieCanvasGraphV0;
+          featureId: string;
+          feature: WalkieCanvasGraphV0;
+        };
+        if (next_.extractStatus) {
+          const status = next_.extractStatus;
+          delete next_.extractStatus;
+          return json(status, { title: 'No se pudo convertir en módulo.' });
+        }
+        const current = canvases[request.featureId] ?? empty();
+        const existing = features.find((f) => f.id === request.moduleId);
+        if (existing && Object.values(current.nodes).some((n) => n.moduleId === request.moduleId)) {
+          return json(200, { module: summarize(existing), feature: current });
+        }
+        if (request.feature.version !== current.version) {
+          return json(409, { title: 'No se pudo convertir en módulo.', currentVersion: current.version });
+        }
+        const now = new Date(0).toISOString();
+        const created: Feature = {
+          id: request.moduleId,
+          appId,
+          name: request.name.trim(),
+          description: request.description?.trim() ?? '',
+          createdAt: now,
+          updatedAt: now,
+          kind: 'module',
+        };
+        if (!existing) features.push(created);
+        canvases[request.moduleId] = { ...request.module, version: 1 };
+        canvases[request.featureId] = { ...request.feature, version: current.version + 1 };
+        return json(200, { module: summarize(created), feature: canvases[request.featureId] });
+      }
+      const input = body as { id?: string; name?: string; description?: string };
+      const error = invalidName(input.name);
+      if (error) return error;
+      if (input.id && features.some((f) => f.id === input.id)) return json(409, { title: 'No se pudo crear el módulo.' });
+      const now = new Date(0).toISOString();
+      const created: Feature = {
+        id: input.id ?? id(),
+        appId,
+        name: input.name!.trim(),
+        description: input.description?.trim() ?? '',
+        createdAt: now,
+        updatedAt: now,
+        kind: 'module',
+      };
+      features.push(created);
+      return json(201, summarize(created));
     }
     if (parts[3] === 'catalog') {
       if (method === 'GET')
@@ -373,7 +559,8 @@ export function installFakeApi(
     if (method === 'GET')
       return json(
         200,
-        features.filter((f) => f.appId === appId),
+        // Los módulos no son features de la galería (ADR-0010).
+        features.filter((f) => f.appId === appId && !isModule(f)),
       );
     const error = invalidName(body.name);
     if (error) return error;

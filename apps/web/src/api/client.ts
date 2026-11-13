@@ -5,6 +5,7 @@ import type { WalkieShareV0 } from '../schema/walkie-share';
 import type { WalkieSharedFeatureV0 } from '../schema/walkie-shared-feature';
 import type { Layout, WalkieAppMapV0 } from '../schema/walkie-app-map';
 import type { WalkieImportSummaryV0 } from '../schema/walkie-import-summary';
+import type { Interface, WalkieModuleSummaryV0 } from '../schema/walkie-module-summary';
 
 /** Mapa de una app (`GET /api/apps/{appId}/map`, spec mapa-de-la-app). */
 export type AppMap = WalkieAppMapV0;
@@ -41,6 +42,22 @@ export interface Feature {
   createdAt: string;
   /** Último cambio de nombre o descripción (el del lienzo viene en su vista previa). */
   updatedAt: string;
+  /** `feature` o `module` (ADR-0010); falta en respuestas anteriores. */
+  kind?: 'feature' | 'module';
+}
+
+/** Resumen de un módulo compartido (`walkie-module-summary.schema.json`, spec modulos-compartidos). */
+export type ModuleSummary = WalkieModuleSummaryV0;
+/** Una interfaz del resumen, con el tipo, título y contrato de su caja interna. */
+export type ModuleInterfaceSummary = Interface;
+
+/** Dónde se usa un módulo (`GET /api/modules/{id}/usages`). */
+export interface ModuleUsage {
+  featureId: string;
+  name: string;
+  kind: 'feature' | 'module';
+  nodes: string[];
+  edges: { edgeId: string; nodeId: string; end: 'from' | 'to'; interfaceId?: string; interfaceName?: string }[];
 }
 
 /** Lo que se envía al renombrar una feature. */
@@ -204,6 +221,63 @@ export function saveCanvas(token: string, featureId: string, graph: WalkieCanvas
     token,
     method: 'PUT',
     body: JSON.stringify(graph),
+  });
+}
+
+export function listModules(token: string, appId: string, signal?: AbortSignal): Promise<ModuleSummary[]> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/modules`, { token, signal });
+}
+
+/** Crea un módulo vacío; `id` lo genera el cliente para que un reintento no duplique. */
+export function createModule(
+  token: string,
+  appId: string,
+  module: { id?: string; name: string; description?: string },
+): Promise<ModuleSummary> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/modules`, { token, method: 'POST', body: JSON.stringify(module) });
+}
+
+/** Borra el módulo; si se usa responde 409 (con `usedBy`) salvo con `force`. */
+export function deleteModule(token: string, moduleId: string, force = false): Promise<void> {
+  return request(`/api/modules/${encodeURIComponent(moduleId)}${force ? '?force=true' : ''}`, { token, method: 'DELETE' });
+}
+
+export function listModuleUsages(token: string, moduleId: string, signal?: AbortSignal): Promise<ModuleUsage[]> {
+  return request(`/api/modules/${encodeURIComponent(moduleId)}/usages`, { token, signal });
+}
+
+/** Pasa las conexiones que usan la interfaz a otra (`to`) o al módulo completo (`null`) en todos los lienzos. */
+export function reassignInterface(
+  token: string,
+  moduleId: string,
+  interfaceId: string,
+  to: string | null,
+): Promise<{ edges: number; features: string[] }> {
+  return request(
+    `/api/modules/${encodeURIComponent(moduleId)}/interfaces/${encodeURIComponent(interfaceId)}/reassign`,
+    { token, method: 'POST', body: JSON.stringify({ to }) },
+  );
+}
+
+/** Lo que manda «Convertir en módulo»: el lienzo del módulo nuevo y el de la feature ya reescrito. */
+export interface ModuleExtraction {
+  moduleId: string;
+  name: string;
+  description?: string;
+  module: WalkieCanvasGraphV0;
+  featureId: string;
+  feature: WalkieCanvasGraphV0;
+}
+
+export function extractModule(
+  token: string,
+  appId: string,
+  extraction: ModuleExtraction,
+): Promise<{ module: ModuleSummary; feature: WalkieCanvasGraphV0 }> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/modules/extract`, {
+    token,
+    method: 'POST',
+    body: JSON.stringify(extraction),
   });
 }
 

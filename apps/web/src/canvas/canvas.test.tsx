@@ -255,7 +255,7 @@ describe('Palette con catálogo (Componentes)', () => {
       </MemoryRouter>,
     );
 
-    const toggle = screen.getByRole('button', { name: 'Componentes' });
+    const toggle = screen.getByRole('button', { name: 'Catálogo' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(toggle);
     const section = screen.getByRole('region', { name: 'Catálogo' });
@@ -276,7 +276,7 @@ describe('Palette con catálogo (Componentes)', () => {
         <Palette onAdd={vi.fn()} catalog={{ appId: 'app-1', items: [consultar, otro], onAddRef: vi.fn() }} />
       </MemoryRouter>,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Componentes' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Catálogo' }));
     const filter = screen.getByRole('group', { name: 'Filtrar por tipo' });
 
     await userEvent.click(within(filter).getByRole('button', { name: 'Base de datos' }));
@@ -295,7 +295,7 @@ describe('Palette con catálogo (Componentes)', () => {
         <Palette onAdd={vi.fn()} catalog={{ appId: 'app-1', items: [], onAddRef: vi.fn(), onCreate }} />
       </MemoryRouter>,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Componentes' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Catálogo' }));
     const form = screen.getByRole('form', { name: 'Nuevo componente' });
 
     await userEvent.click(within(form).getByRole('button', { name: 'Crear y agregar' }));
@@ -317,7 +317,7 @@ describe('Palette con catálogo (Componentes)', () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Componentes' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Catálogo' }));
     expect(screen.getByRole('link', { name: /crea APIs/i })).toHaveAttribute('href', '/apps/app-1/catalog');
   });
 });

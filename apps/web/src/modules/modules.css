@@ -1,0 +1,63 @@
+/* Módulos compartidos (spec modulos-compartidos): franja del editor de un módulo, usos y formularios. */
+
+.module-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--dune-200);
+  background: color-mix(in srgb, #7a5a2a 9%, var(--sand));
+  font-size: 13px;
+}
+
+.module-banner-kind {
+  color: #7a5a2a;
+  font-family: var(--font-title);
+  font-size: 8px;
+}
+
+.module-banner-shared {
+  color: var(--stone-700);
+}
+
+.module-banner-note {
+  color: var(--stone-500);
+}
+
+.module-banner .popover-trigger {
+  font-size: 13px;
+}
+
+.module-uses {
+  display: grid;
+  gap: 8px;
+  min-width: 240px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module-uses li {
+  display: grid;
+  gap: 2px;
+}
+
+.module-uses-meta,
+.module-uses-empty,
+.module-shared-note {
+  margin: 0;
+  color: var(--stone-500);
+  font-size: 12px;
+}
+
+.module-details-form {
+  display: grid;
+  gap: 6px;
+  min-width: 280px;
+}
+
+.module-details-form label {
+  font-size: 12px;
+  font-weight: 600;
+}

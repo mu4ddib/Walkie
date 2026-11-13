@@ -4,6 +4,8 @@ import type { NodeType } from '../store/graphStore';
 export const PALETTE_MIME = 'application/x-walkie-node';
 /** Tipo MIME del arrastre de un elemento del catálogo (crea un `ref`); el dato es su id. */
 export const PALETTE_REF_MIME = 'application/x-walkie-ref';
+/** Tipo MIME del arrastre de un módulo compartido (crea su caja); el dato es su id. */
+export const PALETTE_MODULE_MIME = 'application/x-walkie-module';
 
 /** Tipo MIME del arrastre de un subtipo de recurso (spec nodos-de-infraestructura); el dato es el subtipo. */
 export const PALETTE_RESOURCE_MIME = 'application/x-walkie-resource';

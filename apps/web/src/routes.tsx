@@ -3,6 +3,7 @@ import { AppPage } from './pages/AppPage';
 import { AppsPage } from './pages/AppsPage';
 import { CatalogPage } from './pages/CatalogPage';
 import { FeatureRoute } from './pages/FeatureRoute';
+import { ModuleRoute } from './pages/ModuleRoute';
 import { MapPage } from './map/MapPage';
 import { SharedFeaturePage } from './share/SharedFeaturePage';
 import { SHARED_PATH } from './share/sharedPath';
@@ -19,6 +20,8 @@ export const routes: RouteObject[] = [
   { path: '/apps/:appId/map', element: <MapPage /> },
   { path: '/apps/:appId/catalog/:itemId', element: <CatalogPage /> },
   { path: '/apps/:appId/features/:featureId', element: <FeatureRoute /> },
+  // Lienzo de un módulo compartido (spec modulos-compartidos): el mismo editor, con su franja.
+  { path: '/apps/:appId/modules/:moduleId', element: <ModuleRoute /> },
   // Pública (ADR-0005): `App` la monta sin `AuthGate`.
   { path: SHARED_PATH, element: <SharedFeaturePage /> },
   {

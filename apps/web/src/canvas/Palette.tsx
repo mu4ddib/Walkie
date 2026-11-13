@@ -1,9 +1,10 @@
 import { useCallback, useId, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { ApiError, type CatalogItem, type CatalogItemType, type NewCatalogItem } from '../api/client';
+import { ApiError, type CatalogItem, type CatalogItemType, type ModuleSummary, type NewCatalogItem } from '../api/client';
 import { NODE_LABELS, nodeLabel } from '../nodes/nodeMeta';
 import { CATALOG_TYPES, catalogPath } from '../pages/catalogPaths';
-import { PALETTE_MIME, PALETTE_REF_MIME, PALETTE_TYPES, RESOURCE_KEY } from './paletteTypes';
+import { PALETTE_MIME, PALETTE_MODULE_MIME, PALETTE_REF_MIME, PALETTE_TYPES, RESOURCE_KEY } from './paletteTypes';
+import { fold } from '../modules/moduleMeta';
 import { ResourcePicker } from './ResourcePicker';
 import { RESOURCE_KINDS, normalizeResource, type ResourceKind } from '../nodes/resourceMeta';
 import type { NodeType } from '../store/graphStore';
@@ -24,6 +25,11 @@ interface PaletteProps {
     onAddRef: (item: CatalogItem) => void;
     /** Crea el componente y lo pone en el lienzo; sin él, el panel no ofrece crear. */
     onCreate?: (item: NewCatalogItem) => Promise<void>;
+    /** Módulos compartidos que se pueden poner aquí (spec modulos-compartidos); sin ellos, no hay pestaña «Módulos». */
+    modules?: ModuleSummary[];
+    onAddModule?: (module: ModuleSummary) => void;
+    /** Crea un módulo vacío y pone su caja en el lienzo. */
+    onCreateModule?: (module: { name: string; description?: string }) => Promise<void>;
   };
 }
 
@@ -140,10 +146,10 @@ export function Palette({ onAdd, onAddGroup, onAddNote, resources, catalog }: Pa
             <button
               type="button"
               className="toolbar-tool toolbar-components"
-              aria-label="Componentes"
+              aria-label="Catálogo"
               aria-expanded={showComponents}
               aria-controls={panelId}
-              data-tip="Componentes del catálogo"
+              data-tip="Catálogo: componentes y módulos"
               onClick={() => {
                 setComponentsOpen((open) => !open);
                 resources?.onOpenChange(false);
@@ -172,105 +178,261 @@ export function Palette({ onAdd, onAddGroup, onAddNote, resources, catalog }: Pa
           catalog={catalog}
           onClose={() => setComponentsOpen(false)}
           onDragStart={(e, item) => onDragStart(e, PALETTE_REF_MIME, item.id)}
+          onModuleDragStart={(e, module) => onDragStart(e, PALETTE_MODULE_MIME, module.id)}
         />
       )}
     </div>
   );
 }
 
+type CatalogTab = 'components' | 'modules';
+
+/**
+ * Panel del catálogo (spec modulos-compartidos, criterio 1): dos pestañas, «Componentes» y «Módulos», con una búsqueda
+ * común. Cada elemento se agrega con clic o arrastre; abajo, crear uno nuevo sin salir del lienzo.
+ */
 function ComponentsPanel({
   id,
   catalog,
   onClose,
   onDragStart,
+  onModuleDragStart,
 }: {
   id: string;
   catalog: NonNullable<PaletteProps['catalog']>;
   onClose: () => void;
   onDragStart: (event: DragEvent, item: CatalogItem) => void;
+  onModuleDragStart: (event: DragEvent, module: ModuleSummary) => void;
 }) {
   const [query, setQuery] = useState('');
   const [type, setType] = useState<CatalogItemType | null>(null);
+  const [tab, setTab] = useState<CatalogTab>('components');
   const searchId = useId();
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return catalog.items.filter((i) => (!type || i.type === type) && (!q || i.title.toLowerCase().includes(q)));
-  }, [catalog.items, query, type]);
+  const tabsId = useId();
+  const modules = useMemo(() => catalog.modules ?? [], [catalog.modules]);
+  const q = fold(query.trim());
+  const shown = useMemo(
+    () => catalog.items.filter((i) => (!type || i.type === type) && (!q || fold(i.title).includes(q))),
+    [catalog.items, q, type],
+  );
+  const shownModules = useMemo(
+    () =>
+      modules
+        .filter((m) => !q || fold(m.name).includes(q) || fold(m.description ?? '').includes(q) || m.interfaces.some((i) => fold(i.name).includes(q)))
+        .sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    [modules, q],
+  );
+  const withModules = catalog.modules !== undefined;
+  const current: CatalogTab = withModules ? tab : 'components';
+  const hasAny = current === 'components' ? catalog.items.length > 0 : modules.length > 0;
 
   return (
     <section id={id} className="components-panel floating" aria-label="Catálogo">
       <header className="components-header">
-        <h3>Componentes</h3>
+        <h3>Catálogo</h3>
         <button type="button" className="pixel-button is-ghost icon-button" aria-label="Cerrar panel" onClick={onClose}>
           ✕
         </button>
       </header>
-      <p className="components-help">
-        APIs, servicios, bases de datos y recursos compartidos por todos los lienzos de la app: si cambias su
-        definición, cambia en todos. Arrástralos o haz clic para usarlos.
-      </p>
-      {catalog.items.length > 0 && (
-        <>
-          <label className="sr-only" htmlFor={searchId}>
-            Buscar componentes
-          </label>
-          <input
-            id={searchId}
-            type="search"
-            placeholder="Buscar…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div className="components-filter" role="group" aria-label="Filtrar por tipo">
-            <button type="button" aria-pressed={type === null} onClick={() => setType(null)}>
-              Todos
-            </button>
-            {CATALOG_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                aria-pressed={type === t}
-                onClick={() => setType(type === t ? null : t)}
-                style={{ '--node-color': nodeColors[t] } as CSSProperties}
-              >
-                {NODE_LABELS[t].label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {catalog.items.length === 0 ? (
-        <p className="components-empty">
-          Aún no hay componentes.{' '}
-          {catalog.onCreate ? 'Crea el primero aquí abajo o ' : ''}
-          <Link to={catalogPath(catalog.appId)}>crea APIs, servicios, BD y recursos en el catálogo</Link>.
-        </p>
-      ) : (
-        <div className="components-list">
-          {shown.map((item) => (
+      {withModules && (
+        <div className="catalog-tabs" role="tablist" aria-label="Qué mostrar">
+          {(
+            [
+              ['components', 'Componentes', catalog.items.length],
+              ['modules', 'Módulos', modules.length],
+            ] as const
+          ).map(([key, label, count]) => (
             <button
-              key={item.id}
+              key={key}
               type="button"
-              className="component-item"
-              draggable
-              onDragStart={(e) => onDragStart(e, item)}
-              onClick={() => catalog.onAddRef(item)}
-              style={{ '--node-color': nodeColors[item.type] } as CSSProperties}
+              role="tab"
+              id={`${tabsId}-${key}`}
+              aria-selected={current === key}
+              aria-controls={`${tabsId}-panel`}
+              onClick={() => setTab(key)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  const next = key === 'components' ? 'modules' : 'components';
+                  setTab(next);
+                  document.getElementById(`${tabsId}-${next}`)?.focus();
+                }
+              }}
+              tabIndex={current === key ? 0 : -1}
             >
-              <span className="component-kind" aria-hidden="true" title={nodeLabel(item).label}>
-                {nodeLabel(item).glyph}
-              </span>
-              <span className="component-title">{item.title}</span>
+              {label} <span className="catalog-tab-count">{count}</span>
             </button>
           ))}
-          {shown.length === 0 && <p className="components-empty">Nada coincide con el filtro.</p>}
         </div>
       )}
-      {catalog.onCreate && <NewComponent onCreate={catalog.onCreate} />}
+      <div id={`${tabsId}-panel`} role={withModules ? 'tabpanel' : undefined} aria-labelledby={withModules ? `${tabsId}-${current}` : undefined} className="catalog-tabpanel">
+        <p className="components-help">
+          {current === 'components'
+            ? 'APIs, servicios, bases de datos y recursos compartidos por todos los lienzos de la app: si cambias su definición, cambia en todos. Arrástralos o haz clic para usarlos.'
+            : 'Conjuntos de componentes conectados con su propio lienzo. Cada caja apunta a la misma definición y se conecta por sus interfaces.'}
+        </p>
+        {hasAny && (
+          <>
+            <label className="sr-only" htmlFor={searchId}>
+              {current === 'components' ? 'Buscar componentes' : 'Buscar módulos'}
+            </label>
+            <input
+              id={searchId}
+              type="search"
+              placeholder="Buscar…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </>
+        )}
+        {current === 'components' ? (
+          <>
+            {catalog.items.length > 0 && (
+              <div className="components-filter" role="group" aria-label="Filtrar por tipo">
+                <button type="button" aria-pressed={type === null} onClick={() => setType(null)}>
+                  Todos
+                </button>
+                {CATALOG_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={type === t}
+                    onClick={() => setType(type === t ? null : t)}
+                    style={{ '--node-color': nodeColors[t] } as CSSProperties}
+                  >
+                    {NODE_LABELS[t].label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {catalog.items.length === 0 ? (
+              <p className="components-empty">
+                Aún no hay componentes.{' '}
+                {catalog.onCreate ? 'Crea el primero aquí abajo o ' : ''}
+                <Link to={catalogPath(catalog.appId)}>crea APIs, servicios, BD y recursos en el catálogo</Link>.
+              </p>
+            ) : (
+              <div className="components-list">
+                {shown.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="component-item"
+                    draggable
+                    onDragStart={(e) => onDragStart(e, item)}
+                    onClick={() => catalog.onAddRef(item)}
+                    style={{ '--node-color': nodeColors[item.type] } as CSSProperties}
+                  >
+                    <span className="component-kind" aria-hidden="true" title={nodeLabel(item).label}>
+                      {nodeLabel(item).glyph}
+                    </span>
+                    <span className="component-title">{item.title}</span>
+                  </button>
+                ))}
+                {shown.length === 0 && <p className="components-empty">Nada coincide con el filtro.</p>}
+              </div>
+            )}
+            {catalog.onCreate && <NewComponent onCreate={catalog.onCreate} />}
+          </>
+        ) : (
+          <>
+            {modules.length === 0 ? (
+              <p className="components-empty">
+                Aún no hay módulos. Crea uno vacío aquí abajo o selecciona cajas (o un grupo) y elige «Convertir en módulo».
+              </p>
+            ) : (
+              <div className="components-list">
+                {shownModules.map((module) => (
+                  <button
+                    key={module.id}
+                    type="button"
+                    className="component-item module-item"
+                    draggable
+                    onDragStart={(e) => onModuleDragStart(e, module)}
+                    onClick={() => catalog.onAddModule?.(module)}
+                    style={{ '--node-color': nodeColors.module } as CSSProperties}
+                  >
+                    <span className="component-kind" aria-hidden="true" title="Módulo">
+                      {NODE_LABELS.module.glyph}
+                    </span>
+                    <span className="component-title">
+                      {module.name}
+                      <span className="module-item-meta">
+                        {module.interfaces.length} {module.interfaces.length === 1 ? 'interfaz' : 'interfaces'}
+                        {module.description ? ` · ${module.description}` : ''}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+                {shownModules.length === 0 && <p className="components-empty">Ningún módulo coincide.</p>}
+              </div>
+            )}
+            {catalog.onCreateModule && <NewModule onCreate={catalog.onCreateModule} />}
+          </>
+        )}
+      </div>
       <Link className="components-link" to={catalogPath(catalog.appId)}>
         Abrir el catálogo
       </Link>
     </section>
+  );
+}
+
+/** «Nuevo módulo»: uno vacío, con nombre y descripción; su caja queda en el lienzo y se abre para llenarlo. */
+function NewModule({ onCreate }: { onCreate: (module: { name: string; description?: string }) => Promise<void> }) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const nameId = useId();
+  const descriptionId = useId();
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) {
+      setError('El nombre es obligatorio.');
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      await onCreate({ name: name.trim(), description: description.trim() || undefined });
+      setName('');
+      setDescription('');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.userMessage : 'No se pudo crear el módulo.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <form className="components-new" aria-label="Nuevo módulo" onSubmit={(e) => void submit(e)}>
+      <h4>Nuevo módulo</h4>
+      <label className="sr-only" htmlFor={nameId}>
+        Nombre del módulo
+      </label>
+      <input id={nameId} value={name} maxLength={120} placeholder="Nombre (ej. Usuarios)" onChange={(e) => setName(e.target.value)} disabled={pending} />
+      <label className="sr-only" htmlFor={descriptionId}>
+        Descripción del módulo
+      </label>
+      <input
+        id={descriptionId}
+        value={description}
+        maxLength={500}
+        placeholder="Descripción breve (opcional)"
+        onChange={(e) => setDescription(e.target.value)}
+        disabled={pending}
+      />
+      <button type="submit" className="pixel-button" disabled={pending}>
+        Crear y agregar
+      </button>
+      {error && (
+        <p role="alert" className="components-error">
+          {error}
+        </p>
+      )}
+    </form>
   );
 }
 

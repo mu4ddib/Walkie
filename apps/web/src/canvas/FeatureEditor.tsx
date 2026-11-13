@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { EditorNavigateContext } from './editorNavigation';
 import { useNavigate } from 'react-router';
 import { useStore } from 'zustand';
 import { ApiError } from '../api/client';
@@ -46,6 +47,9 @@ export function FeatureEditor({
   catalog,
   location,
   focusId,
+  focusCenter,
+  initialPlay,
+  banner,
 }: {
   featureId: string;
   initialGraph: WalkieCanvasGraphV0;
@@ -55,6 +59,15 @@ export function FeatureEditor({
   location?: { appId: string; appName?: string; featureName?: string };
   /** Caja con la que se abre (seleccionada y centrada). */
   focusId?: string;
+  /** `false`: la caja se selecciona sin mover la vista recordada (al volver de un módulo). */
+  focusCenter?: boolean;
+  /** Recorrido que se reproduce al abrir (entrar a un módulo desde un recorrido, o volver de él). */
+  initialPlay?: { tourId: string; step: number };
+  /**
+   * Franja bajo la barra (el lienzo de un módulo: qué módulo es, que es compartido y la vuelta a la feature de origen).
+   * Navega con `useEditorNavigate`, que resuelve antes los cambios pendientes.
+   */
+  banner?: ReactNode;
 }) {
   const [store] = useState(() => {
     const s = createGraphStore();
@@ -163,7 +176,8 @@ export function FeatureEditor({
         state.layout !== prev.layout ||
         state.tours !== prev.tours ||
         state.groups !== prev.groups ||
-        state.stickyNotes !== prev.stickyNotes;
+        state.stickyNotes !== prev.stickyNotes ||
+        state.interfaces !== prev.interfaces;
       if (state.dirty && changed) schedule(AUTOSAVE_DELAY_MS);
     });
     const onDown = () => (pointerDown = true);
@@ -409,8 +423,16 @@ export function FeatureEditor({
           </button>
         </div>
       )}
+      {banner && <EditorNavigateContext.Provider value={go}>{banner}</EditorNavigateContext.Provider>}
       <div className="feature-canvas">
-        <Canvas key={canvasKey} store={store} catalog={catalog} focusId={focusId} />
+        <Canvas
+          key={canvasKey}
+          store={store}
+          catalog={catalog}
+          focusId={focusId}
+          focusCenter={focusCenter}
+          initialPlay={canvasKey === 0 ? initialPlay : undefined}
+        />
       </div>
     </div>
   );

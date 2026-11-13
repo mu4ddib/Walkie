@@ -22,6 +22,8 @@ export const nodeColors: Record<Node['type'], string> = {
   resource: '#2f7f86',
   ref: '#857867',
   portal: '#ad3f7c',
+  // Módulo compartido: tierra oscura, distinto del gris de un `ref`.
+  module: '#7a5a2a',
 };
 
 /** Tamaño de la grilla en px; todo se alinea a múltiplos de este valor. */
