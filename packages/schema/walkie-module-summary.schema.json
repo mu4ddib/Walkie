@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-module-summary.schema.json",
+  "title": "Walkie module summary v0",
+  "description": "Resumen de un módulo compartido (spec modulos-compartidos, ADR-0010): lo que una feature necesita para dibujar su caja y resolver sus interfaces sin cargar su lienzo. GET /api/apps/{appId}/modules devuelve un arreglo de estos.",
+  "type": "object",
+  "required": ["id", "appId", "name", "version", "interfaces", "modules", "usedBy"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "appId": { "type": "string", "format": "uuid" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "description": { "type": "string", "maxLength": 500 },
+    "version": { "type": "integer", "minimum": 0, "description": "Versión del lienzo del módulo (0: aún no se guardó)" },
+    "nodes": { "type": "integer", "minimum": 0, "description": "Cajas del lienzo del módulo" },
+    "interfaces": {
+      "type": "array",
+      "description": "Interfaces del módulo, por nombre, con lo que se sabe de su caja interna",
+      "items": { "$ref": "#/$defs/interface" }
+    },
+    "modules": {
+      "type": "array",
+      "description": "Módulos que contiene (nodos module de su lienzo)",
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "usedBy": {
+      "type": "array",
+      "description": "Features y módulos de la app cuyo lienzo guardado lo referencia",
+      "items": { "type": "string", "format": "uuid" }
+    }
+  },
+  "$defs": {
+    "interface": {
+      "type": "object",
+      "required": ["id", "name", "kind", "nodeId"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "description": { "type": "string", "maxLength": 500 },
+        "kind": { "enum": ["provides", "event", "requires"] },
+        "nodeId": { "type": "string", "minLength": 1 },
+        "nodeType": {
+          "enum": ["actor", "screen", "rule", "api", "service", "database", "resource", "ref", "portal", "module"],
+          "description": "Tipo con el que se comporta su caja interna (un ref, el de su elemento del catálogo); falta si la caja ya no existe"
+        },
+        "nodeTitle": { "type": "string", "maxLength": 120 },
+        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"], "description": "Del contrato de su caja (api o ref a una api)" },
+        "path": { "type": "string", "maxLength": 2000 },
+        "tourId": { "type": "string", "minLength": 1, "description": "Recorrido interno de la interfaz" },
+        "tourName": { "type": "string", "maxLength": 60 }
+      }
+    }
+  }
+}

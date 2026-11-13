@@ -155,14 +155,43 @@ internal sealed class ExportHandlers(
         }
 
         var graph = await canvas.GraphOfFeatureAsync(featureId, ct).ConfigureAwait(false);
-        var refs = NodeIds(graph, "ref", "catalogId").Keys.ToList();
+        var modules = await ModulesUsedAsync(feature.AppId, graph, ct).ConfigureAwait(false);
+        var graphs = modules.Select(m => m.Graph).Prepend(graph).ToList();
+        var refs = graphs.SelectMany(g => NodeIds(g, "ref", "catalogId").Keys).Distinct().ToList();
         var items = refs.Count == 0 ? [] : await catalog.ItemsOfAppAsync(feature.AppId, refs, ct).ConfigureAwait(false);
-        var images = await ImagesAsync(feature.AppId, [graph], ct).ConfigureAwait(false);
+        var images = await ImagesAsync(feature.AppId, graphs, ct).ConfigureAwait(false);
         var package = new List<PackageFeature> { new(feature.Id, feature.Name, feature.Description, graph) };
         var list = images.Select(i => new PackageImage(i.Key, i.Value.ContentType, i.Value.Bytes)).ToList();
 
-        var manifest = WalkiePackage.Manifest("feature", feature.AppId, feature.AppName, package, items, list, clock.GetUtcNow());
-        return ($"{Slugs.From(feature.Name)}.walkie", WalkiePackage.Zip(manifest, package, items, list));
+        var manifest = WalkiePackage.Manifest("feature", feature.AppId, feature.AppName, package, items, list, clock.GetUtcNow(), modules: modules);
+        return ($"{Slugs.From(feature.Name)}.walkie", WalkiePackage.Zip(manifest, package, items, list, modules: modules));
+    }
+
+    /// <summary>
+    /// Los módulos compartidos que usa el lienzo y los que esos contienen (spec modulos-compartidos), con su último
+    /// lienzo; los que ya no existen (referencias pendientes) quedan fuera.
+    /// </summary>
+    private async Task<List<PackageFeature>> ModulesUsedAsync(Guid appId, JsonElement graph, CancellationToken ct)
+    {
+        var appModules = (await features.ModulesOfAppAsync(appId, ct).ConfigureAwait(false)).ToDictionary(m => m.Id);
+        var found = new Dictionary<Guid, PackageFeature>();
+        var pending = new Queue<Guid>(NodeIds(graph, "module", "moduleId").Keys);
+        while (pending.TryDequeue(out var id))
+        {
+            if (found.ContainsKey(id) || !appModules.TryGetValue(id, out var module))
+            {
+                continue;
+            }
+
+            var inner = await canvas.GraphOfFeatureAsync(id, ct).ConfigureAwait(false);
+            found[id] = new PackageFeature(id, module.Name, module.Description, inner);
+            foreach (var next in NodeIds(inner, "module", "moduleId").Keys)
+            {
+                pending.Enqueue(next);
+            }
+        }
+
+        return [.. found.Values.OrderBy(m => m.Id)];
     }
 
     /// <summary>
@@ -184,13 +213,22 @@ internal sealed class ExportHandlers(
             package.Add(new PackageFeature(feature.Id, feature.Name, feature.Description, graph));
         }
 
+        // Todos los módulos compartidos de la app (spec modulos-compartidos), también los que nadie usa.
+        var modules = new List<PackageFeature>();
+        foreach (var module in await features.ModulesOfAppAsync(appId, ct).ConfigureAwait(false))
+        {
+            var graph = await canvas.GraphOfFeatureAsync(module.Id, ct).ConfigureAwait(false);
+            modules.Add(new PackageFeature(module.Id, module.Name, module.Description, graph));
+        }
+
         var items = await catalog.AllItemsOfAppAsync(appId, ct).ConfigureAwait(false);
-        var images = await ImagesAsync(appId, package.Select(f => f.Graph), ct).ConfigureAwait(false);
+        var images = await ImagesAsync(appId, package.Concat(modules).Select(f => f.Graph), ct).ConfigureAwait(false);
         var list = images.Select(i => new PackageImage(i.Key, i.Value.ContentType, i.Value.Bytes)).ToList();
         var map = await canvas.MapPositionsAsync(appId, ct).ConfigureAwait(false);
 
-        var manifest = WalkiePackage.Manifest("app", appId, appName, package, items, list, clock.GetUtcNow(), withMap: map is not null);
-        return ($"{Slugs.From(appName, "app")}.walkie", WalkiePackage.Zip(manifest, package, items, list, map));
+        var manifest = WalkiePackage.Manifest(
+            "app", appId, appName, package, items, list, clock.GetUtcNow(), withMap: map is not null, modules: modules);
+        return ($"{Slugs.From(appName, "app")}.walkie", WalkiePackage.Zip(manifest, package, items, list, map, modules));
     }
 
     /// <summary>Las imágenes de las pantallas de los lienzos, por asset (una vez cada una); las que ya no están, fuera.</summary>

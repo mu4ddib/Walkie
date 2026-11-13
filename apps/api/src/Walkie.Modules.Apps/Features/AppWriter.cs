@@ -44,6 +44,40 @@ internal sealed class AppWriter(AppsDbContext db, TimeProvider clock) : IAppWrit
         return feature.Id;
     }
 
+    public async Task<bool> CreateModuleAsync(
+        Guid appId, Guid moduleId, string name, string? description, string userId, CancellationToken cancellationToken)
+    {
+        if (await db.Features.AnyAsync(f => f.Id == moduleId, cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
+        var now = clock.GetUtcNowForDb();
+        db.Features.Add(new Feature
+        {
+            Id = moduleId,
+            AppId = appId,
+            Kind = FeatureKind.Module,
+            Name = name.Trim(),
+            Description = description?.Trim() ?? "",
+            CreatedBy = userId,
+            CreatedAt = now,
+            UpdatedAt = now,
+        });
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException)
+        {
+            // Dos pedidos con el mismo id a la vez: el segundo pierde.
+            db.ChangeTracker.Clear();
+            return false;
+        }
+
+        return true;
+    }
+
     public async Task<Guid> CreateCatalogItemAsync(
         Guid appId, CatalogItemResponse source, string userId, CancellationToken cancellationToken)
     {

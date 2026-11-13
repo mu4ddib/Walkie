@@ -48,6 +48,8 @@ internal sealed class GraphValidator
             OnlyOn(node, "resource", "resource", "Solo los recursos tienen subtipo de recurso.", errors);
             OnlyOn(node, "runtime", "service", "Solo los servicios dicen dónde corren.", errors);
             OnlyOn(node, "mode", "rule", "Solo una regla puede ser una decisión.", errors);
+            OnlyOn(node, "moduleId", "module", "Solo una referencia a módulo apunta a un módulo.", errors);
+            OnlyOn(node, "display", "module", "Solo la caja de un módulo tiene presentación propia.", errors);
             BranchErrors(node, errors);
             if (node.Value.TryGetProperty("groupId", out var groupId) && !groupIds.Contains(groupId.GetString()!))
             {
@@ -108,9 +110,17 @@ internal sealed class GraphValidator
 
             foreach (var end in new[] { "from", "to" })
             {
-                if (!nodeIds.Contains(edge.Value.GetProperty(end).GetString()!))
+                var nodeId = edge.Value.GetProperty(end).GetString()!;
+                if (!nodeIds.Contains(nodeId))
                 {
                     errors[$"/edges/{edge.Name}/{end}"] = ["La conexión apunta a un nodo que no existe."];
+                }
+
+                // Una interfaz (spec modulos-compartidos) solo en el extremo que es la caja de un módulo.
+                if (edge.Value.TryGetProperty(end + "Interface", out _)
+                    && !(nodes.TryGetProperty(nodeId, out var endNode) && endNode.GetProperty("type").GetString() == "module"))
+                {
+                    errors[$"/edges/{edge.Name}/{end}Interface"] = ["Solo el extremo que es un módulo puede apuntar a una de sus interfaces."];
                 }
             }
         }
@@ -119,6 +129,14 @@ internal sealed class GraphValidator
         {
             var edgeIds = edges.EnumerateObject().Select(e => e.Name).ToHashSet(StringComparer.Ordinal);
             TourErrors(tours, nodeIds, edgeIds, errors);
+        }
+
+        if (graph.TryGetProperty("interfaces", out var interfaces))
+        {
+            var tourIds = graph.TryGetProperty("tours", out var tourMap)
+                ? tourMap.EnumerateObject().Select(t => t.Name).ToHashSet(StringComparer.Ordinal)
+                : [];
+            InterfaceErrors(interfaces, nodeIds, tourIds, errors);
         }
 
         foreach (var position in graph.GetProperty("layout").EnumerateObject())
@@ -227,6 +245,39 @@ internal sealed class GraphValidator
                 }
 
                 i++;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Interfaces de un módulo (spec modulos-compartidos, ADR-0010): clave = <c>id</c>, su caja existe, su recorrido
+    /// interno existe y no hay dos con el mismo nombre (sin distinguir mayúsculas).
+    /// </summary>
+    private static void InterfaceErrors(
+        JsonElement interfaces, HashSet<string> nodeIds, HashSet<string> tourIds, Dictionary<string, string[]> errors)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in interfaces.EnumerateObject())
+        {
+            var path = $"/interfaces/{item.Name}";
+            if (item.Value.GetProperty("id").GetString() != item.Name)
+            {
+                errors[$"{path}/id"] = ["El id de la interfaz debe coincidir con su clave."];
+            }
+
+            if (!names.Add(item.Value.GetProperty("name").GetString()!.Trim()))
+            {
+                errors[$"{path}/name"] = ["Ya hay una interfaz con ese nombre en el módulo."];
+            }
+
+            if (!nodeIds.Contains(item.Value.GetProperty("nodeId").GetString()!))
+            {
+                errors[$"{path}/nodeId"] = ["La interfaz apunta a una caja que no existe."];
+            }
+
+            if (item.Value.TryGetProperty("tourId", out var tourId) && !tourIds.Contains(tourId.GetString()!))
+            {
+                errors[$"{path}/tourId"] = ["La interfaz apunta a un recorrido que no existe."];
             }
         }
     }

@@ -43,6 +43,9 @@ public static class WalkieSchemas
     /// <summary>Respuesta de importar un <c>.walkie</c> (<c>walkie-import-summary.schema.json</c>).</summary>
     public static JsonSchema ImportSummary { get; } = JsonSchema.FromText(Load("walkie-import-summary.schema.json"), Options);
 
+    /// <summary>Resumen de un módulo compartido (<c>walkie-module-summary.schema.json</c>, spec modulos-compartidos).</summary>
+    public static JsonSchema ModuleSummary { get; } = JsonSchema.FromText(Load("walkie-module-summary.schema.json"), Options);
+
     /// <summary><c>walkie-catalog-item.schema.json</c>: un elemento del catálogo (en el <c>catalog.json</c> de un <c>.walkie</c>).</summary>
     public static JsonSchema CatalogItem { get; } = LoadAfterGraph("walkie-catalog-item.schema.json");
 

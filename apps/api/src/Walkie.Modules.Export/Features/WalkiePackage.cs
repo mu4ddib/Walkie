@@ -34,6 +34,9 @@ internal static class WalkiePackage
 
     public static string CanvasPath(Guid featureId) => $"features/{featureId}/canvas.json";
 
+    /// <summary>Lienzo de un módulo compartido en el archivo (spec modulos-compartidos).</summary>
+    public static string ModuleCanvasPath(Guid moduleId) => $"modules/{moduleId}/canvas.json";
+
     public static string ImagePath(Guid assetId, string contentType) => contentType switch
     {
         "image/jpeg" => $"img/{assetId}.jpg",
@@ -50,7 +53,8 @@ internal static class WalkiePackage
         IReadOnlyList<CatalogItemResponse> catalog,
         IReadOnlyList<PackageImage> images,
         DateTimeOffset exportedAt,
-        bool withMap = false) =>
+        bool withMap = false,
+        IReadOnlyList<PackageFeature>? modules = null) =>
         new(
             "walkie-package",
             0,
@@ -66,7 +70,15 @@ internal static class WalkiePackage
                 f.Graph.TryGetProperty("version", out var v) && v.TryGetInt32(out var n) ? n : 0))],
             new PackageCatalog(CatalogPath, catalog.Count),
             [.. images.Select(i => new PackageManifestImage(i.AssetId, ImagePath(i.AssetId, i.ContentType), i.ContentType))],
-            withMap ? new PackageMap(MapPath) : null);
+            withMap ? new PackageMap(MapPath) : null,
+            modules is { Count: > 0 }
+                ? [.. modules.Select(m => new PackageManifestFeature(
+                    m.Id,
+                    m.Name,
+                    string.IsNullOrWhiteSpace(m.Description) ? null : m.Description,
+                    ModuleCanvasPath(m.Id),
+                    m.Graph.TryGetProperty("version", out var v) && v.TryGetInt32(out var n) ? n : 0))]
+                : null);
 
     /// <summary>Los bytes del <c>.zip</c>: manifest, lienzos, catálogo, mapa (si hay) e imágenes, en orden estable.</summary>
     public static byte[] Zip(
@@ -74,7 +86,8 @@ internal static class WalkiePackage
         IReadOnlyList<PackageFeature> features,
         IReadOnlyList<CatalogItemResponse> catalog,
         IReadOnlyList<PackageImage> images,
-        JsonElement? mapPositions = null)
+        JsonElement? mapPositions = null,
+        IReadOnlyList<PackageFeature>? modules = null)
     {
         using var buffer = new MemoryStream();
         using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
@@ -83,6 +96,11 @@ internal static class WalkiePackage
             foreach (var feature in features.OrderBy(f => f.Id))
             {
                 Write(zip, CanvasPath(feature.Id), JsonSerializer.SerializeToUtf8Bytes(feature.Graph, Json));
+            }
+
+            foreach (var module in (modules ?? []).OrderBy(m => m.Id))
+            {
+                Write(zip, ModuleCanvasPath(module.Id), JsonSerializer.SerializeToUtf8Bytes(module.Graph, Json));
             }
 
             Write(zip, CatalogPath, JsonSerializer.SerializeToUtf8Bytes(catalog.OrderBy(i => i.Id), Json));
@@ -117,7 +135,8 @@ internal sealed record PackageManifest(
     IReadOnlyList<PackageManifestFeature> Features,
     PackageCatalog Catalog,
     IReadOnlyList<PackageManifestImage> Images,
-    PackageMap? Map = null);
+    PackageMap? Map = null,
+    IReadOnlyList<PackageManifestFeature>? Modules = null);
 
 /// <summary>Dónde está la distribución del mapa en el archivo de una app.</summary>
 internal sealed record PackageMap(string Path);

@@ -155,6 +155,14 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                         .HasDefaultValue("")
                         .HasColumnName("description");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("feature")
+                        .HasColumnName("kind");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)

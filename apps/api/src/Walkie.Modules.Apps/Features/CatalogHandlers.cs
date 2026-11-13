@@ -147,7 +147,7 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
         return await db.Features.AsNoTracking()
             .Where(f => ids.Contains(f.Id))
             .OrderBy(f => f.Name).ThenBy(f => f.Id)
-            .Select(f => new FeatureResponse(f.Id, f.AppId, f.Name, f.Description, f.CreatedAt, f.UpdatedAt))
+            .Select(f => new FeatureResponse(f.Id, f.AppId, f.Name, f.Description, f.CreatedAt, f.UpdatedAt, f.Kind))
             .ToListAsync(ct).ConfigureAwait(false);
     }
 

@@ -33,6 +33,8 @@ internal static partial class MarkdownDocument
         ("database", "Bases de datos", "Base de datos"),
         ("resource", "Recursos", "Recurso"),
         ("portal", "Portales", "Portal"),
+        // Referencias a módulos compartidos (spec modulos-compartidos): la caja, sin el detalle de dentro.
+        ("module", "Módulos", "Módulo"),
         ("ref", "Referencias sin elemento", "Referencia"),
     ];
 
@@ -814,6 +816,7 @@ internal static partial class MarkdownDocument
             ("resource", "function") => $"[[\"{label}\"]]",
             ("resource", _) => $"(\"{label}\")",
             ("portal", _) => $"[/\"{label}\"/]",
+            ("module", _) => $"[[\"{label}\"]]",
             _ => $"[\"{label}\"]",
         };
 

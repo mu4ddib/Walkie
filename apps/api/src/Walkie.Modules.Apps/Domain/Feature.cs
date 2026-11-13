@@ -10,6 +10,12 @@ internal sealed class Feature
     public Guid AppId { get; init; }
     public required string Name { get; set; }
 
+    /// <summary>
+    /// <see cref="FeatureKind"/>: una feature o un módulo compartido (ADR-0010). Un módulo tiene lienzo como una
+    /// feature, pero no aparece en la galería, el mapa ni como destino de un portal.
+    /// </summary>
+    public string Kind { get; init; } = FeatureKind.Feature;
+
     /// <summary>Para qué sirve la feature; vacía si no se ha escrito.</summary>
     public string Description { get; set; } = "";
 

@@ -1,7 +1,7 @@
 /* Generado desde packages/schema/walkie-package.schema.json. No editar a mano: `pnpm gen:schema`. */
 
 /**
- * manifest.json de un archivo .walkie (spec exportar-e-importar, tareas 5 a 7): un .zip que reconstruye una o varias features en otra app (o en la misma). Lista qué hay en el archivo y dónde: el lienzo de cada feature (features/<id>/canvas.json, según walkie-graph), los elementos del catálogo que usan (catalog.json, cada uno según walkie-catalog-item), las imágenes de sus pantallas (img/) y, en el de una app, la distribución del mapa (map.json).
+ * manifest.json de un archivo .walkie (spec exportar-e-importar, tareas 5 a 7): un .zip que reconstruye una o varias features en otra app (o en la misma). Lista qué hay en el archivo y dónde: el lienzo de cada feature (features/<id>/canvas.json, según walkie-graph), los elementos del catálogo que usan (catalog.json, cada uno según walkie-catalog-item), las imágenes de sus pantallas (img/), los módulos que usan (modules/<id>/canvas.json) y, en el de una app, la distribución del mapa (map.json).
  */
 export interface WalkiePackageManifestV0 {
   format: 'walkie-package';
@@ -62,6 +62,22 @@ export interface WalkiePackageManifestV0 {
       canvasVersion: number;
     }[]
   ];
+  /**
+   * Módulos compartidos que usan los lienzos del archivo, también los que esos contienen (spec modulos-compartidos); en el de una app, todos. Su lienzo trae sus interfaces
+   */
+  modules?: {
+    /**
+     * Id en la app de origen (el moduleId de los nodos module)
+     */
+    id: string;
+    name: string;
+    description?: string;
+    /**
+     * Ruta del lienzo en el archivo, ej. modules/<id>/canvas.json
+     */
+    canvas: string;
+    canvasVersion: number;
+  }[];
   catalog: {
     /**
      * Arreglo de elementos del catálogo (walkie-catalog-item) que usan los lienzos del archivo

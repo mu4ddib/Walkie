@@ -48,6 +48,11 @@
       "description": "Mapa id -> nota adhesiva (anotación del lienzo, no es un nodo del flujo); su posición va en layout con el mismo id",
       "additionalProperties": { "$ref": "#/$defs/stickyNote" }
     },
+    "interfaces": {
+      "type": "object",
+      "description": "Solo en el lienzo de un módulo (spec modulos-compartidos, ADR-0010): mapa id -> interfaz expuesta, el punto por el que las features se conectan al módulo",
+      "additionalProperties": { "$ref": "#/$defs/moduleInterface" }
+    },
     "groupNesting": {
       "const": "explicit",
       "description": "Los grupos guardan su grupo padre en parentId y las notas su grupo en groupId. Sin este campo (lienzos anteriores) la jerarquía se infiere por contención al abrir el lienzo"
@@ -61,7 +66,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "type": {
-          "enum": ["actor", "screen", "rule", "api", "service", "database", "resource", "ref", "portal"]
+          "enum": ["actor", "screen", "rule", "api", "service", "database", "resource", "ref", "portal", "module"]
         },
         "title": { "type": "string", "maxLength": 120 },
         "description": { "type": "string", "maxLength": 2000 },
@@ -107,7 +112,17 @@
         "runtime": { "$ref": "#/$defs/runtime", "description": "Dónde corre (solo service)" },
         "catalogId": { "type": "string", "minLength": 1, "description": "Elemento del catálogo de la app (ref)" },
         "targetFeatureId": { "type": "string", "format": "uuid", "description": "Feature destino de la misma app (portal); en un portal, title guarda su último nombre conocido" },
-        "groupId": { "$ref": "#/$defs/id", "description": "Grupo de infraestructura que lo contiene" }
+        "groupId": { "$ref": "#/$defs/id", "description": "Grupo de infraestructura que lo contiene" },
+        "moduleId": { "type": "string", "format": "uuid", "description": "Módulo compartido de la misma app (module, ADR-0010); en él, title guarda su último nombre conocido" },
+        "display": {
+          "type": "object",
+          "description": "Presentación local de la caja de un módulo (solo module): false oculta esa parte en este lienzo",
+          "additionalProperties": false,
+          "properties": {
+            "description": { "type": "boolean" },
+            "interfaces": { "type": "boolean" }
+          }
+        }
       },
       "allOf": [
         {
@@ -117,6 +132,10 @@
         {
           "if": { "properties": { "type": { "const": "resource" } } },
           "then": { "required": ["resource"], "description": "Un recurso declara su subtipo" }
+        },
+        {
+          "if": { "properties": { "type": { "const": "module" } } },
+          "then": { "required": ["moduleId"], "description": "Una referencia a módulo dice a qué módulo apunta" }
         }
       ]
     },
@@ -173,7 +192,36 @@
             }
           }
         },
-        "example": { "type": "string", "maxLength": 10000, "description": "Ejemplo de payload de esta interacción; el contrato reutilizable vive en la API" }
+        "example": { "type": "string", "maxLength": 10000, "description": "Ejemplo de payload de esta interacción; el contrato reutilizable vive en la API" },
+        "fromInterface": { "$ref": "#/$defs/interfaceRef", "description": "Interfaz del módulo de origen (solo si from es un nodo module); sin ella, sale del módulo completo" },
+        "toInterface": { "$ref": "#/$defs/interfaceRef", "description": "Interfaz del módulo de destino (solo si to es un nodo module); sin ella, llega al módulo completo" }
+      }
+    },
+    "interfaceRef": {
+      "type": "object",
+      "description": "Interfaz de un módulo en un extremo de una conexión: id estable y último nombre conocido (para reparar si la interfaz desaparece)",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "maxLength": 60 }
+      }
+    },
+    "moduleInterface": {
+      "type": "object",
+      "description": "Interfaz de un módulo: punto de conexión vinculado a una caja de su lienzo; su contrato es el de esa caja",
+      "required": ["id", "name", "kind", "nodeId"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id", "description": "Estable: las conexiones de las features la referencian por él" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "description": { "type": "string", "maxLength": 500 },
+        "kind": {
+          "enum": ["provides", "event", "requires"],
+          "description": "provides: API u operación que el módulo ofrece; event: evento que emite o recibe; requires: dependencia que necesita de fuera"
+        },
+        "nodeId": { "$ref": "#/$defs/id", "description": "Caja interna que la implementa" },
+        "tourId": { "$ref": "#/$defs/id", "description": "Recorrido interno que muestra lo que pasa dentro al usarla" }
       }
     },
     "http": {

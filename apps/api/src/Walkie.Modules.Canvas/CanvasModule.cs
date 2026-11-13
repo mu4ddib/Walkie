@@ -16,6 +16,8 @@ public static class CanvasModule
         services.AddDbContext<CanvasDbContext>(options => options.UseNpgsql(connectionString, ConfigureNpgsql));
         services.AddSingleton<GraphValidator>();
         services.AddScoped<CanvasHandlers>();
+        services.AddScoped<ModuleReferences>();
+        services.AddScoped<ModuleHandlers>();
         services.AddScoped<CanvasPreviews>();
         services.AddScoped<AppMaps>();
         services.AddScoped<Apps.Contracts.ICatalogUsage, CatalogUsage>();
@@ -26,7 +28,8 @@ public static class CanvasModule
     }
 
     /// <summary>Endpoints <c>/api/features/{featureId}/canvas</c>.</summary>
-    public static IEndpointRouteBuilder MapCanvasModule(this IEndpointRouteBuilder routes) => routes.MapCanvasEndpoints();
+    public static IEndpointRouteBuilder MapCanvasModule(this IEndpointRouteBuilder routes) =>
+        routes.MapCanvasEndpoints().MapModuleEndpoints();
 
     /// <summary>Aplica las migraciones pendientes del módulo.</summary>
     public static async Task MigrateCanvasDatabaseAsync(this IServiceProvider services, CancellationToken cancellationToken = default)
