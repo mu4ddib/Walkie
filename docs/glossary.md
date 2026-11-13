@@ -6,8 +6,10 @@
 | **Feature** | Funcionalidad con un único objetivo de usuario (iniciar sesión, transferir). Tiene un lienzo y sus tours. |
 | **Lienzo (canvas)** | Grafo de nodos y conexiones de una feature, más su `layout`. |
 | **Catálogo** | Nodos reutilizables de la app (`api`, `service`, `database`) definidos una sola vez. |
-| **Nodo** | Caja del lienzo. Tipos: `actor`, `screen`, `rule`, `api`, `service`, `database`, `ref`, `portal`. |
+| **Nodo** | Caja del lienzo. Tipos: `actor`, `screen`, `rule`, `api`, `service`, `database`, `resource`, `ref`, `portal`, `module`. |
 | **ref** | Nodo que apunta a un elemento del catálogo (`catalogId`). Si el elemento cambia, cambia en todos los lienzos. |
+| **Módulo** | Conjunto reutilizable de componentes conectados de una app, con su propio lienzo e **interfaces** (ADR-0010). Una feature lo usa con una caja (nodo `module`, `moduleId`) que comparte su definición; su posición, tamaño y presentación son de cada lienzo. |
+| **Interfaz** | Punto de conexión de un módulo vinculado a una caja de su lienzo (`interfaces`: id estable, nombre, tipo `provides`/`event`/`requires`, recorrido interno opcional). Una conexión apunta a ella con `toInterface`/`fromInterface`; sin eso, va al módulo completo. |
 | **portal** | Nodo que lleva a otra feature. Permite recorrer la app sin un lienzo gigante. |
 | **Conexión (edge)** | Relación entre nodos. Tipos: `navigation`, `request`, `response`, `event`, `uses`, `reads`, `writes`. Una respuesta puede llevar `status` y `replyTo` (su solicitud); una solicitud, su `request` (endpoint y parámetros del paso). |
 | **Input** | Dato que una pantalla pide al usuario (ej. `cc`), con sus reglas. |

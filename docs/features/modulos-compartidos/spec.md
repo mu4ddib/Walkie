@@ -1,7 +1,7 @@
 # Spec: Módulos compartidos
 
 - Issue padre: #155
-- Estado: aprobada (2026-11-13)
+- Estado: implementada (2026-11-13)
 
 ## Objetivo
 
@@ -21,56 +21,56 @@ Equipos que documentan varias features que llaman a lo mismo (ej. un módulo «U
 
 ### Catálogo
 
-- [ ] 1. Dado el panel del catálogo del lienzo, cuando lo abro, entonces veo dos pestañas, «Componentes» y «Módulos», con una búsqueda común; cada módulo muestra nombre, descripción y número de interfaces, y se agrega con clic o arrastre.
-- [ ] 2. Dada la página del catálogo, cuando entro, entonces hay una sección «Módulos» con sus interfaces, usos, «Abrir», «Nuevo módulo» (nombre y descripción, crea uno vacío y lo abre) y «Eliminar» (que antes muestra dónde se usa).
-- [ ] 3. Dado un módulo usado en tres features, cuando cambio su definición (cajas, conexiones, nombre, descripción o interfaces) y guardo, entonces las tres lo muestran actualizado sin cambiar la posición ni el tamaño de su caja en cada una.
-- [ ] 4. Dado un módulo con componentes del catálogo dentro, cuando lo uso, entonces esos `ref` siguen siendo del catálogo (mismo contrato y mismos usos).
+- [x] 1. Dado el panel del catálogo del lienzo, cuando lo abro, entonces veo dos pestañas, «Componentes» y «Módulos», con una búsqueda común; cada módulo muestra nombre, descripción y número de interfaces, y se agrega con clic o arrastre.
+- [x] 2. Dada la página del catálogo, cuando entro, entonces hay una sección «Módulos» con sus interfaces, usos, «Abrir», «Nuevo módulo» (nombre y descripción, crea uno vacío y lo abre) y «Eliminar» (que antes muestra dónde se usa).
+- [x] 3. Dado un módulo usado en tres features, cuando cambio su definición (cajas, conexiones, nombre, descripción o interfaces) y guardo, entonces las tres lo muestran actualizado sin cambiar la posición ni el tamaño de su caja en cada una.
+- [x] 4. Dado un módulo con componentes del catálogo dentro, cuando lo uso, entonces esos `ref` siguen siendo del catálogo (mismo contrato y mismos usos).
 
 ### Creación y conversión
 
-- [ ] 5. Dada una selección de cajas o un grupo (con subgrupos), cuando elijo «Convertir en módulo», entonces un diálogo de cinco pasos pide nombre y descripción, lista lo incluido (con los grupos anidados), las conexiones que cruzan el límite, las interfaces propuestas y las dependencias externas, y explica qué pasa con tours y recorridos antes de confirmar.
-- [ ] 6. Dada una base de datos fuera de la selección conectada a algo de dentro, cuando reviso las conexiones, entonces puedo incluirla en el módulo o dejarla como dependencia externa (una interfaz `requires`).
-- [ ] 7. Dado que confirmo, entonces lo seleccionado pasa al lienzo del módulo con sus posiciones relativas, conexiones internas, contratos, notas y solicitudes/respuestas (`replyTo`); en la feature queda una caja del módulo en su lugar y cada conexión externa llega a la interfaz que le corresponde, con el mismo id (los pasos de recorrido que la usan siguen valiendo).
-- [ ] 8. Dado un tour o recorrido que pasaba por lo convertido, entonces los pasos de nodo apuntan a la caja del módulo, los de conexiones que cruzan se conservan y los de conexiones internas pasan a un recorrido interno del módulo con el mismo nombre (enlazado desde la interfaz); el diálogo lo dice antes de confirmar, igual que las reglas o ramas que pierden su vínculo.
-- [ ] 9. Dado que la conversión falla a mitad (red, 409, 400), entonces no queda nada a medias: el módulo creado se borra y la feature sigue igual; reintentar con el mismo diálogo no duplica el módulo.
-- [ ] 10. Dada una conversión hecha, cuando pulso Ctrl+Z, entonces la feature vuelve a tener lo que había (el módulo queda en el catálogo, sin usos desde ella).
+- [x] 5. Dada una selección de cajas o un grupo (con subgrupos), cuando elijo «Convertir en módulo», entonces un diálogo de cinco pasos pide nombre y descripción, lista lo incluido (con los grupos anidados), las conexiones que cruzan el límite, las interfaces propuestas y las dependencias externas, y explica qué pasa con tours y recorridos antes de confirmar.
+- [x] 6. Dada una base de datos fuera de la selección conectada a algo de dentro, cuando reviso las conexiones, entonces puedo incluirla en el módulo o dejarla como dependencia externa (una interfaz `requires`).
+- [x] 7. Dado que confirmo, entonces lo seleccionado pasa al lienzo del módulo con sus posiciones relativas, conexiones internas, contratos, notas y solicitudes/respuestas (`replyTo`); en la feature queda una caja del módulo en su lugar y cada conexión externa llega a la interfaz que le corresponde, con el mismo id (los pasos de recorrido que la usan siguen valiendo).
+- [x] 8. Dado un tour o recorrido que pasaba por lo convertido, entonces los pasos de nodo apuntan a la caja del módulo, los de conexiones que cruzan se conservan y los de conexiones internas pasan a un recorrido interno del módulo con el mismo nombre (enlazado desde la interfaz); el diálogo lo dice antes de confirmar, igual que las reglas o ramas que pierden su vínculo.
+- [x] 9. Dado que la conversión falla a mitad (red, 409, 400), entonces no queda nada a medias: el módulo creado se borra y la feature sigue igual; reintentar con el mismo diálogo no duplica el módulo.
+- [x] 10. Dada una conversión hecha, cuando pulso Ctrl+Z, entonces la feature vuelve a tener lo que había (el módulo queda en el catálogo, sin usos desde ella).
 
 ### Interfaces y conexiones
 
-- [ ] 11. Dada una caja del módulo, cuando suelto una conexión sobre ella (o la saco de ella), entonces se abre un selector compacto y con búsqueda con sus interfaces (nombre, tipo, método y ruta) y «Módulo completo»; Esc cancela.
-- [ ] 12. Dada una conexión a una interfaz, entonces su etiqueta y su tipo por defecto salen de la caja interna (`llama · GET /usuarios/{id}`); el inspector dice si apunta al módulo completo o a una interfaz y permite cambiarlo.
-- [ ] 13. Dada una solicitud a una interfaz, cuando agrego su respuesta, entonces la respuesta sale de la misma interfaz y conserva `replyTo`.
-- [ ] 14. Dada una interfaz usada, cuando la renombro o renombro su caja interna, entonces las conexiones siguen unidas (por id) y muestran el nombre nuevo.
-- [ ] 15. Dada una interfaz usada, cuando la elimino, entonces antes veo qué conexiones de qué features la usan y puedo reasignarlas a otra interfaz, pasarlas al módulo completo o dejarlas pendientes (conservan el último nombre y se marcan para reparar).
-- [ ] 16. Dada una referencia a un módulo eliminado (o a una interfaz que ya no existe), entonces la caja (o la conexión) lo indica con el último nombre conocido y permite reasignarla.
+- [x] 11. Dada una caja del módulo, cuando suelto una conexión sobre ella (o la saco de ella), entonces se abre un selector compacto y con búsqueda con sus interfaces (nombre, tipo, método y ruta) y «Módulo completo»; Esc cancela.
+- [x] 12. Dada una conexión a una interfaz, entonces su etiqueta y su tipo por defecto salen de la caja interna (`llama · GET /usuarios/{id}`); el inspector dice si apunta al módulo completo o a una interfaz y permite cambiarlo.
+- [x] 13. Dada una solicitud a una interfaz, cuando agrego su respuesta, entonces la respuesta sale de la misma interfaz y conserva `replyTo`.
+- [x] 14. Dada una interfaz usada, cuando la renombro o renombro su caja interna, entonces las conexiones siguen unidas (por id) y muestran el nombre nuevo.
+- [x] 15. Dada una interfaz usada, cuando la elimino, entonces antes veo qué conexiones de qué features la usan y puedo reasignarlas a otra interfaz, pasarlas al módulo completo o dejarlas pendientes (conservan el último nombre y se marcan para reparar).
+- [x] 16. Dada una referencia a un módulo eliminado (o a una interfaz que ya no existe), entonces la caja (o la conexión) lo indica con el último nombre conocido y permite reasignarla.
 
 ### Caja e inspector
 
-- [ ] 17. La caja muestra el nombre, el distintivo «Módulo», la descripción breve (si existe) y solo las interfaces usadas en ese lienzo, con «Abrir módulo» y «Ver interfaces»; el resto se consulta en el inspector.
-- [ ] 18. El inspector separa «En este lienzo» (mostrar u ocultar descripción e interfaces) de «Definición compartida» (nombre y descripción, que avisan que cambian en todas las features) y ofrece «Crear copia independiente» como acción explícita; duplicar la caja (Ctrl+D) sigue apuntando al mismo módulo.
+- [x] 17. La caja muestra el nombre, el distintivo «Módulo», la descripción breve (si existe) y solo las interfaces usadas en ese lienzo, con «Abrir módulo» y «Ver interfaces»; el resto se consulta en el inspector.
+- [x] 18. El inspector separa «En este lienzo» (mostrar u ocultar descripción e interfaces) de «Definición compartida» (nombre y descripción, que avisan que cambian en todas las features) y ofrece «Crear copia independiente» como acción explícita; duplicar la caja (Ctrl+D) sigue apuntando al mismo módulo.
 
 ### Navegación
 
-- [ ] 19. Dada la caja de un módulo, cuando pulso «Abrir módulo» (o doble clic), entonces se abre su lienzo en el editor habitual con una franja «Módulo · <nombre> · Definición compartida · Ver usos» y «← Volver a <feature>»; al volver, la feature conserva zoom, posición y selección.
-- [ ] 20. Dada una interfaz, cuando la abro, entonces el lienzo del módulo se abre con su caja interna seleccionada y centrada.
-- [ ] 21. «Ver usos» lista las features que referencian el módulo y abre cada una con la caja seleccionada.
+- [x] 19. Dada la caja de un módulo, cuando pulso «Abrir módulo» (o doble clic), entonces se abre su lienzo en el editor habitual con una franja «Módulo · <nombre> · Definición compartida · Ver usos» y «← Volver a <feature>»; al volver, la feature conserva zoom, posición y selección.
+- [x] 20. Dada una interfaz, cuando la abro, entonces el lienzo del módulo se abre con su caja interna seleccionada y centrada.
+- [x] 21. «Ver usos» lista las features que referencian el módulo y abre cada una con la caja seleccionada.
 
 ### Consistencia y persistencia
 
-- [ ] 22. El guardado manual y el automático funcionan igual en un módulo; dos ediciones de la misma definición se protegen con la versión (409) y una respuesta de guardado vieja no pisa cambios recientes.
-- [ ] 23. Los lienzos anteriores cargan igual (los campos nuevos son opcionales y el schema sigue en `schemaVersion` 0); la API rechaza con 400 un `moduleId` de otra app, una feature que no es módulo, interfaces fuera de un módulo, interfaces a cajas que no existen y ciclos de contención (un módulo que se contiene a sí mismo, directa o indirectamente). Dos módulos que se llaman entre sí por conexiones no son un ciclo.
+- [x] 22. El guardado manual y el automático funcionan igual en un módulo; dos ediciones de la misma definición se protegen con la versión (409) y una respuesta de guardado vieja no pisa cambios recientes.
+- [x] 23. Los lienzos anteriores cargan igual (los campos nuevos son opcionales y el schema sigue en `schemaVersion` 0); la API rechaza con 400 un `moduleId` de otra app, una feature que no es módulo, interfaces fuera de un módulo, interfaces a cajas que no existen y ciclos de contención (un módulo que se contiene a sí mismo, directa o indirectamente). Dos módulos que se llaman entre sí por conexiones no son un ciclo.
 
 ### Tours y recorridos
 
-- [ ] 24. Dado un recorrido de una feature que pasa por una interfaz con recorrido interno, cuando lo reproduzco y llego a ese paso, entonces «Ver dentro del módulo» abre el módulo reproduciendo su recorrido interno; «← Volver» regresa a la feature en el mismo paso.
+- [x] 24. Dado un recorrido de una feature que pasa por una interfaz con recorrido interno, cuando lo reproduzco y llego a ese paso, entonces «Ver dentro del módulo» abre el módulo reproduciendo su recorrido interno; «← Volver» regresa a la feature en el mismo paso.
 
 ### Importar y exportar
 
-- [ ] 25. El `.walkie` de una feature incluye los módulos que usa (y los que esos contienen, con su catálogo); el de la app, todos. Al importar, un módulo que ya existe en la app destino se reutiliza y si no se crea, con las referencias reconstruidas.
+- [x] 25. El `.walkie` de una feature incluye los módulos que usa (y los que esos contienen, con su catálogo); el de la app, todos. Al importar, un módulo que ya existe en la app destino se reutiliza y si no se crea, con las referencias reconstruidas.
 
 ### Calidad
 
-- [ ] 26. Interacción fluida con varias referencias al mismo módulo (una sola consulta de resúmenes por app; mover una caja no vuelve a pedir nada); teclado (selector, diálogo y franja), foco visible y estados vacíos que explican qué hacer.
+- [x] 26. Interacción fluida con varias referencias al mismo módulo (una sola consulta de resúmenes por app; mover una caja no vuelve a pedir nada); teclado (selector, diálogo y franja), foco visible y estados vacíos que explican qué hacer.
 
 ## Fuera de alcance
 
