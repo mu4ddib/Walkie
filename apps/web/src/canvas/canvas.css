@@ -985,6 +985,9 @@ div.pixel-node-image {
 }
 
 .kind-edge-label select {
+  /* Del ancho de la operación elegida, no de la opción más larga: si no, el selector tapa las cajas. */
+  field-sizing: content;
+  max-width: 180px;
   font: inherit;
   padding: 0;
   border: 0;
@@ -2224,6 +2227,11 @@ div.pixel-node-image {
   font-size: 13px;
 }
 
+.canvas-suggest .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
 .canvas-suggest .pixel-button[aria-pressed='true'] {
   border-color: var(--ibad);
   background: var(--ibad-tint);
@@ -2241,7 +2249,12 @@ div.pixel-node-image {
   outline-offset: 4px;
 }
 
-.react-flow__edge.flow-edge-timeout .kind-edge {
+.react-flow__edge.flow-edge-active.flow-edge-timeout .kind-edge,
+.react-flow__edge.flow-edge-active.flow-edge-timeout .kind-edge-flow {
+  stroke: var(--warn) !important;
+}
+
+.react-flow__edge.flow-edge-active.flow-edge-timeout .kind-edge {
   stroke-dasharray: 6 6;
 }
 

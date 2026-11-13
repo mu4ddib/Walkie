@@ -63,20 +63,28 @@ export type StepIssue =
 export function stepIssues(tour: Tour, edges: Record<string, Edge>): StepIssue[][] {
   const played = new Set<string>();
   let previousEnd: string | null = null;
-  let previousStart: string | null = null;
+  // Un grupo de pasos simultáneos (fan-out, spec interacciones) sale del mismo lugar; el paso siguiente puede seguir
+  // desde el destino de cualquiera de ellos.
+  let groupStart: string | null = null;
+  let groupEnds: string[] = [];
   return tour.steps.map((step) => {
     const issues: StepIssue[] = [];
     if (step.removedEdge) issues.push({ kind: 'removed' });
     const ends = stepEnds(step, edges);
-    // Un paso simultáneo (fan-out, spec interacciones) sale de donde salió o llegó el anterior: no es un salto.
-    const fanOut = step.parallel && ends && (ends.from === previousStart || ends.from === previousEnd);
-    if (ends && previousEnd && ends.from !== previousEnd && !fanOut) issues.push({ kind: 'jump', end: previousEnd, start: ends.from });
-    if (ends && !step.parallel) previousStart = ends.from;
+    const fanOut = step.parallel && ends && (ends.from === groupStart || groupEnds.includes(ends.from));
+    const continues = ends && (ends.from === previousEnd || groupEnds.includes(ends.from));
+    if (ends && previousEnd && !continues && !fanOut) issues.push({ kind: 'jump', end: previousEnd, start: ends.from });
+    if (ends && step.parallel) groupEnds.push(ends.to);
+    else if (ends) {
+      groupStart = ends.from;
+      groupEnds = [ends.to];
+    } else if (step.nodeId) groupEnds = [];
     const edge = step.edgeId ? edges[step.edgeId] : undefined;
     if (edge?.kind === 'response' && edge.replyTo && edges[edge.replyTo] && !played.has(edge.replyTo)) {
       issues.push({ kind: 'response-first', requestId: edge.replyTo });
     }
     if (step.edgeId) played.add(step.edgeId);
+    if (step.parallel && ends) return issues;
     previousEnd = ends?.to ?? (step.nodeId ? null : previousEnd);
     return issues;
   });

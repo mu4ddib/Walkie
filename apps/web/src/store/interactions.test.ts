@@ -156,6 +156,7 @@ describe('recorridos: pasos simultáneos y timeout', () => {
     const end = advance(t, { tourId: tour, step: 0, phase: 'target', mode: 'play' });
     expect(end).toMatchObject({ step: 2, phase: firstPhase(t, 2) });
     expect(goTo(t, { tourId: tour, step: 0, phase: 'target', mode: 'paused' }, 1).step).toBe(0);
-    expect(stepIssues(t, s().edges)[1]).toEqual([]);
+    // Ni el paso simultáneo ni el que sigue desde el destino de cualquiera del grupo son saltos.
+    expect(stepIssues(t, s().edges)).toEqual([[], [], []]);
   });
 });
