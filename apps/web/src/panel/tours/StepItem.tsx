@@ -185,7 +185,7 @@ export function StepItem(props: StepItemProps) {
 
 /** Campos del paso abierto: el elemento (nodo o conexión), avisos y la nota. */
 function StepFields({ tourId, index, step, flow, issues, nodeOptions, edgeOptions }: StepItemProps) {
-  const { setStepNode, setStepEdge, updateStepNote } = useGraphStore((s) => s);
+  const { setStepNode, setStepEdge, updateStepNote, setStepFlags } = useGraphStore((s) => s);
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
   const { items } = useCanvasCatalog();
@@ -264,6 +264,29 @@ function StepFields({ tourId, index, step, flow, issues, nodeOptions, edgeOption
         placeholder={flow ? 'Qué ocurre en este paso (opcional)' : 'Lo que el guía cuenta en este paso'}
         onChange={(text) => updateStepNote(tourId, index, text)}
       />
+      {flow && step.edgeId && (
+        // Fan-out y desenlaces (spec interacciones): ocurre a la vez que el anterior, o quien espera no recibe retorno.
+        <div className="tour-step-flags">
+          {index > 0 && (
+            <label className="contract-check">
+              <input
+                type="checkbox"
+                checked={!!step.parallel}
+                onChange={(e) => setStepFlags(tourId, index, { parallel: e.target.checked })}
+              />
+              A la vez que el paso anterior
+            </label>
+          )}
+          <label className="contract-check">
+            <input
+              type="checkbox"
+              checked={!!step.timeout}
+              onChange={(e) => setStepFlags(tourId, index, { timeout: e.target.checked })}
+            />
+            Termina en timeout (no llega respuesta)
+          </label>
+        </div>
+      )}
     </>
   );
 }

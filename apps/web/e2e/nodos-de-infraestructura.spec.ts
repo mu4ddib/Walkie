@@ -32,9 +32,10 @@ test('crear recursos desde «Recurso» (8): teclado, clic y arrastre; la conexi�
   await expect(menu).toBeHidden();
   await expect(kindOf(page, 1)).toHaveText(/Cola/);
 
-  // Servicio → cola: la conexión nace como evento.
+  // Servicio → cola: la conexión nace como evento (publica, spec interacciones).
   await connect(page, 0, 1);
-  await expect(page.locator('.kind-edge-label').first()).toHaveText('emite');
+  await expect(page.locator('.kind-edge-label').first()).toHaveText('publica');
+  await expect(page.locator('.react-flow__edge').first().locator('.kind-edge')).toHaveClass(/kind-event/);
 
   // Tecla 8: la lista de subtipos; flechas y Enter eligen (Bucket, Función…).
   await page.keyboard.press('Escape');

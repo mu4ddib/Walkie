@@ -24,9 +24,9 @@ test('crear, dibujar, guardar y recargar: el lienzo vuelve idéntico', async ({ 
   // Criterio 5: tipo por defecto según el par, y cambiarlo.
   await connect(page, 0, 1);
   await connect(page, 1, 2);
-  await expect(page.locator('.kind-edge-label')).toHaveText(['llama', 'lee']);
+  await expect(page.locator('.kind-edge-label')).toHaveText(['llama', 'consulta']);
   await page.locator('.kind-edge-label').nth(1).click();
-  await page.getByLabel('Tipo de conexión').selectOption('writes');
+  await page.getByLabel('Operación de la conexión', { exact: true }).selectOption('db.write');
   await page.locator('.react-flow__pane').click({ position: { x: 600, y: 500 } });
   await expect(page.locator('.kind-edge-label')).toHaveText(['llama', 'escribe']);
 

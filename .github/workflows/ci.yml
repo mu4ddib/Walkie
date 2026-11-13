@@ -24,6 +24,9 @@ jobs:
             done
             npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv compile --spec=draft2020 -c ajv-formats -s "$schema" "${refs[@]}"
           done
+      - name: Validar el catálogo de operaciones
+        # Datos compartidos por la web y la API (spec interacciones, ADR-0011).
+        run: npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s packages/schema/walkie-operations.schema.json -d packages/schema/walkie-operations.json
 
   api:
     runs-on: ubuntu-latest

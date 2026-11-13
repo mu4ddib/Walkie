@@ -985,6 +985,9 @@ div.pixel-node-image {
 }
 
 .kind-edge-label select {
+  /* Del ancho de la operación elegida, no de la opción más larga: si no, el selector tapa las cajas. */
+  field-sizing: content;
+  max-width: 180px;
   font: inherit;
   padding: 0;
   border: 0;
@@ -2202,4 +2205,59 @@ div.pixel-node-image {
 .module-node-actions,
 .module-node-popover {
   pointer-events: all;
+}
+
+/* Operaciones sugeridas al crear una conexión (spec interacciones): se elige con un clic o se ignora. */
+.canvas-hint.canvas-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  border: 2px solid var(--dune-300);
+  border-radius: var(--radius-m);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-float);
+  text-align: left;
+  pointer-events: auto;
+}
+
+.canvas-suggest .pixel-button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.canvas-suggest .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
+.canvas-suggest .pixel-button[aria-pressed='true'] {
+  border-color: var(--ibad);
+  background: var(--ibad-tint);
+}
+
+/* Un retorno de error se lee como error, sin depender solo del color: también dice «error». */
+.kind-edge-label[data-error] {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Paso que termina en timeout (spec interacciones): quien espera se marca y el pulso no llega al destino. */
+.react-flow__node.flow-timeout .pixel-node {
+  outline: 3px dashed var(--warn);
+  outline-offset: 4px;
+}
+
+.react-flow__edge.flow-edge-active.flow-edge-timeout .kind-edge,
+.react-flow__edge.flow-edge-active.flow-edge-timeout .kind-edge-flow {
+  stroke: var(--warn) !important;
+}
+
+.react-flow__edge.flow-edge-active.flow-edge-timeout .kind-edge {
+  stroke-dasharray: 6 6;
+}
+
+.flow-timeout-note {
+  color: var(--stone-700);
 }

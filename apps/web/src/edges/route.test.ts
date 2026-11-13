@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Port, Rect } from './ports';
-import { defaultRoute, polylinePath, routeAround, segmentHits, simplify, type Point } from './route';
+import { defaultRoute, polylinePath, routeAround, routeCacheSize, segmentHits, simplify, type Point } from './route';
 
 const right = (x: number, y: number): Port => ({ x, y, side: 'right' });
 const left = (x: number, y: number): Port => ({ x, y, side: 'left' });
@@ -80,5 +80,22 @@ describe('polylinePath y simplify', () => {
       { x: 100, y: 0 },
       { x: 100, y: 50 },
     ]);
+  });
+});
+
+describe('caché de rodeos (spec interacciones: el lienzo no repite el A* en cada edición)', () => {
+  it('los mismos extremos y cajas dan el mismo camino sin buscarlo de nuevo; una copia que se puede invertir', () => {
+    const source = { x: 0, y: 50, side: 'right' as const };
+    const target = { x: 400, y: 50, side: 'left' as const };
+    const box = [{ x: 150, y: 0, w: 100, h: 100 }];
+    const first = routeAround(source, target, box)!;
+    const size = routeCacheSize();
+    first.reverse();
+    const second = routeAround(source, target, box)!;
+    expect(routeCacheSize()).toBe(size);
+    expect(second[0]).toMatchObject({ x: source.x, y: source.y });
+    // Otra caja cerca: otro camino.
+    routeAround(source, target, [...box, { x: 150, y: 120, w: 100, h: 100 }]);
+    expect(routeCacheSize()).toBe(size + 1);
   });
 });

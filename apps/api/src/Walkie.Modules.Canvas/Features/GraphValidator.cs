@@ -244,6 +244,11 @@ internal sealed class GraphValidator
                     errors[$"/tours/{tour.Name}/steps/{i}/nodeId"] = ["El paso apunta a un nodo que no existe."];
                 }
 
+                if (step.TryGetProperty("timeout", out _) && !step.TryGetProperty("edgeId", out _))
+                {
+                    errors[$"/tours/{tour.Name}/steps/{i}/timeout"] = ["Solo un paso de conexión termina en timeout."];
+                }
+
                 if (step.TryGetProperty("edgeId", out var edgeId) && !edgeIds.Contains(edgeId.GetString()!))
                 {
                     errors[$"/tours/{tour.Name}/steps/{i}/edgeId"] = ["El paso apunta a una conexión que no existe."];
@@ -354,16 +359,53 @@ internal sealed class GraphValidator
             }
         }
 
+        // Un retorno responde a cualquier operación que no sea otro retorno (spec interacciones, ADR-0011): una consulta,
+        // una invocación, una publicación… no solo a una solicitud HTTP. Una navegación o una relación estructural no tienen.
         if (edge.Value.TryGetProperty("replyTo", out var replyTo))
         {
             var id = replyTo.GetString()!;
-            var isRequest = id != edge.Name
+            var isOperation = id != edge.Name
                 && edges.TryGetProperty(id, out var request)
-                && request.GetProperty("kind").GetString() == "request";
-            if (!isRequest)
+                && request.GetProperty("kind").GetString() is not ("response" or "navigation" or "uses");
+            if (!isOperation)
             {
-                errors[$"/edges/{edge.Name}/replyTo"] = ["La respuesta apunta a una solicitud que no existe."];
+                errors[$"/edges/{edge.Name}/replyTo"] = ["El retorno apunta a una operación que no existe."];
             }
+        }
+
+        if (edge.Value.TryGetProperty("correlatesWith", out var correlates))
+        {
+            var id = correlates.GetString()!;
+            if (id == edge.Name || !edges.TryGetProperty(id, out _))
+            {
+                errors[$"/edges/{edge.Name}/correlatesWith"] = ["La respuesta asíncrona apunta a una operación que no existe."];
+            }
+        }
+
+        var kind = edge.Value.GetProperty("kind").GetString();
+        var isReturn = kind == "response";
+        foreach (var onlyReturn in new[] { "result", "stream" })
+        {
+            if (edge.Value.TryGetProperty(onlyReturn, out _) && !isReturn)
+            {
+                errors[$"/edges/{edge.Name}/{onlyReturn}"] = ["Solo un retorno (responde) lleva su tipo de resultado."];
+            }
+        }
+
+        foreach (var notReturn in new[] { "exchange", "operation" })
+        {
+            if (edge.Value.TryGetProperty(notReturn, out _) && isReturn)
+            {
+                errors[$"/edges/{edge.Name}/{notReturn}"] = ["Un retorno no tiene operación propia: la define la operación a la que responde."];
+            }
+        }
+
+        var operation = edge.Value.TryGetProperty("operation", out var op) ? op.GetString() : null;
+        if (operation == "custom" != edge.Value.TryGetProperty("customOperation", out _))
+        {
+            errors[$"/edges/{edge.Name}/customOperation"] = [operation == "custom"
+                ? "Una operación personalizada necesita su nombre."
+                : "Solo una operación personalizada lleva nombre propio."];
         }
     }
 

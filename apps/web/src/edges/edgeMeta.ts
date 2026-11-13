@@ -1,5 +1,6 @@
 import type { Edge, Http } from '../schema/walkie-graph';
-import type { EdgeKind, NodeType } from '../store/graphStore';
+import type { EdgeKind } from '../store/graphStore';
+import { RESULT_LABELS, operationVerb, receivesCalls, returnVerb, type Family } from '../interactions/operations';
 
 /** Tipos que el usuario puede elegir (spec, criterio 5). `uses` solo aparece como valor por defecto. */
 export const SELECTABLE_KINDS: EdgeKind[] = ['navigation', 'request', 'response', 'event', 'reads', 'writes'];
@@ -28,29 +29,23 @@ export const KIND_STYLES: Record<EdgeKind, { marker: 'closed' | 'open' | 'none';
   uses: { marker: 'none', description: 'línea continua clara, sin punta' },
 };
 
-/** Tipos que reciben llamadas (API, servicio, base de datos): de ellos sale una respuesta, a ellos llega una solicitud. */
-const CALLEE_TYPES: readonly NodeType[] = ['api', 'service', 'database'];
-const isCallee = (type: NodeType | undefined) => !!type && CALLEE_TYPES.includes(type);
 
 /**
  * ¿Hay que invertir el sentido al cambiar el tipo? Una respuesta sale de quien fue llamado y una solicitud llega a
  * él: si los tipos de los extremos lo contradicen, se invierte (pantalla → API marcada como "responde" pasa a
  * API → pantalla). Si los tipos no deciden (API ↔ servicio), solicitud ↔ respuesta se invierten entre sí.
  */
-export function shouldReverse(
-  prev: EdgeKind,
-  next: EdgeKind,
-  fromType: NodeType | undefined,
-  toType: NodeType | undefined,
-): boolean {
+export function shouldReverse(prev: EdgeKind, next: EdgeKind, fromFamily: Family, toFamily: Family): boolean {
   if (prev === next || (next !== 'request' && next !== 'response')) return false;
-  const from = isCallee(fromType);
-  const to = isCallee(toType);
+  // Quien recibe llamadas (API, servicio, base, caché, almacenamiento, broker): de él sale el retorno.
+  const from = receivesCalls(fromFamily);
+  const to = receivesCalls(toFamily);
   if (from !== to) return next === 'response' ? to : from;
   return (prev === 'request' || prev === 'response') && prev !== next;
 }
 
-type EdgeLike = Pick<Edge, 'kind' | 'label' | 'when' | 'status' | 'request'>;
+type EdgeLike = Pick<Edge, 'kind' | 'label' | 'when' | 'status' | 'request'> &
+  Partial<Pick<Edge, 'operation' | 'customOperation' | 'result' | 'exchange' | 'stream'>>;
 
 /**
  * Código HTTP de una respuesta: `status`, o un `when` que solo es un código (así se documentaba antes de tener
@@ -66,6 +61,11 @@ export function responseStatus(edge: EdgeLike): number | undefined {
 
 /** `POST /ruta` de una solicitud: lo propio del paso (`edge.request`) o, si falta, el contrato de la API destino. */
 export function endpointText(edge: EdgeLike, targetHttp?: Http): string {
+  // Con operación explícita: el endpoint solo en HTTP; en gRPC, servicio/método.
+  if (edge.operation && edge.operation !== 'http.request') {
+    const grpc = edge.exchange?.grpc;
+    return grpc?.service || grpc?.method ? [grpc.service, grpc.method].filter(Boolean).join('/') : '';
+  }
   if (edge.kind !== 'request') return '';
   const method = edge.request?.method ?? targetHttp?.method;
   const path = edge.request?.path ?? targetHttp?.path;
@@ -87,11 +87,19 @@ export interface EdgeDisplay {
   marker: 'closed' | 'open' | 'none';
   /** Rama de una decisión. */
   branch?: boolean;
+  /** Retorno de error (se distingue en el lienzo). */
+  error?: boolean;
 }
 
 export function edgeDisplay(
   edge: EdgeLike,
-  context: { branchLabel?: string; targetHttp?: Http; interfaceName?: string } = {},
+  context: {
+    branchLabel?: string;
+    targetHttp?: Http;
+    interfaceName?: string;
+    /** Operación a la que responde un retorno (su verbo sale de ella). */
+    parent?: Pick<Edge, 'operation' | 'pattern'>;
+  } = {},
 ): EdgeDisplay {
   const style = KIND_STYLES[edge.kind];
   if (context.branchLabel) {
@@ -108,14 +116,27 @@ export function edgeDisplay(
   const code = responseStatus(edge);
   const when = code !== undefined && edge.status === undefined ? undefined : edge.when;
   const endpoint = edge.label ? '' : endpointText(edge, context.targetHttp);
+  // El verbo sale de la operación (spec interacciones, ADR-0011); sin ella, del tipo de siempre.
+  const main =
+    operationVerb(edge) ??
+    (edge.kind === 'response' ? returnVerb(context.parent, edge.result?.type) : undefined) ??
+    KIND_LABELS[edge.kind];
+  // Un retorno sin código HTTP dice qué es: resultado vacío, filas afectadas, confirmación, miss…
+  const result =
+    edge.kind === 'response' && edge.result && code === undefined && edge.result.type !== 'error'
+      ? [RESULT_LABELS[edge.result.type], edge.result.code].filter(Boolean).join(' ')
+      : edge.kind === 'response' && edge.result?.type === 'error'
+        ? edge.result.code
+        : undefined;
   return {
-    main: KIND_LABELS[edge.kind],
+    main: edge.stream ? `${main} ⋯` : main,
     // A la interfaz de un módulo sin endpoint (un evento, una dependencia), su nombre (spec modulos-compartidos).
-    detail: edge.label ?? (endpoint || context.interfaceName || undefined),
+    detail: edge.label ?? (endpoint || context.interfaceName || result || undefined),
     mono: !edge.label && !!endpoint,
     code,
     when,
     marker: style.marker,
+    error: edge.result?.type === 'error' || undefined,
   };
 }
 
@@ -129,16 +150,136 @@ export function statusTone(code: number): 'ok' | 'info' | 'error' {
   return code >= 400 ? 'error' : code >= 300 || code < 200 ? 'info' : 'ok';
 }
 
+/** Escenario de una interacción: un retorno alternativo o el timeout de quien espera. */
+export interface Scenario {
+  /** Id del retorno, o `TIMEOUT_SCENARIO`. */
+  id: string;
+  label: string;
+}
+
+export const TIMEOUT_SCENARIO = 'timeout';
+
+function returnLabel(r: Edge): string {
+  const code = responseStatus(r);
+  const head = code !== undefined ? String(code) : r.result ? `${RESULT_LABELS[r.result.type]}${r.result.code ? ` ${r.result.code}` : ''}` : 'retorno';
+  const text = r.label ?? r.result?.description ?? r.outcome;
+  return text ? `${head} · ${text}` : head;
+}
+
 /**
- * Conexiones que recorre "Previsualizar interacción" a partir de `edgeId`, en orden: una solicitud y luego sus
- * respuestas (la ida y la vuelta); desde una respuesta, su solicitud y ella; cualquier otra, sola.
+ * Escenarios que se pueden elegir al previsualizar una operación (spec interacciones, criterio 12): cada retorno
+ * alternativo (los mensajes de un stream no son alternativas: van siempre, en orden) y, si espera respuesta, el timeout.
  */
-export function interactionEdges(edges: Record<string, Edge>, edgeId: string): string[] {
+export function scenariosOf(edges: Record<string, Edge>, edgeId: string): Scenario[] {
+  const edge = edges[edgeId];
+  if (!edge || edge.kind === 'response') return [];
+  const returns = Object.values(edges).filter((e) => e.kind === 'response' && e.replyTo === edgeId);
+  const alternatives = returns.filter((r) => !r.stream);
+  if (returns.length === 0) return [];
+  return [
+    ...alternatives.map((r) => ({ id: r.id, label: returnLabel(r) })),
+    ...(alternatives.length === 0 ? [{ id: '', label: 'Flujo completo' }] : []),
+    { id: TIMEOUT_SCENARIO, label: 'Timeout (no llega respuesta)' },
+  ];
+}
+
+/** Un tramo de «Previsualizar interacción»: recorrer una conexión, esperar un retorno o terminar por timeout. */
+export interface PreviewStep {
+  edgeId: string;
+  /** Espera de un retorno (ms del `timeoutMs` de la operación, o `undefined` sin esperar). */
+  wait?: number;
+  /** Intento (desde 1) y total de intentos de una operación que termina en timeout. */
+  attempt?: number;
+  attempts?: number;
+  /** Último tramo: quien espera termina por timeout. */
+  timeout?: boolean;
+}
+
+/** Hasta qué profundidad se siguen las llamadas internas (Pantalla → API → Servicio → BD…). */
+const CHAIN_DEPTH = 4;
+
+/**
+ * Llamadas síncronas que hace el destino de una operación mientras quien llamó espera (spec interacciones): las
+ * operaciones `request` que salen de él, en su orden, sin volver por donde se vino.
+ */
+export function innerCalls(edges: Record<string, Edge>, edgeId: string): Edge[] {
+  const edge = edges[edgeId];
+  if (!edge || edge.kind !== 'request') return [];
+  return Object.values(edges).filter((e) => e.from === edge.to && e.kind === 'request' && e.id !== edgeId && e.to !== edge.from);
+}
+
+/**
+ * Tramos de «Previsualizar interacción» a partir de `edgeId`, en orden: la operación, lo que ocurre dentro de su destino
+ * (con `chain`, cada llamada interna con su primer escenario, Pantalla → API → BD → API → Pantalla), los mensajes de
+ * su stream, el retorno del escenario elegido y las respuestas correlacionadas. Con el escenario «timeout», cada
+ * intento (1 + `exchange.retries`) espera su `timeoutMs` y el último termina por timeout. Desde un retorno, su
+ * operación con ese escenario.
+ */
+export function previewSteps(
+  edges: Record<string, Edge>,
+  edgeId: string,
+  scenario?: string,
+  options: { chain?: boolean } = {},
+): PreviewStep[] {
   const edge = edges[edgeId];
   if (!edge) return [];
-  if (edge.kind === 'request') {
-    return [edgeId, ...Object.values(edges).filter((e) => e.kind === 'response' && e.replyTo === edgeId).map((e) => e.id)];
+  if (edge.kind === 'response') {
+    return edge.replyTo && edges[edge.replyTo]
+      ? previewSteps(edges, edge.replyTo, edgeId, options)
+      : [{ edgeId }];
   }
-  if (edge.kind === 'response' && edge.replyTo && edges[edge.replyTo]) return [edge.replyTo, edgeId];
-  return [edgeId];
+  const visited = new Set<string>();
+  const expand = (id: string, chosenScenario: string | undefined, depth: number): PreviewStep[] => {
+    visited.add(id);
+    const op = edges[id]!;
+    const inner =
+      options.chain && depth < CHAIN_DEPTH
+        ? innerCalls(edges, id)
+            .filter((e) => !visited.has(e.id))
+            .flatMap((e) => expand(e.id, undefined, depth + 1))
+        : [];
+    const returns = Object.values(edges).filter((e) => e.kind === 'response' && e.replyTo === id);
+    const replies = Object.values(edges)
+      .filter((e) => e.correlatesWith === id && e.id !== id)
+      .map((e): PreviewStep => ({ edgeId: e.id }));
+    if (chosenScenario === TIMEOUT_SCENARIO) {
+      const retries = op.exchange?.retries ?? 0;
+      const attempts = retries + 1;
+      const wait = op.exchange?.timeoutMs;
+      return Array.from({ length: attempts }, (_, i): PreviewStep[] => [
+        { edgeId: id, attempt: i + 1, attempts },
+        ...(i === 0 ? inner : []),
+        { edgeId: id, wait: wait ?? 0, attempt: i + 1, attempts, timeout: i === attempts - 1 || undefined },
+      ]).flat();
+    }
+    const stream = returns.filter((r) => r.stream).map((r): PreviewStep => ({ edgeId: r.id }));
+    const alternatives = returns.filter((r) => !r.stream);
+    const chosen = alternatives.find((r) => r.id === chosenScenario) ?? alternatives[0];
+    return [{ edgeId: id }, ...inner, ...stream, ...(chosen ? [{ edgeId: chosen.id }] : []), ...replies];
+  };
+  return expand(edgeId, scenario, 0);
+}
+
+/** Texto de la pista durante una previsualización: el tramo, la espera de un retorno o el timeout. */
+export function previewHint(index: number, steps: PreviewStep[], from: string, to: string, text: string): string {
+  const step = steps[index]!;
+  const count = steps.length > 1 ? ` · ${index + 1} de ${steps.length}` : '';
+  const attempt = step.attempts && step.attempts > 1 ? ` (intento ${step.attempt} de ${step.attempts})` : '';
+  if (step.wait !== undefined) {
+    const time = step.wait > 0 ? ` · ${step.wait.toLocaleString('es')} ms` : '';
+    return step.timeout
+      ? `Previsualizando${count}: «${from}» no recibe respuesta de «${to}»${time}${attempt}: termina por timeout · Esc termina`
+      : `Previsualizando${count}: «${from}» espera respuesta de «${to}»${time}${attempt}: no llega, reintenta · Esc termina`;
+  }
+  return `Previsualizando${count}: ${from} → ${to} (${text})${attempt} · Esc termina`;
+}
+
+/** Conexiones distintas que recorre una previsualización, en el orden en que aparecen por primera vez. */
+export function interactionEdges(
+  edges: Record<string, Edge>,
+  edgeId: string,
+  scenario?: string,
+  options: { chain?: boolean } = {},
+): string[] {
+  return [...new Set(previewSteps(edges, edgeId, scenario, options).map((step) => step.edgeId))];
 }

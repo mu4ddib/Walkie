@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 import type { CatalogItem, Feature, ModuleInterfaceSummary, ModuleSummary, NewCatalogItem } from '../api/client';
 import type { InterfaceRef, Node } from '../schema/walkie-graph';
 import type { NodeType } from '../store/graphStore';
+import { familyOf, type Family } from '../interactions/operations';
 
 /**
  * Catálogo de la app visto desde un lienzo: los nodos `ref` se dibujan con los datos actuales
@@ -134,4 +135,18 @@ export function effectiveResource(node: Node, items: Record<string, CatalogItem>
 /** Tipo con el que se comporta un nodo: un `ref` actúa como su elemento (criterio 9). */
 export function effectiveType(node: Node, items: Record<string, CatalogItem>): NodeType {
   return refTarget(node, items)?.type ?? node.type;
+}
+
+/**
+ * Familia del extremo de una conexión (spec interacciones): API, servicio, base, caché, almacenamiento, mensajería…
+ * Un `ref` como su elemento, un recurso por su subtipo y un módulo por la caja interna de su interfaz.
+ */
+export function endFamily(
+  node: Node | undefined,
+  ref: InterfaceRef | undefined,
+  items: Record<string, CatalogItem>,
+  modules: Record<string, ModuleSummary> | undefined,
+): Family {
+  if (!node) return 'other';
+  return familyOf(endType(node, ref, items, modules), node.type === 'module' ? undefined : effectiveResource(node, items)?.kind);
 }

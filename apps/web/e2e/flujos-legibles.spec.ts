@@ -85,7 +85,7 @@ test('solicitud y respuestas: tipo, etiqueta y sentido concuerdan; éxito y erro
 
   // Una conexión pantalla → API marcada como "responde" no se queda apuntando a la API.
   await labels(page).click();
-  await inspector(page).getByLabel('Tipo', { exact: true }).selectOption('response');
+  await inspector(page).getByLabel('Operación', { exact: true }).selectOption({ label: 'Es el retorno de otra operación' });
   await expect(edge).toHaveAttribute('aria-label', `Edge from ${apiId} to ${screenId}`);
   await expect(edge.locator('.kind-edge')).toHaveClass(/kind-response/);
   await expect(inspector(page).getByRole('status')).toContainText('Se invirtió el sentido');
@@ -95,7 +95,7 @@ test('solicitud y respuestas: tipo, etiqueta y sentido concuerdan; éxito y erro
   // La etiqueta personalizada sobrevive a invertir el sentido y a cambiar el tipo.
   await labels(page).click();
   await inspector(page).getByLabel('Etiqueta').fill('Alta');
-  await inspector(page).getByLabel('Tipo', { exact: true }).selectOption('request');
+  await inspector(page).getByRole('button', { name: 'No es un retorno: convertir en operación' }).click();
   await expect(edge).toHaveAttribute('aria-label', `Edge from ${screenId} to ${apiId}`);
   await clearSelection(page);
   await expect(labels(page)).toHaveText('llama · Alta');
@@ -113,7 +113,7 @@ test('solicitud y respuestas: tipo, etiqueta y sentido concuerdan; éxito y erro
   await inspector(page).getByRole('button', { name: '+ Añadir respuesta' }).click();
   await inspector(page).getByLabel('Código HTTP').fill('201');
   await inspector(page).getByLabel('Qué ocurre después').fill('Se muestra la confirmación');
-  await inspector(page).getByRole('button', { name: 'Ir a la solicitud' }).click();
+  await inspector(page).getByRole('button', { name: 'Ir a la operación' }).click();
   await inspector(page).getByRole('button', { name: '+ Añadir respuesta' }).click();
   await inspector(page).getByLabel('Código HTTP').fill('409');
   await inspector(page).getByLabel('Etiqueta').fill('Correo ya registrado');
@@ -133,15 +133,15 @@ test('solicitud y respuestas: tipo, etiqueta y sentido concuerdan; éxito y erro
     await expect(inspector(page).locator('.edge-summary-label')).toContainText(summary.replace(/(\d+)/, '$1'));
   }
 
-  // Previsualizar: primero la ida, luego la vuelta.
+  // Previsualizar: primero la ida, luego la vuelta del escenario elegido (por defecto, el primero).
   await clearSelection(page);
   await labels(page).first().click();
   await inspector(page).getByRole('button', { name: /Previsualizar interacción/ }).click();
   const edges = page.locator('.react-flow__edge');
   await expect(edges.nth(0)).toHaveClass(/edge-preview-active/);
-  await expect(page.locator('.canvas-hint')).toContainText('1 de 3: Creación de cuenta → API Usuarios');
+  await expect(page.locator('.canvas-hint')).toContainText('1 de 2: Creación de cuenta → API Usuarios');
   await expect(edges.nth(1)).toHaveClass(/edge-preview-active/);
-  await expect(page.locator('.canvas-hint')).toContainText('2 de 3: API Usuarios → Creación de cuenta (responde 201)');
+  await expect(page.locator('.canvas-hint')).toContainText('2 de 2: API Usuarios → Creación de cuenta (responde 201)');
   await page.keyboard.press('Escape');
   await expect(page.locator('.canvas-hint')).toHaveCount(0);
 

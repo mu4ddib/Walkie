@@ -31,7 +31,7 @@ test('recorrido completo del espacio de trabajo y capturas en tres anchos', asyn
   await dropNode(page, 'Base de datos', 420, 440);
   await connect(page, 0, 1);
   await connect(page, 1, 2);
-  await expect(page.locator('.kind-edge-label')).toHaveText(['llama', 'lee']);
+  await expect(page.locator('.kind-edge-label')).toHaveText(['llama', 'consulta']);
 
   // Documentación técnica de la API y de la base.
   const inspector = page.getByRole('complementary', { name: 'Propiedades' });

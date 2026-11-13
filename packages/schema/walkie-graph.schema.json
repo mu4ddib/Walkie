@@ -163,7 +163,7 @@
         "when": { "type": "string", "maxLength": 60, "description": "Condición que activa la conexión (ej. la de una rama de decisión). El código de una respuesta va en status" },
         "branch": { "$ref": "#/$defs/id", "description": "Salida de la decisión de origen (id en branches del nodo from); su etiqueta se muestra en la conexión" },
         "status": { "type": "integer", "minimum": 100, "maximum": 599, "description": "Código HTTP de una respuesta (kind response)" },
-        "replyTo": { "$ref": "#/$defs/id", "description": "Solicitud (conexión request) a la que responde una respuesta" },
+        "replyTo": { "$ref": "#/$defs/id", "description": "Operación a la que responde un retorno: cualquier conexión que no sea un retorno, una navegación ni una relación estructural (spec interacciones)" },
         "outcome": { "type": "string", "maxLength": 500, "description": "Qué ocurre después de una respuesta" },
         "request": {
           "type": "object",
@@ -204,8 +204,122 @@
           }
         },
         "example": { "type": "string", "maxLength": 10000, "description": "Ejemplo de payload de esta interacción; el contrato reutilizable vive en la API" },
+        "operation": {
+          "enum": [
+            "http.request",
+            "service.invoke",
+            "db.query", "db.insert", "db.update", "db.delete", "db.write", "db.procedure",
+            "cache.get", "cache.set", "cache.delete",
+            "storage.read", "storage.write", "storage.list", "storage.delete",
+            "message.publish", "message.deliver", "message.consume", "message.reply",
+            "stream.open", "stream.send", "stream.receive", "stream.close",
+            "relation.uses", "relation.depends",
+            "navigation",
+            "custom"
+          ],
+          "description": "Operación de la interacción (spec interacciones, ADR-0011): fuente de verdad del verbo, los retornos y los campos. Sin ella, la conexión se interpreta por su kind (lienzos anteriores). En un retorno no va: lo define la operación a la que responde"
+        },
+        "customOperation": { "type": "string", "minLength": 1, "maxLength": 60, "description": "Nombre de la operación personalizada (solo con operation custom)" },
+        "pattern": {
+          "enum": ["request-response", "one-way", "pub-sub", "stream"],
+          "description": "Patrón de intercambio: solicitud/respuesta, envío unidireccional, publicación/suscripción o streaming. Sin él, el de la operación"
+        },
+        "technology": { "type": "string", "maxLength": 60, "description": "Tecnología o protocolo, ej. HTTP, gRPC, PostgreSQL, Redis, AMQP" },
+        "exchange": { "$ref": "#/$defs/exchange" },
+        "result": { "$ref": "#/$defs/result" },
+        "stream": { "type": "boolean", "description": "Retorno que es un mensaje de una secuencia (stream) y no un escenario alternativo" },
+        "correlatesWith": { "$ref": "#/$defs/id", "description": "Respuesta asíncrona: la operación original a la que corresponde (por clave de correlación y canal de respuesta), aunque sus participantes sean otros" },
         "fromInterface": { "$ref": "#/$defs/interfaceRef", "description": "Interfaz del módulo de origen (solo si from es un nodo module); sin ella, sale del módulo completo" },
         "toInterface": { "$ref": "#/$defs/interfaceRef", "description": "Interfaz del módulo de destino (solo si to es un nodo module); sin ella, llega al módulo completo" }
+      }
+    },
+    "exchange": {
+      "type": "object",
+      "description": "Detalle técnico de una interacción (spec interacciones): lo que corresponda según su operación",
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string", "maxLength": 2000 },
+        "command": {
+          "type": "object",
+          "required": ["language", "text"],
+          "additionalProperties": false,
+          "description": "Query, procedimiento, comando o descripción del acceso (ej. vía ORM)",
+          "properties": {
+            "language": { "enum": ["sql", "procedure", "command", "orm", "text"] },
+            "text": { "type": "string", "maxLength": 10000 }
+          }
+        },
+        "params": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+              "type": { "type": "string", "maxLength": 60 },
+              "example": { "type": "string", "maxLength": 500 }
+            }
+          }
+        },
+        "entities": { "type": "array", "maxItems": 50, "items": { "type": "string", "minLength": 1, "maxLength": 120 } },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Contrato del resultado esperado",
+          "properties": {
+            "description": { "type": "string", "maxLength": 500 },
+            "fields": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/field" } },
+            "example": { "type": "string", "maxLength": 10000 }
+          }
+        },
+        "errors": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "required": ["code"],
+            "additionalProperties": false,
+            "properties": {
+              "code": { "type": "string", "minLength": 1, "maxLength": 60 },
+              "description": { "type": "string", "maxLength": 500 }
+            }
+          }
+        },
+        "timeoutMs": { "type": "integer", "minimum": 0, "maximum": 86400000, "description": "Cuánto espera quien llama antes de darlo por perdido" },
+        "retries": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Cuántas veces reintenta quien llama tras un timeout (la previsualización simula cada intento)" },
+        "retry": { "type": "string", "maxLength": 500, "description": "Política de reintentos documentada" },
+        "channel": { "type": "string", "maxLength": 200, "description": "Cola, tópico o canal" },
+        "message": { "type": "string", "maxLength": 120, "description": "Tipo o nombre del mensaje" },
+        "correlationKey": { "type": "string", "maxLength": 120, "description": "Clave que asocia una respuesta asíncrona" },
+        "replyChannel": { "type": "string", "maxLength": 200, "description": "Canal por el que llega la respuesta asíncrona" },
+        "acks": {
+          "type": "array",
+          "maxItems": 2,
+          "items": { "enum": ["broker", "consumer"] },
+          "description": "Confirmaciones configuradas: del broker al productor y del consumidor al broker"
+        },
+        "grpc": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "service": { "type": "string", "maxLength": 200 },
+            "method": { "type": "string", "maxLength": 200 }
+          }
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "description": "Qué es un retorno (solo en una conexión que responde a otra): éxito, resultado vacío, filas afectadas, confirmación, hit o miss de caché, contenido, error, mensaje de un stream o fin",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["success", "empty", "affected", "ack", "nack", "hit", "miss", "content", "error", "message", "end"] },
+        "code": { "type": "string", "maxLength": 60, "description": "Código del retorno fuera de HTTP (ej. SQLSTATE, estado gRPC); el HTTP va en status" },
+        "description": { "type": "string", "maxLength": 500 },
+        "fields": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/field" } }
       }
     },
     "interfaceRef": {
@@ -484,7 +598,9 @@
                   "label": { "type": "string", "maxLength": 60 }
                 }
               },
-              "note": { "type": "string", "maxLength": 500, "description": "Lo que el guía cuenta en el paso (descripción del paso)" }
+              "note": { "type": "string", "maxLength": 500, "description": "Lo que el guía cuenta en el paso (descripción del paso)" },
+              "parallel": { "type": "boolean", "description": "Ocurre a la vez que el paso anterior (ej. entregas a varios consumidores); sin él, en orden" },
+              "timeout": { "type": "boolean", "description": "Quien espera no recibe retorno: el paso termina en timeout (solo en pasos de conexión)" }
             }
           }
         }

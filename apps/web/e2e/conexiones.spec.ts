@@ -26,7 +26,9 @@ test('conexiones con movimiento: interruptor, trazo por tipo y tour', async ({ p
 
   // Un evento entre API y servicio: su propio trazo (criterio 22).
   await page.locator('.kind-edge-label').nth(1).click();
-  await page.getByRole('complementary', { name: 'Propiedades' }).getByLabel('Tipo', { exact: true }).selectOption('event');
+  const props = page.getByRole('complementary', { name: 'Propiedades' });
+  await props.getByLabel('Operación', { exact: true }).selectOption('service.invoke');
+  await props.getByLabel('Patrón').selectOption('one-way');
   await expect(edges.nth(1).locator('.kind-edge')).toHaveClass(/kind-event/);
   await expect(edges.nth(0).locator('.kind-edge')).toHaveAttribute('marker-end', 'url(#walkie-arrow-closed)');
 

@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-operations.schema.json",
+  "title": "WalkieOperationsCatalog",
+  "description": "Única definición de las operaciones (spec interacciones, ADR-0011): la web la genera en src/schema/walkie-operations.ts y la API la embebe para el export. Los ids son los del enum `operation` de walkie-graph.",
+  "type": "object",
+  "required": [
+    "results",
+    "patterns",
+    "technologies",
+    "operations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "results": {
+      "type": "object",
+      "description": "Texto de cada tipo de retorno",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "patterns": {
+      "type": "object",
+      "description": "Nombre de cada patrón de intercambio",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "technologies": {
+      "type": "object",
+      "description": "Tecnologías sugeridas por familia de componentes",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/operation"
+      }
+    }
+  },
+  "$defs": {
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "verb",
+        "group",
+        "patterns",
+        "returns",
+        "sections"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Id del enum `operation` del grafo"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Nombre en el inspector («Consultar»)"
+        },
+        "verb": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Verbo en el lienzo («consulta»)"
+        },
+        "group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "patterns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "request-response",
+              "one-way",
+              "pub-sub",
+              "stream"
+            ]
+          },
+          "description": "El primero es el de por defecto"
+        },
+        "returns": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "action",
+                "verb",
+                "types"
+              ],
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "«Añadir resultado», «Añadir respuesta»…"
+                },
+                "verb": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Verbo del retorno («devuelve»)"
+                },
+                "types": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "success",
+                      "empty",
+                      "affected",
+                      "ack",
+                      "nack",
+                      "hit",
+                      "miss",
+                      "content",
+                      "error",
+                      "message",
+                      "end"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "oneWayReturns": {
+          "type": "boolean",
+          "description": "Admite retorno aunque el patrón sea unidireccional (confirmaciones de mensajería)"
+        },
+        "sections": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "http",
+              "grpc",
+              "command",
+              "params",
+              "entities",
+              "result",
+              "errors",
+              "policy",
+              "messaging",
+              "correlation"
+            ]
+          }
+        },
+        "access": {
+          "enum": [
+            "read",
+            "write"
+          ],
+          "description": "Acceso a datos que implica (para señalar contradicciones)"
+        }
+      }
+    }
+  }
+}

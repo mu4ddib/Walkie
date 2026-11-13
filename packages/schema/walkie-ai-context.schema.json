@@ -155,6 +155,7 @@
               "api-without-contract",
               "api-without-responses",
               "request-without-response",
+              "operation-conflict",
               "response-without-status",
               "isolated-node",
               "branch-without-target",
@@ -332,7 +333,15 @@
         "toInterface": { "type": "string", "description": "Interfaz del módulo de destino a la que llega (spec modulos-compartidos)" },
         "fromInterface": { "type": "string", "description": "Interfaz del módulo de origen de la que sale" },
         "outcome": { "type": "string" },
-        "notes": { "type": "string" }
+        "notes": { "type": "string" },
+        "operation": { "type": "string", "description": "Operación de la conexión (spec interacciones): la fuente de verdad del verbo, ej. db.query" },
+        "operationName": { "type": "string", "description": "Nombre de la operación, ej. «Consultar» o el de una personalizada" },
+        "pattern": { "enum": ["request-response", "one-way", "pub-sub", "stream"] },
+        "technology": { "type": "string" },
+        "exchange": { "type": "object", "description": "Detalle técnico del intercambio, tal como está en el lienzo ($defs/exchange de walkie-graph)" },
+        "result": { "type": "object", "description": "Tipo y código de un retorno ($defs/result de walkie-graph)" },
+        "stream": { "type": "boolean", "description": "El retorno es un mensaje de un flujo (secuencia), no una alternativa" },
+        "correlatesWith": { "type": "string", "description": "Id de la operación original de una respuesta asíncrona" }
       }
     },
     "flow": {
@@ -355,7 +364,9 @@
               "nodeId": { "type": "string" },
               "edgeId": { "type": "string" },
               "note": { "type": "string" },
-              "broken": { "type": "boolean", "description": "La caja o la conexión del paso ya no existe" }
+              "broken": { "type": "boolean", "description": "La caja o la conexión del paso ya no existe" },
+              "parallel": { "type": "boolean", "description": "Ocurre a la vez que el paso anterior (fan-out)" },
+              "timeout": { "type": "boolean", "description": "Quien espera no recibe retorno: el paso termina en timeout" }
             }
           }
         }

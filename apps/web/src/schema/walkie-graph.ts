@@ -352,8 +352,157 @@ export interface Edge {
    * Ejemplo de payload de esta interacción; el contrato reutilizable vive en la API
    */
   example?: string;
+  /**
+   * Operación de la interacción (spec interacciones, ADR-0011): fuente de verdad del verbo, los retornos y los campos. Sin ella, la conexión se interpreta por su kind (lienzos anteriores). En un retorno no va: lo define la operación a la que responde
+   */
+  operation?:
+    | 'http.request'
+    | 'service.invoke'
+    | 'db.query'
+    | 'db.insert'
+    | 'db.update'
+    | 'db.delete'
+    | 'db.write'
+    | 'db.procedure'
+    | 'cache.get'
+    | 'cache.set'
+    | 'cache.delete'
+    | 'storage.read'
+    | 'storage.write'
+    | 'storage.list'
+    | 'storage.delete'
+    | 'message.publish'
+    | 'message.deliver'
+    | 'message.consume'
+    | 'message.reply'
+    | 'stream.open'
+    | 'stream.send'
+    | 'stream.receive'
+    | 'stream.close'
+    | 'relation.uses'
+    | 'relation.depends'
+    | 'navigation'
+    | 'custom';
+  /**
+   * Nombre de la operación personalizada (solo con operation custom)
+   */
+  customOperation?: string;
+  /**
+   * Patrón de intercambio: solicitud/respuesta, envío unidireccional, publicación/suscripción o streaming. Sin él, el de la operación
+   */
+  pattern?: 'request-response' | 'one-way' | 'pub-sub' | 'stream';
+  /**
+   * Tecnología o protocolo, ej. HTTP, gRPC, PostgreSQL, Redis, AMQP
+   */
+  technology?: string;
+  exchange?: Exchange;
+  result?: Result;
+  /**
+   * Retorno que es un mensaje de una secuencia (stream) y no un escenario alternativo
+   */
+  stream?: boolean;
+  /**
+   * UUID v7 generado en el cliente
+   */
+  correlatesWith?: string;
   fromInterface?: InterfaceRef;
   toInterface?: InterfaceRef1;
+}
+/**
+ * Detalle técnico de una interacción (spec interacciones): lo que corresponda según su operación
+ */
+export interface Exchange {
+  description?: string;
+  /**
+   * Query, procedimiento, comando o descripción del acceso (ej. vía ORM)
+   */
+  command?: {
+    language: 'sql' | 'procedure' | 'command' | 'orm' | 'text';
+    text: string;
+  };
+  /**
+   * @maxItems 50
+   */
+  params?: {
+    name: string;
+    type?: string;
+    example?: string;
+  }[];
+  /**
+   * @maxItems 50
+   */
+  entities?: string[];
+  /**
+   * Contrato del resultado esperado
+   */
+  result?: {
+    description?: string;
+    /**
+     * @maxItems 100
+     */
+    fields?: Field[];
+    example?: string;
+  };
+  /**
+   * @maxItems 50
+   */
+  errors?: {
+    code: string;
+    description?: string;
+  }[];
+  /**
+   * Cuánto espera quien llama antes de darlo por perdido
+   */
+  timeoutMs?: number;
+  /**
+   * Cuántas veces reintenta quien llama tras un timeout (la previsualización simula cada intento)
+   */
+  retries?: number;
+  /**
+   * Política de reintentos documentada
+   */
+  retry?: string;
+  /**
+   * Cola, tópico o canal
+   */
+  channel?: string;
+  /**
+   * Tipo o nombre del mensaje
+   */
+  message?: string;
+  /**
+   * Clave que asocia una respuesta asíncrona
+   */
+  correlationKey?: string;
+  /**
+   * Canal por el que llega la respuesta asíncrona
+   */
+  replyChannel?: string;
+  /**
+   * Confirmaciones configuradas: del broker al productor y del consumidor al broker
+   *
+   * @maxItems 2
+   */
+  acks?: [] | ['broker' | 'consumer'] | ['broker' | 'consumer', 'broker' | 'consumer'];
+  grpc?: {
+    service?: string;
+    method?: string;
+  };
+}
+/**
+ * Qué es un retorno (solo en una conexión que responde a otra): éxito, resultado vacío, filas afectadas, confirmación, hit o miss de caché, contenido, error, mensaje de un stream o fin
+ */
+export interface Result {
+  type: 'success' | 'empty' | 'affected' | 'ack' | 'nack' | 'hit' | 'miss' | 'content' | 'error' | 'message' | 'end';
+  /**
+   * Código del retorno fuera de HTTP (ej. SQLSTATE, estado gRPC); el HTTP va en status
+   */
+  code?: string;
+  description?: string;
+  /**
+   * @maxItems 100
+   */
+  fields?: Field[];
 }
 /**
  * Interfaz del módulo de origen (solo si from es un nodo module); sin ella, sale del módulo completo
@@ -413,6 +562,14 @@ export interface Tour {
      * Lo que el guía cuenta en el paso (descripción del paso)
      */
     note?: string;
+    /**
+     * Ocurre a la vez que el paso anterior (ej. entregas a varios consumidores); sin él, en orden
+     */
+    parallel?: boolean;
+    /**
+     * Quien espera no recibe retorno: el paso termina en timeout (solo en pasos de conexión)
+     */
+    timeout?: boolean;
   })[];
 }
 /**

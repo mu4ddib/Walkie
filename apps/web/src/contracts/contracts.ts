@@ -234,3 +234,48 @@ export function edgeDataSummary(d: EdgeData | undefined): string {
   const op = d.operation ? DATA_OPERATION_LABELS[d.operation] : 'Datos';
   return d.entities?.length ? `${op}: ${d.entities.join(', ')}` : op;
 }
+
+/** Detalle técnico de una interacción (spec interacciones); vacío → `undefined`, como los demás editores. */
+export type EdgeExchange = NonNullable<Edge['exchange']>;
+export type EdgeResult = NonNullable<Edge['result']>;
+
+export function normalizeExchange(x: EdgeExchange | undefined): EdgeExchange | undefined {
+  if (!x) return undefined;
+  const command = x.command && text(x.command.text, 10000) ? { language: x.command.language, text: x.command.text.slice(0, 10000) } : undefined;
+  const result = x.result
+    ? compact({ description: text(x.result.description, 500), fields: fields(x.result.fields), example: text(x.result.example, 10000) })
+    : undefined;
+  const timeout = typeof x.timeoutMs === 'number' && Number.isFinite(x.timeoutMs) && x.timeoutMs >= 0 ? Math.round(x.timeoutMs) : undefined;
+  return compact({
+    description: text(x.description, 2000),
+    command,
+    params: x.params
+      ?.map((p) => {
+        const name = text(p.name, LIMITS.name);
+        return name ? compact({ name, type: text(p.type, 60), example: text(p.example, LIMITS.short) }) : undefined;
+      })
+      .filter((p): p is NonNullable<typeof p> => !!p) as EdgeExchange['params'],
+    entities: x.entities?.map((e) => text(e, LIMITS.name)).filter((e): e is string => !!e),
+    result,
+    errors: x.errors
+      ?.map((e) => {
+        const code = text(e.code, 60);
+        return code ? compact({ code, description: text(e.description, 500) }) : undefined;
+      })
+      .filter((e): e is NonNullable<typeof e> => !!e) as EdgeExchange['errors'],
+    timeoutMs: timeout,
+    retries: typeof x.retries === 'number' && Number.isInteger(x.retries) && x.retries >= 0 ? Math.min(x.retries, 10) : undefined,
+    retry: text(x.retry, 500),
+    channel: text(x.channel, 200),
+    message: text(x.message, 120),
+    correlationKey: text(x.correlationKey, 120),
+    replyChannel: text(x.replyChannel, 200),
+    acks: x.acks?.length ? ([...new Set(x.acks)] as EdgeExchange['acks']) : undefined,
+    grpc: x.grpc ? compact({ service: text(x.grpc.service, 200), method: text(x.grpc.method, 200) }) : undefined,
+  });
+}
+
+export function normalizeResult(r: EdgeResult | undefined): EdgeResult | undefined {
+  if (!r) return undefined;
+  return { type: r.type, ...compact({ code: text(r.code, 60), description: text(r.description, 500), fields: fields(r.fields) }) };
+}

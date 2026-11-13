@@ -1,28 +1,19 @@
 import { useId, useState } from 'react';
-import { effectiveType, interfaceTarget, moduleTarget, refTarget, useCanvasCatalog } from '../catalog/catalogContext';
+import { endFamily, interfaceTarget, moduleTarget, refTarget, useCanvasCatalog } from '../catalog/catalogContext';
 import { ModuleEndsSection } from './ModuleEndsSection';
+import { LIMITS, PARAM_LABELS, PARAM_PLACES, normalizeEdgeRequest, type EdgeRequest } from '../contracts/contracts';
 import {
-  DATA_OPERATION_LABELS,
-  DATA_OPERATIONS,
-  LIMITS,
-  PARAM_LABELS,
-  PARAM_PLACES,
-  normalizeEdgeData,
-  normalizeEdgeRequest,
-  splitList,
-  type EdgeData,
-  type EdgeRequest,
-} from '../contracts/contracts';
-import {
-  KIND_LABELS,
-  SELECTABLE_KINDS,
   edgeDisplay,
   endpointText,
+  innerCalls,
   interactionEdges,
   responseStatus,
+  scenariosOf,
   statusTone,
 } from '../edges/edgeMeta';
 import { useChangeEdgeKind } from '../edges/useChangeEdgeKind';
+import { OPERATIONS, effectiveOperation, operationName, patternOf } from '../interactions/operations';
+import { ExchangeSections, OperationField, ReturnTypeFields, ReturnsSection } from './InteractionSections';
 import { nodeLabel } from '../nodes/nodeMeta';
 import type { Edge, Http, Node } from '../schema/walkie-graph';
 import {
@@ -31,7 +22,6 @@ import {
   HTTP_METHODS,
   OUTCOME_MAX_LENGTH,
   TEXT_MAX_LENGTH,
-  type EdgeKind,
   type HttpMethod,
 } from '../store/graphStore';
 import { useGraphStore } from '../store/useGraphStore';
@@ -44,8 +34,14 @@ import { useDraft } from './contract/useDraft';
 export interface EdgePanelActions {
   /** Selecciona otra caja o conexión (ir al contrato de la API, a la solicitud o a una respuesta). */
   onSelect?: (target: { nodeId?: string; edgeId?: string }) => void;
-  /** "Previsualizar interacción": recorre la conexión o el par solicitud/respuesta en el lienzo. */
-  preview?: { activeEdgeId: string | null; onStart: (edgeId: string) => void; onStop: () => void };
+  /**
+   * "Previsualizar interacción": recorre la conexión y el retorno del escenario elegido (o el timeout) en el lienzo.
+   */
+  preview?: {
+    activeEdgeId: string | null;
+    onStart: (edgeId: string, scenario?: string, chain?: boolean) => void;
+    onStop: () => void;
+  };
   /** Recorridos (spec recorridos-y-grupos, parte 3): crear uno desde esta conexión o abrir los que la usan. */
   flows?: { onCreate: (edgeId: string) => void; onOpen: (tourId: string) => void };
 }
@@ -61,11 +57,13 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
   const edges = useGraphStore((s) => s.edges);
   const nodes = useGraphStore((s) => s.nodes);
   const updateEdge = useGraphStore((s) => s.updateEdge);
-  const changeKind = useChangeEdgeKind();
   const { items, modules } = useCanvasCatalog();
-  const kindId = useId();
-  // Aviso de que el cambio de tipo invirtió el sentido (con su "Deshacer").
+  const scenarioId = useId();
+  // Aviso de que el cambio a retorno invirtió el sentido (con su "Deshacer").
   const [reversed, setReversed] = useState(false);
+  const [scenario, setScenario] = useState('');
+  // Con lo que ocurre dentro del destino (sus llamadas síncronas): Pantalla → API → BD → API → Pantalla.
+  const [chain, setChain] = useState(true);
   if (!edge) return null;
 
   const from = nodes[edge.from];
@@ -79,14 +77,29 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
       ? { method: toIface.method, path: toIface.path }
       : undefined
     : to && (refTarget(to, items)?.http ?? to.http);
-  const targetIsApi = !!to && (toIface ? toIface.nodeType === 'api' : effectiveType(to, items) === 'api');
-  const display = edgeDisplay(edge, { branchLabel: branch?.label, targetHttp, interfaceName: toIface?.name ?? edge.toInterface?.name });
-  const kinds = SELECTABLE_KINDS.includes(edge.kind) ? SELECTABLE_KINDS : [edge.kind, ...SELECTABLE_KINDS];
+  const fromFamily = endFamily(from, edge.fromInterface, items, modules);
+  const toFamily = endFamily(to, edge.toInterface, items, modules);
+  const operation = effectiveOperation(edge, fromFamily, toFamily);
+  const op = operation?.id;
+  const pattern = op ? patternOf(edge, op) : undefined;
+  const isHttp = op === 'http.request';
+  const targetIsApi = toFamily === 'api';
+  const parent = edge.replyTo ? edges[edge.replyTo] : undefined;
+  const display = edgeDisplay(edge, {
+    branchLabel: branch?.label,
+    targetHttp,
+    interfaceName: toIface?.name ?? edge.toInterface?.name,
+    parent,
+  });
   const title = (node: Node | undefined) =>
     node ? (refTarget(node, items)?.title ?? moduleTarget(node, modules)?.name ?? node.title) : '—';
-  const exchange = interactionEdges(edges, id);
+  const scenarios = scenariosOf(edges, id);
+  const inner = innerCalls(edges, edge.kind === 'response' && edge.replyTo ? edge.replyTo : id);
+  const exchange = interactionEdges(edges, id, scenario || undefined, { chain });
   const previewing = !!preview?.activeEdgeId && exchange.includes(preview.activeEdgeId);
-  const defaultLabel = endpointText(edge, targetHttp);
+  const defaultLabel = endpointText(edge, targetHttp) || (op ? operationName(edge) : undefined);
+  const target = to && (refTarget(to, items)?.database ?? to.database);
+  const tables = target?.tables?.map((t) => t.name);
 
   return (
     <>
@@ -131,15 +144,33 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
                   ? 'Recorre en el lienzo la ida y luego la vuelta'
                   : 'Destaca los extremos y recorre la conexión en el lienzo'
               }
-              onClick={() => (previewing ? preview.onStop() : preview.onStart(id))}
+              onClick={() => (previewing ? preview.onStop() : preview.onStart(id, scenario || undefined, chain))}
             >
               {previewing ? '■ Detener' : '▶ Previsualizar interacción'}
             </button>
           )}
         </div>
+        {preview && inner.length > 0 && (
+          <label className="contract-check">
+            <input type="checkbox" checked={chain} onChange={(e) => setChain(e.target.checked)} />
+            Con lo que ocurre dentro ({inner.length === 1 ? '1 llamada' : `${inner.length} llamadas`} de «{title(nodes[inner[0]!.from])}»)
+          </label>
+        )}
+        {preview && scenarios.length > 1 && (
+          <div className="panel-field">
+            <label htmlFor={scenarioId}>Escenario</label>
+            <select id={scenarioId} value={scenario} onChange={(e) => setScenario(e.target.value)}>
+              {scenarios.map((s) => (
+                <option key={s.id} value={s.id === scenarios[0]!.id ? '' : s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {reversed && (
           <p className="edge-note" role="status">
-            Se invirtió el sentido para que coincida con «{KIND_LABELS[edge.kind]}».{' '}
+            Se invirtió el sentido para que el retorno vuelva hacia quien llamó.{' '}
             <button
               type="button"
               className="link-button"
@@ -184,20 +215,9 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
         </section>
       )}
 
-      <div className="panel-field">
-        <label htmlFor={kindId}>Tipo</label>
-        <select
-          id={kindId}
-          value={edge.kind}
-          onChange={(e) => setReversed(changeKind(id, e.target.value as EdgeKind))}
-        >
-          {kinds.map((k) => (
-            <option key={k} value={k}>
-              {KIND_LABELS[k]} ({k})
-            </option>
-          ))}
-        </select>
-      </div>
+      {edge.kind !== 'response' && (
+        <OperationField edge={edge} fromFamily={fromFamily} toFamily={toFamily} onReversed={setReversed} />
+      )}
       <TextField
         label="Etiqueta"
         value={edge.label ?? ''}
@@ -207,12 +227,22 @@ export function EdgePanel({ id, onSelect, preview, flows }: { id: string } & Edg
       />
 
       {fromDecision && from && <BranchSection edge={edge} decision={from} />}
-      {edge.kind === 'request' && (
+      {isHttp && (
         <RequestSection edge={edge} targetHttp={targetIsApi ? targetHttp : undefined} apiId={targetIsApi ? to?.id : undefined} onSelect={onSelect} />
       )}
-      {edge.kind === 'response' && <ResponseSection edge={edge} onSelect={onSelect} />}
-      {(edge.kind === 'reads' || edge.kind === 'writes' || edge.data) && <DataSection edge={edge} />}
-      {edge.kind === 'event' && <ExampleSection edge={edge} title="Ejemplo de payload" />}
+      {op && pattern && (
+        <ReturnsSection
+          edge={edge}
+          operation={op}
+          pattern={pattern}
+          documented={isHttp && targetIsApi ? [...new Set((targetHttp?.responses ?? []).map((r) => r.status))] : undefined}
+          onSelect={onSelect}
+        />
+      )}
+      {op && <ExchangeSections key={edge.id} edge={edge} operation={op} tables={tables} onSelect={onSelect} />}
+      {edge.data && !edge.operation && <LegacyData edge={edge} />}
+      {edge.kind === 'response' && <ResponseSection edge={edge} parent={parent} onSelect={onSelect} onReversed={setReversed} />}
+      {op && !isHttp && OPERATIONS[op].sections.length > 0 && <ExampleSection edge={edge} title="Ejemplo de payload" />}
       {!fromDecision && edge.kind !== 'response' && <ConditionSection edge={edge} />}
 
       <Section title="Notas" defaultOpen={!!edge.notes}>
@@ -308,8 +338,6 @@ function RequestSection({
   onSelect?: EdgePanelActions['onSelect'];
 }) {
   const updateEdge = useGraphStore((s) => s.updateEdge);
-  const addResponse = useGraphStore((s) => s.addResponse);
-  const edges = useGraphStore((s) => s.edges);
   const [request, setRequest] = useDraft<EdgeRequest>(
     edge.request,
     normalizeEdgeRequest,
@@ -320,15 +348,6 @@ function RequestSection({
   const params = request.params ?? [];
   const contract = [targetHttp?.method, targetHttp?.path].filter(Boolean).join(' ');
   const own = !!(edge.request?.method || edge.request?.path);
-  const responses = Object.values(edges).filter((e) => e.kind === 'response' && e.replyTo === edge.id);
-  const used = new Set(responses.map((r) => responseStatus(r)));
-  // Códigos documentados en el contrato que este intercambio aún no tiene: se añaden con un clic.
-  const documented = [...new Set((targetHttp?.responses ?? []).map((r) => r.status))].filter((s) => !used.has(s));
-
-  function add(status?: number) {
-    const id = addResponse(edge.id, { status });
-    if (id) onSelect?.({ edgeId: id });
-  }
 
   return (
     <>
@@ -418,59 +437,26 @@ function RequestSection({
       </Section>
 
       <ExampleSection edge={edge} title="Ejemplo de payload" />
-
-      <section className="panel-section" aria-label="Respuestas">
-        <h4>Respuestas</h4>
-        {responses.length > 0 && (
-          <ul className="edge-links">
-            {responses.map((r) => {
-              const code = responseStatus(r);
-              return (
-                <li key={r.id}>
-                  <button type="button" className="edge-link" onClick={() => onSelect?.({ edgeId: r.id })} disabled={!onSelect}>
-                    {code !== undefined ? (
-                      <span className="kind-edge-code" data-tone={statusTone(code)}>
-                        {code}
-                      </span>
-                    ) : (
-                      <span className="edge-link-muted">sin código</span>
-                    )}
-                    <span>{r.label ?? r.outcome ?? 'Respuesta'}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <div className="edge-add-responses">
-          <button
-            type="button"
-            className="pixel-button"
-            data-tip="Crea el retorno en sentido inverso, vinculado a esta solicitud"
-            onClick={() => add()}
-          >
-            + Añadir respuesta
-          </button>
-          {documented.slice(0, 6).map((status) => (
-            <button
-              key={status}
-              type="button"
-              className="pixel-button is-ghost"
-              aria-label={`Añadir respuesta ${status}`}
-              data-tip="Código documentado en el contrato"
-              onClick={() => add(status)}
-            >
-              + {status}
-            </button>
-          ))}
-        </div>
-      </section>
     </>
   );
 }
 
-/** Respuesta: solicitud asociada, código HTTP (campo propio, no una condición), ejemplo y qué ocurre después. */
-function ResponseSection({ edge, onSelect }: { edge: Edge; onSelect?: EdgePanelActions['onSelect'] }) {
+/**
+ * Retorno: la operación a la que responde (cualquier intercambio, no solo HTTP), su código HTTP si la operación es HTTP
+ * (campo propio, no una condición) o su tipo y código si no, ejemplo y qué ocurre después.
+ */
+function ResponseSection({
+  edge,
+  parent,
+  onSelect,
+  onReversed,
+}: {
+  edge: Edge;
+  parent: Edge | undefined;
+  onSelect?: EdgePanelActions['onSelect'];
+  onReversed: (reversed: boolean) => void;
+}) {
+  const changeKind = useChangeEdgeKind();
   const updateEdge = useGraphStore((s) => s.updateEdge);
   const edges = useGraphStore((s) => s.edges);
   const nodes = useGraphStore((s) => s.nodes);
@@ -489,18 +475,21 @@ function ResponseSection({ edge, onSelect }: { edge: Edge; onSelect?: EdgePanelA
   }
   const invalid = draft.trim() !== '' && !/^[1-5]\d\d$/.test(draft.trim());
 
-  // Solicitudes candidatas: primero las que van en sentido contrario entre los mismos nodos.
-  const requests = Object.values(edges).filter((e) => e.kind === 'request');
+  // Operaciones candidatas: primero las que van en sentido contrario entre los mismos nodos.
+  const requests = Object.values(edges).filter((e) => e.kind !== 'response' && e.kind !== 'navigation' && e.kind !== 'uses');
   const mirrored = requests.filter((r) => r.from === edge.to && r.to === edge.from);
   const others = requests.filter((r) => !mirrored.includes(r));
   const describe = (r: Edge) => {
     const target = nodes[r.to];
-    const text = r.label ?? endpointText(r, target && (refTarget(target, items)?.http ?? target.http));
+    const text = r.label ?? (endpointText(r, target && (refTarget(target, items)?.http ?? target.http)) || operationName(r));
     return `${nodes[r.from]?.title ?? '—'} → ${target ? (refTarget(target, items)?.title ?? target.title) : '—'}${text ? ` · ${text}` : ''}`;
   };
   const source = nodes[edge.from];
   const contract = source && (refTarget(source, items)?.http ?? source.http);
   const documented = contract?.responses?.find((r) => r.status === status);
+  // Código HTTP si responde a una operación HTTP (o a una solicitud anterior sin operación), o si ya tiene uno.
+  const http =
+    status !== undefined || !parent || parent.operation === 'http.request' || (!parent.operation && parent.kind === 'request');
 
   function setStatus(value: string) {
     setDraft(value);
@@ -513,9 +502,9 @@ function ResponseSection({ edge, onSelect }: { edge: Edge; onSelect?: EdgePanelA
   return (
     <>
       <section className="panel-section" aria-label="Respuesta">
-        <h4>Respuesta</h4>
+        <h4>Retorno</h4>
         <div className="panel-field">
-          <label htmlFor={requestId}>Solicitud asociada</label>
+          <label htmlFor={requestId}>Operación asociada</label>
           <select id={requestId} value={edge.replyTo ?? ''} onChange={(e) => updateEdge(edge.id, { replyTo: e.target.value || null })}>
             <option value="">Sin vincular</option>
             {mirrored.map((r) => (
@@ -524,7 +513,7 @@ function ResponseSection({ edge, onSelect }: { edge: Edge; onSelect?: EdgePanelA
               </option>
             ))}
             {others.length > 0 && (
-              <optgroup label="Otras solicitudes del lienzo">
+              <optgroup label="Otras operaciones del lienzo">
                 {others.map((r) => (
                   <option key={r.id} value={r.id}>
                     {describe(r)}
@@ -535,10 +524,13 @@ function ResponseSection({ edge, onSelect }: { edge: Edge; onSelect?: EdgePanelA
           </select>
           {edge.replyTo && onSelect && (
             <button type="button" className="link-button" onClick={() => onSelect({ edgeId: edge.replyTo })}>
-              Ir a la solicitud
+              Ir a la operación
             </button>
           )}
+          {!edge.replyTo && <span className="panel-help">Sin operación asociada: no se reproduce como retorno.</span>}
         </div>
+        {(!http || edge.result) && <ReturnTypeFields edge={edge} parent={parent} />}
+        {http && (
         <div className="panel-field">
           <label htmlFor={statusId}>Código HTTP</label>
           <input
@@ -568,6 +560,7 @@ function ResponseSection({ edge, onSelect }: { edge: Edge; onSelect?: EdgePanelA
           )}
           {documented?.description && <span className="edge-contract">En el contrato: {documented.description}</span>}
         </div>
+        )}
         <TextField
           label="Qué ocurre después"
           multiline
@@ -576,6 +569,14 @@ function ResponseSection({ edge, onSelect }: { edge: Edge; onSelect?: EdgePanelA
           placeholder="Ej. se muestra la confirmación y se navega al inicio"
           onChange={(outcome) => updateEdge(edge.id, { outcome })}
         />
+        <button
+          type="button"
+          className="link-button"
+          data-tip="Deja de ser un retorno: pasa a ser una operación propia"
+          onClick={() => onReversed(changeKind(edge.id, 'request'))}
+        >
+          No es un retorno: convertir en operación
+        </button>
       </section>
       <ExampleSection edge={edge} title="Ejemplo de respuesta" />
       {edge.when && !legacyCode && <ConditionSection edge={edge} />}
@@ -583,46 +584,15 @@ function ResponseSection({ edge, onSelect }: { edge: Edge; onSelect?: EdgePanelA
   );
 }
 
-/** Acceso a datos: operación y entidades (lectura o escritura). */
-function DataSection({ edge }: { edge: Edge }) {
-  const updateEdge = useGraphStore((s) => s.updateEdge);
-  const [data, setData] = useDraft<EdgeData>(edge.data, normalizeEdgeData, (next) => updateEdge(edge.id, { data: next ?? null }), {});
-  const operationId = useId();
-  const entitiesId = useId();
-  const implied = edge.kind === 'reads' ? 'read' : edge.kind === 'writes' ? 'write' : undefined;
-
+/** Acceso a datos anterior (spec interacciones): se muestra mientras no se elija la operación, que lo absorbe. */
+function LegacyData({ edge }: { edge: Edge }) {
+  const entities = edge.data?.entities ?? [];
+  if (entities.length === 0 && !edge.data?.operation) return null;
   return (
-    <section className="panel-section" aria-label="Acceso a datos">
-      <h4>Acceso a datos</h4>
-      <div className="contract-grid">
-        <div className="contract-field">
-          <label htmlFor={operationId}>Operación</label>
-          <select
-            id={operationId}
-            value={data.operation ?? ''}
-            onChange={(e) => setData({ ...data, operation: (e.target.value || undefined) as EdgeData['operation'] })}
-          >
-            <option value="">{implied ? `${DATA_OPERATION_LABELS[implied]} (por el tipo)` : '—'}</option>
-            {DATA_OPERATIONS.map((o) => (
-              <option key={o} value={o}>
-                {DATA_OPERATION_LABELS[o]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="contract-field">
-          <label htmlFor={entitiesId}>Entidades</label>
-          <input
-            id={entitiesId}
-            value={data.entities?.join(',') ?? ''}
-            maxLength={LIMITS.short * 4}
-            placeholder="cuentas, movimientos"
-            onChange={(e) => setData({ ...data, entities: splitList(e.target.value) })}
-          />
-        </div>
-      </div>
-      <ExampleField edge={edge} label="Ejemplo de payload" />
-    </section>
+    <p className="panel-help" aria-label="Acceso a datos anterior">
+      Acceso a datos anterior{edge.data?.operation ? ` (${edge.data.operation === 'read' ? 'lee' : 'escribe'})` : ''}
+      {entities.length > 0 ? `: ${entities.join(', ')}` : ''}. Al elegir la operación, las entidades pasan a su detalle.
+    </p>
   );
 }
 

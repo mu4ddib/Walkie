@@ -1,9 +1,8 @@
 import { BaseEdge, EdgeLabelRenderer, Position, getSmoothStepPath, type Edge as FlowEdge, type EdgeProps } from '@xyflow/react';
 import type { EdgeKind } from '../store/graphStore';
+import { OPERATIONS, OPERATION_IDS, type OperationId } from '../interactions/operations';
 import {
-  KIND_LABELS,
   KIND_STYLES,
-  SELECTABLE_KINDS,
   edgeDisplay,
   edgeDisplayText,
   statusTone,
@@ -11,7 +10,7 @@ import {
 } from './edgeMeta';
 import type { Port, Side } from './ports';
 import { polylinePath, type Point } from './route';
-import { useChangeEdgeKind } from './useChangeEdgeKind';
+import { useSetOperation } from './useChangeEdgeKind';
 
 const SIDE_POSITION: Record<Side, Position> = {
   top: Position.Top,
@@ -56,6 +55,11 @@ export type WalkieFlowEdge = FlowEdge<{
   ports?: { source?: Port; target: Port };
   /** Paso en una previsualización (1 = ida, 2 = vuelta…) o pasos de un recorrido que la usan ("2·5"). */
   step?: string;
+  /**
+   * Operación de la conexión seleccionada (spec interacciones): la efectiva y las sugeridas para el par, para el
+   * selector de la etiqueta. Sin ella (retornos, ramas, no seleccionada) la etiqueta es solo texto.
+   */
+  operation?: { id: OperationId; explicit: boolean; suggested: OperationId[] };
 }>;
 
 /**
@@ -64,7 +68,7 @@ export type WalkieFlowEdge = FlowEdge<{
  * seleccionarla, al pasar por encima, en una previsualización o en el paso de un tour.
  */
 export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowEdge>) {
-  const changeKind = useChangeEdgeKind();
+  const setOperation = useSetOperation();
   const kind = data?.kind ?? 'uses';
   const display = data?.display ?? edgeDisplay({ kind, label: data?.label, when: data?.when });
   const ports = data?.ports;
@@ -96,7 +100,8 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
   const placed = data?.labelAt;
   const labelX = placed?.x ?? routed?.labelX ?? stepLabelX;
   const labelY = placed?.y ?? routed?.labelY ?? stepLabelY;
-  const kinds = SELECTABLE_KINDS.includes(kind) ? SELECTABLE_KINDS : [kind, ...SELECTABLE_KINDS];
+  const operation = data?.operation;
+  const others = operation ? OPERATION_IDS.filter((op) => !operation.suggested.includes(op)) : [];
   const offset = placed ? 0 : (data?.labelOffset ?? 0);
 
   return (
@@ -115,11 +120,12 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
       <EdgeLabelRenderer>
         <div
           className="kind-edge-label nodrag nopan"
-          title={`${edgeDisplayText(display)} — ${KIND_LABELS[kind]}: ${KIND_STYLES[kind].description}`}
+          title={`${edgeDisplayText(display)} — ${KIND_STYLES[kind].description}`}
           data-selected={selected || undefined}
           data-branch={display.branch || undefined}
           data-edge-id={id}
           data-joined={placed?.joined}
+          data-error={display.error}
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY + offset}px)` }}
         >
           {data?.step !== undefined && (
@@ -127,13 +133,25 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
               {data.step}
             </span>
           )}
-          {selected && !display.branch ? (
-            <select aria-label="Tipo de conexión" value={kind} onChange={(e) => changeKind(id, e.target.value as EdgeKind)}>
-              {kinds.map((k) => (
-                <option key={k} value={k}>
-                  {KIND_LABELS[k]} ({k})
+          {selected && !display.branch && operation ? (
+            <select
+              aria-label="Operación de la conexión"
+              value={operation.explicit ? operation.id : ''}
+              onChange={(e) => e.target.value && setOperation(id, e.target.value as OperationId)}
+            >
+              {!operation.explicit && <option value="">{display.main} (por el tipo)</option>}
+              {operation.suggested.map((op) => (
+                <option key={op} value={op}>
+                  {OPERATIONS[op].verb}
                 </option>
               ))}
+              <optgroup label="Otras">
+                {others.map((op) => (
+                  <option key={op} value={op}>
+                    {OPERATIONS[op].name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           ) : (
             <span className="kind-edge-main">{display.main}</span>
