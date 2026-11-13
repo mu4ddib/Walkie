@@ -6,7 +6,7 @@ import { useCreateModule, useDeleteModule, useToken } from '../api/hooks';
 import { moduleTarget, useCanvasCatalog } from '../catalog/catalogContext';
 import { useOpenModule } from '../canvas/useOpenModule';
 import { NODE_LABELS } from '../nodes/nodeMeta';
-import { interfaceKindLabel, interfaceSignature, matchesInterface, placeableModules, usedInterfaces } from '../modules/moduleMeta';
+import { interfaceKindLabel, interfaceSignature, matchesInterface, placeableModules, resolvedUses, usedInterfaces } from '../modules/moduleMeta';
 import { ModuleDetailsForm, ModuleUsesList } from '../modules/ModuleParts';
 import type { Node } from '../schema/walkie-graph';
 import { useGraphStore } from '../store/useGraphStore';
@@ -64,7 +64,7 @@ export function ModulePanel({ node }: { node: Node }) {
 function InThisCanvas({ node, module }: { node: Node; module: ModuleSummary }) {
   const setModuleDisplay = useGraphStore((s) => s.setModuleDisplay);
   const usedKey = useGraphStore((s) => usedInterfaces(s.edges, node.id).join('\n'));
-  const used = usedKey ? usedKey.split('\n').map((pair) => JSON.parse(pair) as { id: string; name: string }) : [];
+  const used = resolvedUses(module, usedKey);
   return (
     <section className="panel-section" aria-label="En este lienzo">
       <h4>En este lienzo</h4>
@@ -88,14 +88,11 @@ function InThisCanvas({ node, module }: { node: Node; module: ModuleSummary }) {
         <p className="panel-help">Ninguna conexión de este lienzo llega a una interfaz concreta.</p>
       ) : (
         <ul className="panel-list" aria-label="Interfaces usadas aquí">
-          {used.map((ref) => {
-            const iface = module.interfaces.find((i) => i.id === ref.id);
-            return (
-              <li key={ref.id} className={iface ? undefined : 'panel-warning'}>
-                {iface ? iface.name : `⚠ ${ref.name} (ya no existe: reasígnala en la conexión)`}
-              </li>
-            );
-          })}
+          {used.map((use) => (
+            <li key={use.key} className={'iface' in use ? undefined : 'panel-warning'}>
+              {'iface' in use ? use.iface.name : `⚠ ${use.pending} (ya no existe: reasígnala en la conexión)`}
+            </li>
+          ))}
         </ul>
       )}
     </section>

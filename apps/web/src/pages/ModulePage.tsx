@@ -63,7 +63,8 @@ export function ModulePage() {
         catalog={catalog}
         location={{ appId, appName: app.data?.name, featureName: `Módulo · ${module.name}` }}
         focusId={entry.select}
-        initialPlay={entry.play ? { tourId: entry.play, step: 0 } : undefined}
+        focusCenter={!entry.keep}
+        initialPlay={entry.play ? { tourId: entry.play, step: entry.step ?? 0 } : undefined}
         banner={<ModuleBanner appId={appId} module={module} entry={entry} back={backTo} />}
       />
     </section>
@@ -128,7 +129,7 @@ function ModuleBanner({
       <Popover label="Editar el módulo" buttonLabel={<span>Editar</span>} className="module-banner-edit">
         {(close) => <ModuleDetailsForm appId={appId} module={module} onDone={close} />}
       </Popover>
-      {entry.play && <span className="module-banner-note">Reproduciendo el recorrido interno de la interfaz.</span>}
+      {entry.play && entry.step === undefined && <span className="module-banner-note">Reproduciendo el recorrido interno de la interfaz.</span>}
     </div>
   );
 }

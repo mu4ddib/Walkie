@@ -16,7 +16,13 @@ public sealed record ModuleSummary(
     int Nodes,
     IReadOnlyList<ModuleInterfaceSummary> Interfaces,
     IReadOnlyList<Guid> Modules,
-    IReadOnlyList<Guid> UsedBy);
+    IReadOnlyList<Guid> UsedBy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<InterfaceRedirect>? Redirects = null);
+
+/// <summary>Interfaz quitada y adónde pasan sus conexiones (<c>To</c>; sin él, al módulo completo).</summary>
+public sealed record InterfaceRedirect(
+    string From,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? To);
 
 /// <summary>Una interfaz con lo que se sabe de su caja interna (tipo efectivo, título y contrato).</summary>
 public sealed record ModuleInterfaceSummary(
@@ -46,12 +52,6 @@ public sealed record ModuleEdgeUsage(
     string End,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? InterfaceId,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? InterfaceName);
-
-/// <summary>Reasignar las conexiones que usan una interfaz: a otra (<c>To</c>) o, con <c>null</c>, al módulo completo.</summary>
-public sealed record ReassignInterfaceRequest(string? To);
-
-/// <summary>Cuántas conexiones se reasignaron y en qué lienzos (cuyas versiones subieron).</summary>
-public sealed record ReassignInterfaceResponse(int Edges, IReadOnlyList<Guid> Features);
 
 /// <summary>
 /// Convertir una selección en módulo (spec modulos-compartidos, criterios 5 a 10): el lienzo del módulo nuevo

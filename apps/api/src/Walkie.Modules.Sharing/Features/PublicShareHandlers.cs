@@ -21,6 +21,7 @@ internal sealed partial class PublicShareHandlers(
     ICatalogDirectory catalog,
     ICanvasReader canvas,
     IAssetDirectory assets,
+    IModuleDirectory modules,
     TimeProvider clock)
 {
     /// <summary>La feature compartida; registra el acceso.</summary>
@@ -37,13 +38,42 @@ internal sealed partial class PublicShareHandlers(
         var items = refs.Count == 0
             ? []
             : await catalog.ItemsOfAppAsync(feature.AppId, refs, ct).ConfigureAwait(false);
+        // Los módulos que usa (a cualquier profundidad), sin decir qué otras features los usan.
+        var reachable = await modules.ReachableAsync(feature.AppId, graph, ct).ConfigureAwait(false);
 
         share.LastAccessedAt = clock.GetUtcNowForDb();
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        return new SharedFeatureResponse(feature.AppName, feature.Name, share.ExpiresAt, graph, items);
+        return new SharedFeatureResponse(
+            feature.AppName,
+            feature.Name,
+            share.ExpiresAt,
+            graph,
+            items,
+            reachable.Count == 0 ? null : [.. reachable.Select(m => m.Summary with { UsedBy = [] })]);
     }
 
-    /// <summary>Los bytes de una imagen solo si una pantalla del grafo actual la usa.</summary>
+    /// <summary>Un módulo que la feature del enlace usa (directa o indirectamente); <c>null</c> si no.</summary>
+    public async Task<SharedModuleResponse?> GetModuleAsync(string token, Guid moduleId, CancellationToken ct)
+    {
+        if (await FindActiveAsync(token, ct).ConfigureAwait(false) is not { } share
+            || await features.AppOfFeatureAsync(share.FeatureId, ct).ConfigureAwait(false) is not { } appId)
+        {
+            return null;
+        }
+
+        var graph = await canvas.GraphOfFeatureAsync(share.FeatureId, ct).ConfigureAwait(false);
+        var module = (await modules.ReachableAsync(appId, graph, ct).ConfigureAwait(false)).FirstOrDefault(m => m.Summary.Id == moduleId);
+        if (module is null)
+        {
+            return null;
+        }
+
+        var refs = NodeIds(module.Graph, "ref", "catalogId");
+        var items = refs.Count == 0 ? [] : await catalog.ItemsOfAppAsync(appId, refs, ct).ConfigureAwait(false);
+        return new SharedModuleResponse(module.Summary.Name, module.Summary.Description, module.Graph, items);
+    }
+
+    /// <summary>Los bytes de una imagen solo si una pantalla del grafo actual (o de un módulo que usa) la usa.</summary>
     public async Task<AssetContent?> OpenAssetAsync(string token, Guid assetId, CancellationToken ct)
     {
         if (await FindActiveAsync(token, ct).ConfigureAwait(false) is not { } share
@@ -53,9 +83,10 @@ internal sealed partial class PublicShareHandlers(
         }
 
         var graph = await canvas.GraphOfFeatureAsync(share.FeatureId, ct).ConfigureAwait(false);
-        return NodeIds(graph, "screen", "assetId").Contains(assetId)
-            ? await assets.OpenInAppAsync(appId, assetId, ct).ConfigureAwait(false)
-            : null;
+        var used = NodeIds(graph, "screen", "assetId").Contains(assetId)
+            || (await modules.ReachableAsync(appId, graph, ct).ConfigureAwait(false))
+                .Any(m => NodeIds(m.Graph, "screen", "assetId").Contains(assetId));
+        return used ? await assets.OpenInAppAsync(appId, assetId, ct).ConfigureAwait(false) : null;
     }
 
     private async Task<Share?> FindActiveAsync(string token, CancellationToken ct)

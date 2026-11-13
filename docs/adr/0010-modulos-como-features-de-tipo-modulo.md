@@ -22,5 +22,5 @@ La validación de referencias (Canvas) exige que `moduleId` sea un módulo de la
 ## Consecuencias
 
 - Positivas: el editor, el guardado (manual, automático, 409), el historial, las imágenes y el catálogo funcionan en un módulo sin código nuevo; los resúmenes cuestan una consulta por app.
-- Negativas / costos: toda lista de features de la API filtra por `kind` (`IFeatureDirectory` lo hace por defecto y `ModulesOfAppAsync` da los módulos); reasignar o borrar una interfaz reescribe los lienzos que la usan (sube su versión: un editor abierto ahí recibe 409 y recarga); el resumen se calcula leyendo los lienzos de la app (aceptable para decenas de features).
+- Negativas / costos: toda lista de features de la API filtra por `kind` (`IFeatureDirectory` lo hace por defecto y `ModulesOfAppAsync` da los módulos); quitar una interfaz no reescribe las features: el módulo guarda `interfaceRedirects` (a qué interfaz pasa, o al módulo completo) y las features lo resuelven al leer el resumen, así ningún editor abierto recibe 409; el resumen se calcula leyendo los lienzos de la app (aceptable para decenas de features).
 - Qué habría que hacer para revertirla: mover las filas `kind = module` a una tabla propia y sus lienzos a otra, manteniendo los ids (los `moduleId` de los grafos siguen valiendo).

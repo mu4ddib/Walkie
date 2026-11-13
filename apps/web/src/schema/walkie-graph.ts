@@ -130,6 +130,17 @@ export interface WalkieCanvasGraphV0 {
     [k: string]: ModuleInterface;
   };
   /**
+   * Solo en el lienzo de un módulo: interfaces quitadas -> a qué interfaz pasan sus conexiones (to) o, sin to, al módulo completo. Las features no se reescriben: resuelven sus conexiones con esto al leer el módulo. Una interfaz quitada sin entrada deja sus conexiones pendientes
+   */
+  interfaceRedirects?: {
+    [k: string]: {
+      /**
+       * UUID v7 generado en el cliente
+       */
+      to?: string;
+    };
+  };
+  /**
    * Los grupos guardan su grupo padre en parentId y las notas su grupo en groupId. Sin este campo (lienzos anteriores) la jerarquía se infiere por contención al abrir el lienzo
    */
   groupNesting?: 'explicit';

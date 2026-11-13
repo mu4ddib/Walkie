@@ -4,7 +4,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Módulos compartidos (spec `modulos-compartidos`, #155): **quitar una interfaz ya no reescribe las features**. El módulo recuerda a qué interfaz pasan sus conexiones (o al módulo completo) y las features lo resuelven al leerlo: quitarla se deshace con Ctrl+Z, llega a todas al guardar el módulo y ningún editor abierto recibe un conflicto. Se quitó `POST /api/modules/{id}/interfaces/{id}/reassign`; el grafo suma `interfaceRedirects` y el resumen, `redirects`.
+
 ### Added
+- Módulos compartidos, pendientes de la primera versión: **cada interfaz usada tiene su punto de conexión** en la caja (soltar ahí la elige sin selector y la flecha llega a su fila); **«Volver» funciona en cada nivel** de módulos anidados; el **contexto para IA, el Markdown y el PDF describen los módulos** (interfaces con contrato y recorrido interno, contenido, conexiones internas, la interfaz de cada conexión y los vacíos «módulo inexistente» e «interfaz pendiente»); y **un enlace de solo lectura abre los módulos** que usa la feature (`GET /api/public/shares/{token}/modules/{id}`, `walkie-shared-module.schema.json`).
 - Módulos compartidos (spec `modulos-compartidos`, #155, ADR-0010): un conjunto de componentes conectados (APIs, servicios, bases, recursos, grupos y sus conexiones) se define una vez en su **propio lienzo** y se reutiliza en varias features como una **caja** que se conecta por sus **interfaces**.
   - **Catálogo:** el panel del lienzo pasa a «Catálogo» con dos pestañas, «Componentes» y «Módulos», y una búsqueda común; la página del catálogo suma la sección «Módulos» (crear uno vacío, abrir, eliminar mostrando antes dónde se usa).
   - **Convertir en módulo:** desde varias cajas seleccionadas o el inspector de un grupo, un diálogo de cinco pasos (nombre, elementos con grupos anidados, conexiones que cruzan —cada caja de fuera se incluye o queda como dependencia externa—, interfaces propuestas con lo que pasa con tours y recorridos, y confirmar). Conserva posiciones relativas, contratos, notas, solicitud/respuesta y los ids de las conexiones externas (sus pasos de recorrido siguen valiendo); los pasos internos pasan a un recorrido del módulo. La API crea el módulo y guarda la feature a la vez o no deja nada; reintentar no duplica y Ctrl+Z devuelve las cajas.
@@ -101,6 +105,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Estructura inicial del repo: documentación, ADR-0001 (stack), ADR-0002 (lienzos por feature), schema del grafo v0, devcontainer, docker-compose, CI y plantillas de GitHub.
 
 ### Fixed
+- Catálogo: los campos de «Nuevo módulo» se montaban uno sobre otro; ahora tienen el mismo diseño que «Nuevo elemento».
 - Lienzo: en pantallas bajas (ej. MacBook de 14") la lista de «Recurso» y el panel «Componentes» ya no quedan debajo de la barra de zoom: terminan sobre ella y se desplazan, así se alcanza la última opción («Personalizado»).
 - Mapa de la app: las teclas de vista no hacían nada; ahora, como en el lienzo, 0 muestra todo el mapa, + y − acercan y alejan, y Esc quita la selección (no mientras se escribe).
 - Una conexión pantalla → API marcada como "responde" seguía apuntando a la API: ahora el cambio de tipo invierte el sentido cuando lo contradice (y ofrece deshacerlo).

@@ -11,7 +11,8 @@ internal sealed record AppAiContextInput(
     string AppName,
     IReadOnlyList<(FeatureSummary Feature, JsonElement Graph)> Features,
     IReadOnlyList<CatalogItemResponse> Catalog,
-    DateTimeOffset ExportedAt);
+    DateTimeOffset ExportedAt,
+    IReadOnlyDictionary<Guid, IReadOnlyList<Walkie.Modules.Canvas.Contracts.ModuleGraph>>? Modules = null);
 
 /// <summary>
 /// Contexto para IA de una app completa (spec exportar-e-importar, tarea 2): el contexto de cada feature (el mismo de
@@ -28,7 +29,8 @@ internal static partial class MarkdownDocument
         var names = input.Features.ToDictionary(f => f.Feature.Id, f => f.Feature.Name);
         var features = input.Features
             .Select(f => BuildAiContext(new AiContextInput(
-                f.Feature.Id, input.AppName, f.Feature.Name, f.Feature.Description, f.Graph, catalog, names, input.ExportedAt)))
+                f.Feature.Id, input.AppName, f.Feature.Name, f.Feature.Description, f.Graph, catalog, names, input.ExportedAt,
+                input.Modules?.GetValueOrDefault(f.Feature.Id))))
             .ToList();
 
         var items = input.Catalog

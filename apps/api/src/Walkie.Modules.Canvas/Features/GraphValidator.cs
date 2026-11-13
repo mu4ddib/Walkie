@@ -139,6 +139,11 @@ internal sealed class GraphValidator
             InterfaceErrors(interfaces, nodeIds, tourIds, errors);
         }
 
+        if (graph.TryGetProperty("interfaceRedirects", out var redirects))
+        {
+            RedirectErrors(redirects, graph.TryGetProperty("interfaces", out var current) ? current : default, errors);
+        }
+
         foreach (var position in graph.GetProperty("layout").EnumerateObject())
         {
             if (groupIds.Contains(position.Name))
@@ -278,6 +283,27 @@ internal sealed class GraphValidator
             if (item.Value.TryGetProperty("tourId", out var tourId) && !tourIds.Contains(tourId.GetString()!))
             {
                 errors[$"{path}/tourId"] = ["La interfaz apunta a un recorrido que no existe."];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Interfaces quitadas (spec modulos-compartidos): una que sigue en el módulo no se redirige, y el destino es una
+    /// interfaz actual (así las features resuelven sus conexiones en un paso).
+    /// </summary>
+    private static void RedirectErrors(JsonElement redirects, JsonElement interfaces, Dictionary<string, string[]> errors)
+    {
+        bool Exists(string id) => interfaces.ValueKind == JsonValueKind.Object && interfaces.TryGetProperty(id, out _);
+        foreach (var redirect in redirects.EnumerateObject())
+        {
+            if (Exists(redirect.Name))
+            {
+                errors[$"/interfaceRedirects/{redirect.Name}"] = ["Una interfaz que sigue en el módulo no se redirige."];
+            }
+
+            if (redirect.Value.TryGetProperty("to", out var to) && !Exists(to.GetString()!))
+            {
+                errors[$"/interfaceRedirects/{redirect.Name}/to"] = ["La interfaz destino no existe en el módulo."];
             }
         }
     }

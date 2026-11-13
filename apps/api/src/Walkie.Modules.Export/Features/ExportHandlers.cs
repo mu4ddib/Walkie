@@ -14,6 +14,7 @@ internal sealed class ExportHandlers(
     ICatalogDirectory catalog,
     ICanvasReader canvas,
     IAssetDirectory assets,
+    IModuleDirectory modules,
     TimeProvider clock)
 {
     /// <summary>Nombre del archivo y bytes del zip, con la última versión guardada; <c>null</c> si la feature no existe.</summary>
@@ -25,8 +26,8 @@ internal sealed class ExportHandlers(
         }
 
         var graph = await canvas.GraphOfFeatureAsync(featureId, ct).ConfigureAwait(false);
-        var refs = NodeIds(graph, "ref", "catalogId").Keys.ToList();
-        var items = refs.Count == 0 ? [] : await catalog.ItemsOfAppAsync(feature.AppId, refs, ct).ConfigureAwait(false);
+        var used = await modules.ReachableAsync(feature.AppId, graph, ct).ConfigureAwait(false);
+        var items = await CatalogOfAsync(feature.AppId, used.Select(m => m.Graph).Prepend(graph), ct).ConfigureAwait(false);
         var featureNames = NodeIds(graph, "portal", "targetFeatureId").Count == 0
             ? new Dictionary<Guid, string>()
             : await features.FeatureNamesOfAppAsync(feature.AppId, ct).ConfigureAwait(false);
@@ -52,10 +53,11 @@ internal sealed class ExportHandlers(
             feature.AppName,
             feature.Name,
             graph,
-            items.ToDictionary(i => i.Id),
+            items,
             featureNames,
             images.ToDictionary(i => i.Key, i => i.Value.Path),
-            clock.GetUtcNow()));
+            clock.GetUtcNow(),
+            used));
 
         var slug = Slugs.From(feature.Name);
         return ($"{slug}.zip", Zip($"{slug}.md", markdown, images.Values));
@@ -73,8 +75,8 @@ internal sealed class ExportHandlers(
         }
 
         var graph = await canvas.GraphOfFeatureAsync(featureId, ct).ConfigureAwait(false);
-        var refs = NodeIds(graph, "ref", "catalogId").Keys.ToList();
-        var items = refs.Count == 0 ? [] : await catalog.ItemsOfAppAsync(feature.AppId, refs, ct).ConfigureAwait(false);
+        var used = await modules.ReachableAsync(feature.AppId, graph, ct).ConfigureAwait(false);
+        var items = await CatalogOfAsync(feature.AppId, used.Select(m => m.Graph).Prepend(graph), ct).ConfigureAwait(false);
         var featureNames = NodeIds(graph, "portal", "targetFeatureId").Count == 0
             ? new Dictionary<Guid, string>()
             : await features.FeatureNamesOfAppAsync(feature.AppId, ct).ConfigureAwait(false);
@@ -85,9 +87,10 @@ internal sealed class ExportHandlers(
             feature.Name,
             feature.Description,
             graph,
-            items.ToDictionary(i => i.Id),
+            items,
             featureNames,
-            clock.GetUtcNow()));
+            clock.GetUtcNow(),
+            used));
         return (Slugs.From(feature.Name), context);
     }
 
@@ -104,13 +107,16 @@ internal sealed class ExportHandlers(
 
         var list = await features.FeaturesOfAppAsync(appId, ct).ConfigureAwait(false);
         var graphs = new List<(FeatureSummary, System.Text.Json.JsonElement)>();
+        var used = new Dictionary<Guid, IReadOnlyList<ModuleGraph>>();
         foreach (var feature in list)
         {
-            graphs.Add((feature, await canvas.GraphOfFeatureAsync(feature.Id, ct).ConfigureAwait(false)));
+            var graph = await canvas.GraphOfFeatureAsync(feature.Id, ct).ConfigureAwait(false);
+            graphs.Add((feature, graph));
+            used[feature.Id] = await modules.ReachableAsync(appId, graph, ct).ConfigureAwait(false);
         }
 
         var items = await catalog.AllItemsOfAppAsync(appId, ct).ConfigureAwait(false);
-        var context = MarkdownDocument.BuildAppAiContext(new AppAiContextInput(appId, appName, graphs, items, clock.GetUtcNow()));
+        var context = MarkdownDocument.BuildAppAiContext(new AppAiContextInput(appId, appName, graphs, items, clock.GetUtcNow(), used));
         return (Slugs.From(appName, "app"), context);
     }
 
@@ -229,6 +235,15 @@ internal sealed class ExportHandlers(
         var manifest = WalkiePackage.Manifest(
             "app", appId, appName, package, items, list, clock.GetUtcNow(), withMap: map is not null, modules: modules);
         return ($"{Slugs.From(appName, "app")}.walkie", WalkiePackage.Zip(manifest, package, items, list, map, modules));
+    }
+
+    /// <summary>Los elementos del catálogo que usan los <c>ref</c> de los lienzos (la feature y sus módulos), por id.</summary>
+    private async Task<Dictionary<Guid, CatalogItemResponse>> CatalogOfAsync(Guid appId, IEnumerable<JsonElement> graphs, CancellationToken ct)
+    {
+        var refs = graphs.SelectMany(g => NodeIds(g, "ref", "catalogId").Keys).Distinct().ToList();
+        return refs.Count == 0
+            ? []
+            : (await catalog.ItemsOfAppAsync(appId, refs, ct).ConfigureAwait(false)).ToDictionary(i => i.Id);
     }
 
     /// <summary>Las imágenes de las pantallas de los lienzos, por asset (una vez cada una); las que ya no están, fuera.</summary>

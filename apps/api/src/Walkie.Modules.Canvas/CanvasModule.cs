@@ -18,6 +18,7 @@ public static class CanvasModule
         services.AddScoped<CanvasHandlers>();
         services.AddScoped<ModuleReferences>();
         services.AddScoped<ModuleHandlers>();
+        services.AddScoped<Contracts.IModuleDirectory, ModuleDirectory>();
         services.AddScoped<CanvasPreviews>();
         services.AddScoped<AppMaps>();
         services.AddScoped<Apps.Contracts.ICatalogUsage, CatalogUsage>();

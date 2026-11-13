@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { interfaceTarget, moduleTarget, useCanvasCatalog } from '../catalog/catalogContext';
+import { moduleTarget, resolveInterface, useCanvasCatalog } from '../catalog/catalogContext';
 import { useOpenModule } from '../canvas/useOpenModule';
 import { interfaceKindLabel, interfaceSignature, interfacesForEnd } from '../modules/moduleMeta';
 import type { Edge } from '../schema/walkie-graph';
@@ -25,8 +25,11 @@ export function ModuleEndsSection({ edge }: { edge: Edge }) {
         const node = nodes[edge[end]]!;
         const module = moduleTarget(node, modules);
         const ref = end === 'from' ? edge.fromInterface : edge.toInterface;
-        const iface = interfaceTarget(node, ref, modules);
-        const pending = ref && module && !iface;
+        // Con las redirecciones del módulo: una interfaz quitada se ve como la que la reemplaza (o el módulo completo).
+        const resolved = resolveInterface(module, ref);
+        const iface = resolved.status === 'ok' ? resolved.iface : undefined;
+        const pending = resolved.status === 'pending' && ref ? ref : undefined;
+        const movedFrom = resolved.status === 'ok' || resolved.status === 'whole' ? resolved.redirectedFrom : undefined;
         const selectId = `${baseId}-${end}`;
         if (!module) {
           return (
@@ -42,7 +45,7 @@ export function ModuleEndsSection({ edge }: { edge: Edge }) {
             </label>
             <select
               id={selectId}
-              value={ref?.id ?? ''}
+              value={iface?.id ?? pending?.id ?? ''}
               disabled={Boolean(share)}
               onChange={(e) => {
                 const picked = module.interfaces.find((i) => i.id === e.target.value);
@@ -52,7 +55,7 @@ export function ModuleEndsSection({ edge }: { edge: Edge }) {
               }}
             >
               <option value="">Módulo completo (relación general)</option>
-              {pending && <option value={ref.id}>⚠ {ref.name} (ya no existe)</option>}
+              {pending && <option value={pending.id}>⚠ {pending.name} (ya no existe)</option>}
               {interfacesForEnd(module, end).map((i) => (
                 <option key={i.id} value={i.id}>
                   {i.name} · {interfaceKindLabel(i.kind)}
@@ -63,7 +66,9 @@ export function ModuleEndsSection({ edge }: { edge: Edge }) {
             <p className="panel-help">
               {pending
                 ? 'Esta interfaz ya no existe en el módulo: elige otra o deja la conexión al módulo completo.'
-                : iface
+                : movedFrom
+                  ? `«${movedFrom}» se quitó del módulo: ${iface ? `sus conexiones pasaron a «${iface.name}».` : 'sus conexiones pasaron al módulo completo.'}`
+                  : iface
                   ? `Apunta a la interfaz «${iface.name}»${iface.description ? `: ${iface.description}` : ''}.`
                   : 'Apunta al módulo completo. Elige una interfaz para precisar el destino.'}
             </p>

@@ -6,7 +6,8 @@ import { FeatureRoute } from './pages/FeatureRoute';
 import { ModuleRoute } from './pages/ModuleRoute';
 import { MapPage } from './map/MapPage';
 import { SharedFeaturePage } from './share/SharedFeaturePage';
-import { SHARED_PATH } from './share/sharedPath';
+import { SHARED_MODULE_PATH, SHARED_PATH } from './share/sharedPath';
+import { SharedModulePage } from './share/SharedModulePage';
 import { HomePage } from './workspace/HomePage';
 import { APPS_PATH } from './workspace/paths';
 
@@ -24,6 +25,7 @@ export const routes: RouteObject[] = [
   { path: '/apps/:appId/modules/:moduleId', element: <ModuleRoute /> },
   // Pública (ADR-0005): `App` la monta sin `AuthGate`.
   { path: SHARED_PATH, element: <SharedFeaturePage /> },
+  { path: SHARED_MODULE_PATH, element: <SharedModulePage /> },
   {
     path: '*',
     element: (

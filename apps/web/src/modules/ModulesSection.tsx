@@ -123,7 +123,7 @@ function NewModuleForm({ appId }: { appId: string }) {
   }
 
   return (
-    <form className="catalog-form" aria-label="Nuevo módulo" onSubmit={(e) => void submit(e)}>
+    <form className="name-form catalog-form" aria-label="Nuevo módulo" onSubmit={(e) => void submit(e)}>
       <label>
         Nombre del módulo
         <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder="Ej. Usuarios" />

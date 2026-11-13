@@ -2173,3 +2173,33 @@ div.pixel-node-image {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Punto de conexión de cada interfaz usada, en el borde de la caja a la altura de su fila. */
+.module-node-iface {
+  position: relative;
+}
+
+.module-node .module-iface-handle.react-flow__handle-left {
+  left: -14px;
+}
+
+.module-node .module-iface-handle.react-flow__handle-right {
+  right: -14px;
+}
+
+.module-node .module-iface-handle {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  border: 1px solid var(--node-color);
+  background: #fffaf1;
+}
+
+/*
+ * En un lienzo de solo lectura (enlace) React Flow quita los eventos de puntero a las cajas; las acciones de la caja de
+ * un módulo («Abrir módulo», «Ver interfaces») y su lista siguen funcionando.
+ */
+.module-node-actions,
+.module-node-popover {
+  pointer-events: all;
+}

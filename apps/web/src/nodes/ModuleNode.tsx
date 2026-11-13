@@ -4,12 +4,17 @@ import { moduleTarget, useCanvasCatalog } from '../catalog/catalogContext';
 import type { ModuleInterfaceSummary } from '../api/client';
 import { useGraphStore } from '../store/useGraphStore';
 import { nodeColors } from '../theme/palette';
-import { MODULE_MIN_WIDTH, interfaceKindLabel, interfaceSignature, usedInterfaces } from '../modules/moduleMeta';
+import {
+  MAX_BOX_INTERFACES,
+  MODULE_MIN_WIDTH,
+  interfaceHandle,
+  interfaceKindLabel,
+  interfaceSignature,
+  resolvedUses,
+  usedInterfaces,
+} from '../modules/moduleMeta';
 import { useOpenModule } from '../canvas/useOpenModule';
 import type { WalkieFlowNode } from './PixelNode';
-
-/** Interfaces usadas que se ven en la caja; el resto, en «Ver interfaces» o en el inspector. */
-export const MAX_BOX_INTERFACES = 4;
 
 /**
  * Caja de un módulo compartido (spec modulos-compartidos, criterio 17): nombre, distintivo «Módulo», descripción breve y
@@ -24,9 +29,10 @@ export const ModuleNode = memo(function ModuleNode({ id, data, selected }: NodeP
   // Clave en texto: el componente solo se vuelve a dibujar si cambian las interfaces que usa, no con cada movimiento.
   const usedKey = useGraphStore((s) => usedInterfaces(s.edges, id).join('\n'));
   const [listOpen, setListOpen] = useState(false);
-  const known = modules !== undefined && !share;
+  const known = modules !== undefined;
   const missing = known && !summary;
-  const used = usedKey ? usedKey.split('\n').map((pair) => JSON.parse(pair) as { id: string; name: string }) : [];
+  // Resueltas con las redirecciones del módulo: una interfaz quitada se ve como la que la reemplaza.
+  const used = summary ? resolvedUses(summary, usedKey) : [];
   const usedShown = used.slice(0, MAX_BOX_INTERFACES);
   const showDescription = node.display?.description !== false;
   const showInterfaces = node.display?.interfaces !== false;
@@ -68,15 +74,26 @@ export const ModuleNode = memo(function ModuleNode({ id, data, selected }: NodeP
         <div className="module-node-interfaces">
           {usedShown.length > 0 ? (
             <ul aria-label="Interfaces usadas en este lienzo">
-              {usedShown.map((ref) => {
-                const iface = summary.interfaces.find((i) => i.id === ref.id);
-                return (
-                  <li key={ref.id} data-pending={iface ? undefined : 'true'} title={iface ? interfaceKindLabel(iface.kind) : 'Interfaz que ya no existe'}>
-                    <span className="module-node-iface-name">{iface?.name ?? `⚠ ${ref.name}`}</span>
-                    {iface && interfaceSignature(iface) && <span className="module-node-iface-sig">{interfaceSignature(iface)}</span>}
+              {usedShown.map((use) =>
+                'iface' in use ? (
+                  // Cada interfaz usada tiene su punto de conexión (llega por la izquierda, sale por la derecha): soltar
+                  // una conexión en él la conecta a esa interfaz sin elegir.
+                  <li key={use.key} className="module-node-iface" title={interfaceKindLabel(use.iface.kind)}>
+                    {!share && (
+                      <>
+                        <Handle type="target" position={Position.Left} id={interfaceHandle(use.iface.id)} className="module-iface-handle" title={`Conectar con ${use.iface.name}`} />
+                        <Handle type="source" position={Position.Right} id={interfaceHandle(use.iface.id, true)} className="module-iface-handle" title={`Conectar desde ${use.iface.name}`} />
+                      </>
+                    )}
+                    <span className="module-node-iface-name">{use.iface.name}</span>
+                    {interfaceSignature(use.iface) && <span className="module-node-iface-sig">{interfaceSignature(use.iface)}</span>}
                   </li>
-                );
-              })}
+                ) : (
+                  <li key={use.key} data-pending="true" title="Interfaz que ya no existe: reasígnala en la conexión">
+                    <span className="module-node-iface-name">⚠ {use.pending}</span>
+                  </li>
+                ),
+              )}
               {used.length > usedShown.length && <li className="pixel-node-muted">+{used.length - usedShown.length} más</li>}
             </ul>
           ) : (
@@ -86,7 +103,7 @@ export const ModuleNode = memo(function ModuleNode({ id, data, selected }: NodeP
           )}
         </div>
       )}
-      {summary && !share && (
+      {summary && (
         <div className="module-node-actions nodrag">
           <button type="button" className="link-button" onClick={() => openModule(summary.id, { nodeId: id })}>
             Abrir módulo

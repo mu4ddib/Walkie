@@ -2,7 +2,9 @@ using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Canvas.Contracts;
 
 namespace Walkie.Modules.Export.Features;
 
@@ -15,7 +17,8 @@ internal sealed record AiContextInput(
     JsonElement Graph,
     IReadOnlyDictionary<Guid, CatalogItemResponse> Catalog,
     IReadOnlyDictionary<Guid, string> FeatureNames,
-    DateTimeOffset ExportedAt);
+    DateTimeOffset ExportedAt,
+    IReadOnlyList<ModuleGraph>? Modules = null);
 
 /// <summary>
 /// Contexto para IA (spec exportar-e-importar, tarea 1): un modelo que se escribe como JSON
@@ -45,21 +48,27 @@ internal static partial class MarkdownDocument
         "missing-catalog-item",
         "portal-without-target",
         "database-without-structure",
+        "missing-module",
+        "pending-interface",
     ];
 
     public static string AiContextJson(AiContext context) => JsonSerializer.Serialize(context, AiJson) + "\n";
 
     public static AiContext BuildAiContext(AiContextInput input)
     {
+        // Módulos compartidos (spec modulos-compartidos): sus cajas se llaman como el módulo, y sus conexiones dicen la
+        // interfaz a la que llegan.
+        var modules = (input.Modules ?? []).ToDictionary(m => m.Summary.Id);
+        var graph = WithModuleNames(input.Graph, modules);
         var export = new ExportInput(
-            input.AppName, input.FeatureName, input.Graph, input.Catalog, input.FeatureNames,
+            input.AppName, input.FeatureName, graph, input.Catalog, input.FeatureNames,
             new Dictionary<Guid, string>(), input.ExportedAt);
         var nodes = ReadNodes(export);
         var byId = nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
-        var edges = ReadEdges(input.Graph, byId);
-        var groups = ReadGroups(input.Graph, nodes);
+        var edges = ReadEdges(graph, byId);
+        var groups = ReadGroups(graph, nodes);
         var groupPath = GroupPaths(groups);
-        var flows = ReadAiFlows(input.Graph, byId, edges);
+        var flows = ReadAiFlows(graph, byId, edges);
 
         var components = nodes.Select(n => new AiComponent(
             n.Id,
@@ -100,14 +109,16 @@ internal static partial class MarkdownDocument
             e.From.Id,
             e.To.Id,
             e.Kind,
-            EdgeText(e, s => s),
+            EdgeText(e, s => s) + InterfaceText(e, modules),
             Blank(e.Label),
             Blank(e.When),
             BranchLabel(e),
             e.Json.TryGetProperty("status", out var status) && status.TryGetInt32(out var code) ? code : null,
             Text(e.Json, "replyTo"),
             Blank(Text(e.Json, "outcome")),
-            Blank(Text(e.Json, "notes")))).ToList();
+            Blank(Text(e.Json, "notes")),
+            ResolveInterface(e.To, e.Json, "toInterface", modules).Name,
+            ResolveInterface(e.From, e.Json, "fromInterface", modules).Name)).ToList();
 
         var rules = nodes
             .Where(n => n.Section == "rule" && n.String("mode") != "decision")
@@ -144,7 +155,7 @@ internal static partial class MarkdownDocument
             new AiApp(input.AppName),
             new AiFeature(input.FeatureId, input.FeatureName, Blank(input.Description)),
             input.ExportedAt,
-            Version(input.Graph),
+            Version(graph),
             glossary,
             components,
             connections,
@@ -152,7 +163,127 @@ internal static partial class MarkdownDocument
             rules,
             decisions,
             relations,
-            Gaps(nodes, edges, flows, input.FeatureNames));
+            [.. Gaps(nodes, edges, flows, input.FeatureNames).Concat(ModuleGaps(nodes, edges, modules))
+                .Select((g, i) => (g, i)).OrderBy(x => Array.IndexOf(GapKinds, x.g.Kind)).ThenBy(x => x.i).Select(x => x.g)],
+            modules.Count == 0 ? null : [.. modules.Values.Select(m => BuildAiModule(m, modules, input))]);
+    }
+
+    /// <summary>El grafo con el nombre actual de cada módulo en sus cajas (en el grafo, el último conocido).</summary>
+    private static JsonElement WithModuleNames(JsonElement graph, Dictionary<Guid, ModuleGraph> modules)
+    {
+        if (modules.Count == 0)
+        {
+            return graph;
+        }
+
+        var root = JsonNode.Parse(graph.GetRawText())!.AsObject();
+        foreach (var (_, value) in root["nodes"]!.AsObject())
+        {
+            var node = value!.AsObject();
+            if (node["type"]?.GetValue<string>() == "module"
+                && Guid.TryParse(node["moduleId"]?.GetValue<string>(), out var id) && modules.TryGetValue(id, out var module))
+            {
+                node["title"] = module.Summary.Name;
+            }
+        }
+
+        using var doc = JsonDocument.Parse(root.ToJsonString());
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// A qué interfaz llega (o de cuál sale) un extremo que es la caja de un módulo, con las redirecciones del módulo:
+    /// el nombre actual, <c>null</c> si es el módulo completo y <c>Pending</c> si la interfaz se quitó sin reemplazo.
+    /// </summary>
+    private static (string? Name, ModuleInterfaceSummary? Interface, bool Pending) ResolveInterface(
+        ExportNode end, JsonElement edge, string property, Dictionary<Guid, ModuleGraph> modules)
+    {
+        if (end.Section != "module" || !edge.TryGetProperty(property, out var reference))
+        {
+            return (null, null, false);
+        }
+
+        var id = Text(reference, "id");
+        var name = Text(reference, "name");
+        if (!Guid.TryParse(end.String("moduleId"), out var moduleId) || !modules.TryGetValue(moduleId, out var module))
+        {
+            return (name, null, false);
+        }
+
+        var direct = module.Summary.Interfaces.FirstOrDefault(i => i.Id == id);
+        if (direct is not null)
+        {
+            return (direct.Name, direct, false);
+        }
+
+        var redirect = module.Summary.Redirects?.FirstOrDefault(r => r.From == id);
+        if (redirect is null)
+        {
+            return (name, null, true);
+        }
+
+        var target = redirect.To is { } to ? module.Summary.Interfaces.FirstOrDefault(i => i.Id == to) : null;
+        return (target?.Name, target, false);
+    }
+
+    /// <summary>« › interfaz «Crear usuario» (POST /usuarios)» si la conexión llega a (o sale de) una interfaz.</summary>
+    private static string InterfaceText(ExportEdge e, Dictionary<Guid, ModuleGraph> modules)
+    {
+        var to = ResolveInterface(e.To, e.Json, "toInterface", modules);
+        var from = ResolveInterface(e.From, e.Json, "fromInterface", modules);
+        var (name, iface) = to.Name is not null ? (to.Name, to.Interface) : (from.Name, from.Interface);
+        if (name is null)
+        {
+            return string.Empty;
+        }
+
+        var http = iface is null ? null : string.Join(' ', new[] { iface.Method, iface.Path }.Where(x => !string.IsNullOrEmpty(x)));
+        return $" › interfaz «{name}»" + (string.IsNullOrEmpty(http) ? string.Empty : $" ({http})");
+    }
+
+    /// <summary>Cajas de módulos que ya no existen y conexiones a interfaces quitadas sin reemplazo.</summary>
+    private static IEnumerable<AiGap> ModuleGaps(
+        List<ExportNode> nodes, List<ExportEdge> edges, Dictionary<Guid, ModuleGraph> modules)
+    {
+        foreach (var box in nodes.Where(n => n.Section == "module"))
+        {
+            if (!Guid.TryParse(box.String("moduleId"), out var id) || !modules.ContainsKey(id))
+            {
+                yield return new AiGap("missing-module", box.Id, $"La caja «{box.Title}» apunta a un módulo que ya no existe.");
+            }
+        }
+
+        foreach (var e in edges)
+        {
+            foreach (var (end, property) in new[] { (e.To, "toInterface"), (e.From, "fromInterface") })
+            {
+                var resolved = ResolveInterface(end, e.Json, property, modules);
+                if (resolved.Pending)
+                {
+                    yield return new AiGap("pending-interface", e.Id,
+                        $"La conexión «{EdgeText(e, s => s)}» apunta a la interfaz «{resolved.Name}», que ya no existe en «{end.Title}».");
+                }
+            }
+        }
+    }
+
+    /// <summary>Un módulo: qué expone, qué contiene y cómo se conecta por dentro (con los mismos lectores del grafo).</summary>
+    internal static AiModule BuildAiModule(ModuleGraph module, Dictionary<Guid, ModuleGraph> modules, AiContextInput input)
+    {
+        var graph = WithModuleNames(module.Graph, modules);
+        var nodes = ReadNodes(new ExportInput(
+            input.AppName, module.Summary.Name, graph, input.Catalog, input.FeatureNames, new Dictionary<Guid, string>(), input.ExportedAt));
+        var byId = nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
+        var edges = ReadEdges(graph, byId);
+        return new AiModule(
+            module.Summary.Id.ToString(),
+            module.Summary.Name,
+            Blank(module.Summary.Description),
+            [.. module.Summary.Interfaces.Select(i => new AiModuleInterface(
+                i.Id, i.Name, i.Kind, Blank(i.Description), i.NodeTitle, i.Method, i.Path, i.TourName))],
+            [.. nodes.Select(n => new AiModuleComponent(n.Id, n.Title, AiKind(n)))],
+            [.. edges.Select(e => EdgeText(e, s => s) + InterfaceText(e, modules))],
+            [.. module.Summary.Modules.Select(id => modules.TryGetValue(id, out var inner) ? inner.Summary.Name : id.ToString())]);
     }
 
     /// <summary>El contexto como Markdown: primero el propósito, el glosario y los componentes; al final, los vacíos.</summary>
@@ -291,6 +422,11 @@ internal static partial class MarkdownDocument
             md.Blank();
         }
 
+        if (c.Modules is { Count: > 0 } modules)
+        {
+            WriteAiModules(md, modules, depth);
+        }
+
         md.Line($"{H(2, depth)}Vacíos detectados");
         md.Blank();
         if (c.Gaps.Count == 0)
@@ -310,6 +446,90 @@ internal static partial class MarkdownDocument
         md.Blank();
         return md;
     }
+
+    /// <summary>
+    /// «Módulos» (spec modulos-compartidos): cada módulo que usa el lienzo con sus interfaces (contrato y recorrido
+    /// interno), lo que contiene y sus conexiones internas, para que la IA sepa qué hay detrás de cada caja.
+    /// </summary>
+    private static void WriteAiModules(Md md, IReadOnlyList<AiModule> modules, int depth, string heading = "Módulos")
+    {
+        md.Line($"{H(2, depth)}{heading}");
+        md.Blank();
+        md.Line("Conjuntos de componentes compartidos con otras features: una caja del lienzo los representa y las conexiones llegan a sus interfaces.");
+        md.Blank();
+        foreach (var module in modules)
+        {
+            md.Line($"{H(3, depth)}{MarkdownText.Inline(module.Name)} (módulo)");
+            md.Blank();
+            md.Line($"id: {MarkdownText.Code(module.Id)}");
+            md.Blank();
+            if (module.Description is { } description)
+            {
+                md.Line(MarkdownText.Block(description));
+                md.Blank();
+            }
+
+            md.Line("**Interfaces:**");
+            md.Blank();
+            if (module.Interfaces.Count == 0)
+            {
+                md.Line("- (no expone ninguna)");
+            }
+
+            foreach (var i in module.Interfaces)
+            {
+                var http = string.Join(' ', new[] { i.Method, i.Path }.Where(x => !string.IsNullOrEmpty(x)));
+                var parts = new List<string> { InterfaceKindText(i.Kind) };
+                if (http.Length > 0)
+                {
+                    parts.Add(MarkdownText.Code(http));
+                }
+
+                if (i.Component is { } component)
+                {
+                    parts.Add($"caja: {MarkdownText.Inline(component)}");
+                }
+
+                if (i.InternalFlow is { } flow)
+                {
+                    parts.Add($"recorrido interno: {MarkdownText.Inline(flow)}");
+                }
+
+                md.Line($"- **{MarkdownText.Inline(i.Name)}** ({string.Join(" · ", parts)})"
+                    + (i.Description is { } d ? $" — {MarkdownText.Inline(d)}" : string.Empty));
+            }
+
+            md.Blank();
+            md.Line("**Contiene:** " + (module.Components.Count == 0
+                ? "nada todavía."
+                : string.Join(", ", module.Components.Select(x => $"{MarkdownText.Inline(x.Title)} ({MarkdownText.Inline(x.Is)})")) + "."));
+            if (module.Contains.Count > 0)
+            {
+                md.Line("**Módulos dentro:** " + string.Join(", ", module.Contains.Select(MarkdownText.Inline)) + ".");
+            }
+
+            md.Blank();
+            if (module.Connections.Count > 0)
+            {
+                md.Line("**Conexiones internas:**");
+                md.Blank();
+                foreach (var connection in module.Connections)
+                {
+                    md.Line($"- {MarkdownText.Inline(connection)}");
+                }
+
+                md.Blank();
+            }
+        }
+    }
+
+    internal static string InterfaceKindText(string kind) => kind switch
+    {
+        "provides" => "ofrece",
+        "event" => "evento",
+        "requires" => "requiere",
+        _ => kind,
+    };
 
     /// <summary>Marca de título de nivel <paramref name="level"/>, bajado <paramref name="depth"/> niveles.</summary>
     private static string H(int level, int depth) => new string('#', level + depth) + " ";
@@ -607,7 +827,30 @@ internal sealed record AiContext(
     IReadOnlyList<AiRule> Rules,
     IReadOnlyList<AiDecision> Decisions,
     AiRelations Relations,
-    IReadOnlyList<AiGap> Gaps);
+    IReadOnlyList<AiGap> Gaps,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AiModule>? Modules = null);
+
+/// <summary>Un módulo compartido que usa el lienzo (spec modulos-compartidos).</summary>
+internal sealed record AiModule(
+    string Id,
+    string Name,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description,
+    IReadOnlyList<AiModuleInterface> Interfaces,
+    IReadOnlyList<AiModuleComponent> Components,
+    IReadOnlyList<string> Connections,
+    IReadOnlyList<string> Contains);
+
+internal sealed record AiModuleInterface(
+    string Id,
+    string Name,
+    string Kind,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Component,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Method,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Path,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? InternalFlow);
+
+internal sealed record AiModuleComponent(string Id, string Title, string Is);
 
 internal sealed record AiApp(string Name);
 
@@ -665,7 +908,9 @@ internal sealed record AiConnection(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Status,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ReplyTo,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Outcome,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Notes);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Notes,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ToInterface = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FromInterface = null);
 
 internal sealed record AiFlow(string Id, string Name, string Kind, IReadOnlyList<AiStep> Steps);
 

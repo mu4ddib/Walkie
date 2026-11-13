@@ -72,14 +72,38 @@ export function moduleTarget(node: Node, modules: Record<string, ModuleSummary> 
   return node.type === 'module' && node.moduleId ? modules?.[node.moduleId] : undefined;
 }
 
-/** La interfaz a la que apunta un extremo de conexión en el módulo; `undefined` si es el módulo completo o ya no existe. */
+/**
+ * A qué llega un extremo de conexión en un módulo (spec modulos-compartidos): una interfaz actual (`ok`), el módulo
+ * completo (`whole`: sin interfaz, o la suya se quitó y sus conexiones pasaron al módulo), o una interfaz que ya no
+ * existe y nadie reasignó (`pending`, con su último nombre). Las interfaces quitadas se resuelven con las redirecciones
+ * del módulo: las features nunca se reescriben.
+ */
+export type InterfaceResolution =
+  | { status: 'ok'; iface: ModuleInterfaceSummary; redirectedFrom?: string }
+  | { status: 'whole'; redirectedFrom?: string }
+  | { status: 'pending'; name: string }
+  | { status: 'unknown' };
+
+export function resolveInterface(summary: ModuleSummary | undefined, ref: InterfaceRef | undefined): InterfaceResolution {
+  if (!summary) return { status: 'unknown' };
+  if (!ref) return { status: 'whole' };
+  const direct = summary.interfaces.find((i) => i.id === ref.id);
+  if (direct) return { status: 'ok', iface: direct };
+  const redirect = summary.redirects?.find((r) => r.from === ref.id);
+  if (!redirect) return { status: 'pending', name: ref.name };
+  const target = redirect.to ? summary.interfaces.find((i) => i.id === redirect.to) : undefined;
+  return target ? { status: 'ok', iface: target, redirectedFrom: ref.name } : { status: 'whole', redirectedFrom: ref.name };
+}
+
+/** La interfaz a la que llega un extremo de conexión (siguiendo las redirecciones); `undefined` si es el módulo completo. */
 export function interfaceTarget(
   node: Node | undefined,
   ref: InterfaceRef | undefined,
   modules: Record<string, ModuleSummary> | undefined,
 ): ModuleInterfaceSummary | undefined {
   if (!node || !ref) return undefined;
-  return moduleTarget(node, modules)?.interfaces.find((i) => i.id === ref.id);
+  const resolved = resolveInterface(moduleTarget(node, modules), ref);
+  return resolved.status === 'ok' ? resolved.iface : undefined;
 }
 
 /**

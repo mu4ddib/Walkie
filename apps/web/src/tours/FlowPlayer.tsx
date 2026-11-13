@@ -42,7 +42,7 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
   const tour = useGraphStore((s) => s.tours[playing.tourId]);
   const edges = useGraphStore((s) => s.edges);
   const nodes = useGraphStore((s) => s.nodes);
-  const { items, modules, share } = useCanvasCatalog();
+  const { items, modules } = useCanvasCatalog();
   const openModule = useOpenModule();
   const { getViewport, setViewport } = useReactFlow();
   const reduced = usePrefersReducedMotion();
@@ -226,7 +226,7 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
           <span className="flow-step-number">{playing.step + 1}</span> {describe(playing.step)}
         </p>
         {current?.note ? <p className="flow-note">{current.note}</p> : null}
-        {!share && inside(current?.edgeId) && (
+        {inside(current?.edgeId) && (
           // El paso pasa por la interfaz de un módulo con recorrido interno (spec modulos-compartidos, criterio 24).
           <button
             type="button"

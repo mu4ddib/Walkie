@@ -21,14 +21,15 @@ import {
   endType,
   interfaceTarget,
   moduleTarget,
+  resolveInterface,
   portalTarget,
   refTarget,
   type CanvasCatalog,
 } from '../catalog/catalogContext';
 import { InterfacePicker, type InterfaceChoice } from '../modules/InterfacePicker';
 import { ExtractModuleDialog } from '../modules/ExtractModuleDialog';
-import { placeableModules } from '../modules/moduleMeta';
-import type { InterfaceRef } from '../schema/walkie-graph';
+import { interfaceHandle, interfaceOfHandle, placeableModules } from '../modules/moduleMeta';
+import type { InterfaceRef, Node as GraphNode } from '../schema/walkie-graph';
 import { edgeTypes } from '../edges/edgeTypes';
 import type { WalkieFlowEdge } from '../edges/KindEdge';
 import { nodeTypes } from '../nodes/nodeTypes';
@@ -159,7 +160,8 @@ function CanvasInner({
   const { addGroup, moveGroup, resizeGroup, setParent, removeGroup, updateGroup } = useGraphStore((s) => s);
   const { addFlowTour, addEdgeStep } = useGraphStore((s) => s);
   const { undo, redo, beginBatch, endBatch, growGroup, canUndo, canRedo } = useGraphStore((s) => s);
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport, setCenter, getNodes, getNodesBounds } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport, setCenter, getNodes, getNodesBounds, getInternalNode } =
+    useReactFlow();
   const openFeature = useOpenFeature();
   const openModule = useOpenModule();
   // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
@@ -546,6 +548,26 @@ function CanvasInner({
         if (r) rects[id] = r;
       }
     }
+    /**
+     * Punto de la fila de una interfaz en la caja de un módulo (spec modulos-compartidos): a su altura, en el lado que
+     * mira al otro extremo. Solo si la caja la muestra (su punto de conexión está medido); si no, la caja entera.
+     */
+    const interfacePort = (nodeId: string, ref: InterfaceRef | undefined, toward: Rect | undefined) => {
+      const node = graphNodes[nodeId];
+      const box = rects[nodeId];
+      if (!ref || !box || !toward || node?.type !== 'module') return undefined;
+      const resolved = resolveInterface(moduleTarget(node, catalog.modules), ref);
+      if (resolved.status !== 'ok') return undefined;
+      const internal = getInternalNode(nodeId);
+      const handle = internal?.internals.handleBounds?.target?.find((h) => h.id === interfaceHandle(resolved.iface.id));
+      if (!internal || !handle) return undefined;
+      const left = toward.x + toward.w / 2 < box.x + box.w / 2;
+      return {
+        x: left ? box.x : box.x + box.w,
+        y: internal.internals.positionAbsolute.y + handle.y + handle.height / 2,
+        side: left ? ('left' as const) : ('right' as const),
+      };
+    };
     const ports = computePorts(
       visible.map(({ edge, source, target }) => {
         const branches = source === edge.from ? (graphNodes[edge.from]?.branches ?? []) : [];
@@ -554,8 +576,11 @@ function CanvasInner({
         const fixedSource =
           index >= 0 && from
             ? { x: from.x + from.w, y: from.y + from.h - (branches.length - index) * 16 - 4, side: 'right' as const }
-            : undefined;
-        return { id: edge.id, source, target, fixedSource };
+            : source === edge.from
+              ? interfacePort(source, edge.fromInterface, rects[target])
+              : undefined;
+        const fixedTarget = target === edge.to ? interfacePort(target, edge.toInterface, rects[source]) : undefined;
+        return { id: edge.id, source, target, fixedSource, fixedTarget };
       }),
       rects,
     );
@@ -634,6 +659,11 @@ function CanvasInner({
       const toIface = interfaceTarget(targetNode, edge.toInterface, catalog.modules);
       const fromIface = interfaceTarget(graphNodes[edge.from], edge.fromInterface, catalog.modules);
       const viaInterface = toIface ?? (edge.kind === 'response' ? undefined : fromIface);
+      // Una interfaz quitada sin reemplazo conserva su último nombre (con aviso); la que pasó al módulo completo, nada.
+      const pendingName = (node: GraphNode | undefined, ref: InterfaceRef | undefined) => {
+        const r = node?.type === 'module' ? resolveInterface(moduleTarget(node, catalog.modules), ref) : null;
+        return r?.status === 'pending' ? `⚠ ${r.name}` : undefined;
+      };
       return edgeDisplay(edge, {
         branchLabel: branch?.label,
         targetHttp: viaInterface
@@ -641,7 +671,10 @@ function CanvasInner({
             ? { method: viaInterface.method, path: viaInterface.path }
             : undefined
           : targetNode && (refTarget(targetNode, catalog.items)?.http ?? targetNode.http),
-        interfaceName: viaInterface?.name ?? edge.toInterface?.name ?? (edge.kind === 'response' ? undefined : edge.fromInterface?.name),
+        interfaceName:
+          viaInterface?.name ??
+          pendingName(targetNode, edge.toInterface) ??
+          (edge.kind === 'response' ? undefined : pendingName(graphNodes[edge.from], edge.fromInterface)),
       });
     };
     const pairLabels: Record<string, PlacedLabel> = {};
@@ -754,6 +787,7 @@ function CanvasInner({
     flash,
     catalog.items,
     catalog.modules,
+    getInternalNode,
     collapsedGroups,
     selectedEdges,
     playing,
@@ -1077,9 +1111,24 @@ function CanvasInner({
         const node = graphNodes[id];
         return node?.type === 'module' && (moduleTarget(node, catalog.modules)?.interfaces.length ?? 0) > 0;
       };
-      const ends = ([['from', c.source], ['to', c.target]] as const).filter(([, id]) => withInterfaces(id)).map(([end]) => end);
-      if (ends.length === 0) return finishConnect(c, {});
-      setPendingConnect({ connection: c, ends: [...ends].reverse(), picked: {}, x: pointer.current.x, y: pointer.current.y });
+      // Soltar sobre el punto de una interfaz la elige sin preguntar.
+      const picked: { fromInterface?: InterfaceRef; toInterface?: InterfaceRef } = {};
+      const byHandle = (id: string, handle: string | null | undefined) => {
+        const ifaceId = interfaceOfHandle(handle);
+        const node = graphNodes[id];
+        const iface = ifaceId && node ? moduleTarget(node, catalog.modules)?.interfaces.find((i) => i.id === ifaceId) : undefined;
+        return iface ? { id: iface.id, name: iface.name } : undefined;
+      };
+      const fromHandle = byHandle(c.source, c.sourceHandle);
+      const toHandle = byHandle(c.target, c.targetHandle);
+      if (fromHandle) picked.fromInterface = fromHandle;
+      if (toHandle) picked.toInterface = toHandle;
+      const connection = { ...c, sourceHandle: fromHandle ? null : c.sourceHandle, targetHandle: toHandle ? null : c.targetHandle };
+      const ends = ([['from', c.source], ['to', c.target]] as const)
+        .filter(([end, id]) => withInterfaces(id) && !(end === 'from' ? fromHandle : toHandle))
+        .map(([end]) => end);
+      if (ends.length === 0) return finishConnect(connection, picked);
+      setPendingConnect({ connection, ends: [...ends].reverse(), picked, x: pointer.current.x, y: pointer.current.y });
     },
     [graphNodes, catalog.modules, finishConnect],
   );

@@ -148,7 +148,7 @@ public sealed class ModulesTests(WalkieApiFactory factory)
     }
 
     [Fact]
-    public async Task Usos_reasignar_una_interfaz_y_borrar_el_modulo()
+    public async Task Usos_redirigir_una_interfaz_quitada_y_borrar_el_modulo()
     {
         using var client = factory.CreateAuthenticatedClient();
         var appId = await CreateAppAsync(client);
@@ -164,19 +164,24 @@ public sealed class ModulesTests(WalkieApiFactory factory)
         Assert.Equal("get", usages![0].Edges.Single().InterfaceId);
         Assert.Equal("to", usages![0].Edges.Single().End);
 
-        var bad = await client.PostAsJsonAsync(new Uri($"/api/modules/{module.Id}/interfaces/get/reassign", UriKind.Relative), new ReassignInterfaceRequest("nada"));
-        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
-        var reassigned = await client.PostAsJsonAsync(new Uri($"/api/modules/{module.Id}/interfaces/get/reassign", UriKind.Relative), new ReassignInterfaceRequest("put"));
-        var result = (await reassigned.Content.ReadFromJsonAsync<ReassignInterfaceResponse>())!;
-        Assert.Equal(2, result.Edges);
+        // Quitar «get» redirigiéndola a «put»: se guarda en el módulo; las features no se reescriben (ni cambian de versión).
+        var redirected = ModuleGraph(null);
+        redirected["interfaces"]!.AsObject().Remove("get");
+        redirected["interfaceRedirects"] = new JsonObject { ["get"] = new JsonObject { ["to"] = "put" } };
+        Assert.Equal(HttpStatusCode.OK, (await PutAsync(client, module.Id, Versioned(redirected, 1))).StatusCode);
+        var summary = await client.GetFromJsonAsync<JsonElement>(new Uri($"/api/modules/{module.Id}", UriKind.Relative));
+        Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.ModuleSummary, summary));
+        Assert.Equal("put", summary.GetProperty("redirects")[0].GetProperty("to").GetString());
         var graph = await client.GetFromJsonAsync<JsonElement>(new Uri($"/api/features/{first}/canvas", UriKind.Relative));
-        Assert.Equal(2, graph.GetProperty("version").GetInt32());
-        Assert.Equal("Actualizar perfil", graph.GetProperty("edges").GetProperty("e1").GetProperty("toInterface").GetProperty("name").GetString());
+        Assert.Equal(1, graph.GetProperty("version").GetInt32());
+        Assert.Equal("get", graph.GetProperty("edges").GetProperty("e1").GetProperty("toInterface").GetProperty("id").GetString());
 
-        // Al módulo completo: la conexión pierde la interfaz.
-        await client.PostAsJsonAsync(new Uri($"/api/modules/{module.Id}/interfaces/put/reassign", UriKind.Relative), new ReassignInterfaceRequest(null));
-        graph = await client.GetFromJsonAsync<JsonElement>(new Uri($"/api/features/{first}/canvas", UriKind.Relative));
-        Assert.False(graph.GetProperty("edges").GetProperty("e1").TryGetProperty("toInterface", out _));
+        // Una redirección a una interfaz que no existe, o de una que sigue en el módulo, no se guarda.
+        var bad = ModuleGraph(null);
+        bad["interfaceRedirects"] = new JsonObject { ["get"] = new JsonObject(), ["old"] = new JsonObject { ["to"] = "nada" } };
+        var errors = (await Problem(await PutAsync(client, module.Id, Versioned(bad, 2)))).Errors.Keys;
+        Assert.Contains("/interfaceRedirects/get", errors);
+        Assert.Contains("/interfaceRedirects/old/to", errors);
 
         var inUse = await client.DeleteAsync(new Uri($"/api/modules/{module.Id}", UriKind.Relative));
         Assert.Equal(HttpStatusCode.Conflict, inUse.StatusCode);
@@ -184,7 +189,7 @@ public sealed class ModulesTests(WalkieApiFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, forced.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(new Uri($"/api/modules/{module.Id}", UriKind.Relative))).StatusCode);
         // Las features siguen guardándose con la caja pendiente.
-        Assert.Equal(HttpStatusCode.OK, (await PutAsync(client, first, Versioned(FeatureUsing(module.Id, null), 3))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PutAsync(client, first, Versioned(FeatureUsing(module.Id, null), 1))).StatusCode);
     }
 
     [Fact]
@@ -284,6 +289,84 @@ public sealed class ModulesTests(WalkieApiFactory factory)
         Assert.Equal([imported], usuarios.UsedBy);
     }
 
+    [Fact]
+    public async Task Un_enlace_de_solo_lectura_trae_los_modulos_que_usa_y_deja_ver_su_lienzo()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        using var anonymous = factory.CreateClient();
+        var appId = await CreateAppAsync(client);
+        var module = await CreateModuleAsync(client, appId, "Usuarios");
+        var other = await CreateModuleAsync(client, appId, "Pagos");
+        await PutAsync(client, module.Id, ModuleGraph(null));
+        var feature = await CreateFeatureAsync(client, appId, "Registro");
+        await PutAsync(client, feature, FeatureUsing(module.Id, "get"));
+        var share = await client.PostAsJsonAsync(
+            new Uri($"/api/features/{feature}/shares", UriKind.Relative), new Walkie.Modules.Sharing.Contracts.CreateShareRequest(7));
+        var token = (await share.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString();
+
+        var view = await anonymous.GetFromJsonAsync<JsonElement>(new Uri($"/api/public/shares/{token}", UriKind.Relative));
+        Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.ModuleSummary, view.GetProperty("modules")[0]));
+        Assert.Equal("Usuarios", view.GetProperty("modules")[0].GetProperty("name").GetString());
+        // Sin decir qué otras features lo usan.
+        Assert.Equal(0, view.GetProperty("modules")[0].GetProperty("usedBy").GetArrayLength());
+
+        var shown = await anonymous.GetAsync(new Uri($"/api/public/shares/{token}/modules/{module.Id}", UriKind.Relative));
+        Assert.Equal(HttpStatusCode.OK, shown.StatusCode);
+        Assert.Equal("no-store", shown.Headers.CacheControl!.ToString());
+        var body = await shown.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("graph").GetProperty("interfaces").TryGetProperty("get", out _));
+        // Un módulo que la feature no usa no se ve.
+        Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(new Uri($"/api/public/shares/{token}/modules/{other.Id}", UriKind.Relative))).StatusCode);
+    }
+
+    [Fact]
+    public async Task El_contexto_para_IA_y_el_Markdown_describen_los_modulos_y_sus_interfaces()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client);
+        var module = await CreateModuleAsync(client, appId, "Usuarios");
+        await PutAsync(client, module.Id, ModuleGraph(null));
+        var feature = await CreateFeatureAsync(client, appId, "Registro");
+        var graph = FeatureUsing(module.Id, "get");
+        // Una segunda conexión a una interfaz que ya no existe (y nadie reasignó).
+        graph["nodes"]!["s2"] = new JsonObject { ["id"] = "s2", ["type"] = "screen", ["title"] = "Perfil" };
+        graph["layout"]!["s2"] = new JsonObject { ["x"] = 0, ["y"] = 160 };
+        graph["edges"]!["e2"] = new JsonObject
+        {
+            ["id"] = "e2", ["from"] = "s2", ["to"] = "m1", ["kind"] = "request",
+            ["toInterface"] = new JsonObject { ["id"] = "vieja", ["name"] = "Borrar usuario" },
+        };
+        await PutAsync(client, feature, graph);
+
+        var json = await client.GetFromJsonAsync<JsonElement>(new Uri($"/api/features/{feature}/export?format=ai-json", UriKind.Relative));
+        Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.AiContext, json));
+        var described = json.GetProperty("modules")[0];
+        Assert.Equal("Usuarios", described.GetProperty("name").GetString());
+        Assert.Equal(["Actualizar perfil", "Obtener usuario"], described.GetProperty("interfaces").EnumerateArray().Select(i => i.GetProperty("name").GetString()));
+        Assert.Equal("GET", described.GetProperty("interfaces")[1].GetProperty("method").GetString());
+        var connection = json.GetProperty("connections").EnumerateArray().Single(c => c.GetProperty("id").GetString() == "e1");
+        Assert.Equal("Obtener usuario", connection.GetProperty("toInterface").GetString());
+        Assert.Contains("interfaz «Obtener usuario» (GET /usuarios/{id})", connection.GetProperty("text").GetString(), StringComparison.Ordinal);
+        Assert.Contains(json.GetProperty("gaps").EnumerateArray(), g => g.GetProperty("kind").GetString() == "pending-interface");
+
+        var markdown = await client.GetStringAsync(new Uri($"/api/features/{feature}/export?format=ai", UriKind.Relative));
+        Assert.Contains("## Módulos", markdown, StringComparison.Ordinal);
+        Assert.Contains("**Obtener usuario** (ofrece · `GET /usuarios/{id}`", markdown, StringComparison.Ordinal);
+
+        var zip = await client.GetByteArrayAsync(new Uri($"/api/features/{feature}/export", UriKind.Relative));
+        using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(zip));
+        using var reader = new StreamReader(archive.Entries.Single(e => e.FullName.EndsWith(".md", StringComparison.Ordinal)).Open());
+        var document = await reader.ReadToEndAsync();
+        Assert.Contains("## Detalle de los módulos", document, StringComparison.Ordinal);
+        Assert.Contains("interfaz «Obtener usuario»", document, StringComparison.Ordinal);
+
+        // El PDF sale con la sección de módulos (sin imagen del lienzo).
+        using var empty = new MultipartFormDataContent();
+        var pdf = await client.PostAsync(new Uri($"/api/features/{feature}/export/pdf", UriKind.Relative), empty);
+        Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+        Assert.Equal("application/pdf", pdf.Content.Headers.ContentType!.MediaType);
+    }
+
     private static async Task<JsonElement> ImportAsync(HttpClient client, Guid appId, byte[] file)
     {
         using var part = new ByteArrayContent(file);
@@ -303,7 +386,7 @@ public sealed class ModulesTests(WalkieApiFactory factory)
 
         var openApi = await client.GetStringAsync(new Uri("/openapi/v1.json", UriKind.Relative));
 
-        foreach (var name in new[] { "ListModules", "CreateModule", "ExtractModule", "GetModule", "DeleteModule", "GetModuleUsages", "ReassignModuleInterface" })
+        foreach (var name in new[] { "ListModules", "CreateModule", "ExtractModule", "GetModule", "DeleteModule", "GetModuleUsages", "GetSharedModule" })
         {
             Assert.Contains(name, openApi, StringComparison.Ordinal);
         }

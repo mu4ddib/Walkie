@@ -1,6 +1,5 @@
 import { useId, useState } from 'react';
-import { ApiError, type ModuleSummary } from '../api/client';
-import { useModuleUsages, useReassignInterface } from '../api/hooks';
+import { useModuleUsages } from '../api/hooks';
 import { useCanvasCatalog } from '../catalog/catalogContext';
 import { interfaceKindHelp, interfaceKindLabel } from '../modules/moduleMeta';
 import type { ModuleInterface, Node } from '../schema/walkie-graph';
@@ -150,32 +149,29 @@ function InterfaceEditor({ item }: { item: ModuleInterface }) {
 
 /**
  * Quitar una interfaz (spec modulos-compartidos, criterio 15): antes dice qué conexiones de qué features la usan (según
- * lo guardado) y deja reasignarlas a otra interfaz guardada, pasarlas al módulo completo o dejarlas pendientes (con su
- * último nombre, para repararlas después).
+ * lo guardado) y deja pasarlas a otra interfaz, al módulo completo o dejarlas pendientes (con su último nombre). Es un
+ * cambio del módulo: se deshace con Ctrl+Z y llega a las features al guardarlo, sin reescribirlas.
  */
 function RemoveInterface({ item, onDone }: { item: ModuleInterface; onDone: () => void }) {
-  const { appId, currentModuleId, modules } = useCanvasCatalog();
+  const { currentModuleId, modules } = useCanvasCatalog();
+  const interfaces = useGraphStore((s) => s.interfaces);
   const removeInterface = useGraphStore((s) => s.removeInterface);
   const usages = useModuleUsages(currentModuleId ?? null);
-  const reassign = useReassignInterface(appId, currentModuleId ?? '');
-  const summary: ModuleSummary | undefined = currentModuleId ? modules?.[currentModuleId] : undefined;
+  const summary = currentModuleId ? modules?.[currentModuleId] : undefined;
   const [target, setTarget] = useState<string>('pending');
   const selectId = useId();
+  // Conexiones guardadas que llegan a ella (directo o por una redirección anterior).
+  const reaches = (id: string | undefined) =>
+    !!id && (id === item.id || summary?.redirects?.some((r) => r.from === id && r.to === item.id) === true);
   const affected = (usages.data ?? [])
-    .map((u) => ({ ...u, edges: u.edges.filter((e) => e.interfaceId === item.id) }))
+    .map((u) => ({ ...u, edges: u.edges.filter((e) => reaches(e.interfaceId)) }))
     .filter((u) => u.edges.length > 0);
   const count = affected.reduce((n, u) => n + u.edges.length, 0);
-  // Solo se reasigna a interfaces ya guardadas: la API reescribe las features con lo que conoce del módulo.
-  const others = (summary?.interfaces ?? []).filter((i) => i.id !== item.id);
+  const others = Object.values(interfaces).filter((i) => i.id !== item.id);
 
-  async function confirm() {
-    try {
-      if (count > 0 && target !== 'pending') await reassign.mutateAsync({ interfaceId: item.id, to: target === 'whole' ? null : target });
-      removeInterface(item.id);
-      onDone();
-    } catch {
-      // El error se muestra abajo; la interfaz sigue.
-    }
+  function confirm() {
+    removeInterface(item.id, target === 'pending' ? undefined : target === 'whole' ? {} : { to: target });
+    onDone();
   }
 
   return (
@@ -185,39 +181,32 @@ function RemoveInterface({ item, onDone }: { item: ModuleInterface; onDone: () =
       ) : count === 0 ? (
         <p className="panel-help">Ninguna feature guardada la usa: se puede quitar sin afectar a nadie.</p>
       ) : (
-        <>
-          <p className="panel-warning">
-            {count === 1 ? '1 conexión la usa' : `${count} conexiones la usan`} en{' '}
-            {affected.map((u) => `«${u.name}» (${u.edges.length})`).join(', ')}.
-          </p>
-          <div className="panel-field">
-            <label htmlFor={selectId}>Qué hacer con esas conexiones</label>
-            <select id={selectId} value={target} onChange={(e) => setTarget(e.target.value)}>
-              <option value="pending">Dejarlas pendientes para repararlas en cada feature</option>
-              <option value="whole">Pasarlas al módulo completo</option>
-              {others.map((i) => (
-                <option key={i.id} value={i.id}>
-                  Reasignarlas a «{i.name}»
-                </option>
-              ))}
-            </select>
-          </div>
-        </>
+        <p className="panel-warning">
+          {count === 1 ? '1 conexión la usa' : `${count} conexiones la usan`} en{' '}
+          {affected.map((u) => `«${u.name}» (${u.edges.length})`).join(', ')}.
+        </p>
       )}
+      <div className="panel-field">
+        <label htmlFor={selectId}>Qué hacer con esas conexiones</label>
+        <select id={selectId} value={target} onChange={(e) => setTarget(e.target.value)}>
+          <option value="pending">Dejarlas pendientes para repararlas en cada feature</option>
+          <option value="whole">Pasarlas al módulo completo</option>
+          {others.map((i) => (
+            <option key={i.id} value={i.id}>
+              Reasignarlas a «{i.name}»
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="panel-actions">
-        <button type="button" className="pixel-button is-primary" disabled={reassign.isPending || usages.isPending} onClick={() => void confirm()}>
-          {reassign.isPending ? 'Reasignando…' : 'Quitar interfaz'}
+        <button type="button" className="pixel-button is-primary" onClick={confirm}>
+          Quitar interfaz
         </button>
         <button type="button" className="pixel-button is-ghost" onClick={onDone}>
           Cancelar
         </button>
       </div>
-      {reassign.error && (
-        <p role="alert" className="save-error">
-          {reassign.error instanceof ApiError ? reassign.error.userMessage : 'No se pudieron reasignar las conexiones.'}
-        </p>
-      )}
-      <p className="panel-help">Guarda el módulo para terminar de quitarla.</p>
+      <p className="panel-help">Las features lo ven al guardar el módulo; Ctrl+Z lo deshace. No se reescribe ninguna feature.</p>
     </div>
   );
 }

@@ -18,6 +18,19 @@
       "description": "Interfaces del módulo, por nombre, con lo que se sabe de su caja interna",
       "items": { "$ref": "#/$defs/interface" }
     },
+    "redirects": {
+      "type": "array",
+      "description": "Interfaces quitadas y adónde pasan sus conexiones (interfaceRedirects del lienzo del módulo); sin to, al módulo completo",
+      "items": {
+        "type": "object",
+        "required": ["from"],
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string", "minLength": 1 },
+          "to": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "modules": {
       "type": "array",
       "description": "Módulos que contiene (nodos module de su lienzo)",

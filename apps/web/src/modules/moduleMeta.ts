@@ -1,4 +1,5 @@
 import type { ModuleInterfaceSummary, ModuleSummary } from '../api/client';
+import { resolveInterface } from '../catalog/catalogContext';
 import type { Edge } from '../schema/walkie-graph';
 import type { InterfaceKind } from '../store/graphStore';
 
@@ -88,4 +89,35 @@ export function placeableModules(modules: Record<string, ModuleSummary>, current
     }
   }
   return all.filter((m) => !containers.has(m.id));
+}
+
+/** Una interfaz usada en un lienzo, ya resuelta: la actual (con su punto en la caja) o la que quedó pendiente. */
+export type ResolvedUse = { key: string; iface: ModuleInterfaceSummary } | { key: string; pending: string };
+
+/** Máximo de interfaces usadas que muestra la caja (cada una con su punto de conexión); el resto, en el inspector. */
+export const MAX_BOX_INTERFACES = 4;
+
+/**
+ * Las interfaces usadas por las conexiones de una caja (JSON de `usedInterfaces`), resueltas con las redirecciones del
+ * módulo: sin repetir, las que pasaron al módulo completo fuera y las pendientes al final.
+ */
+export function resolvedUses(summary: ModuleSummary, usedKey: string): ResolvedUse[] {
+  const refs = usedKey ? usedKey.split('\n').map((pair) => JSON.parse(pair) as { id: string; name: string }) : [];
+  const ok = new Map<string, ResolvedUse>();
+  const pending: ResolvedUse[] = [];
+  for (const ref of refs) {
+    const r = resolveInterface(summary, ref);
+    if (r.status === 'ok' && !ok.has(r.iface.id)) ok.set(r.iface.id, { key: r.iface.id, iface: r.iface });
+    if (r.status === 'pending') pending.push({ key: ref.id, pending: r.name });
+  }
+  return [...[...ok.values()].sort((a, b) => ('iface' in a && 'iface' in b ? a.iface.name.localeCompare(b.iface.name, 'es') : 0)), ...pending];
+}
+
+/** Id del punto de conexión de una interfaz en la caja (llega por la izquierda, sale por la derecha). */
+export const interfaceHandle = (interfaceId: string, out = false) => `iface:${interfaceId}${out ? ':out' : ''}`;
+
+/** La interfaz de un punto de conexión de la caja, o `null` si es un punto de la caja entera. */
+export function interfaceOfHandle(handle: string | null | undefined): string | null {
+  if (!handle?.startsWith('iface:')) return null;
+  return handle.slice('iface:'.length).replace(/:out$/, '');
 }

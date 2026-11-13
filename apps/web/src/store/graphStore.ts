@@ -5,7 +5,8 @@ import type { Edge, Group, InterfaceRef, ModuleInterface, Node, StickyNote, Tour
 import { GRID } from '../theme/palette';
 import { normalizeDatabase, normalizeEdgeData, normalizeEdgeRequest, normalizeHttp } from '../contracts/contracts';
 import { canNest, descendantsOf, inferHierarchy, isInside, ownerOf } from './hierarchy';
-import { History, sameSnapshot, snapshotOf, type Snapshot } from './history';
+import { History, sameSnapshot, snapshotOf, type InterfaceRedirects, type Snapshot } from './history';
+export type { InterfaceRedirects } from './history';
 import { tourKind, type TourKind } from '../tours/flows';
 import { normalizeResource, resourceEdgeKind, resourceKindMeta, type ResourceKind } from '../nodes/resourceMeta';
 
@@ -365,6 +366,8 @@ export interface GraphState {
   stickyNotes: Record<string, StickyNote>;
   /** Interfaces del lienzo de un módulo (spec modulos-compartidos, ADR-0010); vacío en una feature. */
   interfaces: Record<string, ModuleInterface>;
+  /** Interfaces quitadas del módulo y adónde pasan sus conexiones (spec modulos-compartidos). */
+  interfaceRedirects: InterfaceRedirects;
   /** Versión guardada en el servidor (concurrencia optimista). */
   version: number;
   /** Hay cambios sin guardar. */
@@ -543,7 +546,11 @@ export interface GraphActions {
   /** Interfaces del lienzo de un módulo: nombre único (sin distinguir mayúsculas) y una caja existente. */
   addInterface(init: { name: string; kind: InterfaceKind; nodeId: string; description?: string; tourId?: string }): string | null;
   updateInterface(id: string, patch: InterfacePatch): void;
-  removeInterface(id: string): void;
+  /**
+   * Quita una interfaz. `redirect` dice adónde pasan sus conexiones en las features (`to`: otra interfaz; sin `to`, el
+   * módulo completo); sin él quedan pendientes. Las redirecciones que llegaban a ella la siguen.
+   */
+  removeInterface(id: string, redirect?: { to?: string }): void;
   /**
    * Reemplaza el grafo entero en un solo paso del historial (no lo olvida, a diferencia de `loadGraph`): convertir una
    * selección en módulo se deshace con Ctrl+Z.
@@ -573,6 +580,7 @@ const emptyState: GraphState = {
   groups: {},
   stickyNotes: {},
   interfaces: {},
+  interfaceRedirects: {},
   version: 0,
   dirty: false,
   canUndo: false,
@@ -651,6 +659,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           groups: graph.groups ?? {},
           stickyNotes: graph.stickyNotes ?? {},
           interfaces: graph.interfaces ?? {},
+          interfaceRedirects: graph.interfaceRedirects ?? {},
           version: graph.version,
           dirty: false,
           canUndo: false,
@@ -993,7 +1002,12 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           const interfaces = Object.values(s.interfaces).some((i) => i.nodeId === id)
             ? Object.fromEntries(Object.entries(s.interfaces).filter(([, i]) => i.nodeId !== id))
             : s.interfaces;
-          return { nodes, layout, edges, tours, interfaces, dirty: true };
+          // Lo que se redirigía a ellas queda pendiente (como ellas).
+          let interfaceRedirects = s.interfaceRedirects;
+          for (const gone of Object.values(s.interfaces).filter((i) => i.nodeId === id)) {
+            interfaceRedirects = retarget(interfaceRedirects, gone.id, null);
+          }
+          return { nodes, layout, edges, tours, interfaces, interfaceRedirects, dirty: true };
         });
       },
 
@@ -1485,9 +1499,15 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
         set((st) => ({ interfaces: { ...st.interfaces, [id]: next }, dirty: true }));
       },
 
-      removeInterface: (id) => {
-        if (!get().interfaces[id]) return;
-        set((s) => ({ interfaces: omit(s.interfaces, id), dirty: true }));
+      removeInterface: (id, redirect) => {
+        const s = get();
+        if (!s.interfaces[id]) return;
+        const target = redirect?.to && redirect.to !== id && s.interfaces[redirect.to] ? redirect.to : undefined;
+        set((st) => ({
+          interfaces: omit(st.interfaces, id),
+          interfaceRedirects: retarget(st.interfaceRedirects, id, redirect ? { ...(target ? { to: target } : {}) } : null),
+          dirty: true,
+        }));
       },
 
       replaceGraph: (graph) => {
@@ -1500,6 +1520,7 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
           groups: loaded.groups ?? {},
           stickyNotes: loaded.stickyNotes ?? {},
           interfaces: loaded.interfaces ?? {},
+          interfaceRedirects: loaded.interfaceRedirects ?? {},
           dirty: true,
         });
       },
@@ -1514,7 +1535,8 @@ export function createGraphStore(newId: () => string = uuidv7): StoreApi<GraphSt
             s.tours === sent.tours &&
             s.groups === sent.groups &&
             s.stickyNotes === sent.stickyNotes &&
-            s.interfaces === sent.interfaces);
+            s.interfaces === sent.interfaces &&
+            s.interfaceRedirects === sent.interfaceRedirects);
         saved = snapshotOf(sent ?? s);
         set({ version, dirty: unchanged ? false : s.dirty });
       },
@@ -1594,6 +1616,7 @@ export function toGraph(state: GraphState): WalkieCanvasGraphV0 {
   }
   if (Object.keys(state.stickyNotes).length > 0) graph.stickyNotes = state.stickyNotes;
   if (Object.keys(state.interfaces).length > 0) graph.interfaces = state.interfaces;
+  if (Object.keys(state.interfaceRedirects).length > 0) graph.interfaceRedirects = state.interfaceRedirects;
   return graph;
 }
 
@@ -1617,4 +1640,19 @@ function withoutTour(item: ModuleInterface): ModuleInterface {
   const copy = { ...item };
   delete copy.tourId;
   return copy;
+}
+
+/**
+ * Redirecciones al quitar la interfaz `id`: ella apunta a `redirect` (o, con `null`, queda pendiente: sin entrada) y las
+ * que apuntaban a ella la siguen, así cada redirección llega a una interfaz actual en un solo paso.
+ */
+function retarget(redirects: InterfaceRedirects, id: string, redirect: { to?: string } | null): InterfaceRedirects {
+  const next: InterfaceRedirects = {};
+  for (const [from, r] of Object.entries(redirects)) {
+    if (r.to !== id) next[from] = r;
+    else if (redirect) next[from] = redirect;
+  }
+  if (redirect) next[id] = redirect;
+  else delete next[id];
+  return next;
 }
