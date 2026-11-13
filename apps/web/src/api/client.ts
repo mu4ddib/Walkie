@@ -3,6 +3,7 @@ import type { WalkieCatalogItemV0 } from '../schema/walkie-catalog-item';
 import type { WalkieAssetV0 } from '../schema/walkie-asset';
 import type { WalkieShareV0 } from '../schema/walkie-share';
 import type { WalkieSharedFeatureV0 } from '../schema/walkie-shared-feature';
+import type { WalkieSharedModuleV0 } from '../schema/walkie-shared-module';
 import type { Layout, WalkieAppMapV0 } from '../schema/walkie-app-map';
 import type { WalkieImportSummaryV0 } from '../schema/walkie-import-summary';
 import type { Interface, WalkieModuleSummaryV0 } from '../schema/walkie-module-summary';
@@ -246,19 +247,6 @@ export function listModuleUsages(token: string, moduleId: string, signal?: Abort
   return request(`/api/modules/${encodeURIComponent(moduleId)}/usages`, { token, signal });
 }
 
-/** Pasa las conexiones que usan la interfaz a otra (`to`) o al módulo completo (`null`) en todos los lienzos. */
-export function reassignInterface(
-  token: string,
-  moduleId: string,
-  interfaceId: string,
-  to: string | null,
-): Promise<{ edges: number; features: string[] }> {
-  return request(
-    `/api/modules/${encodeURIComponent(moduleId)}/interfaces/${encodeURIComponent(interfaceId)}/reassign`,
-    { token, method: 'POST', body: JSON.stringify({ to }) },
-  );
-}
-
 /** Lo que manda «Convertir en módulo»: el lienzo del módulo nuevo y el de la feature ya reescrito. */
 export interface ModuleExtraction {
   moduleId: string;
@@ -351,6 +339,13 @@ export function revokeShare(token: string, shareId: string): Promise<void> {
 /** La feature de un enlace, sin sesión; 404 como `ApiError` si está revocado, caducado o no existe. */
 export function getSharedFeature(shareToken: string, signal?: AbortSignal): Promise<SharedFeature> {
   return request(`/api/public/shares/${encodeURIComponent(shareToken)}`, { signal });
+}
+
+/** Un módulo que usa la feature de un enlace, sin sesión (spec modulos-compartidos). */
+export type SharedModule = WalkieSharedModuleV0;
+
+export function getSharedModule(shareToken: string, moduleId: string, signal?: AbortSignal): Promise<SharedModule> {
+  return request(`/api/public/shares/${encodeURIComponent(shareToken)}/modules/${encodeURIComponent(moduleId)}`, { signal });
 }
 
 /** Bytes de una imagen del lienzo compartido, sin sesión. */

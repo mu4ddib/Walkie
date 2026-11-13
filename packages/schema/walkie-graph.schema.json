@@ -53,6 +53,17 @@
       "description": "Solo en el lienzo de un módulo (spec modulos-compartidos, ADR-0010): mapa id -> interfaz expuesta, el punto por el que las features se conectan al módulo",
       "additionalProperties": { "$ref": "#/$defs/moduleInterface" }
     },
+    "interfaceRedirects": {
+      "type": "object",
+      "description": "Solo en el lienzo de un módulo: interfaces quitadas -> a qué interfaz pasan sus conexiones (to) o, sin to, al módulo completo. Las features no se reescriben: resuelven sus conexiones con esto al leer el módulo. Una interfaz quitada sin entrada deja sus conexiones pendientes",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "to": { "$ref": "#/$defs/id", "description": "Interfaz actual del módulo que la reemplaza" }
+        }
+      }
+    },
     "groupNesting": {
       "const": "explicit",
       "description": "Los grupos guardan su grupo padre en parentId y las notas su grupo en groupId. Sin este campo (lienzos anteriores) la jerarquía se infiere por contención al abrir el lienzo"

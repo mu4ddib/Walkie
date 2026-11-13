@@ -137,6 +137,11 @@
         }
       }
     },
+    "modules": {
+      "type": "array",
+      "description": "Módulos compartidos que usa el lienzo, a cualquier profundidad (spec modulos-compartidos): qué expone cada uno, qué contiene y cómo se conecta por dentro",
+      "items": { "$ref": "#/$defs/module" }
+    },
     "gaps": {
       "type": "array",
       "description": "Vacíos detectados: lo que falta documentar, para que la IA pregunte en vez de inventar",
@@ -156,7 +161,9 @@
               "broken-flow-step",
               "missing-catalog-item",
               "portal-without-target",
-              "database-without-structure"
+              "database-without-structure",
+              "missing-module",
+              "pending-interface"
             ]
           },
           "elementId": { "type": "string", "description": "Caja o conexión a la que se refiere" },
@@ -166,6 +173,111 @@
     }
   },
   "$defs": {
+    "module": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "interfaces",
+        "components",
+        "connections",
+        "contains"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "kind"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "provides",
+                  "event",
+                  "requires"
+                ]
+              },
+              "description": {
+                "type": "string"
+              },
+              "component": {
+                "type": "string",
+                "description": "Título de la caja interna que la implementa"
+              },
+              "method": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "internalFlow": {
+                "type": "string",
+                "description": "Nombre del recorrido interno que muestra qué pasa dentro"
+              }
+            }
+          }
+        },
+        "components": {
+          "type": "array",
+          "description": "Cajas del lienzo del módulo",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "is"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "is": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "connections": {
+          "type": "array",
+          "description": "Conexiones internas en palabras",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contains": {
+          "type": "array",
+          "description": "Nombres de los módulos que contiene",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "component": {
       "type": "object",
       "required": ["id", "type", "is", "title"],
@@ -217,6 +329,8 @@
         "branch": { "type": "string", "description": "Etiqueta de la salida de la decisión de origen" },
         "status": { "type": "integer" },
         "replyTo": { "type": "string", "description": "Id de la solicitud a la que responde" },
+        "toInterface": { "type": "string", "description": "Interfaz del módulo de destino a la que llega (spec modulos-compartidos)" },
+        "fromInterface": { "type": "string", "description": "Interfaz del módulo de origen de la que sale" },
         "outcome": { "type": "string" },
         "notes": { "type": "string" }
       }

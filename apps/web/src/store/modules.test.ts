@@ -153,3 +153,43 @@ describe('reemplazar el grafo (convertir en módulo)', () => {
     expect(s().dirty).toBe(false);
   });
 });
+
+describe('quitar una interfaz con redirección', () => {
+  it('redirige a otra, al módulo completo o la deja pendiente, y encadena las anteriores', async () => {
+    const { s } = setup();
+    const a = s().addNode('api', { x: 0, y: 0 });
+    const b = s().addNode('api', { x: 0, y: 160 });
+    const first = s().addInterface({ name: 'Alta', kind: 'provides', nodeId: a })!;
+    const second = s().addInterface({ name: 'Alta v2', kind: 'provides', nodeId: b })!;
+    const third = s().addInterface({ name: 'Alta v3', kind: 'provides', nodeId: a })!;
+
+    s().removeInterface(first, { to: second });
+    expect(s().interfaceRedirects).toEqual({ [first]: { to: second } });
+    expect(toGraph(s()).interfaceRedirects).toEqual({ [first]: { to: second } });
+
+    // Quitar la de destino arrastra a las que llegaban a ella.
+    s().removeInterface(second, { to: third });
+    expect(s().interfaceRedirects).toEqual({ [first]: { to: third }, [second]: { to: third } });
+
+    // Al módulo completo (en otro paso del historial).
+    await tick();
+    s().removeInterface(third, {});
+    expect(s().interfaceRedirects).toEqual({ [first]: {}, [second]: {}, [third]: {} });
+    await tick();
+    s().undo();
+    expect(s().interfaces[third]).toBeDefined();
+    expect(s().interfaceRedirects).toEqual({ [first]: { to: third }, [second]: { to: third } });
+  });
+
+  it('sin redirección quedan pendientes (y las que llegaban a ella también); borrar la caja hace lo mismo', () => {
+    const { s } = setup();
+    const a = s().addNode('api', { x: 0, y: 0 });
+    const b = s().addNode('api', { x: 0, y: 160 });
+    const old = s().addInterface({ name: 'Vieja', kind: 'provides', nodeId: a })!;
+    const current = s().addInterface({ name: 'Actual', kind: 'provides', nodeId: b })!;
+    s().removeInterface(old, { to: current });
+    s().removeNode(b);
+    expect(s().interfaces).toEqual({});
+    expect(s().interfaceRedirects).toEqual({});
+  });
+});

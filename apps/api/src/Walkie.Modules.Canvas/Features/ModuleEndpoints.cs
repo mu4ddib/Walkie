@@ -43,12 +43,6 @@ internal static class ModuleEndpoints
             .WithName("GetModuleUsages")
             .WithSummary("Lienzos que referencian el módulo, con sus cajas y las conexiones a cada interfaz.");
 
-        module.MapPost("/interfaces/{interfaceId}/reassign", Reassign)
-            .WithName("ReassignModuleInterface")
-            .WithSummary("Pasa las conexiones que usan la interfaz a otra (to) o al módulo completo (to: null) en todos los lienzos.")
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status409Conflict);
-
         return routes;
     }
 
@@ -88,16 +82,6 @@ internal static class ModuleEndpoints
     private static async Task<Results<Ok<IReadOnlyList<ModuleUsage>>, NotFound>> Usages(
         Guid moduleId, ModuleHandlers handlers, CancellationToken ct) =>
         await handlers.UsagesAsync(moduleId, ct).ConfigureAwait(false) is { } list ? TypedResults.Ok(list) : TypedResults.NotFound();
-
-    private static async Task<Results<Ok<ReassignInterfaceResponse>, NotFound, ValidationProblem, ProblemHttpResult>> Reassign(
-        Guid moduleId, string interfaceId, ReassignInterfaceRequest request, ClaimsPrincipal user, ModuleHandlers handlers, CancellationToken ct) =>
-        await handlers.ReassignAsync(moduleId, interfaceId, request.To, UserId(user), ct).ConfigureAwait(false) switch
-        {
-            ReassignResult.Done done => TypedResults.Ok(done.Response),
-            ReassignResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors, title: "No se puede reasignar."),
-            ReassignResult.Conflict => TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: "Un lienzo cambió mientras se reasignaba. Vuelve a intentarlo."),
-            _ => TypedResults.NotFound(),
-        };
 
     private static async Task<Results<Ok<ExtractModuleResponse>, NotFound, ValidationProblem, ProblemHttpResult>> Extract(
         Guid appId, ExtractModuleRequest request, ClaimsPrincipal user, ModuleHandlers handlers, CancellationToken ct) =>

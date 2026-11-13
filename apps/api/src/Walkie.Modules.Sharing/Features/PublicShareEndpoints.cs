@@ -16,6 +16,9 @@ internal static class PublicShareEndpoints
         group.MapGet("/{token}", Get)
             .WithName("GetSharedFeature")
             .WithSummary("La feature de un enlace activo: grafo, catálogo usado y nombres. 404 si está revocado, caducado o no existe.");
+        group.MapGet("/{token}/modules/{moduleId:guid}", GetModule)
+            .WithName("GetSharedModule")
+            .WithSummary("Un módulo que usa la feature del enlace (directa o indirectamente): su lienzo y el catálogo que usa; 404 si no.");
         group.MapGet("/{token}/assets/{assetId:guid}", GetAsset)
             .WithName("GetSharedAsset")
             .WithSummary("Bytes de una imagen que usa una pantalla del lienzo compartido; 404 si no.");
@@ -30,6 +33,15 @@ internal static class PublicShareEndpoints
         http.Response.Headers.CacheControl = "no-store";
         return await handlers.GetAsync(token, ct).ConfigureAwait(false) is { } shared
             ? TypedResults.Ok(shared)
+            : TypedResults.NotFound();
+    }
+
+    private static async Task<Results<Ok<SharedModuleResponse>, NotFound>> GetModule(
+        string token, Guid moduleId, HttpContext http, PublicShareHandlers handlers, CancellationToken ct)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        return await handlers.GetModuleAsync(token, moduleId, ct).ConfigureAwait(false) is { } module
+            ? TypedResults.Ok(module)
             : TypedResults.NotFound();
     }
 

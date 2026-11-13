@@ -1,8 +1,11 @@
 import type { Edge, Group, ModuleInterface, Node, StickyNote, Tour, WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 
+/** Interfaces quitadas de un módulo → a qué interfaz pasan sus conexiones (`to`) o, sin él, al módulo completo. */
+export type InterfaceRedirects = NonNullable<WalkieCanvasGraphV0['interfaceRedirects']>;
+
 /**
  * Historial del lienzo (deshacer y rehacer). Guarda instantáneas del grafo: como el store nunca muta (cada acción
- * crea objetos nuevos solo donde cambia algo), una instantánea son siete referencias y no cuesta copiar nada.
+ * crea objetos nuevos solo donde cambia algo), una instantánea son ocho referencias y no cuesta copiar nada.
  * Selección, vista, reproducción y plegados temporales no son del grafo: no entran aquí.
  */
 export interface Snapshot {
@@ -14,9 +17,11 @@ export interface Snapshot {
   stickyNotes: Record<string, StickyNote>;
   /** Interfaces de un módulo (spec modulos-compartidos); vacío en una feature. */
   interfaces: Record<string, ModuleInterface>;
+  /** Interfaces quitadas y adónde pasan sus conexiones (las features las resuelven al leer el módulo). */
+  interfaceRedirects: InterfaceRedirects;
 }
 
-const FIELDS = ['nodes', 'edges', 'layout', 'tours', 'groups', 'stickyNotes', 'interfaces'] as const;
+const FIELDS = ['nodes', 'edges', 'layout', 'tours', 'groups', 'stickyNotes', 'interfaces', 'interfaceRedirects'] as const;
 
 /** Pasos que se recuerdan; los más viejos se olvidan. */
 export const HISTORY_LIMIT = 100;
@@ -32,6 +37,7 @@ export function snapshotOf(state: Snapshot): Snapshot {
     groups: state.groups,
     stickyNotes: state.stickyNotes,
     interfaces: state.interfaces,
+    interfaceRedirects: state.interfaceRedirects,
   };
 }
 

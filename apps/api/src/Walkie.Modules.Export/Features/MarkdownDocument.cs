@@ -13,7 +13,8 @@ internal sealed record ExportInput(
     IReadOnlyDictionary<Guid, CatalogItemResponse> Catalog,
     IReadOnlyDictionary<Guid, string> FeatureNames,
     IReadOnlyDictionary<Guid, string> ImagePaths,
-    DateTimeOffset ExportedAt);
+    DateTimeOffset ExportedAt,
+    IReadOnlyList<Walkie.Modules.Canvas.Contracts.ModuleGraph>? Modules = null);
 
 /// <summary>
 /// Documento Markdown de una feature (spec export-markdown, criterios 3 a 8 y 10): encabezado, índice, diagrama
@@ -139,6 +140,9 @@ internal static partial class MarkdownDocument
 
     public static string Render(ExportInput input)
     {
+        // Módulos compartidos (spec modulos-compartidos): sus cajas con el nombre actual y su detalle al final.
+        var modules = (input.Modules ?? []).ToDictionary(m => m.Summary.Id);
+        input = input with { Graph = WithModuleNames(input.Graph, modules) };
         var nodes = ReadNodes(input);
         var byId = nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
         var edges = ReadEdges(input.Graph, byId);
@@ -195,6 +199,11 @@ internal static partial class MarkdownDocument
             md.Line("- [Recorridos](#recorridos)");
         }
 
+        if (modules.Count > 0)
+        {
+            md.Line("- [Detalle de los módulos](#detalle-de-los-módulos)");
+        }
+
         md.Blank();
         WriteDiagram(md, nodes, edges, groups);
 
@@ -219,7 +228,7 @@ internal static partial class MarkdownDocument
             md.Blank();
             foreach (var edge in edges)
             {
-                md.Line($"- {EdgeText(edge, MarkdownText.Inline)}");
+                md.Line($"- {EdgeText(edge, MarkdownText.Inline)}{MarkdownText.Inline(InterfaceText(edge, modules))}");
                 WriteEdgeDetail(md, edge);
             }
 
@@ -240,6 +249,13 @@ internal static partial class MarkdownDocument
 
         WriteTours(md, "Tours", tours);
         WriteTours(md, "Recorridos", flows);
+
+        if (modules.Count > 0)
+        {
+            var context = new AiContextInput(
+                Guid.Empty, input.AppName, input.FeatureName, null, input.Graph, input.Catalog, input.FeatureNames, input.ExportedAt);
+            WriteAiModules(md, [.. modules.Values.Select(m => BuildAiModule(m, modules, context))], 0, "Detalle de los módulos");
+        }
 
         return md.ToString();
     }

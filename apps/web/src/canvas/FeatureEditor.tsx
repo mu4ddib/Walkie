@@ -177,7 +177,8 @@ export function FeatureEditor({
         state.tours !== prev.tours ||
         state.groups !== prev.groups ||
         state.stickyNotes !== prev.stickyNotes ||
-        state.interfaces !== prev.interfaces;
+        state.interfaces !== prev.interfaces ||
+        state.interfaceRedirects !== prev.interfaceRedirects;
       if (state.dirty && changed) schedule(AUTOSAVE_DELAY_MS);
     });
     const onDown = () => (pointerDown = true);

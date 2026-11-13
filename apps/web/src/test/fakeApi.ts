@@ -69,6 +69,11 @@ export function installFakeApi(
       nodes: Object.keys(graph.nodes).length,
       interfaces,
       modules: Object.values(graph.nodes).flatMap((n) => (n.type === 'module' && n.moduleId ? [n.moduleId] : [])),
+      ...(graph.interfaceRedirects && Object.keys(graph.interfaceRedirects).length > 0
+        ? {
+            redirects: Object.entries(graph.interfaceRedirects).map(([from, r]) => ({ from, ...(r.to ? { to: r.to } : {}) })),
+          }
+        : {}),
       usedBy: features
         .filter((f) => f.appId === m.appId && f.id !== m.id && Object.values(canvases[f.id]?.nodes ?? {}).some((n) => n.moduleId === m.id))
         .map((f) => f.id),
@@ -263,39 +268,6 @@ export function installFakeApi(
             };
           });
         return json(200, usages);
-      }
-      if (parts[3] === 'interfaces' && parts[5] === 'reassign') {
-        const to = (body as { to?: string | null }).to ?? null;
-        const target = to ? canvases[module.id]?.interfaces?.[to] : undefined;
-        if (to && !target) return json(400, { title: 'No se puede reasignar.', errors: { To: ['La interfaz destino no existe.'] } });
-        let count = 0;
-        const changed: string[] = [];
-        for (const f of users) {
-          const graph = canvases[f.id];
-          const nodes = nodesOf(f);
-          if (!graph || nodes.length === 0) continue;
-          let here = 0;
-          const edges = Object.fromEntries(
-            Object.entries(graph.edges).map(([key, e]) => {
-              const copy = { ...e };
-              for (const end of ['from', 'to'] as const) {
-                const field = end === 'from' ? 'fromInterface' : 'toInterface';
-                if (nodes.includes(e[end]) && e[field]?.id === parts[4]) {
-                  if (target) copy[field] = { id: target.id, name: target.name };
-                  else delete copy[field];
-                  here++;
-                }
-              }
-              return [key, copy];
-            }),
-          );
-          if (here > 0) {
-            canvases[f.id] = { ...graph, edges, version: graph.version + 1 };
-            changed.push(f.id);
-            count += here;
-          }
-        }
-        return json(200, { edges: count, features: changed });
       }
       if (method === 'DELETE') {
         const usedBy = summarize(module).usedBy;

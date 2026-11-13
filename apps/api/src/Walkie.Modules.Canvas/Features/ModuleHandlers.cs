@@ -1,17 +1,16 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Walkie.Modules.Apps.Contracts;
 using Walkie.Modules.Canvas.Contracts;
 using Walkie.Modules.Canvas.Persistence;
-using Walkie.Shared.Time;
 
 namespace Walkie.Modules.Canvas.Features;
 
 /// <summary>
 /// Módulos compartidos (spec modulos-compartidos, ADR-0010). Un módulo es una feature de tipo <c>module</c> cuyo lienzo
-/// se guarda como cualquier otro; aquí están el resumen que usan las features, crear y borrar, dónde se usa, reasignar
-/// las conexiones de una interfaz y convertir una selección en módulo (con compensación si algo falla).
+/// se guarda como cualquier otro; aquí están el resumen que usan las features (con las redirecciones de las interfaces
+/// quitadas, que las features resuelven al leer), crear y borrar, dónde se usa y convertir una selección en módulo (con
+/// compensación si algo falla).
 /// </summary>
 internal sealed class ModuleHandlers(
     CanvasDbContext db,
@@ -20,8 +19,7 @@ internal sealed class ModuleHandlers(
     ICatalogDirectory catalog,
     IAppWriter writer,
     CanvasHandlers canvases,
-    GraphValidator validator,
-    TimeProvider clock)
+    GraphValidator validator)
 {
     public const int NameMaxLength = 120;
     public const int DescriptionMaxLength = 500;
@@ -58,6 +56,47 @@ internal sealed class ModuleHandlers(
         var graphs = await GraphsOfAppAsync(module.AppId, modules, ct).ConfigureAwait(false);
         var items = await CatalogOfAsync(module.AppId, [graphs.GetValueOrDefault(moduleId)], ct).ConfigureAwait(false);
         return Summarize(module, graphs, items);
+    }
+
+    /// <summary>
+    /// Los módulos de la app que alcanza el grafo, a cualquier profundidad (<see cref="IModuleDirectory"/>), con su
+    /// resumen y su lienzo, por nombre.
+    /// </summary>
+    public async Task<IReadOnlyList<ModuleGraph>> ReachableAsync(Guid appId, JsonElement graph, CancellationToken ct)
+    {
+        var start = ModuleReferences.ModuleIdsOf(graph);
+        if (start.Count == 0)
+        {
+            return [];
+        }
+
+        var modules = (await features.ModulesOfAppAsync(appId, ct).ConfigureAwait(false)).ToDictionary(m => m.Id);
+        var graphs = await GraphsOfAppAsync(appId, [.. modules.Values], ct).ConfigureAwait(false);
+        var reached = new HashSet<Guid>();
+        var pending = new Queue<Guid>(start);
+        while (pending.TryDequeue(out var id))
+        {
+            if (!modules.ContainsKey(id) || !reached.Add(id))
+            {
+                continue;
+            }
+
+            if (graphs.TryGetValue(id, out var inner))
+            {
+                foreach (var next in ModuleReferences.ModuleIdsOf(inner))
+                {
+                    pending.Enqueue(next);
+                }
+            }
+        }
+
+        var items = await CatalogOfAsync(appId, reached.Select(id => graphs.GetValueOrDefault(id)), ct).ConfigureAwait(false);
+        return [.. reached
+            .Select(id => new ModuleGraph(
+                Summarize(modules[id], graphs, items),
+                graphs.TryGetValue(id, out var g) ? g : CanvasHandlers.Parse(CanvasHandlers.EmptyGraph)))
+            .OrderBy(m => m.Summary.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(m => m.Summary.Id)];
     }
 
     /// <summary>Errores de nombre y descripción (los de una feature); vacío si son válidos.</summary>
@@ -167,94 +206,6 @@ internal sealed class ModuleHandlers(
         }
 
         return [.. usages.OrderBy(u => u.Name, StringComparer.OrdinalIgnoreCase).ThenBy(u => u.FeatureId)];
-    }
-
-    /// <summary>
-    /// Pasa a <paramref name="to"/> (otra interfaz del módulo, o el módulo completo con <c>null</c>) las conexiones de
-    /// todos los lienzos que usan <paramref name="interfaceId"/>. Cada lienzo que cambia sube su versión.
-    /// </summary>
-    public async Task<ReassignResult> ReassignAsync(Guid moduleId, string interfaceId, string? to, string userId, CancellationToken ct)
-    {
-        var module = await features.DescribeAsync(moduleId, ct).ConfigureAwait(false);
-        if (module?.Kind != "module")
-        {
-            return new ReassignResult.NotFound();
-        }
-
-        JsonObject? target = null;
-        if (to is not null)
-        {
-            var graph = await canvases.GetAsync(moduleId, ct).ConfigureAwait(false);
-            if (graph is not { } g || !g.TryGetProperty("interfaces", out var ifaces) || !ifaces.TryGetProperty(to, out var found) || to == interfaceId)
-            {
-                return new ReassignResult.Invalid(new() { ["To"] = ["La interfaz destino no existe en el módulo guardado."] });
-            }
-
-            target = new JsonObject { ["id"] = to, ["name"] = found.GetProperty("name").GetString() };
-        }
-
-        var owners = await OwnersAsync(module.AppId, ct).ConfigureAwait(false);
-        var docs = await db.Canvases.Where(c => owners.Keys.Contains(c.FeatureId)).ToListAsync(ct).ConfigureAwait(false);
-        var changed = new List<Guid>();
-        var count = 0;
-        var now = clock.GetUtcNowForDb();
-        foreach (var doc in docs)
-        {
-            var node = JsonNode.Parse(doc.Graph)!.AsObject();
-            var moduleNodes = ModuleNodes(CanvasHandlers.Parse(doc.Graph), moduleId);
-            if (moduleNodes.Count == 0)
-            {
-                continue;
-            }
-
-            var here = 0;
-            foreach (var (_, edgeNode) in node["edges"]!.AsObject())
-            {
-                var edge = edgeNode!.AsObject();
-                foreach (var end in new[] { "from", "to" })
-                {
-                    if (moduleNodes.Contains(edge[end]!.GetValue<string>())
-                        && edge[end + "Interface"] is JsonObject iface
-                        && iface["id"]!.GetValue<string>() == interfaceId)
-                    {
-                        if (target is null)
-                        {
-                            edge.Remove(end + "Interface");
-                        }
-                        else
-                        {
-                            edge[end + "Interface"] = target.DeepClone();
-                        }
-
-                        here++;
-                    }
-                }
-            }
-
-            if (here == 0)
-            {
-                continue;
-            }
-
-            doc.Version++;
-            node["version"] = doc.Version;
-            doc.Graph = node.ToJsonString();
-            doc.UpdatedAt = now;
-            doc.UpdatedBy = userId;
-            changed.Add(doc.FeatureId);
-            count += here;
-        }
-
-        try
-        {
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return new ReassignResult.Conflict();
-        }
-
-        return new ReassignResult.Done(new ReassignInterfaceResponse(count, changed));
     }
 
     /// <summary>
@@ -464,6 +415,13 @@ internal sealed class ModuleHandlers(
             }
         }
 
+        // Interfaces quitadas: las features resuelven con esto sus conexiones (no se reescriben).
+        var redirects = graph.TryGetProperty("interfaceRedirects", out var r)
+            ? r.EnumerateObject()
+                .Select(x => new InterfaceRedirect(x.Name, x.Value.TryGetProperty("to", out var to) ? to.GetString() : null))
+                .OrderBy(x => x.From, StringComparer.Ordinal)
+                .ToList()
+            : [];
         return new ModuleSummary(
             module.Id,
             module.AppId,
@@ -473,7 +431,8 @@ internal sealed class ModuleHandlers(
             nodes.EnumerateObject().Count(),
             [.. interfaces.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.Id, StringComparer.Ordinal)],
             [.. ModuleReferences.ModuleIdsOf(graph).Order()],
-            usedBy);
+            usedBy,
+            redirects.Count > 0 ? redirects : null);
     }
 
     /// <summary>Ids de los nodos <c>module</c> del grafo que apuntan a <paramref name="moduleId"/>.</summary>
@@ -499,14 +458,6 @@ internal abstract record DeleteModuleResult
     public sealed record Deleted : DeleteModuleResult;
     public sealed record NotFound : DeleteModuleResult;
     public sealed record InUse(IReadOnlyList<Guid> UsedBy) : DeleteModuleResult;
-}
-
-internal abstract record ReassignResult
-{
-    public sealed record Done(ReassignInterfaceResponse Response) : ReassignResult;
-    public sealed record NotFound : ReassignResult;
-    public sealed record Invalid(Dictionary<string, string[]> Errors) : ReassignResult;
-    public sealed record Conflict : ReassignResult;
 }
 
 internal abstract record ExtractResult

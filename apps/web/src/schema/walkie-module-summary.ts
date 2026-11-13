@@ -21,6 +21,13 @@ export interface WalkieModuleSummaryV0 {
    */
   interfaces: Interface[];
   /**
+   * Interfaces quitadas y adónde pasan sus conexiones (interfaceRedirects del lienzo del módulo); sin to, al módulo completo
+   */
+  redirects?: {
+    from: string;
+    to?: string;
+  }[];
+  /**
    * Módulos que contiene (nodos module de su lienzo)
    */
   modules: string[];

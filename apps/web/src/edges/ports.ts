@@ -26,6 +26,8 @@ export interface PortEdge {
   target: string;
   /** El origen sale de un punto fijo (la salida de una decisión): solo se reparte la llegada. */
   fixedSource?: Port;
+  /** Punto fijo de llegada (la fila de una interfaz en la caja de un módulo, spec modulos-compartidos). */
+  fixedTarget?: Port;
 }
 
 /** Margen en cada punta de un lado: los puertos no tocan las esquinas. */
@@ -88,6 +90,16 @@ export function computePorts(
     const from = rects[edge.source];
     const to = rects[edge.target];
     if (!from || !to) return;
+    if (edge.fixedSource && edge.fixedTarget) {
+      sides[edge.id] = { source: edge.fixedSource.side, target: edge.fixedTarget.side };
+      return;
+    }
+    if (edge.fixedTarget) {
+      const source = sideToward(from, edge.fixedTarget);
+      sides[edge.id] = { source, target: edge.fixedTarget.side };
+      add(edge.source, source, { edge: edge.id, end: 'source', toward: edge.fixedTarget, order });
+      return;
+    }
     if (edge.fixedSource) {
       const target = sideToward(to, edge.fixedSource);
       sides[edge.id] = { source: edge.fixedSource.side, target };
@@ -119,7 +131,8 @@ export function computePorts(
   for (const edge of edges) {
     const p = ports[edge.id];
     const source = edge.fixedSource ?? p?.source;
-    if (source && p?.target) result[edge.id] = { source, target: p.target };
+    const target = edge.fixedTarget ?? p?.target;
+    if (source && target) result[edge.id] = { source, target };
   }
   return result;
 }

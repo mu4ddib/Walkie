@@ -137,6 +137,25 @@ test('un módulo Usuarios reutilizado desde tres features, cada una con su inter
   await expect(page.locator('.kind-edge-label')).toContainText('POST /usuarios');
   await expect(moduleBox(page).getByRole('list', { name: 'Interfaces usadas en este lienzo' })).toContainText('Crear usuario');
 
+  // Cada interfaz usada tiene su punto en la caja: soltar ahí conecta sin preguntar, y la conexión llega a esa fila.
+  await dropNode(page, 'Pantalla', 140, 420);
+  const second = page.locator('.react-flow__node').filter({ has: page.locator('.pixel-node[data-type="screen"]') }).nth(1);
+  const start = (await second.locator('.react-flow__handle-right').boundingBox())!;
+  const row = moduleBox(page).locator('[data-handleid="iface:ipost"]');
+  const end = (await row.boundingBox())!;
+  await page.mouse.move(start.x + 4, start.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByRole('dialog', { name: 'Conectar con Usuarios' })).toBeHidden();
+  await expect(page.locator('.kind-edge-label', { hasText: 'POST /usuarios' })).toHaveCount(2);
+  // El trazo termina a la altura de la fila de la interfaz, no en el centro de la caja.
+  const rowY = end.y + end.height / 2;
+  const box = (await moduleBox(page).boundingBox())!;
+  expect(Math.abs(rowY - (box.y + box.height / 2))).toBeGreaterThan(8);
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+
   // El inspector dice a qué interfaz llega y permite cambiarla.
   await page.locator('.kind-edge-label').click();
   const inspector = page.getByRole('complementary', { name: 'Propiedades' });
@@ -344,4 +363,68 @@ test('un recorrido externo entra al recorrido interno de la interfaz y vuelve al
   await expect(page).toHaveURL(new RegExp(`/features/${featureId}`));
   await expect(page.getByRole('region', { name: 'Reproducción del recorrido' })).toContainText('Paso 1 de 2');
   await expect(page.getByRole('region', { name: 'Reproducción del recorrido' })).toContainText('Alta');
+});
+
+test('volver funciona por cada nivel de módulos anidados', async ({ page }) => {
+  await login(page);
+  await openNewFeature(page, 'Panel');
+  const { appId, featureId } = appAndFeature(page);
+  const inner = (await api<{ id: string }>(page, 'POST', `/api/apps/${appId}/modules`, { name: 'Auditoría' })).json.id;
+  const outer = (await api<{ id: string }>(page, 'POST', `/api/apps/${appId}/modules`, { name: 'Usuarios' })).json.id;
+  await api(page, 'PUT', `/api/features/${inner}/canvas`, {
+    schemaVersion: 0, version: 0,
+    nodes: { log: { id: 'log', type: 'service', title: 'Registro de cambios' } },
+    edges: {}, layout: { log: { x: 0, y: 0 } },
+  });
+  await api(page, 'PUT', `/api/features/${outer}/canvas`, {
+    schemaVersion: 0, version: 0,
+    nodes: {
+      svc: { id: 'svc', type: 'service', title: 'Servicio de usuarios' },
+      aud: { id: 'aud', type: 'module', title: 'Auditoría', moduleId: inner },
+    },
+    edges: { e: { id: 'e', from: 'svc', to: 'aud', kind: 'uses' } },
+    layout: { svc: { x: 0, y: 0 }, aud: { x: 360, y: 0 } },
+  });
+  await seedCanvas(page, {
+    schemaVersion: 0,
+    nodes: { m: { id: 'm', type: 'module', title: 'Usuarios', moduleId: outer } },
+    edges: {}, layout: { m: { x: 0, y: 0 } },
+  });
+
+  await moduleBox(page).getByRole('button', { name: 'Abrir módulo' }).click();
+  const banner = page.getByRole('region', { name: 'Módulo compartido' });
+  await expect(banner).toContainText('Usuarios');
+  await moduleBox(page).getByRole('button', { name: 'Abrir módulo' }).click();
+  await expect(banner).toContainText('Auditoría');
+  await banner.getByRole('button', { name: 'Volver a Usuarios' }).click();
+  await expect(banner).toContainText('Usuarios');
+  await expect(moduleBox(page)).toHaveAttribute('data-selected', 'true');
+  // Desde el primer nivel se sigue volviendo a la feature.
+  await banner.getByRole('button', { name: 'Volver a Panel' }).click();
+  await expect(page).toHaveURL(new RegExp(`/features/${featureId}`));
+  await expect(moduleBox(page)).toHaveAttribute('data-selected', 'true');
+});
+
+test('un enlace de solo lectura muestra la caja del módulo y lo abre sin sesión', async ({ page, browser }) => {
+  await login(page);
+  await openNewFeature(page, 'Registro');
+  const { appId, featureId } = appAndFeature(page);
+  const moduleId = (await api<{ id: string }>(page, 'POST', `/api/apps/${appId}/modules`, { name: 'Usuarios', description: 'Cuentas' })).json.id;
+  await api(page, 'PUT', `/api/features/${moduleId}/canvas`, usersModule());
+  await seedCanvas(page, featureUsing(moduleId, { id: 'ipost', name: 'Crear usuario' }, 'Formulario'));
+  const share = await api<{ token: string }>(page, 'POST', `/api/features/${featureId}/shares`, { expiresInDays: 7 });
+  expect(share.status).toBe(201);
+
+  const reader = await (await browser.newContext()).newPage();
+  await reader.goto(`/s/${share.json.token}`);
+  await expect(moduleBox(reader)).toContainText('Crear usuario');
+  await moduleBox(reader).getByRole('button', { name: 'Abrir módulo' }).click();
+  const banner = reader.getByRole('region', { name: 'Módulo de solo lectura' });
+  await expect(banner).toContainText('Usuarios');
+  await expect(reader.locator('.react-flow__node').filter({ hasText: 'Servicio de usuarios' })).toBeVisible();
+  // Solo lectura: sin barra de herramientas.
+  await expect(reader.getByRole('navigation', { name: 'Herramientas' })).toHaveCount(0);
+  await banner.getByRole('link', { name: 'Volver a Registro' }).click();
+  await expect(reader).toHaveURL(new RegExp(`/s/${share.json.token}\\?`));
+  await expect(moduleBox(reader)).toHaveAttribute('data-selected', 'true');
 });

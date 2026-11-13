@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-shared-module.schema.json",
+  "title": "Walkie shared module v0",
+  "description": "Un módulo compartido visto desde un enlace de solo lectura (GET /api/public/shares/{token}/modules/{moduleId}, spec modulos-compartidos): solo si la feature del enlace lo usa, directa o indirectamente.",
+  "type": "object",
+  "required": ["name", "graph", "catalog"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "graph": { "$ref": "walkie-graph.schema.json" },
+    "catalog": {
+      "type": "array",
+      "description": "Solo los elementos del catálogo que usan los nodos ref del lienzo del módulo",
+      "items": { "$ref": "walkie-catalog-item.schema.json" }
+    }
+  }
+}

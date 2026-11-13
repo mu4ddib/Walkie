@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { ApiError, type SharedFeature } from '../api/client';
 import { useSharedFeature } from '../api/hooks';
 import { Canvas } from '../canvas/Canvas';
 import type { CanvasCatalog } from '../catalog/catalogContext';
 import { createGraphStore } from '../store/graphStore';
 import { formatDay } from './shareFormat';
+import { readModuleEntry } from '../workspace/paths';
 import './share.css';
 
 /**
@@ -41,7 +42,12 @@ function SharedCanvas({ token, shared }: { token: string; shared: SharedFeature 
     appId: '',
     items: Object.fromEntries(shared.catalog.map((i) => [i.id, i])),
     share: { token },
+    // Los módulos que usa (spec modulos-compartidos): sus cajas se ven y se abren de solo lectura.
+    modules: Object.fromEntries((shared.modules ?? []).map((m) => [m.id, m])),
   }));
+  // Al volver de un módulo: su caja seleccionada sin mover la vista y, si se venía de un recorrido, en el mismo paso.
+  const [search] = useSearchParams();
+  const entry = readModuleEntry(search);
 
   return (
     <section className="shared-page" aria-label="Feature compartida">
@@ -52,7 +58,13 @@ function SharedCanvas({ token, shared }: { token: string; shared: SharedFeature 
         Solo lectura · disponible hasta el {formatDay(shared.expiresAt)}
       </p>
       <div className="feature-canvas">
-        <Canvas store={store} catalog={catalog} />
+        <Canvas
+          store={store}
+          catalog={catalog}
+          focusId={entry.select}
+          focusCenter={!entry.keep}
+          initialPlay={entry.play ? { tourId: entry.play, step: entry.step ?? 0 } : undefined}
+        />
       </div>
     </section>
   );

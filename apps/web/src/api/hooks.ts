@@ -9,6 +9,7 @@ import {
   exportFeature,
   getSharedAssetBlob,
   getSharedFeature,
+  getSharedModule,
   listShares,
   revokeShare,
   getAssetBlob,
@@ -42,7 +43,6 @@ import {
   createModule,
   deleteModule,
   listModuleUsages,
-  reassignInterface,
   extractModule,
   type ModuleExtraction,
 } from './client';
@@ -73,6 +73,7 @@ export const queryKeys = {
   asset: (assetId: string) => ['assets', assetId] as const,
   shares: (featureId: string) => ['canvas', featureId, 'shares'] as const,
   shared: (shareToken: string) => ['shared', shareToken] as const,
+  sharedModule: (shareToken: string, moduleId: string) => ['shared', shareToken, 'modules', moduleId] as const,
   sharedAsset: (shareToken: string, assetId: string) => ['shared', shareToken, 'assets', assetId] as const,
 };
 
@@ -313,6 +314,17 @@ export function useRevokeShare(featureId: string) {
  * La feature de un enlace de solo lectura, sin sesión. Sin refetch automático: el lienzo se carga una vez
  * en su store (recargar la página trae la última versión guardada). Un 404 no se reintenta.
  */
+export function useSharedModule(shareToken: string, moduleId: string) {
+  return useQuery({
+    queryKey: queryKeys.sharedModule(shareToken, moduleId),
+    queryFn: ({ signal }) => getSharedModule(shareToken, moduleId, signal),
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: Infinity,
+  });
+}
+
 export function useSharedFeature(shareToken: string) {
   return useQuery({
     queryKey: queryKeys.shared(shareToken),
@@ -428,20 +440,6 @@ export function useUpdateModule(appId: string) {
   return useMutation({
     mutationFn: ({ moduleId, changes }: { moduleId: string; changes: FeatureChanges }) => updateFeature(token, moduleId, changes),
     onSuccess: () => invalidateModules(queryClient, appId),
-  });
-}
-
-export function useReassignInterface(appId: string, moduleId: string) {
-  const token = useToken();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ interfaceId, to }: { interfaceId: string; to: string | null }) =>
-      reassignInterface(token, moduleId, interfaceId, to),
-    onSuccess: (result) => {
-      invalidateModules(queryClient, appId);
-      // Los lienzos reescritos tienen otra versión: su caché ya no sirve.
-      for (const featureId of result.features) queryClient.removeQueries({ queryKey: queryKeys.canvas(featureId), exact: true });
-    },
   });
 }
 

@@ -210,6 +210,40 @@ internal static partial class MarkdownDocument
             }
         }
 
+        // Módulos compartidos (spec modulos-compartidos): qué expone y qué contiene cada uno.
+        if (c.Modules is { Count: > 0 } modules)
+        {
+            section.AddParagraph("Módulos", "Heading1");
+            foreach (var module in modules)
+            {
+                section.AddParagraph(module.Name, "Heading2");
+                if (module.Description is { } description)
+                {
+                    section.AddParagraph(description);
+                }
+
+                if (module.Interfaces.Count > 0)
+                {
+                    var table = Table(section, ("Interfaz", 5), ("Tipo", 2.5), ("Contrato y caja", 9.5));
+                    foreach (var i in module.Interfaces)
+                    {
+                        var http = string.Join(' ', new[] { i.Method, i.Path }.Where(x => !string.IsNullOrEmpty(x)));
+                        var detail = string.Join(" · ", new[] { http.Length > 0 ? http : null, i.Component, i.InternalFlow is { } f ? $"recorrido interno: {f}" : null }
+                            .Where(x => x is not null));
+                        Row(table, i.Name, InterfaceKindText(i.Kind), detail);
+                    }
+                }
+
+                section.AddParagraph("Contiene: " + (module.Components.Count == 0
+                    ? "nada todavía."
+                    : string.Join(", ", module.Components.Select(x => $"{x.Title} ({x.Is})")) + "."));
+                foreach (var connection in module.Connections)
+                {
+                    section.AddParagraph($"• {connection}");
+                }
+            }
+        }
+
         if (c.Gaps.Count > 0)
         {
             section.AddParagraph("Pendientes de documentar", "Heading1");

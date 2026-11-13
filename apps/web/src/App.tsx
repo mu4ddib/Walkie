@@ -3,12 +3,14 @@ import { ApiStatus } from './api/ApiStatus';
 import { AuthGate } from './auth/AuthGate';
 import { UserMenu } from './auth/UserMenu';
 import { routes } from './routes';
-import { SHARED_PATH } from './share/sharedPath';
+import { SHARED_MODULE_PATH, SHARED_PATH } from './share/sharedPath';
 import { APPS_PATH } from './workspace/paths';
 import './App.css';
 
 export function App() {
-  const shared = useMatch(SHARED_PATH);
+  const sharedFeature = useMatch(SHARED_PATH);
+  const sharedModule = useMatch(SHARED_MODULE_PATH);
+  const shared = sharedFeature ?? sharedModule;
   // El editor y la bienvenida ocupan toda la pantalla y traen su propia barra (spec espacio-de-trabajo).
   const featureEditor = useMatch('/apps/:appId/features/:featureId');
   // El lienzo de un módulo compartido usa el mismo editor (spec modulos-compartidos).

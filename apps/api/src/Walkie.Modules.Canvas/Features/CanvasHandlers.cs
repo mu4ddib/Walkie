@@ -120,7 +120,8 @@ internal sealed class CanvasHandlers(
         var assets = References(graph, "assetId");
         var portals = References(graph, "targetFeatureId");
         var modules = References(graph, "moduleId");
-        var hasInterfaces = graph.TryGetProperty("interfaces", out var interfaces) && interfaces.EnumerateObject().Any();
+        var hasInterfaces = (graph.TryGetProperty("interfaces", out var interfaces) && interfaces.EnumerateObject().Any())
+            || (graph.TryGetProperty("interfaceRedirects", out var redirects) && redirects.EnumerateObject().Any());
         if (refs.Count + assets.Count + portals.Count + modules.Count == 0 && !hasInterfaces)
         {
             return errors;

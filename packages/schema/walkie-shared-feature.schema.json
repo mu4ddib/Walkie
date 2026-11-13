@@ -15,6 +15,11 @@
       "type": "array",
       "description": "Solo los elementos del catálogo que usan los nodos ref del grafo",
       "items": { "$ref": "walkie-catalog-item.schema.json" }
+    },
+    "modules": {
+      "type": "array",
+      "description": "Resúmenes de los módulos compartidos que usa el grafo, a cualquier profundidad (spec modulos-compartidos), sin usedBy",
+      "items": { "$ref": "walkie-module-summary.schema.json" }
     }
   }
 }

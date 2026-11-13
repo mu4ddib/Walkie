@@ -87,6 +87,10 @@ export interface WalkieAIContextV0 {
     }[];
   };
   /**
+   * Módulos compartidos que usa el lienzo, a cualquier profundidad (spec modulos-compartidos): qué expone cada uno, qué contiene y cómo se conecta por dentro
+   */
+  modules?: Module[];
+  /**
    * Vacíos detectados: lo que falta documentar, para que la IA pregunte en vez de inventar
    */
   gaps: {
@@ -100,7 +104,9 @@ export interface WalkieAIContextV0 {
       | 'broken-flow-step'
       | 'missing-catalog-item'
       | 'portal-without-target'
-      | 'database-without-structure';
+      | 'database-without-structure'
+      | 'missing-module'
+      | 'pending-interface';
     /**
      * Caja o conexión a la que se refiere
      */
@@ -324,6 +330,14 @@ export interface Connection {
    * Id de la solicitud a la que responde
    */
   replyTo?: string;
+  /**
+   * Interfaz del módulo de destino a la que llega (spec modulos-compartidos)
+   */
+  toInterface?: string;
+  /**
+   * Interfaz del módulo de origen de la que sale
+   */
+  fromInterface?: string;
   outcome?: string;
   notes?: string;
 }
@@ -345,4 +359,41 @@ export interface Flow {
      */
     broken?: boolean;
   }[];
+}
+export interface Module {
+  id: string;
+  name: string;
+  description?: string;
+  interfaces: {
+    id: string;
+    name: string;
+    kind: 'provides' | 'event' | 'requires';
+    description?: string;
+    /**
+     * Título de la caja interna que la implementa
+     */
+    component?: string;
+    method?: string;
+    path?: string;
+    /**
+     * Nombre del recorrido interno que muestra qué pasa dentro
+     */
+    internalFlow?: string;
+  }[];
+  /**
+   * Cajas del lienzo del módulo
+   */
+  components: {
+    id: string;
+    title: string;
+    is: string;
+  }[];
+  /**
+   * Conexiones internas en palabras
+   */
+  connections: string[];
+  /**
+   * Nombres de los módulos que contiene
+   */
+  contains: string[];
 }

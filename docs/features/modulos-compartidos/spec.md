@@ -42,6 +42,11 @@ Equipos que documentan varias features que llaman a lo mismo (ej. un módulo «U
 - [x] 13. Dada una solicitud a una interfaz, cuando agrego su respuesta, entonces la respuesta sale de la misma interfaz y conserva `replyTo`.
 - [x] 14. Dada una interfaz usada, cuando la renombro o renombro su caja interna, entonces las conexiones siguen unidas (por id) y muestran el nombre nuevo.
 - [x] 15. Dada una interfaz usada, cuando la elimino, entonces antes veo qué conexiones de qué features la usan y puedo reasignarlas a otra interfaz, pasarlas al módulo completo o dejarlas pendientes (conservan el último nombre y se marcan para reparar).
+- [x] 15b. Quitar una interfaz es un cambio del módulo (se deshace y se guarda con él): las features no se reescriben, resuelven sus conexiones con las redirecciones del módulo y un editor abierto no recibe 409.
+- [x] 15c. Cada interfaz usada tiene su punto de conexión en la caja; soltar una conexión ahí la elige sin selector y la flecha llega a su fila.
+- [x] 19b. «Volver» funciona en cada nivel de módulos anidados.
+- [x] 21b. Un enlace de solo lectura muestra las cajas de los módulos y los abre de solo lectura, con «Volver».
+- [x] 25b. El contexto para IA, el Markdown y el PDF describen cada módulo que usa la feature (interfaces, contenido y conexiones internas) y la interfaz de cada conexión.
 - [x] 16. Dada una referencia a un módulo eliminado (o a una interfaz que ya no existe), entonces la caja (o la conexión) lo indica con el último nombre conocido y permite reasignarla.
 
 ### Caja e inspector
@@ -77,9 +82,6 @@ Equipos que documentan varias features que llaman a lo mismo (ej. un módulo «U
 - Módulos compartidos entre apps (el alcance es la app).
 - Versiones o historial de la definición, y bloqueo de edición concurrente más allá del 409.
 - Exponer como interfaz una conexión concreta (la interfaz se vincula a una caja; su contrato es el de esa caja).
-- Interfaces con un punto de conexión propio dentro de la caja (la conexión llega a la caja y la etiqueta dice la interfaz).
-- Enlace de solo lectura de un módulo y navegar a su detalle desde un enlace: la caja se ve, no se abre.
-- Contexto para IA, Markdown y PDF con el detalle de los módulos: muestran la caja como un componente más.
 
 ## Impacto en el modelo
 

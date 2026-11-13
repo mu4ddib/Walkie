@@ -44,6 +44,16 @@ const targets = [
     imports: [
       "import type { WalkieCanvasGraphV0 } from './walkie-graph';",
       "import type { WalkieCatalogItemV0 } from './walkie-catalog-item';",
+      "import type { WalkieModuleSummaryV0 } from './walkie-module-summary';",
+    ],
+  },
+  {
+    schema: 'walkie-shared-module.schema.json',
+    out: 'walkie-shared-module.ts',
+    name: 'WalkieSharedModule',
+    imports: [
+      "import type { WalkieCanvasGraphV0 } from './walkie-graph';",
+      "import type { WalkieCatalogItemV0 } from './walkie-catalog-item';",
     ],
   },
 ];
