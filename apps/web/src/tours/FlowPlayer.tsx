@@ -239,7 +239,7 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
               });
             }}
           >
-            [≡] Ver dentro del módulo: {inside(current?.edgeId)!.name}
+            [::] Ver dentro del módulo: {inside(current?.edgeId)!.name}
           </button>
         )}
         {isEnded && <p className="panel-help">Fin del recorrido.</p>}

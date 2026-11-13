@@ -54,7 +54,7 @@ export const ModuleNode = memo(function ModuleNode({ id, data, selected }: NodeP
       <Handle type="source" position={Position.Top} id="top" className="pixel-node-handle-extra" title={connectTip} />
       <Handle type="source" position={Position.Bottom} id="bottom" className="pixel-node-handle-extra" title={connectTip} />
       <div className="pixel-node-kind module-node-kind">
-        <span aria-hidden="true">[≡]</span> {missing ? 'Módulo no encontrado' : 'Módulo'}
+        <span aria-hidden="true">[::]</span> {missing ? 'Módulo no encontrado' : 'Módulo'}
         <span className="pixel-node-badge" title="Definición compartida: cambia en todas las features que la usan">
           compartido
         </span>

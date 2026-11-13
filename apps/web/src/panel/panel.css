@@ -1405,3 +1405,60 @@ p.edge-contract {
   }
 }
 
+
+/* Módulos compartidos (spec modulos-compartidos). */
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.panel-subsection {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.panel-details > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel-details[open] > summary {
+  margin-bottom: 8px;
+}
+
+.module-iface-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.module-iface-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.module-iface-list .module-node-iface-sig {
+  overflow-wrap: anywhere;
+}
+
+.interface-editor,
+.interface-remove {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+}
+
+.module-end + .module-end {
+  margin-top: 8px;
+}

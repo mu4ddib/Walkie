@@ -43,6 +43,7 @@ export function PropertiesPanel({
   preview,
   flows,
   onNest,
+  onExtract,
 }: {
   nodeId: string | null;
   edgeId: string | null;
@@ -52,6 +53,8 @@ export function PropertiesPanel({
   noteId?: string | null;
   /** Meter o sacar algo de un grupo desde su inspector (el lienzo además agranda el grupo si hace falta). */
   onNest?: (id: string, groupId: string | null) => void;
+  /** «Convertir en módulo» desde el inspector de un grupo (spec modulos-compartidos). */
+  onExtract?: (ids: string[]) => void;
   /** Sección "Tours" cuando no hay nada seleccionado (spec modo-tour); sin ella, solo la ayuda. */
   tours?: ToursSectionProps;
 } & EdgePanelActions) {
@@ -62,7 +65,7 @@ export function PropertiesPanel({
       ) : edgeId ? (
         <EdgePanel key={edgeId} id={edgeId} onSelect={onSelect} preview={preview} flows={flows} />
       ) : groupId ? (
-        <GroupPanel key={groupId} id={groupId} onNest={onNest} />
+        <GroupPanel key={groupId} id={groupId} onNest={onNest} onExtract={onExtract} />
       ) : noteId ? (
         <StickyPanel key={noteId} id={noteId} />
       ) : (

@@ -26,6 +26,7 @@ import {
   type CanvasCatalog,
 } from '../catalog/catalogContext';
 import { InterfacePicker, type InterfaceChoice } from '../modules/InterfacePicker';
+import { ExtractModuleDialog } from '../modules/ExtractModuleDialog';
 import { placeableModules } from '../modules/moduleMeta';
 import type { InterfaceRef } from '../schema/walkie-graph';
 import { edgeTypes } from '../edges/edgeTypes';
@@ -232,6 +233,8 @@ function CanvasInner({
   // Arrastre: a qué grupo iría lo que se arrastra (indicación de la pertenencia resultante) y aviso al soltar.
   const [dropHint, setDropHint] = useState<{ groupId: string | null; text: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // «Convertir en módulo» (spec modulos-compartidos): lo seleccionado que se convierte, con el diálogo abierto.
+  const [extracting, setExtracting] = useState<string[] | null>(null);
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), NOTICE_MS);
@@ -1035,6 +1038,8 @@ function CanvasInner({
   const panelGroupId = single ? (liveGroups[0] ?? null) : null;
   const panelEdgeId = single ? (liveEdges[0] ?? null) : null;
   const panelSelected = Boolean(panelNodeId || panelEdgeId || panelGroupId || panelNoteId);
+  // Convertir en módulo necesita la API (crea el módulo y guarda este lienzo a la vez).
+  const canExtract = !locked && !!catalog.featureId && !!catalog.modules && !!catalog.appId;
 
   /**
    * Termina una conexión: un `ref` conecta como su elemento del catálogo (spec catalogo, criterio 9) y el extremo que es
@@ -1584,6 +1589,29 @@ function CanvasInner({
             <span className="selection-bar-help">Mayús + clic suma o quita</span>
           </div>
         )}
+        {canExtract && !pickingTourId && liveNodes.length + liveGroups.length + liveNotes.length >= 2 && (
+          <div className="selection-bar floating" role="toolbar" aria-label="Cajas seleccionadas">
+            <span>
+              <strong>{liveNodes.length + liveGroups.length + liveNotes.length}</strong> elementos seleccionados
+            </span>
+            <button type="button" className="pixel-button" onClick={() => setExtracting([...liveGroups, ...liveNodes, ...liveNotes])}>
+              Convertir en módulo…
+            </button>
+            <span className="selection-bar-help">G agrupa · Mayús + clic suma o quita</span>
+          </div>
+        )}
+        {extracting && (
+          <ExtractModuleDialog
+            roots={extracting}
+            onClose={() => setExtracting(null)}
+            onDone={(moduleNodeId, name) => {
+              setExtracting(null);
+              setSelectedNodes(new Set([moduleNodeId]));
+              setSelectedEdges(new Set());
+              setNotice(`Se creó el módulo «${name}». Ctrl+Z devuelve las cajas a este lienzo (el módulo queda en el catálogo).`);
+            }}
+          />
+        )}
         {playing && flowPlaying && (
           <FlowPlayer
             playing={playing}
@@ -1632,6 +1660,7 @@ function CanvasInner({
             preview={{ activeEdgeId: previewId, onStart: startPreview, onStop: stopPreview }}
             flows={{ onCreate: (edgeId) => createFlow([edgeId]), onOpen: openFlow }}
             onNest={nest}
+            onExtract={canExtract ? setExtracting : undefined}
             tours={{
               openTourId,
               onOpen: setOpenTourId,

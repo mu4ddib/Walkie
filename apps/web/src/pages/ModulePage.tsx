@@ -106,7 +106,7 @@ function ModuleBanner({
       )}
       <span className="module-banner-name">
         <span className="module-banner-kind" aria-hidden="true">
-          [≡] Módulo
+          [::] Módulo
         </span>{' '}
         <strong>{module.name}</strong>
       </span>

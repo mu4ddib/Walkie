@@ -10,7 +10,16 @@ import { TextField } from './TextField';
  * parte 1): nombre, tipo, plegado, en qué grupo está y lo que contiene (nodos, notas y grupos). Un grupo es parte del
  * lienzo de la feature: no es una app ni una feature.
  */
-export function GroupPanel({ id, onNest }: { id: string; onNest?: (id: string, groupId: string | null) => void }) {
+export function GroupPanel({
+  id,
+  onNest,
+  onExtract,
+}: {
+  id: string;
+  onNest?: (id: string, groupId: string | null) => void;
+  /** «Convertir en módulo» (spec modulos-compartidos): el grupo con todo lo suyo pasa a un módulo compartido. */
+  onExtract?: (ids: string[]) => void;
+}) {
   const group = useGraphStore((s) => s.groups[id]);
   const groups = useGraphStore((s) => s.groups);
   const allNodes = useGraphStore((s) => s.nodes);
@@ -109,6 +118,16 @@ export function GroupPanel({ id, onNest }: { id: string; onNest?: (id: string, g
         Desagrupar
       </button>
       <p className="panel-help">Desagrupar quita el grupo y deja lo que contenía donde está, en el grupo de afuera.</p>
+      {onExtract && (
+        <>
+          <button type="button" className="pixel-button" onClick={() => onExtract([id])}>
+            Convertir en módulo…
+          </button>
+          <p className="panel-help">
+            Pasa el grupo (con sus subgrupos) a un módulo que otras features pueden reutilizar; aquí queda su caja.
+          </p>
+        </>
+      )}
     </>
   );
 }
