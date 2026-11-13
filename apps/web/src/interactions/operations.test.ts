@@ -91,6 +91,9 @@ describe('catálogo de operaciones (spec interacciones)', () => {
     expect(legacyOperation({ kind: 'reads' }, 'api', 'database')).toBe('db.query');
     expect(legacyOperation({ kind: 'writes' }, 'service', 'storage')).toBe('storage.write');
     expect(legacyOperation({ kind: 'request' }, 'screen', 'api')).toBe('http.request');
+    // A un servicio: invocar, salvo que sus retornos lleven código HTTP (entonces responde, como antes).
+    expect(legacyOperation({ kind: 'request' }, 'api', 'service')).toBe('service.invoke');
+    expect(legacyOperation({ kind: 'request' }, 'api', 'service', true)).toBe('http.request');
     expect(legacyOperation({ kind: 'event' }, 'service', 'messaging')).toBe('message.publish');
     expect(legacyOperation({ kind: 'navigation' }, 'screen', 'screen')).toBe('navigation');
     // Ambiguas: un request a una base (¿consulta o escritura?), un evento entre servicios, un `reads` a una regla.

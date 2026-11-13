@@ -1206,11 +1206,14 @@ function CanvasInner({
   // para revisar en el inspector.
   useEffect(() => {
     const operations: Record<string, OperationId> = {};
+    const http = new Set(
+      Object.values(graphEdges).flatMap((e) => (e.kind === 'response' && e.replyTo && e.status !== undefined ? [e.replyTo] : [])),
+    );
     for (const edge of Object.values(graphEdges)) {
       if (edge.operation || edge.kind === 'response') continue;
       const from = endFamily(graphNodes[edge.from], edge.fromInterface, catalog.items, catalog.modules);
       const to = endFamily(graphNodes[edge.to], edge.toInterface, catalog.items, catalog.modules);
-      const operation = legacyOperation(edge, from, to);
+      const operation = legacyOperation(edge, from, to, http.has(edge.id));
       if (operation) operations[edge.id] = operation;
     }
     if (Object.keys(operations).length > 0) store.getState().migrateOperations(operations);

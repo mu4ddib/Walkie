@@ -196,7 +196,13 @@ export function effectiveOperation(edge: Pick<Edge, 'kind' | 'operation'>, from:
  * admite varias lecturas (un `request` a una base: ¿consulta o escritura?), si su acceso a datos contradice al tipo, si
  * es un retorno o una rama de decisión, `null`: queda como está, a la vista para revisar.
  */
-export function legacyOperation(edge: Pick<Edge, 'kind' | 'operation' | 'data' | 'branch'>, from: Family, to: Family): OperationId | null {
+export function legacyOperation(
+  edge: Pick<Edge, 'kind' | 'operation' | 'data' | 'branch'>,
+  from: Family,
+  to: Family,
+  /** Sus retornos llevan código HTTP: entonces es una solicitud HTTP aunque el destino sea un servicio. */
+  httpReturns = false,
+): OperationId | null {
   if (edge.operation || edge.kind === 'response' || edge.branch) return null;
   if (operationConflict(edge, from, to)) return null;
   const store = (read: OperationId, write: OperationId) => (edge.kind === 'reads' ? read : write);
@@ -212,7 +218,7 @@ export function legacyOperation(edge: Pick<Edge, 'kind' | 'operation' | 'data' |
       if (to === 'storage') return store('storage.read', 'storage.write');
       return null;
     case 'request':
-      if (to === 'api') return 'http.request';
+      if (to === 'api' || httpReturns) return 'http.request';
       if (to === 'service') return 'service.invoke';
       return null;
     case 'event':
