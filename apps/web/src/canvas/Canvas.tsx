@@ -65,6 +65,7 @@ import { PALETTE_MIME, PALETTE_MODULE_MIME, PALETTE_REF_MIME, PALETTE_RESOURCE_M
 import { RESOURCE_KINDS, type ResourceKind } from '../nodes/resourceMeta';
 import { useOpenFeature } from './useOpenFeature';
 import { useOpenModule } from './useOpenModule';
+import { freeSpot, pushBelow } from './layoutSpace';
 import {
   getEdgeMotion,
   getFlowSpeed,
@@ -306,6 +307,11 @@ function CanvasInner({
   // Medidas que reporta React Flow. Si no se devuelven en `measured`, al reconstruir los nodos
   // React Flow los oculta un instante para medirlos otra vez y se pierden clics (ej. doble clic).
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
+  // Lo medido antes del cambio en curso (para saber si una caja creció): `onNodesChange` no ve el estado nuevo.
+  const measuredRef = useRef(measured);
+  useEffect(() => {
+    measuredRef.current = measured;
+  }, [measured]);
   const stopEditing = useCallback(() => setEditingId(null), []);
 
   const hierarchy = useMemo<Hierarchy>(
@@ -450,6 +456,8 @@ function CanvasInner({
       position: layout[node.id] ?? { x: 0, y: 0 },
       // La caja de un módulo conserva su ancho en este lienzo (spec modulos-compartidos, criterio 3).
       width: node.type === 'module' ? layout[node.id]?.w : undefined,
+      // La seleccionada queda encima de sus vecinas (los grupos siguen detrás: zIndex negativo).
+      zIndex: selectedNodes.has(node.id) ? 1 : 0,
       data: { node, editing: editingId === node.id, onEditDone: stopEditing },
       selected: selectedNodes.has(node.id),
       measured: measured[node.id],
@@ -876,6 +884,33 @@ function CanvasInner({
         if (change.type === 'select') setSelectedNodes((s) => toggle(s, change.id, change.selected));
         if (change.type === 'dimensions' && change.dimensions) {
           const { width, height } = change.dimensions;
+          // Una caja que crece (ej. al completar su contrato) empuja hacia abajo a las que tapa, en vez de montarse.
+          const before = measuredRef.current[change.id];
+          const at = layout[change.id];
+          if (before && at && graphNodes[change.id] && !change.resizing && !locked && height > before.height + 1) {
+            const boxes: Record<string, Rect> = {};
+            for (const id of [...Object.keys(graphNodes), ...Object.keys(stickyNotes)]) {
+              const r = id !== change.id && !isHidden(hierarchy, id, collapsedGroups) ? boxOf(id) : null;
+              if (r) boxes[id] = r;
+            }
+            const moved = pushBelow(
+              change.id,
+              { x: at.x, y: at.y, w: before.width, h: before.height },
+              { x: at.x, y: at.y, w: width, h: height },
+              boxes,
+            );
+            if (Object.keys(moved).length > 0) {
+              beginBatch();
+              for (const [id, position] of Object.entries(moved)) {
+                if (stickyNotes[id]) moveStickyNote(id, position);
+                else moveNode(id, position);
+                const owner = ownerOf(hierarchy, id);
+                const r = boxes[id];
+                if (owner && r) growGroup(owner, { ...r, ...position });
+              }
+              endBatch();
+            }
+          }
           setMeasured((m) =>
             m[change.id]?.width === width && m[change.id]?.height === height
               ? m
@@ -885,7 +920,7 @@ function CanvasInner({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [moveNode, removeNode, groups, stickyNotes, layout, moveGroup, resizeGroup, removeGroup, moveStickyNote, removeStickyNote, hierarchy, graphEdges, graphNodes, resizeNode, moduleInterfaces],
+    [moveNode, removeNode, groups, stickyNotes, layout, moveGroup, resizeGroup, removeGroup, moveStickyNote, removeStickyNote, hierarchy, graphEdges, graphNodes, resizeNode, moduleInterfaces, locked, collapsedGroups, boxOf, beginBatch, endBatch, growGroup],
   );
 
   /** Al borrar conexiones usadas en recorridos, avisa qué recorridos revisar (el paso queda marcado en el editor). */
@@ -1180,12 +1215,22 @@ function CanvasInner({
       const y = Math.min(...rects.map((r) => r.y)) - GRID * 7;
       box = { x, y, w: Math.max(...rects.map((r) => r.r)) + GRID * 4 - x, h: Math.max(...rects.map((r) => r.b)) + GRID * 4 - y };
     } else {
+      // Sin selección: un grupo vacío en un hueco libre de la vista (no encima de lo que ya hay), listo para arrastrar
+      // cosas dentro. Para envolver grupos o cajas existentes, se seleccionan antes de pulsar G.
       const rect = flowRef.current?.getBoundingClientRect();
-      const center = screenToFlowPosition({
-        x: rect ? rect.left + rect.width / 2 : 0,
-        y: rect ? rect.top + rect.height / 2 : 0,
+      const topLeft = screenToFlowPosition({ x: (rect?.left ?? 0) + 88, y: (rect?.top ?? 0) + 72 });
+      const bottomRight = screenToFlowPosition({
+        x: (rect?.right ?? 0) - (inspectorOpen ? 376 : 56),
+        y: (rect?.bottom ?? 0) - 72,
       });
-      box = { x: center.x - 240, y: center.y - 160, w: 480, h: 320 };
+      const view = { x: topLeft.x, y: topLeft.y, w: bottomRight.x - topLeft.x, h: bottomRight.y - topLeft.y };
+      const want = { x: view.x + view.w / 2 - 240, y: view.y + view.h / 2 - 160, w: 480, h: 320 };
+      const obstacles = [...Object.keys(graphNodes), ...Object.keys(stickyNotes), ...Object.keys(groups)]
+        .filter((id) => !isHidden(hierarchy, id, collapsedGroups))
+        .map((id) => boxOf(id))
+        .filter((r): r is Rect => !!r);
+      box = { ...want, ...freeSpot(want, obstacles, view) };
+      setNotice('Grupo vacío: arrastra cajas o grupos dentro. Para envolver lo que ya hay, selecciónalo (Mayús + clic) y pulsa G.');
     }
     // El grupo nuevo queda donde estaban sus miembros (dentro de su grupo común, si lo tienen).
     const parentId = commonOwner(hierarchy, members);

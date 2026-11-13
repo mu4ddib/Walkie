@@ -105,6 +105,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Estructura inicial del repo: documentación, ADR-0001 (stack), ADR-0002 (lienzos por feature), schema del grafo v0, devcontainer, docker-compose, CI y plantillas de GitHub.
 
 ### Fixed
+- Lienzo: las cajas ya no se montan unas sobre otras. Una caja que crece (al completar su contrato o su descripción) empuja hacia abajo a las que tenía debajo, en cascada y agrandando su grupo si hace falta (un paso de Ctrl+Z); la caja seleccionada se dibuja encima de sus vecinas; y «Grupo» (G) sin nada seleccionado crea el grupo vacío en un hueco libre de la vista, con un aviso de cómo envolver lo que ya hay (seleccionarlo y pulsar G).
 - Catálogo: los campos de «Nuevo módulo» se montaban uno sobre otro; ahora tienen el mismo diseño que «Nuevo elemento».
 - Lienzo: en pantallas bajas (ej. MacBook de 14") la lista de «Recurso» y el panel «Componentes» ya no quedan debajo de la barra de zoom: terminan sobre ella y se desplazan, así se alcanza la última opción («Personalizado»).
 - Mapa de la app: las teclas de vista no hacían nada; ahora, como en el lienzo, 0 muestra todo el mapa, + y − acercan y alejan, y Esc quita la selección (no mientras se escribe).
