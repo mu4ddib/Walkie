@@ -27,7 +27,7 @@
       "id": "csproj",
       "version": "0.1.0",
       "status": "skipped",
-      "reason": "No se pidió: walkie analyze --detectors openapi",
+      "reason": "No se pidió: walkie scan --detectors openapi",
       "produces": {
         "entities": [
           "service",

@@ -23,13 +23,13 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 
 ### CLI y paquete
 
-- [ ] Dado un proyecto local, cuando ejecuto `walkie analyze <carpeta> -o <archivo>.walkiepack`, entonces obtengo un paquete con: tecnologías detectadas, entidades descubiertas (api, service, database, resource, screen, candidatos a módulo y a feature), relaciones entre ellas, evidencia de cada una (archivo relativo, líneas, detector, confianza), el alcance del análisis y sus limitaciones.
-- [ ] El análisis es estático: el CLI no compila, no instala dependencias ni ejecuta código ni scripts del proyecto analizado.
-- [ ] El paquete no contiene rutas absolutas, ni contenido de archivos de secretos (`.env`, `*.pfx`, `appsettings.*.json` con secretos), ni fragmentos de código salvo con `--include-snippets`.
-- [ ] Analizar dos veces el mismo árbol de archivos produce un paquete idéntico (orden estable; la fecha solo en el manifest).
-- [ ] Cada entidad tiene una clave estable determinista (ej. `api:GET /api/apps/{appId}`), la misma entre análisis del mismo proyecto.
-- [ ] La fuente tiene un id estable que el CLI guarda en `.walkie/source.json` del proyecto: reanalizar el mismo proyecto apunta a la misma fuente.
-- [ ] Detectores del primer alcance: archivos OpenAPI, docker-compose, manifiestos (`.csproj`, `package.json`, `.sln`/`.slnx`), ASP.NET Core (Minimal APIs, controllers, `DbContext`/`DbSet`) y rutas y llamadas HTTP de React y Angular. Lo que un detector no puede resolver (una ruta construida en tiempo de ejecución) aparece en `limitations`, sin inventarlo.
+- [ ] Dado un proyecto local, cuando ejecuto `walkie scan <carpeta> -o <archivo>.walkiepack`, entonces obtengo un paquete con: tecnologías detectadas, entidades descubiertas (api, service, database, resource, screen, candidatos a módulo y a feature; hoy todo menos screen y feature, que esperan el parser de TypeScript), relaciones entre ellas, evidencia de cada una (archivo relativo, líneas, detector, confianza), el alcance del análisis y sus limitaciones.
+- [x] El análisis es estático: el CLI no compila, no instala dependencias ni ejecuta código ni scripts del proyecto analizado.
+- [x] El paquete no contiene rutas absolutas, ni contenido de archivos de secretos (`.env`, `*.pfx`, `appsettings.*.json` con secretos), ni fragmentos de código salvo con `--include-snippets`.
+- [x] Analizar dos veces el mismo árbol de archivos produce un paquete idéntico (orden estable; la fecha solo en el manifest).
+- [x] Cada entidad tiene una clave estable determinista (ej. `api:GET /api/apps/{}`: los parámetros se normalizan, ADR-0014), la misma entre análisis del mismo proyecto.
+- [x] La fuente tiene un id estable que el CLI guarda en `.walkie/source.json` del proyecto: reanalizar el mismo proyecto apunta a la misma fuente.
+- [ ] Detectores del primer alcance (hechos todos menos las rutas y llamadas HTTP de React y Angular, tarea 8): archivos OpenAPI, docker-compose, manifiestos (`.csproj`, `package.json`, `.sln`/`.slnx`), ASP.NET Core (Minimal APIs, controllers, `DbContext`/`DbSet`) y rutas y llamadas HTTP de React y Angular. Lo que un detector no puede resolver (una ruta construida en tiempo de ejecución) aparece en `limitations`, sin inventarlo.
 
 ### Cargar el paquete
 

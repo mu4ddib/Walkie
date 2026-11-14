@@ -67,6 +67,20 @@ jobs:
       - if: ${{ hashFiles('apps/api/**/*.csproj') != '' }}
         run: dotnet test apps/api --no-build -c Release
 
+  cli:
+    # Walkie Live (spec walkie-live): analizador y CLI. Sin Docker: las pruebas usan proyectos ficticios y el propio repo.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore apps/cli/Walkie.Cli.slnx
+      - run: dotnet build apps/cli/Walkie.Cli.slnx --no-restore -c Release
+      - run: dotnet test apps/cli/Walkie.Cli.slnx --no-build -c Release
+      - name: walkie scan sobre el propio repo
+        run: dotnet run --project apps/cli/src/Walkie.Cli -c Release --no-build -- scan . -o walkie.walkiepack --source-id 0198f0c0-0000-7000-8000-0000000000a1
+
   web:
     runs-on: ubuntu-latest
     steps:

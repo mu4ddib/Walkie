@@ -1,6 +1,6 @@
 # ADR-0013: Formato `.walkiepack` y CLI .NET con análisis estático
 
-- Estado: aceptado (el parser de TypeScript se decide en la tarea 8 de `walkie-live`, con los criterios de abajo)
+- Estado: aceptado (el parser de TypeScript se decide en la tarea 8 de `walkie-live`, con los criterios de abajo; implementado sin él en las tareas 2 y 7, ver «Estado de la implementación»)
 - Fecha: 2026-11-14 (revisado el mismo día: justificación del CLI .NET y evaluación de TypeScript, React y Angular)
 
 ## Contexto
@@ -93,6 +93,14 @@ Cualquier otra dependencia necesita justificación en el PR.
 6. Tamaño de la herramienta.
 
 El resultado se registra aquí. Si se elige (b) o (c), se reemplaza el escáner detrás del mismo detector, sin cambiar el formato.
+
+## Estado de la implementación (tareas 2 y 7, 2026-11-14)
+
+- **CLI y Analyzer separados.** `apps/cli/src/Walkie.Analyzer` es una biblioteca sin consola, API, lienzo ni base. `apps/cli/src/Walkie.Cli` es la herramienta `walkie` (`dotnet tool`, `walkie scan [carpeta] -o <archivo>`), y por defecto escribe `./architecture.walkiepack`. La distribución sigue siendo `dotnet tool`; un binario autocontenido queda para antes del piloto.
+- **Dependencias confirmadas** (licencia leída en su `nuspec`): `Microsoft.CodeAnalysis.CSharp` 4.14.0 (MIT) y `YamlDotNet` 16.3.0 (MIT).
+- **Contrato no duplicado.** El Analyzer referencia `Walkie.Shared` (claves, fingerprints, validador, schemas). Costo aceptado: `Walkie.Shared` trae `FrameworkReference` a `Microsoft.AspNetCore.App` (por el filtro de validación de endpoints), así que la herramienta necesita el runtime de ASP.NET Core, que viene con el SDK de .NET. Si un binario autocontenido o un analizador sin ASP.NET lo pide, se separa el contrato de Discovery en su propio proyecto.
+- **TypeScript, React y Angular: sin análisis semántico todavía.** No se implementó ninguna de las opciones (a), (b) ni (c). `package-json` detecta las tecnologías y declara la limitación `frontend-semantics-not-analyzed`, que deja el análisis como parcial. No se proponen pantallas, rutas ni llamadas HTTP del front. La prueba de concepto y la decisión siguen en la tarea 8, con los mismos criterios.
+- **Límites:** 20.000 archivos, 1 MB por archivo, 20.000 entidades y 50 MB de paquete (`AnalyzerLimits`).
 
 ## Consecuencias
 

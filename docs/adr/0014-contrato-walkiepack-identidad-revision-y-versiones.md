@@ -131,7 +131,7 @@ Los errores llevan la ruta dentro del paquete (`discovery.json/entities/3/eviden
 - Negativas / costos:
   - el paquete exige orden y fingerprints, así que el analizador tiene que calcularlos (`DiscoveryFingerprint`, `DiscoveryKeys`);
   - cada campo nuevo sube `formatVersion` y requiere una migración;
-  - cambiar el nombre de un servicio o de un módulo cambia su clave: se ve como uno que no aparece y otro nuevo, y la persona lo vuelve a vincular;
+  - cambiar el nombre de un servicio o de un módulo cambia su clave: se ve como uno que no aparece y otro nuevo, y la persona lo vuelve a vincular. Para que la revisión pueda proponer la correspondencia sin un sistema de matching, la evidencia conserva lo que no cambia con el nombre: la carpeta y el ancla (`symbol`, ej. `Project` del `.csproj`, `services.<nombre>` de compose). Un `missing` y un `new` del mismo tipo con la misma carpeta y ancla son una posible correspondencia, nunca una decisión automática (prueba `Renombrar_un_proyecto_…` en `apps/cli/tests`);
   - el JSON canónico escribe los números no enteros con el formato de .NET (`R`); el formato solo usa enteros.
 - Qué habría que hacer para revertirla:
   - las claves y los fingerprints viven en `Walkie.Shared`: cambiar el algoritmo es una versión nueva del formato con una migración que recalcule;

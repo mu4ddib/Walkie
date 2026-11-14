@@ -20,7 +20,7 @@ Basado en `spec.md` (aprobada el 2026-11-14), ADR-0012 y ADR-0013. Issue padre: 
 
 | Etapa | Qué pasa | Tareas |
 |---|---|---|
-| CLI | `walkie analyze` lee el proyecto sin ejecutar nada | 2, 7, 8 |
+| CLI | `walkie scan` lee el proyecto sin ejecutar nada | 2, 7, 8 |
 | `.walkiepack` | manifest + `discovery.json`, validados con `WalkieSchemas` | 1 (contrato), 2 (escritura) |
 | Importación web | «Importar proyecto local» y «Crear app desde proyecto local»: `dryRun` → resumen (tecnologías, alcance, limitaciones) → confirmar | 3 (API), 5 (web), 10 (crear app) |
 | Discovery Review | hallazgos por tipo y estado, evidencia, filtros y paginación | 4 (API), 5 (web) |
@@ -46,7 +46,7 @@ Cada tarea cabe en una sesión y en un PR.
    - ejemplos completo y parcial, y registros de la API, validados en el CI;
    - pruebas de schema, integridad, compatibilidad y versiones;
    - tipos generados en la web.
-2. [ ] (#164) CLI mínimo, `walkie analyze <carpeta> -o <archivo>.walkiepack`:
+2. [x] (#164) CLI mínimo, `walkie scan [carpeta] -o <archivo>.walkiepack` (el nombre del comando pasó de `analyze` a `scan`):
    - detectores de manifiestos (`.csproj`, `.sln`/`.slnx`, `package.json`), docker-compose y OpenAPI;
    - `.walkie/source.json`, exclusión de secretos y salida determinista;
    - lector de YAML para compose y OpenAPI (candidato YamlDotNet, MIT; justificar en el PR);
@@ -69,11 +69,11 @@ Cada tarea cabe en una sesión y en un PR.
    - bitácora `discovery.applies` (plan con ids antes de escribir; `pending` → `completed` o `compensated`), `IAppWriter.CreateCatalogItemAsync` con id dado y recuperación de una aplicación `pending`;
    - crear o vincular elementos del catálogo, sin tocar los vinculados ni los lienzos;
    - desde un elemento del catálogo, ver de qué evidencia viene.
-7. [ ] (#169) Detectores ASP.NET Core y EF con Roslyn solo sintáctico:
+7. [x] (#169) Detectores ASP.NET Core y EF con Roslyn solo sintáctico:
    - Minimal APIs y controllers → `api`;
    - `DbContext`/`DbSet` → `database`;
    - proyectos → `service` y candidatos a módulo.
-8. [ ] (#170) Detectores React y Angular:
+8. [ ] (#170) Detectores React y Angular (hoy solo tecnologías por `package.json` y la limitación `frontend-semantics-not-analyzed`):
    - prueba de concepto del parser de TS/TSX, con la decisión registrada en ADR-0013;
    - rutas → `screen` y candidatos a feature;
    - llamadas HTTP con URL literal → relación con `api`.
@@ -108,4 +108,4 @@ Dependencias:
 
 ## Estado
 
-Última actualización: 2026-11-14 — tarea 0 hecha: auditoría de la fase 0, spec aprobada, ADR-0012 y ADR-0013 aceptados y documentación alineada con el código. Tarea 1 hecha (fase 1, contratos y fundamentos; ADR-0014): siete schemas (`walkie-discovery-pack`, `walkie-discovery`, `walkie-discovery-snapshot`, `walkie-discovery-binding`, `walkie-discovery-review`, `walkie-discovery-apply`, `walkie-discovery-apply-result`); `Walkie.Shared/Discovery` con claves normalizadas (`DiscoveryKeys`), fingerprints en JSON canónico (`DiscoveryFingerprint`), integridad (`DiscoveryPackValidator`: duplicados, referencias, orden, capacidades, parcialidad, fragmentos, estadísticas) y versiones (`DiscoveryFormat`: versión actual, migraciones, rechazo de versiones futuras antes del schema); ejemplos `tienda-demo` (completo) y `parcial` más los registros de la API, validados en el job `schema`; pruebas `DiscoveryPackSchemaTests`, `DiscoveryPackValidatorTests` y `DiscoveryCompatibilityTests` (los fingerprints de los ejemplos los calculó un script independiente y C# los reproduce); tipos en `apps/web/src/schema/`. Cambio de alcance: el `PUT .../bindings/{key}` de la spec se reemplazó por operaciones `reject`/`link`/`reset` en `apply`. Sigue: tarea 2 (CLI) o 3 (API).
+Última actualización: 2026-11-14 — tarea 0 hecha: auditoría de la fase 0, spec aprobada, ADR-0012 y ADR-0013 aceptados y documentación alineada con el código. Tarea 1 hecha (fase 1, contratos y fundamentos; ADR-0014): siete schemas (`walkie-discovery-pack`, `walkie-discovery`, `walkie-discovery-snapshot`, `walkie-discovery-binding`, `walkie-discovery-review`, `walkie-discovery-apply`, `walkie-discovery-apply-result`); `Walkie.Shared/Discovery` con claves normalizadas (`DiscoveryKeys`), fingerprints en JSON canónico (`DiscoveryFingerprint`), integridad (`DiscoveryPackValidator`: duplicados, referencias, orden, capacidades, parcialidad, fragmentos, estadísticas) y versiones (`DiscoveryFormat`: versión actual, migraciones, rechazo de versiones futuras antes del schema); ejemplos `tienda-demo` (completo) y `parcial` más los registros de la API, validados en el job `schema`; pruebas `DiscoveryPackSchemaTests`, `DiscoveryPackValidatorTests` y `DiscoveryCompatibilityTests` (los fingerprints de los ejemplos los calculó un script independiente y C# los reproduce); tipos en `apps/web/src/schema/`. Cambio de alcance: el `PUT .../bindings/{key}` de la spec se reemplazó por operaciones `reject`/`link`/`reset` en `apply`. Tareas 2 y 7 hechas (fase 2, analizador y CLI): `apps/cli` con `Walkie.Analyzer` (biblioteca: recorrido seguro, `Findings`, detectores `csproj`, `package-json`, `compose`, `openapi`, `aspnetcore-endpoints` y `efcore` con Roslyn solo sintáctico y YamlDotNet) y `Walkie.Cli` (`walkie scan`, `dotnet tool`). Cada paquete pasa `DiscoveryPackValidator` antes de escribirse. 46 pruebas sin Docker (proyectos ficticios en rutas con espacios, malformados, parciales, sin tecnologías, secretos, límites, escaneo repetido byte a byte, claves estables, CLI y el propio repo). Walkie analizado por sí mismo en `analisis-de-walkie.md`: 38 APIs (todas las de `apps/api/src`), 5 módulos, 5 bases, 2 recursos, 1 servicio y 56 relaciones. Job `cli` en el CI. Tarea 8: solo tecnologías del front; el parser de TypeScript sigue pendiente (ADR-0013). Sigue: tarea 3 (API recibe el paquete).

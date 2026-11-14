@@ -1,0 +1,4 @@
+<Project>
+  <!-- Mismas reglas que la API: warnings como errores y analizadores recomendados. -->
+  <Import Project="../api/Directory.Build.props" />
+</Project>

@@ -6,6 +6,7 @@ Walkie es un lienzo interactivo para documentar apps (pantallas, inputs, reglas,
 
 - `apps/web` — React + TS + Vite + React Flow. Ver `apps/web/CLAUDE.md`.
 - `apps/api` — ASP.NET Core .NET 10, monolito modular. Ver `apps/api/CLAUDE.md`.
+- `apps/cli` — Walkie Live: analizador estático (`Walkie.Analyzer`) y CLI `walkie scan` que genera un `.walkiepack`. Ver `apps/cli/CLAUDE.md`.
 - `packages/schema` — JSON Schema del grafo. **Fuente de verdad**: front y back se ajustan a él, nunca al revés.
 - `infra/` — docker-compose (Postgres, RustFS (S3), Keycloak) y realm de Keycloak de desarrollo.
 - `docs/` — `vision.md`, `architecture.md`, `glossary.md`, `adr/`, `features/<feature>/{spec,plan}.md`, `workflow.md`.
@@ -28,6 +29,8 @@ App → Catálogo (nodos reutilizables: api, service, database, resource; y mód
 | E2E (requiere Postgres, RustFS y Keycloak levantados) | `pnpm --dir apps/web e2e --trace off` |
 | Medir rendimiento del lienzo (compilación de producción; mismos servicios que E2E) | `pnpm --dir apps/web perf` (`WALKIE_SCALES`, `WALKIE_CPU`, `WALKIE_PERF_LABEL`, `WALKIE_BROWSER=webkit` para Safari; resultados en `apps/web/perf/results/`) |
 | Regenerar tipos del schema | `pnpm --dir apps/web gen:schema` |
+| Analizar un proyecto local (Walkie Live) | `dotnet run --project apps/cli/src/Walkie.Cli -- scan <carpeta> -o <archivo>.walkiepack` (o instalada: `walkie scan .`) |
+| Pruebas del analizador y la CLI (sin Docker) | `dotnet test apps/cli/Walkie.Cli.slnx` |
 
 API en http://localhost:5080 (OpenAPI en `/openapi/v1.json` en Development), web en http://localhost:5173, Keycloak en http://localhost:8080 (usuario de prueba `dev` / `walkie_dev`). Actualiza esta tabla si cambian.
 
@@ -51,7 +54,7 @@ Si `dotnet` no existe, Docker no responde, una imagen no baja o el push da 403, 
 
 - Una tarea de `plan.md` = una rama = un PR. Al terminar: marca la tarea en `plan.md`, actualiza su sección "Estado" y el `CHANGELOG.md`.
 - Si el PR anterior de la rama ya se mergeó, reinicia la rama desde `main` (`git fetch origin main && git checkout -B <rama> origin/main`) antes de seguir.
-- Antes del push corre los checks de lo que tocaste: `dotnet build -c Release` + `dotnet test apps/api`, o `pnpm --dir apps/web check:schema && pnpm --dir apps/web lint && pnpm --dir apps/web test && pnpm --dir apps/web build`.
+- Antes del push corre los checks de lo que tocaste: `dotnet build -c Release` + `dotnet test apps/api` (y `dotnet test apps/cli/Walkie.Cli.slnx` si tocaste `apps/cli` o `Walkie.Shared`), o `pnpm --dir apps/web check:schema && pnpm --dir apps/web lint && pnpm --dir apps/web test && pnpm --dir apps/web build`.
 - Cuando descubras una trampa nueva (error que costó tiempo), anótala en la sección "Trampas conocidas" del `CLAUDE.md` de esa app en el mismo PR.
 
 ## Skills del repo

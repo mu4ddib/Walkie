@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Walkie.Analyzer/Walkie.Analyzer.csproj" />
+    <Project Path="src/Walkie.Cli/Walkie.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Walkie.Analyzer.Tests/Walkie.Analyzer.Tests.csproj" />
+  </Folder>
+</Solution>
