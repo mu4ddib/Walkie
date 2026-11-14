@@ -1,6 +1,6 @@
 # ADR-0013: Formato `.walkiepack` y CLI .NET con análisis estático
 
-- Estado: propuesto
+- Estado: aceptado
 - Fecha: 2026-11-14
 
 ## Contexto

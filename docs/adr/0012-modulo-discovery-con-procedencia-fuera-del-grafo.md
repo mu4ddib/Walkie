@@ -1,6 +1,6 @@
 # ADR-0012: Módulo Discovery con la procedencia fuera del grafo
 
-- Estado: propuesto
+- Estado: aceptado
 - Fecha: 2026-11-14
 
 ## Contexto

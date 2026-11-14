@@ -1,7 +1,7 @@
 # Spec: Walkie Live — Importar proyecto local
 
-- Issue padre: #
-- Estado: borrador
+- Issue padre: #162
+- Estado: aprobada (2026-11-14)
 
 ## Objetivo
 
