@@ -27,6 +27,12 @@ jobs:
       - name: Validar el catálogo de operaciones
         # Datos compartidos por la web y la API (spec interacciones, ADR-0011).
         run: npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s packages/schema/walkie-operations.schema.json -d packages/schema/walkie-operations.json
+      - name: Validar los ejemplos del .walkiepack
+        # Spec walkie-live (ADR-0013): el manifest y el discovery.json de ejemplo cumplen su schema.
+        run: |
+          ajv="npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats"
+          $ajv -s packages/schema/walkie-discovery-pack.schema.json -r packages/schema/walkie-discovery.schema.json -r packages/schema/walkie-graph.schema.json -d packages/schema/examples/walkiepack/manifest.json
+          $ajv -s packages/schema/walkie-discovery.schema.json -r packages/schema/walkie-graph.schema.json -d packages/schema/examples/walkiepack/discovery.json
 
   api:
     runs-on: ubuntu-latest

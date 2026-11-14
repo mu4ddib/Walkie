@@ -26,7 +26,7 @@ Opción 2, con un formato propio.
 **Formato:** `.walkiepack` es un zip que contiene:
 
 - `manifest.json`: `format: "walkiepack"`, `formatVersion`, `schemaVersion`, analizador (nombre y versión), fuente (id estable de `.walkie/source.json` y nombre), VCS (commit, rama y si hay cambios sin confirmar), alcance (rutas incluidas y excluidas, detectores), `limitations[]` y estadísticas;
-- `entities.json`, `relations.json` y `evidence.json`.
+- `discovery.json` (`walkie-discovery.schema.json`): entidades, relaciones y evidencia en un solo archivo, así la integridad entre ellas (evidencia citada que existe, extremos de cada relación) se valida en una pasada. Las entidades reutilizan los `$defs` del grafo (`http`, `database`, `resource`, `runtime`): lo aprobado pasa al catálogo sin traducir. (Ajuste de la tarea 1: la primera versión de este ADR hablaba de tres archivos).
 
 El paquete no lleva rutas absolutas. Las entidades usan claves deterministas, se ordenan de forma estable y no llevan fechas, así que el mismo árbol da el mismo paquete. La evidencia (archivo relativo, líneas, detector, confianza) va sin fragmentos de código salvo `--include-snippets`. Los archivos de secretos se excluyen siempre.
 

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery.schema.json",
+  "title": "Walkie discovery v0",
+  "description": "discovery.json de un .walkiepack (spec walkie-live, ADR-0013): lo que el análisis estático descubrió (entidades y relaciones) y la evidencia que lo respalda. Toda entidad y relación cita al menos una evidencia; ninguna se inventa. Orden estable (por clave o id) y sin fechas: el mismo árbol da el mismo archivo. Lo que el schema no expresa lo valida la API: claves e ids únicos, evidence/from/to/members/interfaces que existen, snippet solo con includeSnippets del manifest y stats que coinciden.",
+  "type": "object",
+  "required": ["entities", "relations", "evidence"],
+  "additionalProperties": false,
+  "properties": {
+    "entities": { "type": "array", "items": { "$ref": "#/$defs/entity" } },
+    "relations": { "type": "array", "items": { "$ref": "#/$defs/relation" } },
+    "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+  },
+  "$defs": {
+    "entityKey": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 500,
+      "pattern": "^(api|service|database|resource|screen|module|feature):\\S.*$",
+      "description": "Clave estable y determinista: el mismo componente da la misma clave en cada análisis de la fuente (ej. api:GET /api/apps/{appId}, service:Walkie.Api, database:postgres/walkie). Los vínculos de ADR-0012 la usan para reconocerlo entre análisis"
+    },
+    "evidenceId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$", "description": "Id de una evidencia en este archivo (el CLI lo deriva del contenido, ej. un hash corto)" },
+    "detectorId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "maxLength": 60, "description": "Detector que produjo el hallazgo (ej. openapi, compose, csproj, package-json, aspnetcore-endpoints, efcore, react-router, angular-router)" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!(.*/)?\\.\\.(/|$))[^\\\\\\u0000]+$",
+      "description": "Ruta relativa a la raíz del proyecto, con /: nunca absoluta, sin .. ni \\"
+    },
+    "confidence": {
+      "enum": ["high", "medium", "low"],
+      "description": "high: declarado tal cual (un archivo OpenAPI, un MapGet con ruta literal); medium: deducido de una convención (un controller con [Route]); low: heurística (un nombre parecido). La revisión nunca aplica sola lo que no es high"
+    },
+    "entity": {
+      "type": "object",
+      "required": ["key", "kind", "title", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/entityKey" },
+        "kind": {
+          "enum": ["api", "service", "database", "resource", "screen", "module", "feature"],
+          "description": "api, service, database y resource se proponen como elementos del catálogo; screen como pantalla de una feature; module como módulo compartido (ADR-0010) y feature como feature con su lienzo inicial"
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Título propuesto (los mismos límites que el catálogo)" },
+        "description": { "type": "string", "maxLength": 2000 },
+        "technology": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]*$", "maxLength": 60, "description": "Id de una tecnología del manifest (ej. aspnetcore)" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "http": { "$ref": "walkie-graph.schema.json#/$defs/http", "description": "Contrato descubierto (solo api)" },
+        "database": { "$ref": "walkie-graph.schema.json#/$defs/database", "description": "Motor y estructura descubiertos (solo database)" },
+        "resource": { "$ref": "walkie-graph.schema.json#/$defs/resource", "description": "Subtipo y detalles (solo resource; obligatorio en él)" },
+        "runtime": { "$ref": "walkie-graph.schema.json#/$defs/runtime", "description": "Dónde corre (solo service)" },
+        "route": { "type": "string", "minLength": 1, "maxLength": 500, "description": "Ruta de la pantalla en el front, ej. /apps/:appId (solo screen)" },
+        "members": {
+          "type": "array",
+          "description": "Claves de las entidades que agrupa (solo module y feature)",
+          "items": { "$ref": "#/$defs/entityKey" }
+        },
+        "interfaces": {
+          "type": "array",
+          "description": "Interfaces propuestas del módulo (solo module; ADR-0010): cada una la implementa una entidad de members",
+          "items": {
+            "type": "object",
+            "required": ["name", "kind", "entity"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+              "kind": { "enum": ["provides", "event", "requires"] },
+              "entity": { "$ref": "#/$defs/entityKey" }
+            }
+          }
+        },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceId" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "resource" } } }, "then": { "required": ["resource"] } },
+        { "if": { "properties": { "kind": { "not": { "const": "api" } } } }, "then": { "not": { "required": ["http"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "database" } } } }, "then": { "not": { "required": ["database"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "resource" } } } }, "then": { "not": { "required": ["resource"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "service" } } } }, "then": { "not": { "required": ["runtime"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "screen" } } } }, "then": { "not": { "required": ["route"] } } },
+        { "if": { "properties": { "kind": { "not": { "enum": ["module", "feature"] } } } }, "then": { "not": { "required": ["members"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "module" } } } }, "then": { "not": { "required": ["interfaces"] } } }
+      ]
+    },
+    "relation": {
+      "type": "object",
+      "required": ["key", "kind", "from", "to", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string", "minLength": 3, "maxLength": 1100, "description": "Clave estable: <kind>:<from>-><to>" },
+        "kind": {
+          "enum": ["calls", "reads", "writes", "publishes", "consumes", "exposes", "depends-on", "navigates"],
+          "description": "calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base; publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra"
+        },
+        "from": { "$ref": "#/$defs/entityKey" },
+        "to": { "$ref": "#/$defs/entityKey" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceId" } }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["id", "detector", "path", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/evidenceId" },
+        "detector": { "$ref": "#/$defs/detectorId" },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "lines": {
+          "type": "object",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "integer", "minimum": 1 },
+            "end": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "note": { "type": "string", "maxLength": 500, "description": "Por qué el detector concluye esto (ej. «MapGet con ruta literal»)" },
+        "snippet": { "type": "string", "maxLength": 2000, "description": "Fragmento del código, solo si el manifest dice includeSnippets" }
+      }
+    }
+  }
+}

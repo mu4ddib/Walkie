@@ -61,6 +61,15 @@ public static class WalkieSchemas
     /// </summary>
     public static string OperationsCatalog { get; } = Load("walkie-operations.json");
 
+    /// <summary>
+    /// <c>walkie-discovery.schema.json</c>: el <c>discovery.json</c> de un <c>.walkiepack</c> (spec walkie-live,
+    /// ADR-0013): entidades, relaciones y evidencia de un análisis local. Usa <c>$defs</c> del grafo.
+    /// </summary>
+    public static JsonSchema Discovery { get; } = LoadAfterGraph("walkie-discovery.schema.json");
+
+    /// <summary><c>walkie-discovery-pack.schema.json</c>: <c>manifest.json</c> de un <c>.walkiepack</c> (usa <c>$defs</c> de <see cref="Discovery"/>).</summary>
+    public static JsonSchema DiscoveryPack { get; } = LoadAfter(Discovery, "walkie-discovery-pack.schema.json");
+
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
         $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",

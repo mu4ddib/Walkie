@@ -5,7 +5,7 @@ Basado en `spec.md` (aprobada el 2026-11-14), ADR-0012 y ADR-0013. Issue padre: 
 ## Archivos a tocar
 
 - `packages/schema/`:
-  - `walkie-discovery-pack.schema.json` y `walkie-discovered-entity.schema.json` (tarea 1);
+  - `walkie-discovery-pack.schema.json` y `walkie-discovery.schema.json` (tarea 1);
   - `walkie-discovery-review.schema.json` (tarea 4);
   - `walkie-discovery-apply.schema.json` (tarea 6);
   - ejemplos en `examples/walkiepack/`.
@@ -23,7 +23,7 @@ Basado en `spec.md` (aprobada el 2026-11-14), ADR-0012 y ADR-0013. Issue padre: 
 Cada tarea cabe en una sesión y en un PR.
 
 0. [x] Auditoría, spec, ADR-0012, ADR-0013 y correcciones de documentación.
-1. [ ] (#163) Contrato del `.walkiepack`: schemas del manifest y de entidades, relaciones y evidencia; tipos generados; ejemplos válidos; pruebas de que los válidos pasan y los inválidos fallan con la ruta del error; validación de los ejemplos en el CI.
+1. [x] (#163) Contrato del `.walkiepack`: schemas del manifest y de entidades, relaciones y evidencia; tipos generados; ejemplos válidos; pruebas de que los válidos pasan y los inválidos fallan con la ruta del error; validación de los ejemplos en el CI.
 2. [ ] (#164) CLI mínimo, `walkie analyze <carpeta> -o <archivo>.walkiepack`:
    - detectores de manifiestos (`.csproj`, `.sln`/`.slnx`, `package.json`), docker-compose y OpenAPI;
    - `.walkie/source.json`, exclusión de secretos y salida determinista;
@@ -80,4 +80,4 @@ Dependencias:
 
 ## Estado
 
-Última actualización: 2026-11-14 — tarea 0 hecha: auditoría de la fase 0, spec aprobada, ADR-0012 y ADR-0013 aceptados y documentación alineada con el código. Tarea 1 en curso.
+Última actualización: 2026-11-14 — tarea 0 hecha: auditoría de la fase 0, spec aprobada, ADR-0012 y ADR-0013 aceptados y documentación alineada con el código. Tarea 1 hecha: `walkie-discovery-pack.schema.json` (manifest) y `walkie-discovery.schema.json` (un solo `discovery.json` con entidades, relaciones y evidencia, en vez de tres archivos: la integridad entre ellas se valida en una pasada; ADR-0013 ajustado), ejemplos en `packages/schema/examples/walkiepack/` validados en el job `schema` del CI, `WalkieSchemas.Discovery`/`DiscoveryPack` con `DiscoveryPackSchemaTests` (ejemplos válidos, 23 variantes inválidas con su ruta de error, rutas con puntos que no suben de carpeta) y tipos en `apps/web/src/schema/`. Sigue: tarea 2 (CLI) o 3 (API), que ya pueden empezar en paralelo.

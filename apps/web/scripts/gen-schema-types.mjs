@@ -37,6 +37,9 @@ const targets = [
   { schema: 'walkie-module-summary.schema.json', out: 'walkie-module-summary.ts', name: 'WalkieModuleSummary' },
   { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },
   { schema: 'walkie-app-map.schema.json', out: 'walkie-app-map.ts', name: 'WalkieAppMap' },
+  // .walkiepack (spec walkie-live, ADR-0013). Sin `imports`: declaran los `$defs` del grafo y del discovery que usan.
+  { schema: 'walkie-discovery.schema.json', out: 'walkie-discovery.ts', name: 'WalkieDiscovery' },
+  { schema: 'walkie-discovery-pack.schema.json', out: 'walkie-discovery-pack.ts', name: 'WalkieDiscoveryPack' },
   // Usa `$ref` a otros schemas: sus tipos se importan de su propio archivo en vez de repetirse.
   {
     schema: 'walkie-shared-feature.schema.json',

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-pack.schema.json",
+  "title": "Walkie discovery pack manifest v0",
+  "description": "manifest.json de un .walkiepack (spec walkie-live, ADR-0013): un .zip que genera el CLI de Walkie al analizar un proyecto local de forma estática. Junto al manifest va discovery.json (walkie-discovery.schema.json: entidades, relaciones y evidencia). Nunca lleva rutas absolutas ni contenido de archivos de secretos; los fragmentos de código solo con includeSnippets. La integridad que el schema no expresa (claves únicas, evidencia y extremos que existen, stats coherentes) la valida la API al recibirlo.",
+  "type": "object",
+  "required": ["format", "formatVersion", "schemaVersion", "createdAt", "analyzer", "source", "scope", "technologies", "limitations", "stats", "includeSnippets"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "walkiepack" },
+    "formatVersion": { "const": 0, "description": "Versión de este formato; un paquete de una versión que la API no conoce se rechaza con un mensaje propio" },
+    "schemaVersion": { "type": "integer", "minimum": 0, "description": "schemaVersion de walkie-graph del que salen los $defs que usan las entidades (http, database, resource, runtime)" },
+    "createdAt": { "type": "string", "format": "date-time", "description": "Única fecha del paquete: las entidades no llevan fechas, así el mismo árbol da el mismo contenido" },
+    "analyzer": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 60, "description": "Ej. walkie-cli" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$", "description": "SemVer del analizador" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "description": "El proyecto analizado. El id lo crea el CLI una vez y lo guarda en .walkie/source.json del proyecto: reanalizar apunta a la misma fuente",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Nombre del proyecto (por defecto, el de su carpeta), nunca su ruta" }
+      }
+    },
+    "vcs": {
+      "type": "object",
+      "description": "Estado del control de versiones al analizar, si lo hay (leído de los archivos de .git, sin ejecutar git)",
+      "required": ["kind", "commit"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "git" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{7,64}$" },
+        "branch": { "type": "string", "maxLength": 255 },
+        "dirty": { "type": "boolean", "description": "Hay cambios sin confirmar (si se pudo saber)" }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "description": "Qué se miró: rutas relativas (globs) incluidas y excluidas y los detectores que corrieron",
+      "required": ["include", "exclude", "detectors"],
+      "additionalProperties": false,
+      "properties": {
+        "include": { "type": "array", "items": { "$ref": "#/$defs/glob" } },
+        "exclude": { "type": "array", "items": { "$ref": "#/$defs/glob" } },
+        "detectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "version"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "$ref": "walkie-discovery.schema.json#/$defs/detectorId" },
+              "version": { "type": "string", "minLength": 1, "maxLength": 40 }
+            }
+          }
+        }
+      }
+    },
+    "technologies": {
+      "type": "array",
+      "description": "Tecnologías detectadas (lenguajes, frameworks, motores), para mostrarlas antes de confirmar",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]*$", "maxLength": 60, "description": "Ej. dotnet, aspnetcore, efcore, react, angular, postgresql" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "version": { "type": "string", "maxLength": 40 },
+          "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "walkie-discovery.schema.json#/$defs/evidenceId" } }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "description": "Lo que el análisis no pudo resolver o no miró (ej. una ruta construida en tiempo de ejecución); se muestra antes de confirmar en vez de adivinar",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "maxLength": 60, "description": "Ej. dynamic-route, unparsed-file, unsupported-technology, file-too-large" },
+          "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "detector": { "$ref": "walkie-discovery.schema.json#/$defs/detectorId" },
+          "path": { "$ref": "walkie-discovery.schema.json#/$defs/relativePath" }
+        }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": ["files", "entities", "relations", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "files": { "type": "integer", "minimum": 0, "description": "Archivos leídos" },
+        "entities": { "type": "integer", "minimum": 0 },
+        "relations": { "type": "integer", "minimum": 0 },
+        "evidence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "includeSnippets": { "type": "boolean", "description": "Si la evidencia trae fragmentos de código (--include-snippets). Sin él, ninguna evidencia lleva snippet" }
+  },
+  "$defs": {
+    "glob": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^(?![/\\\\])(?![A-Za-z]:)[^\\\\]+$", "description": "Patrón relativo a la raíz del proyecto, con /" }
+  }
+}

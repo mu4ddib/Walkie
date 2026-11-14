@@ -4,6 +4,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Walkie Live, importar proyecto local (spec `walkie-live`, #162; ADR-0012 y ADR-0013): **contrato del `.walkiepack`** (tarea 1, #163). `walkie-discovery-pack.schema.json` (manifest: analizador, fuente con id estable, VCS, alcance, tecnologías, limitaciones, estadísticas y si trae fragmentos de código) y `walkie-discovery.schema.json` (entidades `api`, `service`, `database`, `resource`, `screen`, `module` y `feature` con clave estable, relaciones y evidencia con ruta relativa, líneas, detector y confianza; toda entidad y relación cita evidencia). Ejemplos en `packages/schema/examples/walkiepack/`, validados en el CI y por la API (`WalkieSchemas.Discovery` y `DiscoveryPack`); tipos generados en la web. Aún no hay CLI ni endpoints.
+
+### Changed
+- Documentación alineada con el código: sin módulo «Tours» en la API, `resource` en el catálogo del glosario, spec `exportar-e-importar` marcada como implementada, qué ids genera el cliente y cuáles la API, y regla nueva: si la documentación contradice el código, se señala y se propone cómo resolverlo antes de cambiar el comportamiento.
+
 ### Fixed
 - **«Ver todo» sin saltos en Safari** (spec `fluidez`, criterio 13): con todo el lienzo a la vista, Safari tarda en pintar cada cuadro y la transición de 320 ms se dibujaba en 3 o 4 cuadros (uno cubría más de la mitad del camino). Ahora el reloj de la cámara empieza en el segundo cuadro y ningún cuadro avanza más de un décimo del tiempo: si el equipo va lento, el movimiento dura algo más pero llega en al menos 10 pasos. A 60 fps no cambia nada. El banco mide también en WebKit (`WALKIE_BROWSER=webkit`, escenario `camara`).
 

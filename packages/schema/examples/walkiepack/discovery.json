@@ -1,0 +1,112 @@
+{
+  "entities": [
+    {
+      "key": "api:GET /api/pedidos/{pedidoId}",
+      "kind": "api",
+      "title": "GET /api/pedidos/{pedidoId}",
+      "technology": "aspnetcore",
+      "confidence": "high",
+      "http": { "method": "GET", "path": "/api/pedidos/{pedidoId}" },
+      "evidence": ["ev-openapi-pedido", "ev-mapget-pedido"]
+    },
+    {
+      "key": "database:postgresql/tienda",
+      "kind": "database",
+      "title": "tienda",
+      "technology": "postgresql",
+      "confidence": "high",
+      "database": { "engine": "PostgreSQL", "name": "tienda" },
+      "evidence": ["ev-compose-db", "ev-dbcontext"]
+    },
+    {
+      "key": "feature:Ver pedido",
+      "kind": "feature",
+      "title": "Ver pedido",
+      "confidence": "low",
+      "members": ["screen:/pedidos/:pedidoId", "api:GET /api/pedidos/{pedidoId}"],
+      "evidence": ["ev-route-pedido"]
+    },
+    {
+      "key": "module:Tienda.Pedidos",
+      "kind": "module",
+      "title": "Pedidos",
+      "confidence": "medium",
+      "members": ["api:GET /api/pedidos/{pedidoId}"],
+      "interfaces": [{ "name": "Consultar pedido", "kind": "provides", "entity": "api:GET /api/pedidos/{pedidoId}" }],
+      "evidence": ["ev-csproj-pedidos"]
+    },
+    {
+      "key": "resource:queue/pedidos-creados",
+      "kind": "resource",
+      "title": "pedidos-creados",
+      "confidence": "high",
+      "resource": { "kind": "queue", "name": "pedidos-creados" },
+      "evidence": ["ev-compose-queue"]
+    },
+    {
+      "key": "screen:/pedidos/:pedidoId",
+      "kind": "screen",
+      "title": "Detalle del pedido",
+      "technology": "react",
+      "confidence": "medium",
+      "route": "/pedidos/:pedidoId",
+      "evidence": ["ev-route-pedido"]
+    },
+    {
+      "key": "service:Tienda.Api",
+      "kind": "service",
+      "title": "Tienda.Api",
+      "technology": "aspnetcore",
+      "confidence": "high",
+      "runtime": "container",
+      "evidence": ["ev-csproj-api", "ev-compose-api"]
+    }
+  ],
+  "relations": [
+    {
+      "key": "calls:screen:/pedidos/:pedidoId->api:GET /api/pedidos/{pedidoId}",
+      "kind": "calls",
+      "from": "screen:/pedidos/:pedidoId",
+      "to": "api:GET /api/pedidos/{pedidoId}",
+      "confidence": "medium",
+      "evidence": ["ev-fetch-pedido"]
+    },
+    {
+      "key": "depends-on:service:Tienda.Api->database:postgresql/tienda",
+      "kind": "depends-on",
+      "from": "service:Tienda.Api",
+      "to": "database:postgresql/tienda",
+      "confidence": "high",
+      "evidence": ["ev-compose-api"]
+    },
+    {
+      "key": "exposes:service:Tienda.Api->api:GET /api/pedidos/{pedidoId}",
+      "kind": "exposes",
+      "from": "service:Tienda.Api",
+      "to": "api:GET /api/pedidos/{pedidoId}",
+      "confidence": "high",
+      "evidence": ["ev-mapget-pedido"]
+    },
+    {
+      "key": "reads:service:Tienda.Api->database:postgresql/tienda",
+      "kind": "reads",
+      "from": "service:Tienda.Api",
+      "to": "database:postgresql/tienda",
+      "confidence": "medium",
+      "evidence": ["ev-dbcontext"]
+    }
+  ],
+  "evidence": [
+    { "id": "ev-compose-api", "detector": "compose", "path": "docker-compose.yml", "lines": { "start": 3, "end": 12 }, "confidence": "high", "note": "Servicio api con depends_on: db" },
+    { "id": "ev-compose-db", "detector": "compose", "path": "docker-compose.yml", "lines": { "start": 14, "end": 20 }, "confidence": "high", "note": "Imagen postgres:17 con POSTGRES_DB=tienda" },
+    { "id": "ev-compose-queue", "detector": "compose", "path": "docker-compose.yml", "lines": { "start": 22, "end": 26 }, "confidence": "high" },
+    { "id": "ev-csproj-api", "detector": "csproj", "path": "src/Tienda.Api/Tienda.Api.csproj", "lines": { "start": 1, "end": 1 }, "confidence": "high", "note": "Sdk Microsoft.NET.Sdk.Web" },
+    { "id": "ev-csproj-pedidos", "detector": "csproj", "path": "src/Tienda.Pedidos/Tienda.Pedidos.csproj", "confidence": "medium", "note": "Proyecto de biblioteca referenciado por Tienda.Api" },
+    { "id": "ev-dbcontext", "detector": "efcore", "path": "src/Tienda.Api/Persistencia/TiendaDbContext.cs", "lines": { "start": 8, "end": 30 }, "confidence": "medium", "note": "DbContext con DbSet<Pedido>" },
+    { "id": "ev-fetch-pedido", "detector": "react-router", "path": "web/src/pedidos/DetallePedido.tsx", "lines": { "start": 15, "end": 15 }, "confidence": "medium", "note": "fetch con URL literal /api/pedidos/${id}" },
+    { "id": "ev-mapget-pedido", "detector": "aspnetcore-endpoints", "path": "src/Tienda.Api/Pedidos/PedidosEndpoints.cs", "lines": { "start": 12, "end": 14 }, "confidence": "high", "note": "MapGet con ruta literal" },
+    { "id": "ev-openapi-pedido", "detector": "openapi", "path": "docs/openapi.json", "lines": { "start": 40, "end": 61 }, "confidence": "high" },
+    { "id": "ev-package-web", "detector": "package-json", "path": "web/package.json", "lines": { "start": 12, "end": 12 }, "confidence": "high" },
+    { "id": "ev-route-pedido", "detector": "react-router", "path": "web/src/routes.tsx", "lines": { "start": 20, "end": 20 }, "confidence": "medium", "note": "Route path=/pedidos/:pedidoId" }
+  ]
+}

@@ -73,7 +73,7 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 - `walkie-catalog-item` sin cambios en sus campos (el id puede venir del cliente al aplicar; el schema ya lo trata como uuid).
 - Nuevos schemas en `packages/schema` (ADR-0013):
   - `walkie-discovery-pack.schema.json`: `manifest.json` del `.walkiepack` (formato, versiones, analizador, fuente, VCS, alcance, limitaciones, estadísticas).
-  - `walkie-discovered-entity.schema.json`: entidad, relación y evidencia.
+  - `walkie-discovery.schema.json`: el `discovery.json` del paquete, con entidades, relaciones y evidencia.
   - `walkie-discovery-review.schema.json`: la revisión calculada de un análisis.
   - `walkie-discovery-apply.schema.json`: decisiones a aplicar y resultado.
 

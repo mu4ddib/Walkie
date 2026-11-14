@@ -1,0 +1,37 @@
+{
+  "format": "walkiepack",
+  "formatVersion": 0,
+  "schemaVersion": 0,
+  "createdAt": "2026-11-14T12:00:00Z",
+  "analyzer": { "name": "walkie-cli", "version": "0.1.0" },
+  "source": { "id": "0198f0c0-aaaa-7000-8000-000000000001", "name": "tienda-demo" },
+  "vcs": { "kind": "git", "commit": "3f1c2a9b7d4e5f60718293a4b5c6d7e8f9012345", "branch": "main", "dirty": false },
+  "scope": {
+    "include": ["**/*"],
+    "exclude": ["**/node_modules/**", "**/bin/**", "**/obj/**", "**/.env*"],
+    "detectors": [
+      { "id": "aspnetcore-endpoints", "version": "0.1.0" },
+      { "id": "compose", "version": "0.1.0" },
+      { "id": "csproj", "version": "0.1.0" },
+      { "id": "efcore", "version": "0.1.0" },
+      { "id": "openapi", "version": "0.1.0" },
+      { "id": "package-json", "version": "0.1.0" },
+      { "id": "react-router", "version": "0.1.0" }
+    ]
+  },
+  "technologies": [
+    { "id": "aspnetcore", "name": "ASP.NET Core", "version": "10.0", "evidence": ["ev-csproj-api"] },
+    { "id": "postgresql", "name": "PostgreSQL", "version": "17", "evidence": ["ev-compose-db"] },
+    { "id": "react", "name": "React", "version": "19.3.1", "evidence": ["ev-package-web"] }
+  ],
+  "limitations": [
+    {
+      "code": "dynamic-route",
+      "message": "La ruta de un endpoint se arma en tiempo de ejecución y no se pudo resolver.",
+      "detector": "aspnetcore-endpoints",
+      "path": "src/Tienda.Api/Pedidos/PedidosEndpoints.cs"
+    }
+  ],
+  "stats": { "files": 42, "entities": 7, "relations": 4, "evidence": 11 },
+  "includeSnippets": false
+}
