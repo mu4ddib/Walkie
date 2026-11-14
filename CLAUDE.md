@@ -41,6 +41,7 @@ API en http://localhost:5080 (OpenAPI en `/openapi/v1.json` en Development), web
 - Secretos solo por variables de entorno; nunca en el repo.
 - Si cambias el schema, el contrato de la API o una decisión de arquitectura: actualiza `packages/schema`, `docs/` o un ADR en el mismo PR.
 - Commits con Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`…).
+- Si la documentación (`docs/`, specs, planes, ADR, `CLAUDE.md`) contradice el código, identifica la diferencia y propón cómo resolverla (corregir el código o la documentación) antes de modificar el comportamiento. No elijas un lado en silencio.
 
 ## Antes de depurar el entorno
 
