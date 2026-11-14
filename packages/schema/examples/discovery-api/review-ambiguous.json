@@ -1,0 +1,51 @@
+{
+  "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
+  "sourceId": "0198f0c0-aaaa-7000-8000-000000000001",
+  "counts": {
+    "new": 5,
+    "matched": 1,
+    "linked": 1,
+    "created": 0,
+    "rejected": 1,
+    "changed": 0,
+    "missing": 0
+  },
+  "page": {
+    "index": 0,
+    "size": 1,
+    "total": 1
+  },
+  "items": [
+    {
+      "key": "api:GET /api/pedidos/{}/estado",
+      "kind": "api",
+      "title": "Estado del pedido",
+      "basis": "observed",
+      "confidence": "high",
+      "status": "new",
+      "fingerprint": "sha256:523d2ac5d9751ccffafad02cc2e7bf4c555887f7a24ca52920772eecde8ff730",
+      "evidenceCount": 2,
+      "proposal": {
+        "op": "none"
+      },
+      "candidates": [
+        {
+          "target": {
+            "kind": "catalogItem",
+            "id": "0198f0c0-3333-7000-8000-000000000303",
+            "title": "Estado del pedido (v1)"
+          },
+          "reason": "signature"
+        },
+        {
+          "target": {
+            "kind": "catalogItem",
+            "id": "0198f0c0-3333-7000-8000-000000000304",
+            "title": "Estado del pedido (v2)"
+          },
+          "reason": "signature"
+        }
+      ]
+    }
+  ]
+}

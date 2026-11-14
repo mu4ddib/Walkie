@@ -23,6 +23,135 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Walkie.Modules.Discovery.Domain.ApplyRecord", b =>
+                {
+                    b.Property<Guid>("ApplyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("apply_id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("request_hash")
+                        .IsFixedLength();
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("snapshot_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("status");
+
+                    b.HasKey("ApplyId");
+
+                    b.HasIndex("SnapshotId");
+
+                    b.ToTable("applies", "discovery");
+                });
+
+            modelBuilder.Entity("Walkie.Modules.Discovery.Domain.Binding", b =>
+                {
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("EntityKey")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("entity_key");
+
+                    b.Property<Guid?>("ApplyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("apply_id");
+
+                    b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<string>("DecidedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("Decision")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("decision");
+
+                    b.Property<string>("EntityFingerprint")
+                        .HasMaxLength(71)
+                        .HasColumnType("character varying(71)")
+                        .HasColumnName("entity_fingerprint");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<Guid?>("SnapshotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("snapshot_id");
+
+                    b.Property<Guid?>("TargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_id");
+
+                    b.Property<string>("TargetKind")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("target_kind");
+
+                    b.Property<string>("TargetTitle")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("target_title");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("AppId", "SourceId", "EntityKey");
+
+                    b.HasIndex("SnapshotId");
+
+                    b.HasIndex("AppId", "TargetKind", "TargetId")
+                        .HasDatabaseName("ix_bindings_app_target");
+
+                    b.ToTable("bindings", "discovery", t =>
+                        {
+                            t.HasCheckConstraint("ck_bindings_decision", "decision IS NULL OR (decision = 'rejected' AND target_id IS NULL) OR (decision IN ('linked', 'created') AND target_id IS NOT NULL AND target_kind IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Walkie.Modules.Discovery.Domain.DiscoveredEntity", b =>
                 {
                     b.Property<Guid>("SnapshotId")
@@ -286,6 +415,29 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                     b.HasKey("AppId", "Id");
 
                     b.ToTable("sources", "discovery");
+                });
+
+            modelBuilder.Entity("Walkie.Modules.Discovery.Domain.ApplyRecord", b =>
+                {
+                    b.HasOne("Walkie.Modules.Discovery.Domain.Snapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Walkie.Modules.Discovery.Domain.Binding", b =>
+                {
+                    b.HasOne("Walkie.Modules.Discovery.Domain.Snapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Walkie.Modules.Discovery.Domain.Source", null)
+                        .WithMany()
+                        .HasForeignKey("AppId", "SourceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Walkie.Modules.Discovery.Domain.DiscoveredEntity", b =>

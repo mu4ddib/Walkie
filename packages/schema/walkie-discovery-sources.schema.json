@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-sources.schema.json",
+  "title": "Walkie discovery sources v0",
+  "description": "Respuesta de GET /api/apps/{appId}/sources (spec walkie-live, tarea 4): las fuentes locales de una app con su último análisis, para ir a su revisión. Solo las de esa app. Se agrega porque la spec nombra el endpoint sin contrato.",
+  "type": "object",
+  "required": [
+    "appId",
+    "sources"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "appId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "sources": {
+      "type": "array",
+      "description": "Orden: la del análisis más reciente primero; empate por id",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "createdAt",
+          "updatedAt",
+          "snapshotCount",
+          "latestSnapshot"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "$ref": "walkie-discovery-snapshot.schema.json#/$defs/source"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "snapshotCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "latestSnapshot": {
+            "$ref": "walkie-discovery-snapshot.schema.json",
+            "description": "Último análisis cargado: procedencia (analizador, commit, fechas), completitud, detectores, tecnologías y limitaciones"
+          }
+        }
+      }
+    }
+  }
+}

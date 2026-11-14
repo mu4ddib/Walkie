@@ -40,6 +40,7 @@ internal static class SnapshotEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
+        discovery.MapReviewEndpoints();
         return routes;
     }
 

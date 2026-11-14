@@ -25,13 +25,17 @@ public static partial class DiscoveryModule
         services.AddDbContext<DiscoveryDbContext>(options => options.UseNpgsql(connectionString, ConfigureNpgsql));
         services.Configure<DiscoveryOptions>(configuration.GetSection(DiscoveryOptions.Section));
         services.AddScoped<SnapshotHandlers>();
+        services.AddScoped<ReviewHandlers>();
+        services.AddScoped<ApplyHandlers>();
+        services.AddScoped<SourceHandlers>();
         services.AddScoped<IDiscoveryReader, DiscoveryReader>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 
     /// <summary>
-    /// <c>POST /api/apps/{appId}/sources/snapshots</c>. Si Discovery está encendido fuera de Development, lo avisa en el
+    /// <c>POST /api/apps/{appId}/sources/snapshots</c>, <c>GET /api/apps/{appId}/sources</c>,
+    /// <c>GET /api/snapshots/{snapshotId}/review</c> y <c>POST /api/snapshots/{snapshotId}/apply</c>. Si Discovery está encendido fuera de Development, lo avisa en el
     /// log: falta la autorización por app (bloqueo de seguridad de ADR-0012).
     /// </summary>
     public static IEndpointRouteBuilder MapDiscoveryModule(this IEndpointRouteBuilder routes)

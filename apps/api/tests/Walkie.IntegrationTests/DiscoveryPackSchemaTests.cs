@@ -29,6 +29,8 @@ public sealed class DiscoveryPackSchemaTests
     [InlineData("apply-result.json")]
     [InlineData("upload-preview.json")]
     [InlineData("upload-created.json")]
+    [InlineData("review-ambiguous.json")]
+    [InlineData("sources.json")]
     public void Los_registros_de_ejemplo_cumplen_su_schema(string file)
     {
         Assert.Empty(WalkieSchemas.Errors(RecordSchema(file), Element(Record(file))));
@@ -154,6 +156,8 @@ public sealed class DiscoveryPackSchemaTests
     [InlineData("apply-result.json", "estado-desconocido", "/status")]
     [InlineData("upload-preview.json", "vista-previa-que-dice-creado", "/status")]
     [InlineData("upload-created.json", "creado-sin-analisis", "/")]
+    [InlineData("review-ambiguous.json", "candidatos-con-propuesta-de-vincular", "/items/0/proposal/op")]
+    [InlineData("review-ambiguous.json", "candidatos-en-un-vinculado", "/items/0")]
     public void Un_registro_invalido_falla_con_la_ruta_del_error(string file, string variant, string path)
     {
         var record = Record(file);
@@ -175,6 +179,8 @@ public sealed class DiscoveryPackSchemaTests
             case "estado-desconocido": record["status"] = "partial"; break;
             case "vista-previa-que-dice-creado": record["status"] = "created"; break;
             case "creado-sin-analisis": record.Remove("snapshot"); break;
+            case "candidatos-con-propuesta-de-vincular": record["items"]![0]!["proposal"] = new JsonObject { ["op"] = "link", ["target"] = record["items"]![0]!["candidates"]![0]!["target"]!.DeepClone() }; break;
+            case "candidatos-en-un-vinculado": record["items"]![0]!["status"] = "matched"; record["items"]![0]!["match"] = record["items"]![0]!["candidates"]![0]!.DeepClone(); break;
             default: throw new ArgumentOutOfRangeException(nameof(variant), variant, null);
         }
 
@@ -201,6 +207,8 @@ public sealed class DiscoveryPackSchemaTests
         "apply.json" => WalkieSchemas.DiscoveryApply,
         "apply-result.json" => WalkieSchemas.DiscoveryApplyResult,
         "upload-preview.json" or "upload-created.json" => WalkieSchemas.DiscoveryUpload,
+        "review-ambiguous.json" => WalkieSchemas.DiscoveryReview,
+        "sources.json" => WalkieSchemas.DiscoverySources,
         _ => throw new ArgumentOutOfRangeException(nameof(file), file, null),
     };
 }

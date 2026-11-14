@@ -94,8 +94,8 @@ Módulo nuevo `Walkie.Modules.Discovery` (schema `discovery` de Postgres; ADR-00
 
 - `POST /api/apps/{appId}/sources/snapshots` (multipart, campo `file`, `dryRun`): responde `walkie-discovery-upload`. 201 con el análisis nuevo; 200 con la vista previa (`dryRun`) o con el existente (mismo archivo, o mismo contenido que el último análisis de la fuente); 400 con la ruta del error dentro del paquete; 413 si pasa de 50 MB; 404 si la app no existe o Discovery está apagado; 401 sin sesión.
 - `POST /api/sources/import` (multipart): crea una app nueva y carga el análisis («Crear app desde proyecto local»).
-- `GET /api/apps/{appId}/sources`: fuentes de la app con su último análisis.
-- `GET /api/snapshots/{snapshotId}/review?kind=&status=&page=`: la revisión paginada (`walkie-discovery-review`).
+- `GET /api/apps/{appId}/sources`: fuentes de la app con su último análisis (`walkie-discovery-sources`).
+- `GET /api/snapshots/{snapshotId}/review?kind=&status=&page=&pageSize=`: la revisión paginada (`walkie-discovery-review`; `page` desde 0, `pageSize` de 1 a 500, por defecto 50; los conteos son del análisis completo).
 - `POST /api/snapshots/{snapshotId}/apply` (`walkie-discovery-apply`, con `applyId` del cliente): 200 con `walkie-discovery-apply-result`; 400 con lo inválido; 409 si un vínculo cambió (`bindingVersion`). Descartar, vincular y restablecer también son operaciones de esta lista (ADR-0014): no hay un endpoint aparte para los vínculos.
 - `GET /api/apps/{appId}/bindings?target=`: de qué evidencia viene un componente.
 - `POST /api/snapshots/{snapshotId}/apply?dryRun=true`: la vista previa (lo que se crearía y vincularía, sin escribir).

@@ -88,6 +88,9 @@ public static class WalkieSchemas
     /// <summary><c>walkie-discovery-upload.schema.json</c>: respuesta de subir un <c>.walkiepack</c> (usa el snapshot).</summary>
     public static JsonSchema DiscoveryUpload { get; } = LoadAfter(DiscoverySnapshot, "walkie-discovery-upload.schema.json");
 
+    /// <summary><c>walkie-discovery-sources.schema.json</c>: fuentes de una app con su último análisis (usa el snapshot).</summary>
+    public static JsonSchema DiscoverySources { get; } = LoadAfter(DiscoverySnapshot, "walkie-discovery-sources.schema.json");
+
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
         $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",
@@ -98,6 +101,13 @@ public static class WalkieSchemas
     /// </summary>
     public static Dictionary<string, string[]> Errors(JsonSchema schema, JsonElement value, string prefix = "")
     {
+        // Primero solo sí o no (Flag): con List, la evaluación arma el detalle de cada nodo aunque el documento sea
+        // válido, y en un .walkiepack de 20.000 entidades eso multiplica el tiempo. El detalle se pide solo si falla.
+        if (schema.Evaluate(value, new EvaluationOptions { OutputFormat = OutputFormat.Flag }).IsValid)
+        {
+            return [];
+        }
+
         var results = schema.Evaluate(value, new EvaluationOptions { OutputFormat = OutputFormat.List });
         if (results.IsValid)
         {

@@ -117,6 +117,14 @@ Los errores llevan la ruta dentro del paquete (`discovery.json/entities/3/eviden
 
 **Respuesta de la subida** (agregado en la tarea 3): `walkie-discovery-upload.schema.json` es la respuesta de `POST /api/apps/{appId}/sources/snapshots`, con `status` (`preview`, `created` o `existing`), `duplicate` (`pack` o `content`), el `snapshot` y un `summary` del paquete. Se agregó porque `walkie-discovery-snapshot` exige `id` e `importedAt`, que una vista previa (`dryRun`) no tiene. Los schemas anteriores no cambian: reutiliza sus `$defs` por `$ref`.
 
+**Revisión, decisiones y fuentes** (agregado en la tarea 4):
+- **Coincidencia ambigua:** `walkie-discovery-review` suma `candidates`, opcional y con dos o más elementos, en un ítem `new`. Varios elementos existentes coinciden por el mismo motivo y no se elige ninguno; la propuesta es `none` y decide la persona. Se agregó porque `match` admite un único `target`: con varios candidatos, el contrato obligaba a elegir uno al azar o a ocultar la ambigüedad.
+- **`walkie-discovery-sources`:** es la respuesta de `GET /api/apps/{appId}/sources`, que la spec nombraba sin contrato.
+- **Firma verificable:** la clave de `DiscoveryKeys` calculada desde el contrato del elemento existente (api: método y ruta; database: motor y nombre; resource: subtipo y nombre). Servicios, módulos y features no tienen firma: coinciden solo por título, como sugerencia.
+- **`missing`:** solo si cada detector que dio la evidencia en el análisis anterior corrió entero en el actual, cada archivo de esa evidencia está en el alcance actual y ninguna limitación alcanza a esos archivos, a esos detectores ni al análisis entero (`file-limit`, `entity-limit`).
+- **Versión del vínculo:** restablecer conserva la fila sin decisión, así la versión del vínculo nunca vuelve atrás. `bindingVersion` 0 significa «sin decisión activa».
+- **Solo sobre el último análisis:** las decisiones se toman sobre el último análisis de la fuente. Decidir sobre uno anterior guardaría un fingerprint que ya no es el actual.
+
 **Compatibilidad:**
 - `walkie-graph.schema.json` no cambia.
 - Las entidades usan sus `$defs` (`http`, `database`, `resource`, `runtime`) por `$ref`, sin copiarlos: lo aprobado se vuelve un elemento del catálogo válido sin traducir (`DiscoveryCompatibilityTests`).

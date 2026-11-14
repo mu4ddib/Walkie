@@ -119,3 +119,74 @@ internal sealed class DiscoveredEvidence
 
     public required string Data { get; init; }
 }
+
+/// <summary>
+/// Decisión de una persona sobre un hallazgo de una fuente (ADR-0012 y ADR-0014, <c>walkie-discovery-binding</c>): la
+/// única confirmación. Una fila por (app, fuente, clave). Restablecer la deja sin <see cref="Decision"/> en vez de
+/// borrarla, así <see cref="Version"/> nunca vuelve atrás y una operación con una versión vieja siempre da 409.
+/// </summary>
+internal sealed class Binding
+{
+    public Guid AppId { get; init; }
+
+    public Guid SourceId { get; init; }
+
+    public required string EntityKey { get; init; }
+
+    /// <summary><c>linked</c>, <c>created</c> o <c>rejected</c>; null si se restableció.</summary>
+    public string? Decision { get; set; }
+
+    /// <summary><c>catalogItem</c>, <c>module</c> o <c>feature</c> (solo con linked o created).</summary>
+    public string? TargetKind { get; set; }
+
+    public Guid? TargetId { get; set; }
+
+    /// <summary>Último nombre conocido del destino (informativo).</summary>
+    public string? TargetTitle { get; set; }
+
+    /// <summary>Fingerprint de la entidad cuando se decidió: si cambia, la revisión la marca changed.</summary>
+    public string? EntityFingerprint { get; set; }
+
+    /// <summary>Análisis en el que se decidió.</summary>
+    public Guid? SnapshotId { get; set; }
+
+    public Guid? ApplyId { get; set; }
+
+    public string? Note { get; set; }
+
+    public required string DecidedBy { get; set; }
+
+    public DateTimeOffset DecidedAt { get; set; }
+
+    /// <summary>Concurrencia optimista: sube en cada decisión, también al restablecer.</summary>
+    public int Version { get; set; }
+
+    public bool Active => Decision is not null;
+}
+
+/// <summary>
+/// Bitácora de aplicaciones (ADR-0012): una por <c>applyId</c> del cliente, con el hash de la solicitud y su resultado.
+/// Repetir el mismo <c>applyId</c> con la misma solicitud devuelve el mismo resultado; con otra, 409. En la tarea 4
+/// solo hay operaciones de una transacción (reject, link y reset), así que queda <c>completed</c>; las creaciones de
+/// la tarea 6 suman <c>pending</c> y <c>compensated</c> sobre esta misma tabla.
+/// </summary>
+internal sealed class ApplyRecord
+{
+    public Guid ApplyId { get; init; }
+
+    public Guid AppId { get; init; }
+
+    public Guid SnapshotId { get; init; }
+
+    /// <summary>SHA-256 del JSON canónico de la solicitud.</summary>
+    public required string RequestHash { get; init; }
+
+    public required string Status { get; set; }
+
+    /// <summary>El <c>walkie-discovery-apply-result</c> como <c>jsonb</c>.</summary>
+    public required string Result { get; set; }
+
+    public required string CreatedBy { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+}

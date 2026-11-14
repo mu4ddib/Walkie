@@ -34,6 +34,25 @@ export type Item = {
      */
     reason: 'signature' | 'title';
   };
+  /**
+   * Solo en new: varios elementos existentes coinciden por el mismo motivo y no se elige ninguno (la persona decide). Agregado en la tarea 4
+   *
+   * @minItems 2
+   */
+  candidates?: [
+    {
+      target: Target;
+      reason: 'signature' | 'title';
+    },
+    {
+      target: Target;
+      reason: 'signature' | 'title';
+    },
+    ...{
+      target: Target;
+      reason: 'signature' | 'title';
+    }[]
+  ];
   evidenceCount: number;
   /**
    * Lo que Walkie sugiere; la persona decide con una operación de walkie-discovery-apply
