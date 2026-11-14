@@ -68,6 +68,7 @@ Analizar el propio repo sin escribir en él: `--source-id <uuid>`. Así no se cr
 - **`${POSTGRES_DB:-walkie}`**: el nombre real puede venir de una variable. Se usa el valor por defecto literal con confianza media, nunca el `.env`.
 - **Prefijo de `MapGroup` sobre un parámetro**: en Walkie, `routes.MapGroup("/api/apps")` está dentro de un método de extensión. El prefijo literal se sigue, pero `routes` podría traer otro prefijo, así que el endpoint queda con confianza media. No lo subas a alta sin seguir la llamada.
 - **`TryGetInt32` en JSON que puede venir mal** lanza con un texto: mira `ValueKind` antes (también en `Walkie.Shared`).
+- **`Program` de la CLI**: es `Walkie.Cli.Program` con `Main`, no instrucciones de nivel superior. Las pruebas de la API referencian la CLI para generar paquetes reales, y una clase `Program` global chocaría con la del host de la API (`CS0433`).
 - **`Regex.Matches(...).Count`** rompe el build (CA1875): usa `Regex.Count`.
 - **Una carpeta llamada `packages`** puede ser código propio (en Walkie, `packages/schema`): no está en las exclusiones.
 - **Cambiar el directorio actual en una prueba** (`Environment.CurrentDirectory`) afecta a las demás que usen rutas relativas. Las pruebas usan rutas absolutas y solo una lo cambia, restaurándolo en `finally`.

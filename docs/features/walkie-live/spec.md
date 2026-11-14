@@ -34,8 +34,8 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 ### Cargar el paquete
 
 - [ ] Dada la página de una app, cuando uso «Importar proyecto local» y elijo un `.walkiepack`, entonces Walkie lo valida sin guardar nada y me muestra las tecnologías, cuántos hallazgos hay por tipo, el alcance y las limitaciones antes de confirmar.
-- [ ] Un paquete inválido, de una versión no soportada o demasiado grande se rechaza con un mensaje que dice qué falla (ruta del error dentro del paquete); no se guarda nada.
-- [ ] Cargar dos veces el mismo paquete no crea un segundo análisis: se abre el que ya existe.
+- [x] Un paquete inválido, de una versión no soportada o demasiado grande se rechaza con un mensaje que dice qué falla (ruta del error dentro del paquete); no se guarda nada.
+- [x] Cargar dos veces el mismo paquete no crea un segundo análisis: se abre el que ya existe.
 - [ ] Dada la galería de apps, cuando uso «Crear app desde proyecto local», entonces se crea una app nueva con el nombre de la fuente y se abre la revisión de su primer análisis.
 - [ ] Dada una app con una fuente, entonces la página de la app muestra la fuente (nombre, último análisis, commit) y permite abrir su revisión o cargar un análisis nuevo.
 
@@ -60,9 +60,9 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 
 ### Seguridad
 
-- [ ] Los endpoints de Discovery responden solo con `Discovery:Enabled` encendido (apagado por defecto fuera de Development); apagado, responden 404.
+- [x] Los endpoints de Discovery responden solo con `Discovery:Enabled` encendido (apagado por defecto fuera de Development); apagado, responden 404.
 - [ ] **Bloqueo:** no se habilita la importación de proyectos privados para usuarios reales (piloto ni producción) hasta que exista autorización por app (ADR-0012). Encender `Discovery:Enabled` en un entorno con usuarios reales exige el ADR de esa autorización.
-- [ ] El paquete se lee con límites (tamaño, entradas, descomprimido) y sin seguir rutas fuera del zip; nada del paquete se ejecuta ni se interpreta como HTML en la web.
+- [x] El paquete se lee con límites (tamaño, entradas, descomprimido) y sin seguir rutas fuera del zip; nada del paquete se ejecuta ni se interpreta como HTML en la web.
 
 ## Fuera de alcance
 
@@ -92,7 +92,7 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 
 Módulo nuevo `Walkie.Modules.Discovery` (schema `discovery` de Postgres; ADR-0012).
 
-- `POST /api/apps/{appId}/sources/snapshots` (multipart, campo `file`, `dryRun`): 201 con el análisis; 200 con el existente si el paquete ya se cargó; 400 con la ruta del error; 413; 404 si la app no existe.
+- `POST /api/apps/{appId}/sources/snapshots` (multipart, campo `file`, `dryRun`): responde `walkie-discovery-upload`. 201 con el análisis nuevo; 200 con la vista previa (`dryRun`) o con el existente (mismo archivo, o mismo contenido que el último análisis de la fuente); 400 con la ruta del error dentro del paquete; 413 si pasa de 50 MB; 404 si la app no existe o Discovery está apagado; 401 sin sesión.
 - `POST /api/sources/import` (multipart): crea una app nueva y carga el análisis («Crear app desde proyecto local»).
 - `GET /api/apps/{appId}/sources`: fuentes de la app con su último análisis.
 - `GET /api/snapshots/{snapshotId}/review?kind=&status=&page=`: la revisión paginada (`walkie-discovery-review`).

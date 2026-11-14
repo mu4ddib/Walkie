@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Walkie.Api\Walkie.Api.csproj" />
+    <!-- Walkie Live: las pruebas de Discovery suben paquetes generados por la CLI real (apps/cli), no armados a mano. -->
+    <ProjectReference Include="..\..\..\cli\src\Walkie.Cli\Walkie.Cli.csproj" />
   </ItemGroup>
 
 </Project>

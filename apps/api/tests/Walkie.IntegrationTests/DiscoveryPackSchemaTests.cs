@@ -27,6 +27,8 @@ public sealed class DiscoveryPackSchemaTests
     [InlineData("review.json")]
     [InlineData("apply.json")]
     [InlineData("apply-result.json")]
+    [InlineData("upload-preview.json")]
+    [InlineData("upload-created.json")]
     public void Los_registros_de_ejemplo_cumplen_su_schema(string file)
     {
         Assert.Empty(WalkieSchemas.Errors(RecordSchema(file), Element(Record(file))));
@@ -150,6 +152,8 @@ public sealed class DiscoveryPackSchemaTests
     [InlineData("review.json", "match-fuera-de-matched", "/items/2")]
     [InlineData("snapshot.json", "hash-malformado", "/packSha256")]
     [InlineData("apply-result.json", "estado-desconocido", "/status")]
+    [InlineData("upload-preview.json", "vista-previa-que-dice-creado", "/status")]
+    [InlineData("upload-created.json", "creado-sin-analisis", "/")]
     public void Un_registro_invalido_falla_con_la_ruta_del_error(string file, string variant, string path)
     {
         var record = Record(file);
@@ -169,6 +173,8 @@ public sealed class DiscoveryPackSchemaTests
             case "match-fuera-de-matched": record["items"]![2]!["match"] = record["items"]![1]!["match"]!.DeepClone(); break;
             case "hash-malformado": record["packSha256"] = "no-es-un-hash"; break;
             case "estado-desconocido": record["status"] = "partial"; break;
+            case "vista-previa-que-dice-creado": record["status"] = "created"; break;
+            case "creado-sin-analisis": record.Remove("snapshot"); break;
             default: throw new ArgumentOutOfRangeException(nameof(variant), variant, null);
         }
 
@@ -194,6 +200,7 @@ public sealed class DiscoveryPackSchemaTests
         "review.json" => WalkieSchemas.DiscoveryReview,
         "apply.json" => WalkieSchemas.DiscoveryApply,
         "apply-result.json" => WalkieSchemas.DiscoveryApplyResult,
+        "upload-preview.json" or "upload-created.json" => WalkieSchemas.DiscoveryUpload,
         _ => throw new ArgumentOutOfRangeException(nameof(file), file, null),
     };
 }

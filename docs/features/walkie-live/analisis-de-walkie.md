@@ -27,6 +27,8 @@ Limitaciones:
 Paquete: walkie.walkiepack (10 KB).
 ```
 
+> Después de la tarea 3 el mismo comando encuentra **39 APIs, 6 módulos y 6 bases**: detecta solo el módulo nuevo `Walkie.Modules.Discovery`, con su endpoint `POST /api/apps/{appId}/sources/snapshots` y su `DiscoveryDbContext`. Lo de abajo es la corrida del commit `be56285`.
+
 ## Qué encontró
 
 | Entidad | Base | Confianza | Miembros |

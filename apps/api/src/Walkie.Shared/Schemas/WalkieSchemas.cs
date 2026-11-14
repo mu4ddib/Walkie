@@ -85,6 +85,9 @@ public static class WalkieSchemas
     /// <summary><c>walkie-discovery-apply-result.schema.json</c>: resultado (o vista previa) de aplicar.</summary>
     public static JsonSchema DiscoveryApplyResult { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-apply-result.schema.json");
 
+    /// <summary><c>walkie-discovery-upload.schema.json</c>: respuesta de subir un <c>.walkiepack</c> (usa el snapshot).</summary>
+    public static JsonSchema DiscoveryUpload { get; } = LoadAfter(DiscoverySnapshot, "walkie-discovery-upload.schema.json");
+
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
         $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",

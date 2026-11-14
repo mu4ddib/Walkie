@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-upload.schema.json",
+  "title": "Walkie discovery upload result v0",
+  "description": "Respuesta de POST /api/apps/{appId}/sources/snapshots (spec walkie-live, tarea 3; ADR-0014). Con dryRun=true es la vista previa: nada se guarda y no hay id de análisis. Sin él, el análisis guardado (status created, 201) o el que ya existía (status existing, 200: el mismo archivo, o el mismo contenido que el último análisis de esa fuente). Se agrega porque walkie-discovery-snapshot exige id e importedAt, que una vista previa no tiene.",
+  "type": "object",
+  "required": ["dryRun", "status", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "dryRun": { "type": "boolean" },
+    "status": {
+      "enum": ["preview", "created", "existing"],
+      "description": "preview: dryRun, nada escrito; created: análisis nuevo guardado; existing: ya estaba (ver duplicate), no se guardó otro"
+    },
+    "duplicate": {
+      "enum": ["pack", "content"],
+      "description": "Por qué ya existe (en existing, o en preview si al confirmar no se crearía otro): pack = mismo archivo (packSha256); content = mismo contenido que el último análisis de la fuente (contentFingerprint)"
+    },
+    "snapshot": { "$ref": "walkie-discovery-snapshot.schema.json", "description": "En created y existing, el análisis; en preview, solo si ya existe" },
+    "summary": {
+      "type": "object",
+      "description": "Lo que trae el paquete, para mostrar antes de confirmar",
+      "required": ["appId", "source", "sourceExists", "formatVersion", "analyzer", "generatedAt", "completeness", "detectors", "technologies", "limitations", "stats", "entities", "packSha256", "contentFingerprint"],
+      "additionalProperties": false,
+      "properties": {
+        "appId": { "type": "string", "format": "uuid" },
+        "source": { "$ref": "walkie-discovery-snapshot.schema.json#/$defs/source" },
+        "sourceExists": { "type": "boolean", "description": "La app ya tenía análisis de esta fuente" },
+        "formatVersion": { "type": "integer", "minimum": 0 },
+        "analyzer": { "$ref": "walkie-discovery-pack.schema.json#/properties/analyzer" },
+        "vcs": { "$ref": "walkie-discovery-pack.schema.json#/properties/vcs" },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "completeness": { "$ref": "walkie-discovery-pack.schema.json#/properties/completeness" },
+        "detectors": { "$ref": "walkie-discovery-pack.schema.json#/properties/detectors" },
+        "technologies": { "$ref": "walkie-discovery-pack.schema.json#/properties/technologies" },
+        "limitations": { "$ref": "walkie-discovery-pack.schema.json#/properties/limitations" },
+        "stats": { "$ref": "walkie-discovery-pack.schema.json#/properties/stats" },
+        "entities": {
+          "type": "object",
+          "description": "Entidades por tipo (solo los tipos presentes)",
+          "propertyNames": { "$ref": "walkie-discovery.schema.json#/$defs/entityKind" },
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        },
+        "packSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "contentFingerprint": { "$ref": "walkie-discovery.schema.json#/$defs/fingerprint" }
+      }
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "enum": ["created", "existing"] } } }, "then": { "required": ["snapshot"] } },
+    { "if": { "properties": { "status": { "const": "existing" } } }, "then": { "required": ["duplicate"] } },
+    { "if": { "properties": { "status": { "const": "created" } } }, "then": { "not": { "required": ["duplicate"] } } },
+    { "if": { "properties": { "dryRun": { "const": true } } }, "then": { "properties": { "status": { "const": "preview" } } }, "else": { "properties": { "status": { "enum": ["created", "existing"] } } } }
+  ]
+}

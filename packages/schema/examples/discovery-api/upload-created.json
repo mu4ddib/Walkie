@@ -1,0 +1,337 @@
+{
+  "dryRun": false,
+  "status": "created",
+  "snapshot": {
+    "id": "0198f0c0-2222-7000-8000-000000000201",
+    "appId": "0198f0c0-1111-7000-8000-000000000101",
+    "source": {
+      "id": "0198f0c0-aaaa-7000-8000-000000000001",
+      "name": "tienda-demo"
+    },
+    "formatVersion": 0,
+    "analyzer": {
+      "name": "walkie-cli",
+      "version": "0.1.0"
+    },
+    "vcs": {
+      "kind": "git",
+      "commit": "3f1c2a9b7d4e5f60718293a4b5c6d7e8f9012345",
+      "branch": "main",
+      "dirty": false
+    },
+    "generatedAt": "2026-11-14T12:00:00Z",
+    "importedAt": "2026-11-14T12:05:00Z",
+    "importedBy": "usuario-demo",
+    "completeness": "complete",
+    "detectors": [
+      {
+        "id": "aspnetcore-endpoints",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "api"
+          ],
+          "relations": [
+            "exposes"
+          ]
+        }
+      },
+      {
+        "id": "compose",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "service",
+            "database",
+            "resource"
+          ],
+          "relations": [
+            "depends-on"
+          ]
+        }
+      },
+      {
+        "id": "csproj",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "service",
+            "module"
+          ],
+          "relations": [
+            "contains",
+            "depends-on"
+          ]
+        }
+      },
+      {
+        "id": "efcore",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "database"
+          ],
+          "relations": [
+            "reads",
+            "writes"
+          ]
+        }
+      },
+      {
+        "id": "openapi",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "api"
+          ],
+          "relations": []
+        }
+      },
+      {
+        "id": "package-json",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [],
+          "relations": []
+        }
+      },
+      {
+        "id": "react-router",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "screen",
+            "feature"
+          ],
+          "relations": [
+            "calls",
+            "navigates"
+          ]
+        }
+      }
+    ],
+    "technologies": [
+      {
+        "id": "aspnetcore",
+        "name": "ASP.NET Core",
+        "version": "10.0",
+        "evidence": [
+          "ev-csproj-api"
+        ]
+      },
+      {
+        "id": "postgresql",
+        "name": "PostgreSQL",
+        "version": "17",
+        "evidence": [
+          "ev-compose-db"
+        ]
+      },
+      {
+        "id": "react",
+        "name": "React",
+        "version": "19.3.1",
+        "evidence": [
+          "ev-package-web"
+        ]
+      }
+    ],
+    "limitations": [
+      {
+        "code": "dynamic-route",
+        "message": "La ruta de un endpoint se arma en tiempo de ejecución y no se pudo resolver.",
+        "detector": "aspnetcore-endpoints",
+        "path": "src/Tienda.Api/Pedidos/PedidosEndpoints.cs"
+      },
+      {
+        "code": "secret-excluded",
+        "message": "Se excluyeron 2 archivos de secretos (.env, appsettings.Production.json)."
+      }
+    ],
+    "stats": {
+      "files": 42,
+      "entities": 8,
+      "relations": 6,
+      "evidence": 12
+    },
+    "packSha256": "9b2f0c6e1d4a3b5c7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9012345678ab",
+    "contentFingerprint": "sha256:199a63de5c776a090afbe433e238b7b16e221d66835211a817fa2975bdfad99a"
+  },
+  "summary": {
+    "appId": "0198f0c0-1111-7000-8000-000000000101",
+    "source": {
+      "id": "0198f0c0-aaaa-7000-8000-000000000001",
+      "name": "tienda-demo"
+    },
+    "sourceExists": false,
+    "formatVersion": 0,
+    "analyzer": {
+      "name": "walkie-cli",
+      "version": "0.1.0"
+    },
+    "vcs": {
+      "kind": "git",
+      "commit": "3f1c2a9b7d4e5f60718293a4b5c6d7e8f9012345",
+      "branch": "main",
+      "dirty": false
+    },
+    "generatedAt": "2026-11-14T12:00:00Z",
+    "completeness": "complete",
+    "detectors": [
+      {
+        "id": "aspnetcore-endpoints",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "api"
+          ],
+          "relations": [
+            "exposes"
+          ]
+        }
+      },
+      {
+        "id": "compose",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "service",
+            "database",
+            "resource"
+          ],
+          "relations": [
+            "depends-on"
+          ]
+        }
+      },
+      {
+        "id": "csproj",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "service",
+            "module"
+          ],
+          "relations": [
+            "contains",
+            "depends-on"
+          ]
+        }
+      },
+      {
+        "id": "efcore",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "database"
+          ],
+          "relations": [
+            "reads",
+            "writes"
+          ]
+        }
+      },
+      {
+        "id": "openapi",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "api"
+          ],
+          "relations": []
+        }
+      },
+      {
+        "id": "package-json",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [],
+          "relations": []
+        }
+      },
+      {
+        "id": "react-router",
+        "version": "0.1.0",
+        "status": "ran",
+        "produces": {
+          "entities": [
+            "screen",
+            "feature"
+          ],
+          "relations": [
+            "calls",
+            "navigates"
+          ]
+        }
+      }
+    ],
+    "technologies": [
+      {
+        "id": "aspnetcore",
+        "name": "ASP.NET Core",
+        "version": "10.0",
+        "evidence": [
+          "ev-csproj-api"
+        ]
+      },
+      {
+        "id": "postgresql",
+        "name": "PostgreSQL",
+        "version": "17",
+        "evidence": [
+          "ev-compose-db"
+        ]
+      },
+      {
+        "id": "react",
+        "name": "React",
+        "version": "19.3.1",
+        "evidence": [
+          "ev-package-web"
+        ]
+      }
+    ],
+    "limitations": [
+      {
+        "code": "dynamic-route",
+        "message": "La ruta de un endpoint se arma en tiempo de ejecución y no se pudo resolver.",
+        "detector": "aspnetcore-endpoints",
+        "path": "src/Tienda.Api/Pedidos/PedidosEndpoints.cs"
+      },
+      {
+        "code": "secret-excluded",
+        "message": "Se excluyeron 2 archivos de secretos (.env, appsettings.Production.json)."
+      }
+    ],
+    "stats": {
+      "files": 42,
+      "entities": 8,
+      "relations": 6,
+      "evidence": 12
+    },
+    "entities": {
+      "api": 2,
+      "database": 1,
+      "feature": 1,
+      "module": 1,
+      "resource": 1,
+      "screen": 1,
+      "service": 1
+    },
+    "packSha256": "9b2f0c6e1d4a3b5c7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9012345678ab",
+    "contentFingerprint": "sha256:199a63de5c776a090afbe433e238b7b16e221d66835211a817fa2975bdfad99a"
+  }
+}

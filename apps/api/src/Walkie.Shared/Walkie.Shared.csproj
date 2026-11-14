@@ -28,6 +28,7 @@
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-review.schema.json" LogicalName="walkie-discovery-review.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-apply.schema.json" LogicalName="walkie-discovery-apply.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-apply-result.schema.json" LogicalName="walkie-discovery-apply-result.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-upload.schema.json" LogicalName="walkie-discovery-upload.schema.json" />
   </ItemGroup>
 
 </Project>

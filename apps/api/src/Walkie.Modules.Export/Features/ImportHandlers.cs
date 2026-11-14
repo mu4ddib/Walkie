@@ -5,6 +5,7 @@ using Walkie.Modules.Apps.Contracts;
 using Walkie.Modules.Canvas.Contracts;
 using Walkie.Modules.Files.Contracts;
 using Walkie.Shared;
+using Walkie.Shared.Packages;
 using Walkie.Shared.Schemas;
 
 namespace Walkie.Modules.Export.Features;
@@ -70,6 +71,9 @@ internal sealed class ImportHandlers(
     public const long MaxFileBytes = 50L * 1024 * 1024;
     public const int MaxEntries = 2000;
     public const long MaxUncompressedBytes = 200L * 1024 * 1024;
+
+    /// <summary>Límites del zip (los de siempre del .walkie, ADR-0009).</summary>
+    private static readonly SafeZipOptions ZipOptions = new() { FormatName = ".walkie", MaxEntries = MaxEntries, MaxUncompressedBytes = MaxUncompressedBytes };
 
     private const int FeatureNameMaxLength = 120;
     private const int FeatureDescriptionMaxLength = 500;
@@ -230,38 +234,16 @@ internal sealed class ImportHandlers(
 
     private Package? Read(byte[] file, Dictionary<string, string[]> errors)
     {
-        ZipArchive zip;
-        try
+        // Lectura segura compartida (Walkie.Shared): las opciones por defecto son las de siempre del .walkie.
+        var zip = SafeZip.Open(file, ZipOptions, errors);
+        if (zip is null)
         {
-            zip = new ZipArchive(new MemoryStream(file, writable: false), ZipArchiveMode.Read);
-        }
-        catch (InvalidDataException)
-        {
-            errors["file"] = ["No es un archivo .walkie válido: no se pudo abrir como .zip."];
             return null;
         }
 
         using (zip)
         {
-            if (zip.Entries.Count > MaxEntries)
-            {
-                errors["file"] = [$"El archivo tiene demasiadas entradas (más de {MaxEntries})."];
-                return null;
-            }
-
-            if (zip.Entries.Sum(e => e.Length) > MaxUncompressedBytes)
-            {
-                errors["file"] = ["El contenido del archivo descomprimido pasa de 200 MB."];
-                return null;
-            }
-
-            var entries = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
-            foreach (var entry in zip.Entries)
-            {
-                entries.TryAdd(entry.FullName, entry);
-            }
-
-            if (ReadJson(entries, WalkiePackage.ManifestPath, errors) is not { } manifestJson)
+            if (zip.ReadJson(WalkiePackage.ManifestPath, errors) is not { } manifestJson)
             {
                 return null;
             }
@@ -296,7 +278,7 @@ internal sealed class ImportHandlers(
                     errors[$"{WalkiePackage.ManifestPath}/features/{i}/name"] = ["La feature no tiene nombre."];
                 }
 
-                if (ReadJson(entries, feature.Canvas, errors) is not { } graph)
+                if (zip.ReadJson(feature.Canvas, errors) is not { } graph)
                 {
                     continue;
                 }
@@ -327,7 +309,7 @@ internal sealed class ImportHandlers(
                     errors[$"{WalkiePackage.ManifestPath}/modules/{i}/name"] = ["El módulo no tiene nombre."];
                 }
 
-                if (ReadJson(entries, module.Canvas, errors) is not { } graph)
+                if (zip.ReadJson(module.Canvas, errors) is not { } graph)
                 {
                     continue;
                 }
@@ -341,7 +323,7 @@ internal sealed class ImportHandlers(
             }
 
             var items = new List<CatalogItemResponse>();
-            if (ReadJson(entries, manifest.Catalog.Path, errors) is { } catalogJson)
+            if (zip.ReadJson(manifest.Catalog.Path, errors) is { } catalogJson)
             {
                 if (catalogJson.ValueKind != JsonValueKind.Array)
                 {
@@ -370,7 +352,7 @@ internal sealed class ImportHandlers(
             var images = new Dictionary<Guid, byte[]>();
             foreach (var image in manifest.Images)
             {
-                if (!entries.TryGetValue(image.Path, out var entry))
+                if (!zip.Entries.TryGetValue(image.Path, out var entry))
                 {
                     errors[image.Path] = ["Falta la imagen en el archivo."];
                     continue;
@@ -382,7 +364,7 @@ internal sealed class ImportHandlers(
                     continue;
                 }
 
-                var bytes = ReadBytes(entry, assetWriter.MaxSize);
+                var bytes = zip.ReadBytes(entry, assetWriter.MaxSize);
                 if (bytes is null || assetWriter.Recognize(bytes) is null)
                 {
                     errors[image.Path] = ["No es una imagen PNG, JPEG o WebP válida."];
@@ -394,7 +376,7 @@ internal sealed class ImportHandlers(
 
             // La distribución del mapa (solo en el archivo de una app): mismas reglas que al guardarla en la app.
             JsonElement? map = null;
-            if (manifest.Map is { } mapEntry && ReadJson(entries, mapEntry.Path, errors) is { } positions)
+            if (manifest.Map is { } mapEntry && zip.ReadJson(mapEntry.Path, errors) is { } positions)
             {
                 var mapErrors = canvasWriter.ValidateMapPositions(positions, mapEntry.Path);
                 if (mapErrors.Count > 0)
@@ -443,59 +425,6 @@ internal sealed class ImportHandlers(
 
     private static string Raw(JsonElement manifest, string property) =>
         manifest.TryGetProperty(property, out var value) ? value.GetRawText() : "sin indicar";
-
-    private static JsonElement? ReadJson(Dictionary<string, ZipArchiveEntry> entries, string path, Dictionary<string, string[]> errors)
-    {
-        if (!entries.TryGetValue(path, out var entry))
-        {
-            errors[path] = ["Falta en el archivo."];
-            return null;
-        }
-
-        if (ReadBytes(entry, MaxUncompressedBytes) is not { } bytes)
-        {
-            errors[path] = ["No se pudo leer del archivo."];
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(bytes);
-            return document.RootElement.Clone();
-        }
-        catch (JsonException)
-        {
-            errors[path] = ["No es JSON válido."];
-            return null;
-        }
-    }
-
-    /// <summary>Los bytes de la entrada, sin creerle al tamaño que declara: corta al pasar de <paramref name="max"/>.</summary>
-    private static byte[]? ReadBytes(ZipArchiveEntry entry, long max)
-    {
-        try
-        {
-            using var stream = entry.Open();
-            using var buffer = new MemoryStream();
-            var chunk = new byte[81920];
-            int read;
-            while ((read = stream.Read(chunk, 0, chunk.Length)) > 0)
-            {
-                if (buffer.Length + read > max)
-                {
-                    return null;
-                }
-
-                buffer.Write(chunk, 0, read);
-            }
-
-            return buffer.ToArray();
-        }
-        catch (InvalidDataException)
-        {
-            return null;
-        }
-    }
 
     private static void Merge(Dictionary<string, string[]> errors, Dictionary<string, string[]> more)
     {

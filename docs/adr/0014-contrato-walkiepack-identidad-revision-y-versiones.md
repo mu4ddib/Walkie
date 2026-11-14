@@ -115,6 +115,8 @@ Los errores llevan la ruta dentro del paquete (`discovery.json/entities/3/eviden
 - La versión 0 se definió en la tarea 1, sin consumidores ni paquetes en circulación, y esta tarea la reescribe sin subirla. La política rige desde que llega a `main`.
 - Los registros de la API (snapshot, vínculo, revisión, operaciones) siguen la regla del resto de schemas del repo: si cambian, cambian en el mismo PR que la API y la web.
 
+**Respuesta de la subida** (agregado en la tarea 3): `walkie-discovery-upload.schema.json` es la respuesta de `POST /api/apps/{appId}/sources/snapshots`, con `status` (`preview`, `created` o `existing`), `duplicate` (`pack` o `content`), el `snapshot` y un `summary` del paquete. Se agregó porque `walkie-discovery-snapshot` exige `id` e `importedAt`, que una vista previa (`dryRun`) no tiene. Los schemas anteriores no cambian: reutiliza sus `$defs` por `$ref`.
+
 **Compatibilidad:**
 - `walkie-graph.schema.json` no cambia.
 - Las entidades usan sus `$defs` (`http`, `database`, `resource`, `runtime`) por `$ref`, sin copiarlos: lo aprobado se vuelve un elemento del catálogo válido sin traducir (`DiscoveryCompatibilityTests`).
