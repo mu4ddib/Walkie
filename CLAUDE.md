@@ -34,7 +34,7 @@ API en http://localhost:5080 (OpenAPI en `/openapi/v1.json` en Development), web
 ## Reglas
 
 - Trabaja a partir del issue y del `plan.md` de la feature; no amplíes el alcance sin decirlo.
-- IDs de nodos y conexiones se generan en el cliente (UUID v7). Nodos y conexiones se guardan como mapas por ID.
+- IDs de nodos, conexiones y módulos se generan en el cliente (UUID v7). Los de apps, features, elementos del catálogo e imágenes los genera la API. Nodos y conexiones se guardan como mapas por ID.
 - Posición (`layout`) separada del contenido del nodo.
 - Todo cambio de estado del lienzo en el front pasa por acciones del store (`addNode`, `moveNode`, `connect`…), nunca mutaciones sueltas.
 - Nada de datos reales de clientes en ejemplos, seeds ni pruebas.

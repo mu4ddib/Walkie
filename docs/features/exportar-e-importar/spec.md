@@ -1,7 +1,7 @@
 # Spec: Exportar e importar
 
 - Issue padre: #137
-- Estado: en curso (tareas 1 a 5 de 7 hechas)
+- Estado: implementada (2026-11-12)
 
 ## Objetivo
 
@@ -21,7 +21,7 @@ Que lo documentado en Walkie salga en el formato que cada uno necesita: un conte
 
 ### Menú «Exportar»
 
-- [ ] Dado el editor, cuando abro «Exportar», entonces elijo entre: Contexto para IA, Markdown (el actual), Imagen, PDF y Archivo de Walkie; cada opción dice en una línea para qué sirve. Como hoy, se exporta lo guardado y se avisa si hay cambios pendientes. (Tarea 1: el menú con Contexto para IA y Markdown; las demás opciones se suman con sus tareas.)
+- [x] Dado el editor, cuando abro «Exportar», entonces elijo entre: Contexto para IA, Markdown (el actual), Imagen, PDF y Archivo de Walkie; cada opción dice en una línea para qué sirve. Como hoy, se exporta lo guardado y se avisa si hay cambios pendientes. (Tarea 1: el menú con Contexto para IA y Markdown; las demás opciones se suman con sus tareas.)
 
 ### Contexto para IA
 

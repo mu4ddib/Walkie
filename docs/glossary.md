@@ -5,7 +5,7 @@
 | **App** | Aplicación documentada. Contiene un catálogo y varias features. |
 | **Feature** | Funcionalidad con un único objetivo de usuario (iniciar sesión, transferir). Tiene un lienzo y sus tours. |
 | **Lienzo (canvas)** | Grafo de nodos y conexiones de una feature, más su `layout`. |
-| **Catálogo** | Nodos reutilizables de la app (`api`, `service`, `database`) definidos una sola vez. |
+| **Catálogo** | Nodos reutilizables de la app (`api`, `service`, `database`, `resource`) definidos una sola vez. |
 | **Nodo** | Caja del lienzo. Tipos: `actor`, `screen`, `rule`, `api`, `service`, `database`, `resource`, `ref`, `portal`, `module`. |
 | **ref** | Nodo que apunta a un elemento del catálogo (`catalogId`). Si el elemento cambia, cambia en todos los lienzos. |
 | **Módulo** | Conjunto reutilizable de componentes conectados de una app, con su propio lienzo e **interfaces** (ADR-0010). Una feature lo usa con una caja (nodo `module`, `moduleId`) que comparte su definición; su posición, tamaño y presentación son de cada lienzo. |

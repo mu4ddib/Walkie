@@ -10,7 +10,6 @@ apps/api/
     Walkie.Api/            # host: Program.cs, DI, middlewares, OpenAPI
     Walkie.Modules.Apps/   # apps, features, catálogo
     Walkie.Modules.Canvas/ # lienzos (grafo en jsonb), versionado, módulos compartidos (ADR-0010)
-    Walkie.Modules.Tours/
     Walkie.Modules.Files/  # imágenes en S3 (RustFS en desarrollo), ADR-0004
     Walkie.Modules.Sharing/ # enlaces de solo lectura (token con hash), ADR-0005
     Walkie.Modules.Export/ # export (Markdown, contexto para IA, PDF, .walkie) e import de .walkie, sin tablas
