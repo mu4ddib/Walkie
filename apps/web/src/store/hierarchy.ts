@@ -17,37 +17,71 @@ export function ownerOf(h: Hierarchy, id: string): string | null {
   return owner && h.groups[owner] ? owner : null;
 }
 
-/** Grupos que contienen a `id`, del más cercano al más externo. Corta si encuentra un ciclo (datos corruptos). */
-export function ancestorsOf(h: Hierarchy, id: string): string[] {
-  const chain: string[] = [];
-  const seen = new Set([id]);
-  let current = ownerOf(h, id);
-  while (current && !seen.has(current)) {
-    chain.push(current);
-    seen.add(current);
-    current = ownerOf(h, current);
+/**
+ * Cadenas de grupos ya calculadas por jerarquía (revisión de fluidez): el lienzo pregunta por los mismos ids muchas
+ * veces por cada cambio (visibilidad, extremos de conexiones, contenido de cada grupo). Una jerarquía es inmutable —el
+ * store crea objetos nuevos al cambiar—, así que la caché vive mientras viva el objeto y no queda vieja.
+ */
+const chains = new WeakMap<Hierarchy, Map<string, readonly string[]>>();
+
+function chainOf(h: Hierarchy, id: string): readonly string[] {
+  let byId = chains.get(h);
+  if (!byId) chains.set(h, (byId = new Map()));
+  let chain = byId.get(id);
+  if (!chain) {
+    const list: string[] = [];
+    const seen = new Set([id]);
+    let current = ownerOf(h, id);
+    while (current && !seen.has(current)) {
+      list.push(current);
+      seen.add(current);
+      current = ownerOf(h, current);
+    }
+    chain = list;
+    byId.set(id, chain);
   }
   return chain;
 }
 
+/** Grupos que contienen a `id`, del más cercano al más externo. Corta si encuentra un ciclo (datos corruptos). */
+export function ancestorsOf(h: Hierarchy, id: string): string[] {
+  return [...chainOf(h, id)];
+}
+
 /** Profundidad de un grupo (0 = suelto en el lienzo). */
 export function depthOf(h: Hierarchy, id: string): number {
-  return ancestorsOf(h, id).length;
+  return chainOf(h, id).length;
 }
 
 /** ¿`id` está dentro de `groupId`, a cualquier profundidad? */
 export function isInside(h: Hierarchy, id: string, groupId: string): boolean {
-  return ancestorsOf(h, id).includes(groupId);
+  return chainOf(h, id).includes(groupId);
 }
+
+type Contents = { groups: string[]; nodes: string[]; notes: string[] };
+
+/** Contenido de cada grupo, en una sola pasada por jerarquía (antes, una pasada completa por cada grupo). */
+const contents = new WeakMap<Hierarchy, Map<string, Contents>>();
 
 /** Todo lo que vive dentro de `groupId`, a cualquier profundidad. */
 export function descendantsOf(h: Hierarchy, groupId: string): { groups: string[]; nodes: string[]; notes: string[] } {
-  const inside = (id: string) => isInside(h, id, groupId);
-  return {
-    groups: Object.keys(h.groups).filter(inside),
-    nodes: Object.keys(h.nodes).filter(inside),
-    notes: Object.keys(h.stickyNotes).filter(inside),
-  };
+  let index = contents.get(h);
+  if (!index) {
+    index = new Map();
+    const add = (kind: keyof Contents, id: string) => {
+      for (const g of chainOf(h, id)) {
+        let entry = index!.get(g);
+        if (!entry) index!.set(g, (entry = { groups: [], nodes: [], notes: [] }));
+        entry[kind].push(id);
+      }
+    };
+    for (const id of Object.keys(h.groups)) add('groups', id);
+    for (const id of Object.keys(h.nodes)) add('nodes', id);
+    for (const id of Object.keys(h.stickyNotes)) add('notes', id);
+    contents.set(h, index);
+  }
+  const found = index.get(groupId);
+  return { groups: [...(found?.groups ?? [])], nodes: [...(found?.nodes ?? [])], notes: [...(found?.notes ?? [])] };
 }
 
 /**
@@ -65,14 +99,15 @@ export function canNest(h: Hierarchy, id: string, groupId: string | null): boole
  * mismo si ninguno lo está. Los extremos de una conexión se dibujan contra esto (parte 2).
  */
 export function visibleEnd(h: Hierarchy, id: string, collapsed: ReadonlySet<string>): string {
-  const chain = ancestorsOf(h, id);
+  const chain = chainOf(h, id);
   for (let i = chain.length - 1; i >= 0; i--) if (collapsed.has(chain[i]!)) return chain[i]!;
   return id;
 }
 
 /** ¿Algún grupo que contiene a `id` está plegado? (entonces `id` no se dibuja). */
 export function isHidden(h: Hierarchy, id: string, collapsed: ReadonlySet<string>): boolean {
-  return ancestorsOf(h, id).some((g) => collapsed.has(g));
+  if (collapsed.size === 0) return false;
+  return chainOf(h, id).some((g) => collapsed.has(g));
 }
 
 /** Grupo más profundo que contiene a todos los `ids` (su ancestro común), o `null`. */

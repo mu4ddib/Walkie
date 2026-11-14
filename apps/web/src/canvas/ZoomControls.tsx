@@ -1,18 +1,19 @@
-import { useReactFlow, useViewport, type FitViewOptions } from '@xyflow/react';
+import { useReactFlow, useViewport } from '@xyflow/react';
 
 /** Zoom abajo a la izquierda (spec espacio-de-trabajo, criterio 5): alejar, porcentaje (vuelve al 100 %), acercar y ajustar. */
 export function ZoomControls({
-  fitPadding,
+  onFit,
   motion,
   history,
 }: {
-  fitPadding: FitViewOptions['padding'];
+  /** «Ver todo»: lo hace la cámara del lienzo (una sola transición, cancelable). */
+  onFit: () => void;
   /** Interruptor de la animación de las conexiones (spec espacio-de-trabajo, criterio 21). */
   motion?: { on: boolean; onToggle: () => void };
   /** Deshacer y rehacer (no en solo lectura). */
   history?: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void };
 }) {
-  const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
+  const { zoomIn, zoomOut, zoomTo } = useReactFlow();
   const { zoom } = useViewport();
 
   return (
@@ -62,7 +63,7 @@ export function ZoomControls({
         className="zoom-button"
         aria-label="Ajustar a la vista"
         data-tip="Ver todo · 0"
-        onClick={() => void fitView({ padding: fitPadding, duration: 200 })}
+        onClick={onFit}
       >
         ⤢
       </button>

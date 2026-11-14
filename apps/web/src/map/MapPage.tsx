@@ -1,5 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, useReactFlow, type NodeChange } from '@xyflow/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Background,
+  BackgroundVariant,
+  ReactFlow,
+  ReactFlowProvider,
+  useNodesInitialized,
+  useReactFlow,
+  useStore,
+  type NodeChange,
+} from '@xyflow/react';
+import { useCameraController } from '../canvas/useCamera';
 import '@xyflow/react/dist/style.css';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError, type Feature } from '../api/client';
@@ -76,7 +86,13 @@ export function MapPage() {
 function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<ReturnType<typeof useAppMap>['data']>; features: Feature[] }) {
   const navigate = useNavigate();
   const save = useSaveMapLayout(appId);
-  const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const { zoomIn, zoomOut } = useReactFlow();
+  const camera = useCameraController();
+  // Al mostrar u ocultar compartidos aparecen o se van cajas: se encuadra cuando React Flow ya las midió (no tras un
+  // tiempo fijo).
+  const initialized = useNodesInitialized();
+  const lookupSize = useStore((s) => s.nodeLookup.size);
+  const pendingFit = useRef(false);
 
   const [showShared, setShowShared] = useState(getMapShowShared);
   const [selection, setSelection] = useState<MapSelection | null>(null);
@@ -94,7 +110,7 @@ function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<R
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return;
-      if (event.key === '0') void fitView({ padding: FIT_PADDING, duration: 200 });
+      if (event.key === '0') void camera.fit(FIT_PADDING);
       else if (event.key === '+' || event.key === '=') void zoomIn();
       else if (event.key === '-') void zoomOut();
       else if (event.key === 'Escape') setSelection(null);
@@ -103,7 +119,7 @@ function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<R
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [fitView, zoomIn, zoomOut]);
+  }, [camera, zoomIn, zoomOut]);
 
   const byId = useMemo(() => new Map(features.map((f) => [f.id, f])), [features]);
   const ordered = useMemo(
@@ -257,6 +273,13 @@ function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<R
     },
     [save, map.layout.version],
   );
+  // Encuadra cuando React Flow ya tiene y midió exactamente las cajas que se muestran ahora.
+  useEffect(() => {
+    if (!pendingFit.current || !initialized || lookupSize !== nodes.length) return;
+    pendingFit.current = false;
+    void camera.fit(FIT_PADDING);
+  }, [initialized, lookupSize, nodes.length, camera]);
+
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -304,7 +327,7 @@ function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<R
               setShowShared(e.target.checked);
               setMapShowShared(e.target.checked);
               // Aparecen o se van cajas: la vista se ajusta para verlas todas (después de que React Flow las mida).
-              setTimeout(() => void fitView({ padding: FIT_PADDING, duration: 300 }), 50);
+              pendingFit.current = true;
             }}
           />
           Mostrar componentes compartidos{shared.length > 0 ? ` (${shared.length})` : ''}
@@ -348,7 +371,7 @@ function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<R
         <Background variant={BackgroundVariant.Dots} gap={GRID * 3} size={1.5} color={palette.grid} />
       </ReactFlow>
       <EdgeMarkers />
-      <ZoomControls fitPadding={FIT_PADDING} />
+      <ZoomControls onFit={() => void camera.fit(FIT_PADDING)} />
       {notice && (
         <p className="canvas-hint" role="status">
           {notice}

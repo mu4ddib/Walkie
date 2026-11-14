@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -28,6 +28,9 @@ import {
   type CanvasCatalog,
 } from '../catalog/catalogContext';
 import { InterfacePicker, type InterfaceChoice } from '../modules/InterfacePicker';
+import { CameraContext, useCameraController } from './useCamera';
+import { KeyedValue, StableElements } from './stableElements';
+import { RectGrid, around } from '../edges/spatial';
 import { OPERATIONS, effectiveOperation, legacyOperation, suggestOperations, type OperationId } from '../interactions/operations';
 import { ExtractModuleDialog } from '../modules/ExtractModuleDialog';
 import { interfaceHandle, interfaceOfHandle, placeableModules } from '../modules/moduleMeta';
@@ -82,8 +85,8 @@ import { EdgeMarkers } from '../edges/EdgeMarkers';
 import { labelSize, placePairLabels, type PlacedLabel } from '../edges/labels';
 import { laneOffsets, laneRoute } from '../edges/lanes';
 import { computePorts, staggerBends, type Side } from '../edges/ports';
-import { defaultRoute, routeAround, type Point } from '../edges/route';
-import { edgeDisplay, edgeDisplayText, previewHint, previewSteps, type PreviewStep } from '../edges/edgeMeta';
+import { SEARCH_MARGIN, defaultRoute, routeAround, type Point } from '../edges/route';
+import { edgeDisplay, edgeDisplayText, previewHint, previewSteps, type EdgeDisplay, type PreviewStep } from '../edges/edgeMeta';
 import { NodeMenu } from './NodeMenu';
 import { OPEN_HELP_EVENT, isTyping } from './canvasShortcuts';
 import { captureCanvas, framing, onCanvasImageRequest } from './canvasImage';
@@ -112,6 +115,17 @@ const NOTICE_MS = 4000;
 /** Punto de un grupo que decide dónde cae al soltarlo: su asa (el encabezado), por donde se arrastra. */
 const GROUP_GRIP = { x: 24, y: 16 } as const;
 type CanvasFlowNode = WalkieFlowNode | GroupFlowNode | StickyFlowNode;
+
+/** ¿Los dos mapas tienen exactamente los mismos ids? (O(n), sin armar listas). */
+function sameKeys(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  if (a === b) return true;
+  let count = 0;
+  for (const key in a) {
+    if (!(key in b)) return false;
+    count++;
+  }
+  return count === Object.keys(b).length;
+}
 
 /**
  * Lienzo de una feature. Todo cambio del grafo pasa por las acciones del store. `catalog` es el catálogo
@@ -157,9 +171,18 @@ function CanvasInner({
   initialPlay?: { tourId: string; step: number };
 }) {
   const store = useGraphStoreApi();
-  const graphNodes = useGraphStore((s) => s.nodes);
+  // Contenido de cajas y conexiones con prioridad baja (revisión de fluidez): al escribir en el inspector el campo
+  // responde primero y el lienzo se actualiza en un render que React interrumpe si llega otra tecla. El store ya tiene
+  // cada cambio (guardar, deshacer y el autoguardado lo ven en el acto); la posición (`layout`) no se difiere, así un
+  // arrastre no se atrasa respecto al puntero.
+  const storeNodes = useGraphStore((s) => s.nodes);
+  const storeEdges = useGraphStore((s) => s.edges);
+  const deferredNodes = useDeferredValue(storeNodes);
+  const deferredEdges = useDeferredValue(storeEdges);
+  // Solo se difiere el contenido: si aparece o desaparece una caja o una conexión, se dibuja en el acto.
+  const graphNodes = sameKeys(storeNodes, deferredNodes) ? deferredNodes : storeNodes;
   const layout = useGraphStore((s) => s.layout);
-  const graphEdges = useGraphStore((s) => s.edges);
+  const graphEdges = sameKeys(storeEdges, deferredEdges) ? deferredEdges : storeEdges;
   const groups = useGraphStore((s) => s.groups);
   const stickyNotes = useGraphStore((s) => s.stickyNotes);
   const moduleInterfaces = useGraphStore((s) => s.interfaces);
@@ -169,8 +192,20 @@ function CanvasInner({
   const { addGroup, moveGroup, resizeGroup, setParent, removeGroup, updateGroup } = useGraphStore((s) => s);
   const { addFlowTour, addEdgeStep } = useGraphStore((s) => s);
   const { undo, redo, beginBatch, endBatch, growGroup, canUndo, canRedo } = useGraphStore((s) => s);
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getViewport, setCenter, getNodes, getNodesBounds, getInternalNode } =
-    useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, getViewport, getNodes, getNodesBounds, getInternalNode } = useReactFlow();
+  // Cámara (revisión de fluidez): un solo dueño de la vista; recuerda la vista al terminar cada movimiento.
+  const camera = useCameraController();
+  // Identidad estable de nodos y conexiones: React Flow solo vuelve a dibujar lo que cambió (revisión de fluidez).
+  const [nodeCache] = useState(() => new StableElements<CanvasFlowNode>());
+  const [edgeCache] = useState(() => new StableElements<WalkieFlowEdge>());
+  const [displayCache] = useState(() => new Map<string, { deps: unknown[]; display: EdgeDisplay }>());
+  useEffect(
+    () =>
+      camera.onSettle((view) => {
+        if (catalog.featureId && !catalog.share) saveViewport(catalog.featureId, view);
+      }),
+    [camera, catalog.featureId, catalog.share],
+  );
   const openFeature = useOpenFeature();
   const openModule = useOpenModule();
   // La vista se recuerda por feature (spec espacio-de-trabajo, criterio 1). Sin vista guardada, fitView
@@ -342,10 +377,20 @@ function CanvasInner({
   }, [measured]);
   const stopEditing = useCallback(() => setEditingId(null), []);
 
-  const hierarchy = useMemo<Hierarchy>(
-    () => ({ nodes: graphNodes, groups, stickyNotes }),
-    [graphNodes, groups, stickyNotes],
-  );
+  // La jerarquía solo cambia si cambia quién está dentro de qué (o qué existe): escribir en una caja, moverla o plegar
+  // un grupo no la renueva, así sus cálculos (visibilidad, contenido de grupos) siguen en caché.
+  const [hierarchyCache] = useState(() => new KeyedValue<Hierarchy>());
+  const structureKey = useMemo(() => {
+    let key = '';
+    for (const n of Object.values(graphNodes)) key += `${n.id}>${n.groupId ?? ''};`;
+    key += '|';
+    for (const g of Object.values(groups)) key += `${g.id}>${g.parentId ?? ''};`;
+    key += '|';
+    for (const n of Object.values(stickyNotes)) key += `${n.id}>${n.groupId ?? ''};`;
+    return key;
+  }, [graphNodes, groups, stickyNotes]);
+  // Solo lee la pertenencia (groupId, parentId) y qué ids existen: lo que fija `structureKey`.
+  const hierarchy = hierarchyCache.get(structureKey, () => ({ nodes: graphNodes, groups, stickyNotes }));
   // Durante un tour o un recorrido, los grupos que contienen el paso activo se despliegan solo en la vista (no en el
   // grafo); al cambiar de paso o al detener, vuelven a verse como estaban.
   const activeIds =
@@ -488,10 +533,11 @@ function CanvasInner({
       hidden: isHidden(hierarchy, note.id, collapsedGroups),
       className: dimClass,
     }));
-    const graphFlowNodes: WalkieFlowNode[] = Object.values(graphNodes).map((node) => ({
+    // Una caja sin posición no se dibuja: el contenido se lee diferido y, al borrar, la posición se va un render antes.
+    const graphFlowNodes: WalkieFlowNode[] = Object.values(graphNodes).filter((node) => layout[node.id]).map((node) => ({
       id: node.id,
       type: node.type,
-      position: layout[node.id] ?? { x: 0, y: 0 },
+      position: layout[node.id]!,
       // La caja de un módulo conserva su ancho en este lienzo (spec modulos-compartidos, criterio 3).
       width: node.type === 'module' ? layout[node.id]?.w : undefined,
       // La seleccionada queda encima de sus vecinas (los grupos siguen detrás: zIndex negativo).
@@ -502,8 +548,9 @@ function CanvasInner({
       hidden: isHidden(hierarchy, node.id, collapsedGroups),
       className: [stateClass(node.id), flash === node.id && 'locate-flash'].filter(Boolean).join(' ') || undefined,
     }));
-    return [...groupNodes, ...noteNodes, ...graphFlowNodes];
+    return nodeCache.reuse([...groupNodes, ...noteNodes, ...graphFlowNodes]);
   }, [
+    nodeCache,
     graphNodes,
     graphEdges,
     preview,
@@ -653,12 +700,19 @@ function CanvasInner({
       const r = !isHidden(hierarchy, id, collapsedGroups) && boxOf(id);
       if (r) obstacles.push({ id, rect: r });
     }
+    // Solo las cajas cerca de cada trazo (las mismas que `routeAround` mira): índice en grilla, no la lista entera.
+    const grid = new RectGrid(obstacles);
+    const othersNear = (from: Point, to: Point, source: string, target: string) =>
+      grid
+        .query(around(from, to, SEARCH_MARGIN))
+        .filter((o) => o.id !== source && o.id !== target)
+        .map((o) => o.rect);
     const routes: Record<string, Point[]> = {};
     for (const { edge, source, target } of visible) {
       const p = ports[edge.id];
       const branchEdge = !!edge.branch && source === edge.from;
       if (!p || branchEdge) continue;
-      const others = obstacles.filter((o) => o.id !== source && o.id !== target).map((o) => o.rect);
+      const others = othersNear(p.source, p.target, source, target);
       const single = (pairs[pairKey(source, target)] ?? 1) === 1;
       const route = routeAround(p.source, p.target, others, single ? staggered[edge.id] : undefined);
       if (route) routes[edge.id] = route;
@@ -672,6 +726,12 @@ function CanvasInner({
       return p && !branchEdge && (pairs[pairKey(source, target)] ?? 1) > 1 ? [{ id: edge.id, source, target, ports: p }] : [];
     });
     const lanes = laneOffsets(laneEdges);
+    // Carril más abierto de cada par (una pasada; antes se filtraba la lista entera por cada par).
+    const widestLane = new Map<string, number>();
+    for (const e of laneEdges) {
+      const key = pairKey(e.source, e.target);
+      widestLane.set(key, Math.max(widestLane.get(key) ?? 0, Math.abs(lanes[e.id] ?? 0)));
+    }
     const corridors = new Map<string, { points: Point[]; start: Side; end: Side }>();
     for (const edge of laneEdges) {
       const canonical = edge.source < edge.target;
@@ -680,10 +740,8 @@ function CanvasInner({
       let base = corridors.get(key);
       if (!base) {
         // Si hay que rodear cajas, el corredor deja lugar a todos los carriles del par (más aire y salidas más largas).
-        const widest = Math.max(
-          ...laneEdges.filter((e) => pairKey(e.source, e.target) === key).map((e) => Math.abs(lanes[e.id] ?? 0)),
-        );
-        const others = obstacles.filter((o) => o.id !== edge.source && o.id !== edge.target).map((o) => o.rect);
+        const widest = widestLane.get(key) ?? 0;
+        const others = othersNear(edge.ports.source, edge.ports.target, edge.source, edge.target);
         const own =
           (routes[edge.id] && routeAround(edge.ports.source, edge.ports.target, others, undefined, widest)) ??
           defaultRoute(edge.ports.source, edge.ports.target);
@@ -706,7 +764,17 @@ function CanvasInner({
       const effective = effectiveOperation(edge, fromFamily, toFamily);
       return effective ? { ...effective, suggested: suggestOperations(fromFamily, toFamily) } : undefined;
     };
+    // Lo que muestra cada etiqueta depende de la conexión, sus dos cajas, la operación a la que responde y el catálogo:
+    // si nada de eso cambió (al arrastrar, al seleccionar), se reutiliza (revisión de fluidez).
     const displayOf = (edge: (typeof visible)[number]['edge']) => {
+      const deps = [edge, graphNodes[edge.from], graphNodes[edge.to], edge.replyTo ? graphEdges[edge.replyTo] : undefined, catalog.items, catalog.modules];
+      const known = displayCache.get(edge.id);
+      if (known && known.deps.every((d, i) => d === deps[i])) return known.display;
+      const display = computeDisplay(edge);
+      displayCache.set(edge.id, { deps, display });
+      return display;
+    };
+    const computeDisplay = (edge: (typeof visible)[number]['edge']) => {
       const branch = edge.branch ? graphNodes[edge.from]?.branches?.find((b) => b.id === edge.branch) : undefined;
       const targetNode = graphNodes[edge.to];
       // Hacia la interfaz de un módulo: su contrato (método y ruta de su caja) o, sin él, su nombre.
@@ -739,7 +807,9 @@ function CanvasInner({
     for (const e of laneEdges) {
       if (!routes[e.id]) continue;
       const key = pairKey(e.source, e.target);
-      laneGroups.set(key, [...(laneGroups.get(key) ?? []), e]);
+      const group = laneGroups.get(key);
+      if (group) group.push(e);
+      else laneGroups.set(key, [e]);
     }
     for (const list of laneGroups.values()) {
       // Primero la solicitud (así la compuesta se lee «llama ⇄ responde»), después por carril.
@@ -776,7 +846,7 @@ function CanvasInner({
       const drift = (placed.reduce((a, b) => a + b, 0) - sorted.reduce((a, b) => a + b.y, 0)) / sorted.length;
       sorted.forEach((item, i) => labelShift.set(item.id, placed[i]! - drift - item.y));
     }
-    return visible.map(({ edge, source, target }) => {
+    const list = visible.map(({ edge, source, target }): WalkieFlowEdge => {
       const key = pairKey(source, target);
       const count = pairs[key] ?? 1;
       const index = (seen[key] = (seen[key] ?? -1) + 1);
@@ -831,7 +901,10 @@ function CanvasInner({
               .join(' ') || undefined,
       };
     });
+    return edgeCache.reuse(list);
   }, [
+    edgeCache,
+    displayCache,
     graphEdges,
     graphNodes,
     stickyNotes,
@@ -1435,7 +1508,7 @@ function CanvasInner({
       } else if (!readOnly && event.key === RESOURCE_KEY) setResourcesOpen((open) => !open);
       else if (event.key === '+' || event.key === '=') void zoomIn();
       else if (event.key === '-') void zoomOut();
-      else if (event.key === '0') void fitView({ padding: fitPadding, duration: 200 });
+      else if (event.key === '0') void camera.fit(fitPadding);
       else if (!readOnly && event.key.toLowerCase() === 'i') toggleInspector();
       else if (!readOnly && event.key.toLowerCase() === 'g') createGroup();
       else if (!readOnly && event.key.toLowerCase() === 'n') addNote();
@@ -1481,8 +1554,8 @@ function CanvasInner({
     const at = layout[focusId];
     if (!at) return;
     focused.current = true;
-    void setCenter(at.x + focusSize.width / 2, at.y + focusSize.height / 2, { zoom: 1.1, duration: 300 });
-  }, [focusId, focusSize, layout, setCenter, focusCenter]);
+    void camera.centerOn(at.x + focusSize.width / 2, at.y + focusSize.height / 2, 1.1);
+  }, [focusId, focusSize, layout, camera, focusCenter]);
 
   // La vista también se guarda al salir: `onMoveEnd` llega al terminar una animación de zoom, y quien
   // cierra o recarga la página antes perdería el último movimiento.
@@ -1499,9 +1572,10 @@ function CanvasInner({
 
   const onMoveEnd = useCallback(
     (_: unknown, viewport: Viewport) => {
-      if (catalog.featureId && !readOnly) saveViewport(catalog.featureId, viewport);
+      // Durante una transición de la cámara no se guarda en cada cuadro: lo hace ella al llegar.
+      if (catalog.featureId && !readOnly && !camera.animating) saveViewport(catalog.featureId, viewport);
     },
-    [catalog.featureId, readOnly],
+    [catalog.featureId, readOnly, camera],
   );
 
   // Las ayudas de uso viven en "?" (atajos y gestos) y en los tooltips; aquí solo lo que cambia el modo del lienzo.
@@ -1533,10 +1607,7 @@ function CanvasInner({
     const rect = unionOf(ids);
     if (!rect) return;
     const zoom = Math.max(getViewport().zoom, 0.8);
-    void setCenter(rect.x + rect.w / 2 + insets.right / 2 / zoom, rect.y + rect.h / 2 + insets.bottom / 2 / zoom, {
-      zoom,
-      duration: 400,
-    });
+    void camera.centerOn(rect.x + rect.w / 2 + insets.right / 2 / zoom, rect.y + rect.h / 2 + insets.bottom / 2 / zoom, zoom);
     setFlash(edge ? edge.id : visibleEnd(hierarchy, ids[0]!, collapsedGroups));
   };
 
@@ -1669,7 +1740,11 @@ function CanvasInner({
             setMenu({ id: flowNode.id, x: event.clientX, y: event.clientY });
           }}
           onPaneClick={() => setMenu(null)}
-          onMoveStart={() => setMenu(null)}
+          onMoveStart={(event) => {
+            // La persona arrastra o hace zoom: la cámara le cede el control desde donde está (sin terminar la transición).
+            if (event) camera.cancel();
+            setMenu(null);
+          }}
           zoomOnDoubleClick={false}
           // Cualquier punto de una caja empieza o termina una conexión (spec puertos-de-conexion).
           connectionMode={ConnectionMode.Loose}
@@ -1726,7 +1801,7 @@ function CanvasInner({
           })()}
         {!playing && (
           <ZoomControls
-            fitPadding={fitPadding}
+            onFit={() => void camera.fit(fitPadding)}
             motion={{ on: edgeMotion, onToggle: toggleEdgeMotion }}
             history={
               readOnly
@@ -1825,6 +1900,7 @@ function CanvasInner({
             }}
           />
         )}
+        <CameraContext.Provider value={camera}>
         {playing && flowPlaying && (
           <FlowPlayer
             playing={playing}
@@ -1847,6 +1923,7 @@ function CanvasInner({
             onExit={() => setPlaying(null)}
           />
         )}
+        </CameraContext.Provider>
       </div>
       {readOnly ? (
         <SharedTours onPlay={startTour} ui={toursUi} onUi={setToursUi} onLocate={locate} playback={playback} />

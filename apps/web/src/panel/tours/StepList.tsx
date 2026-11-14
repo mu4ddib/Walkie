@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -115,18 +114,27 @@ export function StepList(props: StepListProps) {
   }, [virtual, frame]);
 
   // Medir lo dibujado: los pasos abiertos o con texto largo no miden lo estimado.
-  useLayoutEffect(() => {
-    if (!virtual || !list.current) return;
+  // Alto real de cada paso dibujado: lo informa un ResizeObserver después del layout normal del navegador (revisión de
+  // fluidez). Antes se leía `offsetHeight` de todos en cada cambio, lo que forzaba a calcular en ese instante el layout
+  // de toda la página —lienzo incluido— al abrir o cerrar un paso.
+  useEffect(() => {
+    if (!virtual || !list.current || typeof ResizeObserver === 'undefined') return;
     const gap = parseFloat(getComputedStyle(list.current).rowGap) || 0;
-    const found: [string, number][] = [];
-    list.current.querySelectorAll<HTMLElement>(':scope > [data-step-key]').forEach((item) => {
-      found.push([item.dataset.stepKey!, item.offsetHeight + gap]);
+    const observer = new ResizeObserver((entries) => {
+      const found: [string, number][] = [];
+      for (const entry of entries) {
+        const key = (entry.target as HTMLElement).dataset.stepKey;
+        const height = entry.borderBoxSize?.[0]?.blockSize ?? (entry.target as HTMLElement).offsetHeight;
+        if (key) found.push([key, height + gap]);
+      }
+      setHeights((known) => {
+        const changed = found.filter(([key, h]) => Math.abs((known.get(key) ?? STEP_ESTIMATE) - h) > 0.5);
+        return changed.length === 0 ? known : new Map([...known, ...changed]);
+      });
     });
-    setHeights((known) => {
-      const changed = found.filter(([key, h]) => Math.abs((known.get(key) ?? STEP_ESTIMATE) - h) > 0.5);
-      return changed.length === 0 ? known : new Map([...known, ...changed]);
-    });
-  }, [virtual, start, end, tour.steps, open, moving]);
+    list.current.querySelectorAll<HTMLElement>(':scope > [data-step-key]').forEach((item) => observer.observe(item));
+    return () => observer.disconnect();
+  }, [virtual, start, end, tour.steps, moving]);
 
   useEffect(() => {
     const id = regrip.current;

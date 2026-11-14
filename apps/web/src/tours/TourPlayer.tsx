@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useReactFlow, type Viewport } from '@xyflow/react';
+import { useCamera } from '../canvas/useCamera';
 import { useOpenFeature } from '../canvas/useOpenFeature';
 import { portalTarget, useCanvasCatalog } from '../catalog/catalogContext';
 import { useGraphStore } from '../store/useGraphStore';
@@ -41,7 +42,8 @@ export function TourPlayer({ tourId, sizes, pane: full, step, insets = { right: 
   const layout = useGraphStore((s) => s.layout);
   const { features } = useCanvasCatalog();
   const openFeature = useOpenFeature();
-  const { setCenter, getViewport, setViewport } = useReactFlow();
+  const { getViewport } = useReactFlow();
+  const camera = useCamera();
   const reduced = usePrefersReducedMotion();
   const [phase, setPhase] = useState<{ step: number; phase: Phase; chars: number }>({
     step,
@@ -54,9 +56,10 @@ export function TourPlayer({ tourId, sizes, pane: full, step, insets = { right: 
   useEffect(() => {
     saved.current = getViewport();
     return () => {
-      if (saved.current) void setViewport(saved.current);
+      // Vuelve por la misma cámara (una transición, no un corte); con movimiento reducido, directo.
+      if (saved.current) void camera.to(saved.current);
     };
-  }, [getViewport, setViewport]);
+  }, [getViewport, camera]);
 
   const steps = tour?.steps ?? [];
   const current = steps[step];
@@ -77,12 +80,11 @@ export function TourPlayer({ tourId, sizes, pane: full, step, insets = { right: 
   useEffect(() => {
     if (targetX === undefined || targetY === undefined) return;
     // setCenter centra en todo el lienzo: se corre lo que tapa el inspector para que quede en el centro del área libre.
-    void setCenter(targetX + insets.right / 2 / TOUR_ZOOM, targetY + insets.bottom / 2 / TOUR_ZOOM, {
-      zoom: TOUR_ZOOM,
+    void camera.centerOn(targetX + insets.right / 2 / TOUR_ZOOM, targetY + insets.bottom / 2 / TOUR_ZOOM, TOUR_ZOOM, {
       duration: reduced ? 0 : TOUR_TIMING.pan,
     });
     // Al entrar al modo tour se ocultan paleta y panel y el lienzo se agranda: se vuelve a centrar con el ancho nuevo.
-  }, [targetX, targetY, setCenter, reduced, pane.width, pane.height, insets.right, insets.bottom]);
+  }, [targetX, targetY, camera, reduced, pane.width, pane.height, insets.right, insets.bottom]);
 
   // walk → gesto (point/think lo termina el Guide) ; talk escribe la nota letra a letra → idle.
   useEffect(() => {

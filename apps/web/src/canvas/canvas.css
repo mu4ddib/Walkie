@@ -722,9 +722,14 @@
   opacity: 0.85;
 }
 
+/* El hueco de la imagen tiene su alto desde el principio (revisión de fluidez): cargando, con error o ya cargada mide
+   lo mismo. Si creciera al llegar la imagen, la caja empujaría a las de abajo y el lienzo quedaría «Sin guardar» sin
+   que nadie lo tocara. */
 .pixel-node-image {
   display: block;
+  box-sizing: border-box;
   width: calc(100% - 20px);
+  aspect-ratio: 16 / 10;
   max-height: 168px;
   margin: 8px 10px 0;
   object-fit: contain;
@@ -736,7 +741,9 @@
 }
 
 div.pixel-node-image {
-  padding: 16px 8px;
+  display: grid;
+  place-items: center;
+  padding: 8px;
   text-align: center;
 }
 
