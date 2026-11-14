@@ -12,6 +12,7 @@ import {
   type SharedFeature,
 } from '../api/client';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
+import { fakeDiscovery, type DiscoverySeed } from './fakeDiscovery';
 
 /**
  * API falsa en memoria para pruebas de componentes: reemplaza `fetch` y responde
@@ -28,6 +29,8 @@ export function installFakeApi(
     shared?: Record<string, SharedFeature>;
     /** Módulos compartidos (spec modulos-compartidos): features de tipo `module`; su lienzo va en `canvases`. */
     modules?: Feature[];
+    /** Walkie Live (spec walkie-live, tarea 5). Sin él, Discovery responde 404, como apagado en la API. */
+    discovery?: DiscoverySeed;
   } = {},
 ) {
   const apps = [...(seed.apps ?? [])];
@@ -104,11 +107,16 @@ export function installFakeApi(
       ? json(400, { title: 'Error de validación', errors: { Name: ['El nombre es obligatorio.'] } })
       : null;
 
+  const discovery = fakeDiscovery(seed.discovery, json);
+
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' ? input : input.toString());
     const method = init?.method ?? 'GET';
-    const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as { name?: string }) : {};
+    const body = typeof init?.body === 'string' && !url.pathname.includes('/snapshots/') ? (JSON.parse(init.body) as { name?: string }) : {};
     const parts = url.pathname.split('/').filter(Boolean); // ['api','apps',id?,'features'?]
+
+    const fromDiscovery = discovery.handle(parts, url, method, init);
+    if (fromDiscovery) return fromDiscovery;
 
     // /api/health — la API responde; así el aviso compacto de "sin conexión" no aparece.
     if (parts[1] === 'health') return json(200, { status: 'ok', schemaVersion: 0 });
@@ -544,5 +552,5 @@ export function installFakeApi(
   });
 
   vi.stubGlobal('fetch', fetchMock);
-  return { apps, features, canvases, catalog, assets, shares, next: next_, fetchMock };
+  return { apps, features, canvases, catalog, assets, shares, next: next_, discovery, fetchMock };
 }

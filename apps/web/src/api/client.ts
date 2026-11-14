@@ -441,3 +441,71 @@ export function fileNameOf(disposition: string | null): string | undefined {
   if (encoded) return decodeURIComponent(encoded.trim());
   return /filename="?([^";]+)"?/i.exec(disposition)?.[1]?.trim();
 }
+
+// ---------- Walkie Live: Discovery (spec walkie-live, tareas 3 a 5) ----------
+// Todo lo que llega de un .walkiepack (títulos, rutas, notas) es texto de un archivo subido por una persona: se muestra
+// siempre como texto, nunca como HTML.
+
+export type DiscoveryUpload = import('../schema/walkie-discovery-upload').WalkieDiscoveryUploadResultV0;
+export type DiscoverySnapshot = import('../schema/walkie-discovery-upload').WalkieDiscoverySnapshotV0;
+export type DiscoveryReview = import('../schema/walkie-discovery-review').WalkieDiscoveryReviewV0;
+export type DiscoveryReviewItem = import('../schema/walkie-discovery-review').Item;
+export type DiscoveryStatus = import('../schema/walkie-discovery-review').Status;
+export type DiscoveryTarget = import('../schema/walkie-discovery-review').Target;
+export type DiscoveryOperation = import('../schema/walkie-discovery-apply').Operation;
+export type DiscoveryApplyResult = import('../schema/walkie-discovery-apply-result').WalkieDiscoveryApplyResultV0;
+export type DiscoverySources = import('../schema/walkie-discovery-sources').WalkieDiscoverySourcesV0;
+export type DiscoveryEvidence = import('../schema/walkie-discovery-evidence').WalkieDiscoveryEntityEvidenceV0;
+
+/** Tamaño máximo de un .walkiepack (el de `DiscoveryLimits.MaxPackBytes` en la API). */
+export const WALKIEPACK_MAX_BYTES = 50 * 1024 * 1024;
+
+/** Filtros y página de la revisión (los conteos de la respuesta son siempre del análisis completo). */
+export interface ReviewQuery {
+  kind?: string;
+  status?: string;
+  page: number;
+  pageSize: number;
+}
+
+/** `POST /api/apps/{appId}/sources/snapshots`: con `dryRun` solo valida y resume; sin él, guarda el análisis. */
+export function uploadSnapshot(token: string, appId: string, file: Blob, dryRun: boolean): Promise<DiscoveryUpload> {
+  const form = new FormData();
+  form.append('file', file, 'architecture.walkiepack');
+  return request(`/api/apps/${encodeURIComponent(appId)}/sources/snapshots${dryRun ? '?dryRun=true' : ''}`, {
+    token,
+    method: 'POST',
+    body: form,
+  });
+}
+
+/** Fuentes de la app con su último análisis. 404 si Discovery está apagado en la API. */
+export function listDiscoverySources(token: string, appId: string, signal?: AbortSignal): Promise<DiscoverySources> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/sources`, { token, signal });
+}
+
+export function getDiscoveryReview(token: string, snapshotId: string, query: ReviewQuery, signal?: AbortSignal): Promise<DiscoveryReview> {
+  const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) });
+  if (query.kind) params.set('kind', query.kind);
+  if (query.status) params.set('status', query.status);
+  return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/review?${params}`, { token, signal });
+}
+
+/** Decisiones sobre hallazgos (reject, link, reset); con `dryRun` es la vista previa. */
+export function applyDiscovery(
+  token: string,
+  snapshotId: string,
+  body: { applyId: string; operations: DiscoveryOperation[] },
+  dryRun: boolean,
+): Promise<DiscoveryApplyResult> {
+  return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/apply${dryRun ? '?dryRun=true' : ''}`, {
+    token,
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** Evidencia y relaciones de un hallazgo (solo de ese, no del análisis entero). */
+export function getDiscoveryEvidence(token: string, snapshotId: string, entityKey: string, signal?: AbortSignal): Promise<DiscoveryEvidence> {
+  return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/evidence?entityKey=${encodeURIComponent(entityKey)}`, { token, signal });
+}

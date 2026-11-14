@@ -1,0 +1,54 @@
+{
+  "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
+  "foundIn": "0198f0c0-2222-7000-8000-000000000201",
+  "entityKey": "api:GET /api/pedidos/{}",
+  "evidence": [
+    {
+      "id": "ev-mapget-pedido",
+      "detector": "aspnetcore-endpoints",
+      "path": "src/Tienda.Api/Pedidos/PedidosEndpoints.cs",
+      "symbol": "PedidosEndpoints.MapPedidos",
+      "lines": {
+        "start": 12,
+        "end": 14
+      },
+      "confidence": "high",
+      "note": "MapGet con ruta literal"
+    },
+    {
+      "id": "ev-openapi-pedido",
+      "detector": "openapi",
+      "path": "docs/openapi.json",
+      "symbol": "paths./api/pedidos/{pedidoId}.get",
+      "lines": {
+        "start": 40,
+        "end": 61
+      },
+      "confidence": "high"
+    }
+  ],
+  "relations": [
+    {
+      "key": "calls:screen:/pedidos/{}->api:GET /api/pedidos/{}",
+      "kind": "calls",
+      "from": "screen:/pedidos/{}",
+      "to": "api:GET /api/pedidos/{}",
+      "basis": "inferred",
+      "confidence": "medium",
+      "evidence": [
+        "ev-fetch-pedido"
+      ]
+    },
+    {
+      "key": "exposes:service:Tienda.Api->api:GET /api/pedidos/{}",
+      "kind": "exposes",
+      "from": "service:Tienda.Api",
+      "to": "api:GET /api/pedidos/{}",
+      "basis": "observed",
+      "confidence": "high",
+      "evidence": [
+        "ev-mapget-pedido"
+      ]
+    }
+  ]
+}

@@ -52,6 +52,7 @@ jobs:
           check walkie-discovery-upload.schema.json "$api/upload-preview.json"
           check walkie-discovery-review.schema.json "$api/review-ambiguous.json"
           check walkie-discovery-sources.schema.json "$api/sources.json"
+          check walkie-discovery-evidence.schema.json "$api/evidence.json"
 
   api:
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from 'react-oidc-context';
 import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
@@ -45,6 +45,14 @@ import {
   listModuleUsages,
   extractModule,
   type ModuleExtraction,
+  ApiError,
+  applyDiscovery,
+  getDiscoveryEvidence,
+  getDiscoveryReview,
+  listDiscoverySources,
+  uploadSnapshot,
+  type DiscoveryOperation,
+  type ReviewQuery,
 } from './client';
 
 /** Access token de la sesión actual. `AuthGate` garantiza que existe dentro de la app. */
@@ -53,6 +61,11 @@ export function useToken(): string {
 }
 
 export const queryKeys = {
+  /** Walkie Live (spec walkie-live): fuentes de una app, revisión de un análisis (por filtros) y evidencia de un hallazgo. */
+  discoverySources: (appId: string) => ['discovery', 'sources', appId] as const,
+  discoveryReviewAll: (snapshotId: string) => ['discovery', 'review', snapshotId] as const,
+  discoveryReview: (snapshotId: string, query: ReviewQuery) => ['discovery', 'review', snapshotId, query] as const,
+  discoveryEvidence: (snapshotId: string, entityKey: string) => ['discovery', 'evidence', snapshotId, entityKey] as const,
   apps: ['apps'] as const,
   app: (appId: string) => ['apps', appId] as const,
   features: (appId: string) => ['apps', appId, 'features'] as const,
@@ -454,6 +467,82 @@ export function useExtractModule(appId: string) {
     onSuccess: (result, extraction) => {
       queryClient.setQueryData(queryKeys.canvas(extraction.featureId), result.feature);
       invalidateModules(queryClient, appId);
+    },
+  });
+}
+
+// ---------- Walkie Live: Discovery (spec walkie-live, tarea 5) ----------
+
+/** 404 de Discovery = apagado en la API (o la app no existe): no se reintenta ni se muestra el flujo. */
+const notFoundIsFinal = (failures: number, error: Error) => !(error instanceof ApiError && error.status === 404) && failures < 2;
+
+/** Fuentes de la app. Si Discovery está apagado responde 404: `isError` con status 404 = la capacidad no está. */
+export function useDiscoverySources(appId: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.discoverySources(appId),
+    queryFn: ({ signal }) => listDiscoverySources(token, appId, signal),
+    retry: notFoundIsFinal,
+  });
+}
+
+/** Subir un .walkiepack: primero con `dryRun` (resumen), después de verdad (guarda el análisis, no cambia la app). */
+export function useUploadSnapshot(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, dryRun }: { file: Blob; dryRun: boolean }) => uploadSnapshot(token, appId, file, dryRun),
+    onSuccess: (result) => {
+      if (!result.dryRun) void queryClient.invalidateQueries({ queryKey: queryKeys.discoverySources(appId) });
+    },
+  });
+}
+
+/**
+ * Una página de la revisión. La página anterior se mantiene a la vista mientras llega la nueva (sin parpadeo), y como
+ * la clave incluye los filtros, una respuesta vieja nunca pisa a la de los filtros actuales.
+ */
+export function useDiscoveryReview(snapshotId: string, query: ReviewQuery) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.discoveryReview(snapshotId, query),
+    queryFn: ({ signal }) => getDiscoveryReview(token, snapshotId, query, signal),
+    placeholderData: keepPreviousData,
+    retry: notFoundIsFinal,
+  });
+}
+
+/** Evidencia del hallazgo elegido; solo se pide al elegirlo. Un análisis no cambia: no se vuelve a pedir. */
+export function useDiscoveryEvidence(snapshotId: string, entityKey: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.discoveryEvidence(snapshotId, entityKey ?? ''),
+    queryFn: ({ signal }) => getDiscoveryEvidence(token, snapshotId, entityKey!, signal),
+    enabled: entityKey !== null,
+    staleTime: Infinity,
+    retry: notFoundIsFinal,
+  });
+}
+
+/**
+ * Decidir sobre hallazgos. Al guardar (o ante un 409) la revisión de ese análisis queda vieja en todas sus páginas y
+ * filtros; las demás consultas no se tocan.
+ */
+export function useApplyDiscovery(snapshotId: string, appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.discoveryReviewAll(snapshotId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.discoverySources(appId) });
+  };
+  return useMutation({
+    mutationFn: ({ applyId, operations, dryRun }: { applyId: string; operations: DiscoveryOperation[]; dryRun: boolean }) =>
+      applyDiscovery(token, snapshotId, { applyId, operations }, dryRun),
+    onSuccess: (result) => {
+      if (!result.dryRun) refresh();
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) refresh();
     },
   });
 }

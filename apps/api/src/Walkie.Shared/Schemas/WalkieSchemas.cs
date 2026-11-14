@@ -91,6 +91,9 @@ public static class WalkieSchemas
     /// <summary><c>walkie-discovery-sources.schema.json</c>: fuentes de una app con su último análisis (usa el snapshot).</summary>
     public static JsonSchema DiscoverySources { get; } = LoadAfter(DiscoverySnapshot, "walkie-discovery-sources.schema.json");
 
+    /// <summary><c>walkie-discovery-evidence.schema.json</c>: evidencia y relaciones de un hallazgo (usa el discovery).</summary>
+    public static JsonSchema DiscoveryEvidence { get; } = LoadAfter(Discovery, "walkie-discovery-evidence.schema.json");
+
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
         $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",

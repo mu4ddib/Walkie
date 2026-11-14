@@ -40,6 +40,15 @@ internal static class ReviewEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        discovery.MapGet("/api/snapshots/{snapshotId:guid}/evidence", Evidence)
+            .WithName("GetDiscoveryEvidence")
+            .WithSummary(
+                "Evidencia y relaciones de un hallazgo (walkie-discovery-evidence), para el inspector de la revisión: entityKey en la "
+                + "query (las claves llevan / y espacios). Si ya no aparece en el análisis, la del anterior. 404 si no está en ninguno.")
+            .Produces<EntityEvidence>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         discovery.MapGet("/api/apps/{appId:guid}/sources", Sources)
             .WithName("ListDiscoverySources")
             .WithSummary("Fuentes locales de la app con su último análisis (walkie-discovery-sources). Solo las de esa app.")
@@ -72,6 +81,19 @@ internal static class ReviewEndpoints
                 extensions: new Dictionary<string, object?> { ["errors"] = conflict.Errors }),
             _ => TypedResults.NotFound(),
         };
+    }
+
+    private static async Task<Results<Ok<EntityEvidence>, NotFound, ValidationProblem>> Evidence(
+        Guid snapshotId, string? entityKey, EvidenceHandlers handlers, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(entityKey))
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["entityKey"] = ["Falta la clave del hallazgo."] });
+        }
+
+        return await handlers.EvidenceAsync(snapshotId, entityKey, ct).ConfigureAwait(false) is { } evidence
+            ? TypedResults.Ok(evidence)
+            : TypedResults.NotFound();
     }
 
     private static async Task<Results<Ok<DiscoverySourcesResponse>, NotFound>> Sources(Guid appId, SourceHandlers handlers, CancellationToken ct) =>

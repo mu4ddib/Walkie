@@ -47,6 +47,7 @@ const targets = [
   { schema: 'walkie-discovery-apply-result.schema.json', out: 'walkie-discovery-apply-result.ts', name: 'WalkieDiscoveryApplyResult' },
   { schema: 'walkie-discovery-upload.schema.json', out: 'walkie-discovery-upload.ts', name: 'WalkieDiscoveryUpload' },
   { schema: 'walkie-discovery-sources.schema.json', out: 'walkie-discovery-sources.ts', name: 'WalkieDiscoverySources' },
+  { schema: 'walkie-discovery-evidence.schema.json', out: 'walkie-discovery-evidence.ts', name: 'WalkieDiscoveryEvidence' },
   // Usa `$ref` a otros schemas: sus tipos se importan de su propio archivo en vez de repetirse.
   {
     schema: 'walkie-shared-feature.schema.json',

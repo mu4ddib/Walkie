@@ -5,6 +5,7 @@ import {
   useApp,
   useCanvasPreviews,
   useCreateFeature,
+  useDiscoverySources,
   useExportAppPackage,
   useFeatures,
   useUpdateFeature,
@@ -20,6 +21,8 @@ import { mapPath } from '../workspace/paths';
 import { QueryState } from '../ui/QueryState';
 import { AiContextDialog } from '../canvas/AiContextDialog';
 import { ImportDialog } from '../gallery/ImportDialog';
+import { LocalImportDialog } from '../discovery/LocalImportDialog';
+import { SourcesSection } from '../discovery/SourcesSection';
 
 /**
  * Galería de features de una app (spec espacio-de-trabajo, criterios 7 a 9): tarjetas con miniatura,
@@ -40,6 +43,10 @@ export function AppPage() {
   const [importing, setImporting] = useState(false);
   // «Exportar app (.walkie)»: la app completa para reconstruirla con «Importar app» (spec exportar-e-importar, tarea 7).
   const exportApp = useExportAppPackage(appId);
+  // Walkie Live (spec walkie-live, tarea 5): solo si la API responde las fuentes. Con Discovery apagado (404) no se
+  // muestra nada que parezca funcionar.
+  const sources = useDiscoverySources(appId);
+  const [importingLocal, setImportingLocal] = useState(false);
 
   const byFeature = useMemo(() => new Map((previews.data ?? []).map((p) => [p.featureId, p])), [previews.data]);
   const shown = useMemo(() => {
@@ -89,6 +96,16 @@ export function AppPage() {
           >
             Importar feature
           </button>
+          {sources.data && (
+            <button
+              type="button"
+              className="pixel-button is-ghost gallery-map-link"
+              title="Analizar el código de un proyecto con «walkie scan» y revisar lo descubierto"
+              onClick={() => setImportingLocal(true)}
+            >
+              Importar proyecto local
+            </button>
+          )}
           <button
             type="button"
             className="pixel-button is-ghost gallery-map-link"
@@ -107,6 +124,7 @@ export function AppPage() {
       </header>
       {aiContext && <AiContextDialog target={{ kind: 'app', id: appId }} onClose={() => setAiContext(false)} />}
       {importing && <ImportDialog appId={appId} onClose={() => setImporting(false)} />}
+      {importingLocal && <LocalImportDialog appId={appId} onClose={() => setImportingLocal(false)} />}
       <div className="gallery-create">
         <NameForm
           label="Nueva feature"
@@ -142,6 +160,7 @@ export function AppPage() {
           {shown.length === 0 && <p className="gallery-note">Ninguna feature coincide con “{query}”.</p>}
         </>
       )}
+      {sources.data && <SourcesSection sources={sources.data} onImport={() => setImportingLocal(true)} />}
     </section>
   );
 }

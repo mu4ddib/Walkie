@@ -125,6 +125,8 @@ Los errores llevan la ruta dentro del paquete (`discovery.json/entities/3/eviden
 - **Versión del vínculo:** restablecer conserva la fila sin decisión, así la versión del vínculo nunca vuelve atrás. `bindingVersion` 0 significa «sin decisión activa».
 - **Solo sobre el último análisis:** las decisiones se toman sobre el último análisis de la fuente. Decidir sobre uno anterior guardaría un fingerprint que ya no es el actual.
 
+**Evidencia de un hallazgo** (agregado en la tarea 5): `walkie-discovery-evidence.schema.json` es la respuesta de `GET /api/snapshots/{snapshotId}/evidence?entityKey=`: la evidencia (los `$defs` de `walkie-discovery`) y las relaciones (hasta 100) de un solo hallazgo, con `foundIn` (el análisis pedido o, para un `missing`, el anterior). Se agregó porque la revisión trae solo `evidenceCount` (sumar la evidencia a cada ítem multiplicaría el tamaño de cada página) y la web no debe pedir el análisis entero para mostrar un hallazgo.
+
 **Compatibilidad:**
 - `walkie-graph.schema.json` no cambia.
 - Las entidades usan sus `$defs` (`http`, `database`, `resource`, `runtime`) por `$ref`, sin copiarlos: lo aprobado se vuelve un elemento del catálogo válido sin traducir (`DiscoveryCompatibilityTests`).

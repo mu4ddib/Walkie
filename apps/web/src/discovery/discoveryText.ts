@@ -1,0 +1,90 @@
+import type { DiscoveryStatus } from '../api/client';
+
+/**
+ * Textos de Walkie Live (spec walkie-live, tarea 5). Cada estado tiene nombre, glifo y explicación: nunca se distingue
+ * solo por el color. Las explicaciones dicen lo que la revisión sabe, no lo que la persona tiene que hacer: un hallazgo
+ * que «ya no aparece» no es una orden de borrar nada.
+ */
+export const STATUS: Record<DiscoveryStatus, { label: string; glyph: string; help: string }> = {
+  new: {
+    label: 'Nuevo',
+    glyph: '+',
+    help: 'Walkie no tiene nada vinculado a este hallazgo y no encontró un elemento que coincida.',
+  },
+  matched: {
+    label: 'Coincide',
+    glyph: '≈',
+    help: 'Se parece a un elemento que ya existe en la app. Es una sugerencia: no se vincula hasta que lo confirmes.',
+  },
+  linked: {
+    label: 'Vinculado',
+    glyph: '↔',
+    help: 'Está vinculado a un elemento existente. El elemento no cambió: el vínculo solo dice de qué código viene.',
+  },
+  created: {
+    label: 'Creado',
+    glyph: '✓',
+    help: 'Walkie creó un elemento a partir de este hallazgo.',
+  },
+  rejected: {
+    label: 'Descartado',
+    glyph: '×',
+    help: 'Lo descartaste: sigue descartado en los análisis siguientes de esta fuente hasta que lo restablezcas.',
+  },
+  changed: {
+    label: 'Cambió',
+    glyph: 'Δ',
+    help: 'El descubrimiento cambió desde que se decidió sobre él (por ejemplo, su contrato). La decisión se conserva: revísala.',
+  },
+  missing: {
+    label: 'Ya no aparece',
+    glyph: '?',
+    help: 'Estaba vinculado y este análisis, que sí miró donde estaba, ya no lo encontró. No se borra nada: decide tú si sigue vigente.',
+  },
+};
+
+export const STATUS_ORDER: DiscoveryStatus[] = ['new', 'matched', 'changed', 'missing', 'linked', 'created', 'rejected'];
+
+export const KIND: Record<string, string> = {
+  api: 'API',
+  service: 'Servicio',
+  database: 'Base de datos',
+  resource: 'Recurso',
+  screen: 'Pantalla',
+  module: 'Módulo',
+  feature: 'Feature',
+};
+
+export const KIND_ORDER = ['api', 'service', 'database', 'resource', 'screen', 'module', 'feature'];
+
+export const BASIS: Record<string, string> = {
+  observed: 'Observado en el código',
+  inferred: 'Inferido',
+};
+
+export const CONFIDENCE: Record<string, string> = { high: 'alta', medium: 'media', low: 'baja' };
+
+export const REASON: Record<string, { label: string; help: string }> = {
+  signature: { label: 'Misma firma', help: 'El contrato coincide: mismo método y ruta, mismo motor y nombre o mismo subtipo y nombre.' },
+  title: { label: 'Mismo nombre', help: 'Solo coincide el nombre: puede ser otro componente con el mismo título.' },
+};
+
+export const TARGET_KIND: Record<string, string> = { catalogItem: 'Elemento del catálogo', module: 'Módulo', feature: 'Feature' };
+
+export const DETECTOR_STATUS: Record<string, string> = { ran: 'corrió', skipped: 'no corrió', failed: 'falló' };
+
+/** A qué tipo de elemento existente se puede vincular un hallazgo (como `MatchIndex.TargetKindFor` en la API). */
+export function targetKindFor(kind: string): 'catalogItem' | 'module' | 'feature' | null {
+  if (kind === 'api' || kind === 'service' || kind === 'database' || kind === 'resource') return 'catalogItem';
+  if (kind === 'module') return 'module';
+  if (kind === 'feature') return 'feature';
+  return null;
+}
+
+/** Ruta de la revisión de un análisis. */
+export const reviewPath = (appId: string, snapshotId: string) => `/apps/${appId}/sources/${snapshotId}`;
+
+/** Commit corto. */
+export const shortCommit = (commit: string) => commit.slice(0, 8);
+
+export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

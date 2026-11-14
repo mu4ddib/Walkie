@@ -457,6 +457,7 @@ public sealed class DiscoveryReviewTests(WalkieApiFactory factory)
             Assert.Equal(expected, (await http.GetAsync(new Uri($"/api/snapshots/{snapshotId}/review", UriKind.Relative))).StatusCode);
             Assert.Equal(expected, (await ApplyAsync(http, snapshotId, Op("reject", Get, 0))).StatusCode);
             Assert.Equal(expected, (await http.GetAsync(new Uri($"/api/apps/{appId}/sources", UriKind.Relative))).StatusCode);
+            Assert.Equal(expected, (await http.GetAsync(EvidenceUri(snapshotId, Get))).StatusCode);
         }
 
         await AssertBindingsAsync(appId, 0);
@@ -483,6 +484,62 @@ public sealed class DiscoveryReviewTests(WalkieApiFactory factory)
         Assert.True(JsonElement.DeepEquals(before, after), $"Antes: {before}\nDespués: {after}");
     }
 
+    // ---------- Evidencia de un hallazgo ----------
+
+    [Fact]
+    public async Task La_evidencia_de_un_hallazgo_es_la_que_cita_con_sus_relaciones_y_nada_mas()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client);
+        var pack = Pack();
+        var snapshotId = await UploadSnapshotAsync(client, appId, pack);
+        var (_, discovery) = Open(pack);
+        var entity = discovery["entities"]!.AsArray().Single(e => e!["key"]!.GetValue<string>() == Get)!;
+        var cited = entity["evidence"]!.AsArray().Select(e => e!.GetValue<string>()).ToHashSet();
+
+        var evidence = await JsonAsync(await client.GetAsync(EvidenceUri(snapshotId, Get)), HttpStatusCode.OK);
+
+        Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.DiscoveryEvidence, evidence));
+        Assert.Equal(snapshotId, evidence.GetProperty("foundIn").GetGuid());
+        Assert.Equal(cited, evidence.GetProperty("evidence").EnumerateArray().Select(e => e.GetProperty("id").GetString()!).ToHashSet());
+        Assert.All(evidence.GetProperty("evidence").EnumerateArray(), e => Assert.Equal("src/Tienda.Api/Program.cs", e.GetProperty("path").GetString()));
+        Assert.All(evidence.GetProperty("relations").EnumerateArray(), r =>
+            Assert.True(r.GetProperty("from").GetString() == Get || r.GetProperty("to").GetString() == Get));
+        Assert.NotEmpty(evidence.GetProperty("relations").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task La_evidencia_de_algo_que_ya_no_aparece_viene_del_analisis_anterior()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client);
+        var itemId = await CatalogAsync(client, appId, "database", "Base de la tienda");
+        var first = await UploadSnapshotAsync(client, appId, Pack(extra: ["--source-id", WalkieSource.ToString()]));
+        await JsonAsync(await ApplyAsync(client, first, Link(Db, "catalogItem", itemId, 0)), HttpStatusCode.OK);
+        var second = await UploadSnapshotAsync(client, appId, Pack(withDatabase: false, extra: ["--source-id", WalkieSource.ToString()]));
+
+        var evidence = await JsonAsync(await client.GetAsync(EvidenceUri(second, Db)), HttpStatusCode.OK);
+
+        Assert.Equal(second, evidence.GetProperty("snapshotId").GetGuid());
+        Assert.Equal(first, evidence.GetProperty("foundIn").GetGuid());
+        Assert.Equal("docker-compose.yml", evidence.GetProperty("evidence")[0].GetProperty("path").GetString());
+    }
+
+    [Fact]
+    public async Task Pedir_evidencia_sin_clave_400_y_de_algo_que_no_esta_404()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client);
+        var snapshotId = await UploadSnapshotAsync(client, appId, Pack());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/evidence", UriKind.Relative))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(EvidenceUri(snapshotId, "api:GET /no-existe"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(EvidenceUri(Guid.NewGuid(), Get))).StatusCode);
+    }
+
+    private static Uri EvidenceUri(Guid snapshotId, string key) =>
+        new($"/api/snapshots/{snapshotId}/evidence?entityKey={Uri.EscapeDataString(key)}", UriKind.Relative);
+
     [Fact]
     public async Task Los_endpoints_aparecen_en_OpenAPI()
     {
@@ -493,6 +550,7 @@ public sealed class DiscoveryReviewTests(WalkieApiFactory factory)
         Assert.Contains("/api/snapshots/{snapshotId}/review", document, StringComparison.Ordinal);
         Assert.Contains("/api/snapshots/{snapshotId}/apply", document, StringComparison.Ordinal);
         Assert.Contains("/api/apps/{appId}/sources", document, StringComparison.Ordinal);
+        Assert.Contains("/api/snapshots/{snapshotId}/evidence", document, StringComparison.Ordinal);
     }
 
     // ---------- Ayudas ----------

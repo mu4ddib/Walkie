@@ -28,6 +28,7 @@ public static partial class DiscoveryModule
         services.AddScoped<ReviewHandlers>();
         services.AddScoped<ApplyHandlers>();
         services.AddScoped<SourceHandlers>();
+        services.AddScoped<EvidenceHandlers>();
         services.AddScoped<IDiscoveryReader, DiscoveryReader>();
         services.TryAddSingleton(TimeProvider.System);
         return services;

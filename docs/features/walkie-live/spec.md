@@ -33,21 +33,21 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 
 ### Cargar el paquete
 
-- [ ] Dada la página de una app, cuando uso «Importar proyecto local» y elijo un `.walkiepack`, entonces Walkie lo valida sin guardar nada y me muestra las tecnologías, cuántos hallazgos hay por tipo, el alcance y las limitaciones antes de confirmar.
+- [x] Dada la página de una app, cuando uso «Importar proyecto local» y elijo un `.walkiepack`, entonces Walkie lo valida sin guardar nada y me muestra las tecnologías, cuántos hallazgos hay por tipo, el alcance y las limitaciones antes de confirmar.
 - [x] Un paquete inválido, de una versión no soportada o demasiado grande se rechaza con un mensaje que dice qué falla (ruta del error dentro del paquete); no se guarda nada.
 - [x] Cargar dos veces el mismo paquete no crea un segundo análisis: se abre el que ya existe.
 - [ ] Dada la galería de apps, cuando uso «Crear app desde proyecto local», entonces se crea una app nueva con el nombre de la fuente y se abre la revisión de su primer análisis.
-- [ ] Dada una app con una fuente, entonces la página de la app muestra la fuente (nombre, último análisis, commit) y permite abrir su revisión o cargar un análisis nuevo.
+- [x] Dada una app con una fuente, entonces la página de la app muestra la fuente (nombre, último análisis, commit) y permite abrir su revisión o cargar un análisis nuevo.
 
 ### Revisar (Discovery Review)
 
-- [ ] Dado un análisis, entonces veo sus hallazgos agrupados por tipo y por estado: **nuevo**, **coincide con** un elemento existente (con el motivo: vínculo previo, firma igual o título parecido), **vinculado**, **descartado** y, en un reanálisis, **cambiado** y **ya no aparece**.
-- [ ] Cada hallazgo muestra su evidencia (archivo, líneas, detector, confianza) y sus relaciones.
-- [ ] Puedo descartar un hallazgo; el descarte se recuerda en los análisis siguientes de la misma fuente.
-- [ ] Puedo vincular un hallazgo a un elemento existente del catálogo o a un módulo en vez de crear uno nuevo; una coincidencia por título nunca se vincula sola.
+- [x] Dado un análisis, entonces veo sus hallazgos agrupados por tipo y por estado: **nuevo**, **coincide con** un elemento existente (con el motivo: vínculo previo, firma igual o título parecido), **vinculado**, **descartado** y, en un reanálisis, **cambiado** y **ya no aparece**.
+- [x] Cada hallazgo muestra su evidencia (archivo, líneas, detector, confianza) y sus relaciones.
+- [x] Puedo descartar un hallazgo; el descarte se recuerda en los análisis siguientes de la misma fuente.
+- [x] Puedo vincular un hallazgo a un elemento existente del catálogo o a un módulo en vez de crear uno nuevo; una coincidencia por título nunca se vincula sola.
 - [ ] Puedo elegir qué nuevos elementos del catálogo, módulos (con sus interfaces) y features propuestas crear.
 - [ ] Antes de aplicar veo una vista previa calculada por la API con las mismas validaciones que aplicar (`dryRun`): qué se crea, qué se vincula, qué se descarta y qué no cambia; si algo no se puede aplicar, lo dice con su motivo antes de confirmar.
-- [ ] Con miles de hallazgos, la revisión pagina y filtra sin bloquear la interfaz.
+- [x] Con miles de hallazgos, la revisión pagina y filtra sin bloquear la interfaz.
 
 ### Aplicar
 
@@ -96,6 +96,7 @@ Módulo nuevo `Walkie.Modules.Discovery` (schema `discovery` de Postgres; ADR-00
 - `POST /api/sources/import` (multipart): crea una app nueva y carga el análisis («Crear app desde proyecto local»).
 - `GET /api/apps/{appId}/sources`: fuentes de la app con su último análisis (`walkie-discovery-sources`).
 - `GET /api/snapshots/{snapshotId}/review?kind=&status=&page=&pageSize=`: la revisión paginada (`walkie-discovery-review`; `page` desde 0, `pageSize` de 1 a 500, por defecto 50; los conteos son del análisis completo).
+- `GET /api/snapshots/{snapshotId}/evidence?entityKey=`: la evidencia y las relaciones (hasta 100) de un hallazgo (`walkie-discovery-evidence`). Si ya no está en ese análisis, la del anterior (`foundIn`). 400 sin `entityKey`; 404 si no está en ninguno de los dos o Discovery está apagado. Agregado en la tarea 5: la revisión solo trae `evidenceCount` y el inspector no debe cargar la evidencia de todo el análisis.
 - `POST /api/snapshots/{snapshotId}/apply` (`walkie-discovery-apply`, con `applyId` del cliente): 200 con `walkie-discovery-apply-result`; 400 con lo inválido; 409 si un vínculo cambió (`bindingVersion`). Descartar, vincular y restablecer también son operaciones de esta lista (ADR-0014): no hay un endpoint aparte para los vínculos.
 - `GET /api/apps/{appId}/bindings?target=`: de qué evidencia viene un componente.
 - `POST /api/snapshots/{snapshotId}/apply?dryRun=true`: la vista previa (lo que se crearía y vincularía, sin escribir).

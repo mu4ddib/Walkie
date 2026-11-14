@@ -173,14 +173,25 @@ function Summary({ summary }: { summary: ImportSummary }) {
   );
 }
 
-/** Los errores de validación con su ruta dentro del archivo; si no hay, el mensaje del problema. */
-function ImportErrors({ error }: { error: Error }) {
+/**
+ * Los errores de validación con su ruta dentro del archivo; si no hay, el mensaje del problema. La usan «Importar
+ * feature» (.walkie) y «Importar proyecto local» (.walkiepack); los textos por defecto son los del .walkie.
+ */
+export function ImportErrors({
+  error,
+  intro = 'No se puede importar este archivo:',
+  tooLarge = 'El archivo pasa de 50 MB.',
+}: {
+  error: Error;
+  intro?: string;
+  tooLarge?: string;
+}) {
   const problem = error instanceof ApiError ? error.problem : undefined;
   const entries = Object.entries(problem?.errors ?? {});
   if (entries.length === 0) {
     const message =
       error instanceof ApiError && error.status === 413
-        ? 'El archivo pasa de 50 MB.'
+        ? tooLarge
         : error instanceof ApiError
           ? (problem?.detail ?? error.userMessage)
           : 'No se pudo revisar el archivo. Revisa la conexión y vuelve a intentarlo.';
@@ -192,7 +203,7 @@ function ImportErrors({ error }: { error: Error }) {
   }
   return (
     <div role="alert" className="save-error import-errors">
-      <p>No se puede importar este archivo:</p>
+      <p>{intro}</p>
       <ul>
         {entries.map(([path, messages]) => (
           <li key={path}>
