@@ -2,20 +2,25 @@
 
 export type Entity = {
   key: EntityKey;
-  /**
-   * api, service, database y resource se proponen como elementos del catálogo; screen como pantalla de una feature; module como módulo compartido (ADR-0010) y feature como feature con su lienzo inicial
-   */
-  kind: 'api' | 'service' | 'database' | 'resource' | 'screen' | 'module' | 'feature';
+  kind: EntityKind;
   /**
    * Título propuesto (los mismos límites que el catálogo)
    */
   title: string;
   description?: string;
   /**
-   * Id de una tecnología del manifest (ej. aspnetcore)
+   * Id de una tecnología del manifest
    */
   technology?: string;
-  confidence?: Confidence;
+  basis: Basis;
+  confidence: Confidence;
+  fingerprint: Fingerprint;
+  /**
+   * Solo en lo inferido: claves de las entidades de las que se dedujo
+   *
+   * @minItems 1
+   */
+  derivedFrom?: [EntityKey, ...EntityKey[]];
   http?: Http;
   database?: Database;
   resource?: Resource;
@@ -45,17 +50,38 @@ export type Entity = {
   evidence: [EvidenceId, ...EvidenceId[]];
 };
 /**
- * Clave estable y determinista: el mismo componente da la misma clave en cada análisis de la fuente (ej. api:GET /api/apps/{appId}, service:Walkie.Api, database:postgres/walkie). Los vínculos de ADR-0012 la usan para reconocerlo entre análisis
+ * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ruta normalizada>, module:<nombre>, feature:<nombre>. DiscoveryKeys (Walkie.Shared) las arma
  */
 export type EntityKey = string;
 /**
- * high: declarado tal cual (un archivo OpenAPI, un MapGet con ruta literal); medium: deducido de una convención (un controller con [Route]); low: heurística (un nombre parecido). La revisión nunca aplica sola lo que no es high
+ * api, service, database y resource se proponen como elementos del catálogo; screen como pantalla de una feature; module como módulo compartido (ADR-0010) y feature como feature con su lienzo inicial
+ */
+export type EntityKind = 'api' | 'service' | 'database' | 'resource' | 'screen' | 'module' | 'feature';
+/**
+ * observed: declarado tal cual en el código o la configuración (un archivo OpenAPI, un MapGet con ruta literal, un servicio de compose); inferred: deducido por convención o heurística (un módulo por proyecto, una feature por pantalla). Ninguno es una confirmación
+ */
+export type Basis = 'observed' | 'inferred';
+/**
+ * high: sin ambigüedad (solo en lo observado); medium: convención clara; low: heurística. La revisión nunca aplica sola lo que no es high
  */
 export type Confidence = 'high' | 'medium' | 'low';
 /**
- * Id de una evidencia en este archivo (el CLI lo deriva del contenido, ej. un hash corto)
+ * SHA-256 del contenido de la entidad en JSON canónico (claves ordenadas, sin espacios), sin key, fingerprint, basis, confidence, derivedFrom ni evidence: cambia si cambia lo que describe, no si se mueve de línea (ADR-0014, DiscoveryFingerprint)
+ */
+export type Fingerprint = string;
+/**
+ * Id de una evidencia en este archivo (el analizador lo deriva de detector, ruta y ancla)
  */
 export type EvidenceId = string;
+/**
+ * <kind>:<from>-><to>
+ */
+export type RelationKey = string;
+/**
+ * calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base; publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra; contains: un servicio contiene un módulo
+ */
+export type RelationKind =
+  'calls' | 'reads' | 'writes' | 'publishes' | 'consumes' | 'exposes' | 'depends-on' | 'navigates' | 'contains';
 /**
  * Detector que produjo el hallazgo (ej. openapi, compose, csproj, package-json, aspnetcore-endpoints, efcore, react-router, angular-router)
  */
@@ -66,7 +92,7 @@ export type DetectorId = string;
 export type RelativePath = string;
 
 /**
- * discovery.json de un .walkiepack (spec walkie-live, ADR-0013): lo que el análisis estático descubrió (entidades y relaciones) y la evidencia que lo respalda. Toda entidad y relación cita al menos una evidencia; ninguna se inventa. Orden estable (por clave o id) y sin fechas: el mismo árbol da el mismo archivo. Lo que el schema no expresa lo valida la API: claves e ids únicos, evidence/from/to/members/interfaces que existen, snippet solo con includeSnippets del manifest y stats que coinciden.
+ * discovery.json de un .walkiepack (spec walkie-live, ADR-0013 y ADR-0014): lo que el análisis estático observó o infirió (entidades y relaciones) y la evidencia que lo respalda. Toda entidad y relación cita al menos una evidencia. No hay confirmaciones: las decide una persona en Walkie (walkie-discovery-binding). Orden estable por clave (entidades, relaciones) e id (evidencia) y sin fechas: el mismo árbol da el mismo archivo. Lo que el schema no expresa (claves e ids únicos, referencias que existen, fingerprints, orden, claves normalizadas) lo valida DiscoveryPackValidator (Walkie.Shared).
  */
 export interface WalkieDiscoveryV0 {
   entities: Entity[];
@@ -74,7 +100,7 @@ export interface WalkieDiscoveryV0 {
   evidence: Evidence[];
 }
 /**
- * Contrato descubierto (solo api)
+ * Contrato descubierto (solo api; el mismo $defs que el catálogo y el lienzo)
  */
 export interface Http {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -220,17 +246,12 @@ export interface Resource {
   }[];
 }
 export interface Relation {
-  /**
-   * Clave estable: <kind>:<from>-><to>
-   */
-  key: string;
-  /**
-   * calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base; publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra
-   */
-  kind: 'calls' | 'reads' | 'writes' | 'publishes' | 'consumes' | 'exposes' | 'depends-on' | 'navigates';
+  key: RelationKey;
+  kind: RelationKind;
   from: EntityKey;
   to: EntityKey;
-  confidence?: Confidence;
+  basis: Basis;
+  confidence: Confidence;
   /**
    * @minItems 1
    */
@@ -240,6 +261,13 @@ export interface Evidence {
   id: EvidenceId;
   detector: DetectorId;
   path: RelativePath;
+  /**
+   * Ancla estable dentro del archivo (ej. PedidosEndpoints.MapPedidos, services.db, paths./api/pedidos/{pedidoId}.get): sobrevive a que cambien las líneas
+   */
+  symbol?: string;
+  /**
+   * Informativas: cambian con cualquier edición y no forman parte de ninguna identidad
+   */
   lines?: {
     start: number;
     end: number;
@@ -250,7 +278,7 @@ export interface Evidence {
    */
   note?: string;
   /**
-   * Fragmento del código, solo si el manifest dice includeSnippets
+   * Fragmento del código, solo si el manifest dice includeSnippets; nunca un archivo completo
    */
   snippet?: string;
 }

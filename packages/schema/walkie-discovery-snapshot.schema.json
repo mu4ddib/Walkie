@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-snapshot.schema.json",
+  "title": "Walkie discovery snapshot v0",
+  "description": "Un análisis cargado en Walkie (spec walkie-live, ADR-0014): la procedencia de un .walkiepack de una fuente, inmutable una vez creado. Cargar el mismo paquete (packSha256) o uno con el mismo contenido que el último análisis de la fuente (contentFingerprint) devuelve el que ya existe.",
+  "type": "object",
+  "required": ["id", "appId", "source", "formatVersion", "analyzer", "generatedAt", "importedAt", "importedBy", "completeness", "detectors", "technologies", "limitations", "stats", "packSha256", "contentFingerprint"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid", "description": "Generado por la API" },
+    "appId": { "type": "string", "format": "uuid" },
+    "source": { "$ref": "#/$defs/source" },
+    "previousSnapshotId": { "type": "string", "format": "uuid", "description": "Análisis anterior de la misma fuente, contra el que se calculan changed y missing" },
+    "formatVersion": { "type": "integer", "minimum": 0, "description": "formatVersion del paquete tal como llegó (antes de migrarlo)" },
+    "analyzer": { "$ref": "walkie-discovery-pack.schema.json#/properties/analyzer" },
+    "vcs": { "$ref": "walkie-discovery-pack.schema.json#/properties/vcs" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "importedAt": { "type": "string", "format": "date-time" },
+    "importedBy": { "type": "string", "minLength": 1, "description": "Claim sub de quien lo cargó" },
+    "completeness": { "$ref": "walkie-discovery-pack.schema.json#/properties/completeness" },
+    "detectors": { "$ref": "walkie-discovery-pack.schema.json#/properties/detectors" },
+    "technologies": { "$ref": "walkie-discovery-pack.schema.json#/properties/technologies" },
+    "limitations": { "$ref": "walkie-discovery-pack.schema.json#/properties/limitations" },
+    "stats": { "$ref": "walkie-discovery-pack.schema.json#/properties/stats" },
+    "packSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 del archivo tal como se subió" },
+    "contentFingerprint": { "$ref": "walkie-discovery.schema.json#/$defs/fingerprint", "description": "Fingerprint del discovery.json en JSON canónico: dos análisis del mismo árbol dan el mismo, aunque cambie generatedAt" }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "description": "Fuente local de una app: el id viene del .walkiepack (.walkie/source.json del proyecto)",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 }
+      }
+    }
+  }
+}

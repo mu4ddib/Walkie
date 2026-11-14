@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-apply-result.schema.json",
+  "title": "Walkie discovery apply result v0",
+  "description": "Resultado de walkie-discovery-apply (spec walkie-live, ADR-0012): con dryRun, la vista previa (status planned, nada escrito); sin él, lo que quedó escrito. unchanged lista lo que las operaciones no tocan a propósito, para que la vista previa diga también qué no cambia.",
+  "type": "object",
+  "required": ["applyId", "dryRun", "status", "created", "linked", "rejected", "reset", "unchanged", "warnings"],
+  "additionalProperties": false,
+  "properties": {
+    "applyId": { "type": "string", "format": "uuid" },
+    "dryRun": { "type": "boolean" },
+    "status": {
+      "enum": ["planned", "completed", "compensated"],
+      "description": "planned: vista previa; completed: todo escrito; compensated: falló y se deshizo lo creado (bitácora, ADR-0012)"
+    },
+    "created": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entityKey", "target"],
+        "additionalProperties": false,
+        "properties": {
+          "entityKey": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" },
+          "target": { "$ref": "walkie-discovery-binding.schema.json#/$defs/target" },
+          "includes": { "type": "array", "description": "En una feature: las pantallas y referencias que entran en su lienzo inicial", "items": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" } }
+        }
+      }
+    },
+    "linked": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entityKey", "target"],
+        "additionalProperties": false,
+        "properties": {
+          "entityKey": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" },
+          "target": { "$ref": "walkie-discovery-binding.schema.json#/$defs/target" }
+        }
+      }
+    },
+    "rejected": { "type": "array", "items": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" } },
+    "reset": { "type": "array", "items": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" } },
+    "unchanged": {
+      "type": "array",
+      "description": "Elementos de Walkie que las operaciones no modifican (lienzos existentes que usan lo vinculado, elementos vinculados)",
+      "items": { "$ref": "walkie-discovery-binding.schema.json#/$defs/target" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "maxLength": 60 },
+          "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "entityKey": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" }
+        }
+      }
+    }
+  }
+}

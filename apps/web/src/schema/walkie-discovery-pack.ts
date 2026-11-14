@@ -6,22 +6,25 @@
 export type Glob = string;
 
 /**
- * manifest.json de un .walkiepack (spec walkie-live, ADR-0013): un .zip que genera el CLI de Walkie al analizar un proyecto local de forma estática. Junto al manifest va discovery.json (walkie-discovery.schema.json: entidades, relaciones y evidencia). Nunca lleva rutas absolutas ni contenido de archivos de secretos; los fragmentos de código solo con includeSnippets. La integridad que el schema no expresa (claves únicas, evidencia y extremos que existen, stats coherentes) la valida la API al recibirlo.
+ * manifest.json de un .walkiepack (spec walkie-live, ADR-0013 y ADR-0014): un .zip que genera un analizador local de forma estática. Junto al manifest va discovery.json (walkie-discovery.schema.json: entidades, relaciones y evidencia). Un .walkiepack no es un lienzo: no trae posiciones, ni código fuente completo, ni secretos, ni confirmaciones (las decide una persona en Walkie). Se lee primero: format y formatVersion se revisan antes que el resto (mensaje propio para una versión desconocida). La integridad que el schema no expresa la valida DiscoveryPackValidator (Walkie.Shared).
  */
 export interface WalkieDiscoveryPackManifestV0 {
   format: 'walkiepack';
   /**
-   * Versión de este formato; un paquete de una versión que la API no conoce se rechaza con un mensaje propio
+   * Versión de este formato (ADR-0014). Un lector rechaza una versión mayor que la suya con un mensaje propio; las anteriores las sube con migraciones puras
    */
   formatVersion: 0;
   /**
-   * schemaVersion de walkie-graph del que salen los $defs que usan las entidades (http, database, resource, runtime)
+   * schemaVersion de walkie-graph de los $defs que usan las entidades (http, database, resource, runtime); no puede ser mayor que el del lector
    */
   schemaVersion: number;
   /**
-   * Única fecha del paquete: las entidades no llevan fechas, así el mismo árbol da el mismo contenido
+   * Cuándo se generó. Única fecha del paquete: discovery.json no lleva fechas
    */
-  createdAt: string;
+  generatedAt: string;
+  /**
+   * Qué programa lo generó
+   */
   analyzer: {
     /**
      * Ej. walkie-cli
@@ -33,7 +36,7 @@ export interface WalkieDiscoveryPackManifestV0 {
     version: string;
   };
   /**
-   * El proyecto analizado. El id lo crea el CLI una vez y lo guarda en .walkie/source.json del proyecto: reanalizar apunta a la misma fuente
+   * El proyecto analizado. El id lo crea el analizador una vez y lo guarda en .walkie/source.json del proyecto: reanalizar apunta a la misma fuente
    */
   source: {
     id: string;
@@ -55,19 +58,80 @@ export interface WalkieDiscoveryPackManifestV0 {
     dirty?: boolean;
   };
   /**
-   * Qué se miró: rutas relativas (globs) incluidas y excluidas y los detectores que corrieron
+   * Capacidades del analizador: cada detector, qué puede producir y si corrió. Un hallazgo solo puede venir de un detector que corrió; en un reanálisis, algo «ya no aparece» solo si un detector que lo puede producir corrió sobre su ruta (ADR-0014)
+   *
+   * @minItems 1
    */
-  scope: {
-    include: Glob[];
-    exclude: Glob[];
-    detectors: {
+  detectors: [
+    {
       /**
        * Detector que produjo el hallazgo (ej. openapi, compose, csproj, package-json, aspnetcore-endpoints, efcore, react-router, angular-router)
        */
       id: string;
       version: string;
-    }[];
+      /**
+       * ran: corrió sobre todo su alcance; skipped: no corrió (no aplica o se excluyó); failed: empezó y no terminó
+       */
+      status: 'ran' | 'skipped' | 'failed';
+      /**
+       * Por qué no corrió o falló (obligatorio salvo en ran)
+       */
+      reason?: string;
+      produces: {
+        /**
+         * Items: api, service, database y resource se proponen como elementos del catálogo; screen como pantalla de una feature; module como módulo compartido (ADR-0010) y feature como feature con su lienzo inicial
+         */
+        entities: ('api' | 'service' | 'database' | 'resource' | 'screen' | 'module' | 'feature')[];
+        /**
+         * Items: calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base; publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra; contains: un servicio contiene un módulo
+         */
+        relations: (
+          'calls' | 'reads' | 'writes' | 'publishes' | 'consumes' | 'exposes' | 'depends-on' | 'navigates' | 'contains'
+        )[];
+      };
+    },
+    ...{
+      /**
+       * Detector que produjo el hallazgo (ej. openapi, compose, csproj, package-json, aspnetcore-endpoints, efcore, react-router, angular-router)
+       */
+      id: string;
+      version: string;
+      /**
+       * ran: corrió sobre todo su alcance; skipped: no corrió (no aplica o se excluyó); failed: empezó y no terminó
+       */
+      status: 'ran' | 'skipped' | 'failed';
+      /**
+       * Por qué no corrió o falló (obligatorio salvo en ran)
+       */
+      reason?: string;
+      produces: {
+        /**
+         * Items: api, service, database y resource se proponen como elementos del catálogo; screen como pantalla de una feature; module como módulo compartido (ADR-0010) y feature como feature con su lienzo inicial
+         */
+        entities: ('api' | 'service' | 'database' | 'resource' | 'screen' | 'module' | 'feature')[];
+        /**
+         * Items: calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base; publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra; contains: un servicio contiene un módulo
+         */
+        relations: (
+          'calls' | 'reads' | 'writes' | 'publishes' | 'consumes' | 'exposes' | 'depends-on' | 'navigates' | 'contains'
+        )[];
+      };
+    }[]
+  ];
+  /**
+   * Qué se miró: rutas relativas (globs) incluidas y excluidas. Los secretos se excluyen siempre, estén o no aquí
+   */
+  scope: {
+    /**
+     * @minItems 1
+     */
+    include: [Glob, ...Glob[]];
+    exclude: Glob[];
   };
+  /**
+   * complete: todos los detectores corrieron sobre todo el proyecto (include = ** /*); partial: no. Un análisis parcial es válido: la revisión no marca como «ya no aparece» lo que quedó fuera
+   */
+  completeness: 'complete' | 'partial';
   /**
    * Tecnologías detectadas (lenguajes, frameworks, motores), para mostrarlas antes de confirmar
    */
@@ -81,7 +145,7 @@ export interface WalkieDiscoveryPackManifestV0 {
     /**
      * @minItems 1
      *
-     * Items: Id de una evidencia en este archivo (el CLI lo deriva del contenido, ej. un hash corto)
+     * Items: Id de una evidencia en este archivo (el analizador lo deriva de detector, ruta y ancla)
      */
     evidence: [string, ...string[]];
   }[];
@@ -90,7 +154,7 @@ export interface WalkieDiscoveryPackManifestV0 {
    */
   limitations: {
     /**
-     * Ej. dynamic-route, unparsed-file, unsupported-technology, file-too-large
+     * Ej. dynamic-route, unparsed-file, unsupported-technology, file-too-large, secret-excluded
      */
     code: string;
     message: string;
@@ -103,6 +167,9 @@ export interface WalkieDiscoveryPackManifestV0 {
      */
     path?: string;
   }[];
+  /**
+   * Conteos; entities, relations y evidence coinciden con discovery.json
+   */
   stats: {
     /**
      * Archivos leídos

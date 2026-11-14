@@ -1,0 +1,31 @@
+{
+  "applyId": "0198f0c0-4444-7000-8000-000000000402",
+  "operations": [
+    {
+      "op": "link",
+      "entityKey": "api:POST /api/pedidos",
+      "target": {
+        "kind": "catalogItem",
+        "id": "0198f0c0-3333-7000-8000-000000000302"
+      },
+      "bindingVersion": 0
+    },
+    {
+      "op": "create",
+      "entityKey": "database:postgresql/tienda",
+      "id": "0198f0c0-5555-7000-8000-000000000501",
+      "bindingVersion": 0
+    },
+    {
+      "op": "create",
+      "entityKey": "module:Tienda.Pedidos",
+      "id": "0198f0c0-5555-7000-8000-000000000502",
+      "bindingVersion": 0
+    },
+    {
+      "op": "reset",
+      "entityKey": "feature:Ver pedido",
+      "bindingVersion": 1
+    }
+  ]
+}

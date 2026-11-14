@@ -40,6 +40,11 @@ const targets = [
   // .walkiepack (spec walkie-live, ADR-0013). Sin `imports`: declaran los `$defs` del grafo y del discovery que usan.
   { schema: 'walkie-discovery.schema.json', out: 'walkie-discovery.ts', name: 'WalkieDiscovery' },
   { schema: 'walkie-discovery-pack.schema.json', out: 'walkie-discovery-pack.ts', name: 'WalkieDiscoveryPack' },
+  { schema: 'walkie-discovery-binding.schema.json', out: 'walkie-discovery-binding.ts', name: 'WalkieDiscoveryBinding' },
+  { schema: 'walkie-discovery-snapshot.schema.json', out: 'walkie-discovery-snapshot.ts', name: 'WalkieDiscoverySnapshot' },
+  { schema: 'walkie-discovery-review.schema.json', out: 'walkie-discovery-review.ts', name: 'WalkieDiscoveryReview' },
+  { schema: 'walkie-discovery-apply.schema.json', out: 'walkie-discovery-apply.ts', name: 'WalkieDiscoveryApply' },
+  { schema: 'walkie-discovery-apply-result.schema.json', out: 'walkie-discovery-apply-result.ts', name: 'WalkieDiscoveryApplyResult' },
   // Usa `$ref` a otros schemas: sus tipos se importan de su propio archivo en vez de repetirse.
   {
     schema: 'walkie-shared-feature.schema.json',

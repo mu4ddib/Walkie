@@ -68,10 +68,11 @@ Cualquier otra dependencia necesita justificación en el PR.
 
 **Formato:** `.walkiepack` es un zip que contiene:
 
-- `manifest.json` (`walkie-discovery-pack.schema.json`): `format: "walkiepack"`, `formatVersion`, `schemaVersion`, analizador (nombre y versión), fuente (id estable de `.walkie/source.json` y nombre), VCS (commit, rama y si hay cambios sin confirmar), alcance (rutas incluidas y excluidas, detectores), tecnologías, `limitations[]`, estadísticas e `includeSnippets`;
+- `manifest.json` (`walkie-discovery-pack.schema.json`): formato y versiones, fecha de generación, analizador, fuente (id estable de `.walkie/source.json` y nombre), VCS, detectores con sus capacidades y si corrieron, alcance, completitud, tecnologías, `limitations[]`, estadísticas e `includeSnippets`;
 - `discovery.json` (`walkie-discovery.schema.json`): entidades, relaciones y evidencia en un solo archivo, así la integridad entre ellas se valida en una pasada.
   - Las entidades reutilizan los `$defs` del grafo (`http`, `database`, `resource`, `runtime`): lo aprobado pasa al catálogo sin traducir.
   - La primera versión de este ADR hablaba de tres archivos; se cambió en la tarea 1.
+- El detalle del contrato (identidad, fingerprints, observado/inferido/confirmado, snapshots, vínculos, revisión, operaciones y versiones) está en ADR-0014.
 
 **Privacidad y determinismo:**
 

@@ -70,6 +70,21 @@ public static class WalkieSchemas
     /// <summary><c>walkie-discovery-pack.schema.json</c>: <c>manifest.json</c> de un <c>.walkiepack</c> (usa <c>$defs</c> de <see cref="Discovery"/>).</summary>
     public static JsonSchema DiscoveryPack { get; } = LoadAfter(Discovery, "walkie-discovery-pack.schema.json");
 
+    /// <summary><c>walkie-discovery-binding.schema.json</c>: vínculo de un hallazgo (la confirmación, ADR-0014).</summary>
+    public static JsonSchema DiscoveryBinding { get; } = LoadAfter(Discovery, "walkie-discovery-binding.schema.json");
+
+    /// <summary><c>walkie-discovery-snapshot.schema.json</c>: un análisis cargado (usa el manifest y el discovery).</summary>
+    public static JsonSchema DiscoverySnapshot { get; } = LoadAfter(DiscoveryPack, "walkie-discovery-snapshot.schema.json");
+
+    /// <summary><c>walkie-discovery-review.schema.json</c>: una página de la revisión calculada (usa el vínculo).</summary>
+    public static JsonSchema DiscoveryReview { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-review.schema.json");
+
+    /// <summary><c>walkie-discovery-apply.schema.json</c>: operaciones de revisión sobre un análisis.</summary>
+    public static JsonSchema DiscoveryApply { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-apply.schema.json");
+
+    /// <summary><c>walkie-discovery-apply-result.schema.json</c>: resultado (o vista previa) de aplicar.</summary>
+    public static JsonSchema DiscoveryApplyResult { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-apply-result.schema.json");
+
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
         $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",

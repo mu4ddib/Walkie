@@ -22,6 +22,11 @@
 | **Mapa de la app** | Vista de una app entera: cada feature es una caja, los portales son flechas entre ellas y, si se elige, se ven los componentes del catálogo que comparten. Se suma a la galería de features. |
 | **Recorrido** | Tour cuyos pasos recorren conexiones (origen → destino, en su sentido real): ej. Pantalla → API → Servicio → BD → Servicio → API → Pantalla. Cada escenario de una decisión es un recorrido distinto. Un paso `parallel` ocurre a la vez que el anterior (fan-out). |
 | **Grupo anidado** | Grupo dentro de otro (`parentId`). Plegar un grupo oculta todo lo de dentro; sus conexiones llegan al grupo plegado visible más externo. |
+| **Fuente (Walkie Live)** | Proyecto local analizado, con un id estable que el analizador guarda en `.walkie/source.json`. Una app puede tener sus fuentes (ADR-0012). |
+| **`.walkiepack`** | Paquete que genera el analizador local: `manifest.json` y `discovery.json` con lo que encontró en el código y su evidencia. No es un lienzo (ADR-0013 y ADR-0014). |
+| **Hallazgo** | Entidad o relación de un `.walkiepack`, **observada** (declarada tal cual en el código) o **inferida** (deducida), con clave estable, fingerprint de contenido y evidencia (archivo relativo, ancla, detector, confianza). |
+| **Análisis (snapshot)** | Un `.walkiepack` cargado en Walkie: inmutable, con su procedencia. |
+| **Vínculo** | Decisión de una persona sobre un hallazgo: vinculado a un elemento existente, creado al aplicar o descartado. Es la única confirmación; persiste entre análisis y no cambia el elemento. |
 | **Layout** | Posición `x, y` de cada nodo, guardada aparte del contenido. |
 
 ## Regla de corte

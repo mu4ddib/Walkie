@@ -82,8 +82,11 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 - Nuevos schemas en `packages/schema` (ADR-0013):
   - `walkie-discovery-pack.schema.json`: `manifest.json` del `.walkiepack` (formato, versiones, analizador, fuente, VCS, alcance, limitaciones, estadísticas).
   - `walkie-discovery.schema.json`: el `discovery.json` del paquete, con entidades, relaciones y evidencia.
+  - `walkie-discovery-snapshot.schema.json`: un análisis cargado (procedencia, `packSha256`, `contentFingerprint`).
+  - `walkie-discovery-binding.schema.json`: el vínculo de un hallazgo con un elemento de Walkie; es la única confirmación.
   - `walkie-discovery-review.schema.json`: la revisión calculada de un análisis.
-  - `walkie-discovery-apply.schema.json`: decisiones a aplicar y resultado.
+  - `walkie-discovery-apply.schema.json` y `walkie-discovery-apply-result.schema.json`: operaciones de revisión (`create`, `link`, `reject`, `reset`) y su resultado o vista previa.
+  - Contrato completo e identidad estable en ADR-0014; integridad en `DiscoveryPackValidator` (`Walkie.Shared`).
 
 ## Impacto en la API
 
@@ -93,8 +96,7 @@ Módulo nuevo `Walkie.Modules.Discovery` (schema `discovery` de Postgres; ADR-00
 - `POST /api/sources/import` (multipart): crea una app nueva y carga el análisis («Crear app desde proyecto local»).
 - `GET /api/apps/{appId}/sources`: fuentes de la app con su último análisis.
 - `GET /api/snapshots/{snapshotId}/review?kind=&status=&page=`: la revisión paginada (`walkie-discovery-review`).
-- `PUT /api/sources/{sourceId}/bindings/{entityKey}`: descartar, vincular o deshacer (con versión: 409).
-- `POST /api/snapshots/{snapshotId}/apply` (`walkie-discovery-apply`, con `applyId` del cliente): 200 con lo creado y vinculado; 400 con lo inválido; 409 si un vínculo cambió.
+- `POST /api/snapshots/{snapshotId}/apply` (`walkie-discovery-apply`, con `applyId` del cliente): 200 con `walkie-discovery-apply-result`; 400 con lo inválido; 409 si un vínculo cambió (`bindingVersion`). Descartar, vincular y restablecer también son operaciones de esta lista (ADR-0014): no hay un endpoint aparte para los vínculos.
 - `GET /api/apps/{appId}/bindings?target=`: de qué evidencia viene un componente.
 - `POST /api/snapshots/{snapshotId}/apply?dryRun=true`: la vista previa (lo que se crearía y vincularía, sin escribir).
 - Contratos internos que se extienden (sin romper): `IAppWriter.CreateCatalogItemAsync` acepta un id dado (borrar ya existe: `DeleteCatalogItemsAsync`); la lectura segura del zip pasa de `ImportHandlers` a `Walkie.Shared`. Ningún endpoint existente cambia.

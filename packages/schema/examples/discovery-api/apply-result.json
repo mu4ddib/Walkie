@@ -1,0 +1,60 @@
+{
+  "applyId": "0198f0c0-4444-7000-8000-000000000402",
+  "dryRun": true,
+  "status": "planned",
+  "created": [
+    {
+      "entityKey": "database:postgresql/tienda",
+      "target": {
+        "kind": "catalogItem",
+        "id": "0198f0c0-5555-7000-8000-000000000501",
+        "title": "tienda"
+      }
+    },
+    {
+      "entityKey": "module:Tienda.Pedidos",
+      "target": {
+        "kind": "module",
+        "id": "0198f0c0-5555-7000-8000-000000000502",
+        "title": "Pedidos"
+      },
+      "includes": [
+        "api:GET /api/pedidos/{}",
+        "api:POST /api/pedidos"
+      ]
+    }
+  ],
+  "linked": [
+    {
+      "entityKey": "api:POST /api/pedidos",
+      "target": {
+        "kind": "catalogItem",
+        "id": "0198f0c0-3333-7000-8000-000000000302",
+        "title": "POST /api/pedidos"
+      }
+    }
+  ],
+  "rejected": [],
+  "reset": [
+    "feature:Ver pedido"
+  ],
+  "unchanged": [
+    {
+      "kind": "catalogItem",
+      "id": "0198f0c0-3333-7000-8000-000000000302",
+      "title": "POST /api/pedidos"
+    },
+    {
+      "kind": "feature",
+      "id": "0198f0c0-6666-7000-8000-000000000601",
+      "title": "Seguimiento de pedidos"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "interface-pending",
+      "message": "El módulo expone «Crear pedido», que se vincula a un elemento existente: la interfaz apuntará a su caja dentro del módulo.",
+      "entityKey": "module:Tienda.Pedidos"
+    }
+  ]
+}

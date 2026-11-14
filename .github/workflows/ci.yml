@@ -27,12 +27,27 @@ jobs:
       - name: Validar el catálogo de operaciones
         # Datos compartidos por la web y la API (spec interacciones, ADR-0011).
         run: npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s packages/schema/walkie-operations.schema.json -d packages/schema/walkie-operations.json
-      - name: Validar los ejemplos del .walkiepack
-        # Spec walkie-live (ADR-0013): el manifest y el discovery.json de ejemplo cumplen su schema.
+      - name: Validar los ejemplos de Walkie Live
+        # Spec walkie-live (ADR-0013 y ADR-0014): cada ejemplo cumple su schema; la integridad la prueban las pruebas de la API.
         run: |
-          ajv="npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats"
-          $ajv -s packages/schema/walkie-discovery-pack.schema.json -r packages/schema/walkie-discovery.schema.json -r packages/schema/walkie-graph.schema.json -d packages/schema/examples/walkiepack/manifest.json
-          $ajv -s packages/schema/walkie-discovery.schema.json -r packages/schema/walkie-graph.schema.json -d packages/schema/examples/walkiepack/discovery.json
+          check() {
+            local schema="packages/schema/$1" data="$2" refs=()
+            for other in packages/schema/*.schema.json; do
+              if [ "$other" != "$schema" ]; then refs+=(-r "$other"); fi
+            done
+            npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s "$schema" "${refs[@]}" -d "$data"
+          }
+          for pack in packages/schema/examples/walkiepack/*/; do
+            check walkie-discovery-pack.schema.json "${pack}manifest.json"
+            check walkie-discovery.schema.json "${pack}discovery.json"
+          done
+          api=packages/schema/examples/discovery-api
+          check walkie-discovery-snapshot.schema.json "$api/snapshot.json"
+          check walkie-discovery-binding.schema.json "$api/binding-linked.json"
+          check walkie-discovery-binding.schema.json "$api/binding-rejected.json"
+          check walkie-discovery-review.schema.json "$api/review.json"
+          check walkie-discovery-apply.schema.json "$api/apply.json"
+          check walkie-discovery-apply-result.schema.json "$api/apply-result.json"
 
   api:
     runs-on: ubuntu-latest

@@ -1,0 +1,69 @@
+{
+  "entities": [
+    {
+      "key": "api:GET /api/clientes/{}",
+      "kind": "api",
+      "title": "Consultar cliente",
+      "basis": "observed",
+      "confidence": "high",
+      "http": {
+        "method": "GET",
+        "path": "/api/clientes/{clienteId}",
+        "responses": [
+          {
+            "status": 200,
+            "description": "El cliente"
+          },
+          {
+            "status": 404,
+            "description": "No existe"
+          }
+        ]
+      },
+      "evidence": [
+        "ev-openapi-cliente"
+      ],
+      "fingerprint": "sha256:a4285c7287cbfde3254ec899e1380ca67e2a0e624326fa41da2d9f22c2ac04ad"
+    },
+    {
+      "key": "api:GET /api/clientes/{}/cuentas",
+      "kind": "api",
+      "title": "Cuentas del cliente",
+      "basis": "observed",
+      "confidence": "high",
+      "http": {
+        "method": "GET",
+        "path": "/api/clientes/{clienteId}/cuentas"
+      },
+      "evidence": [
+        "ev-openapi-cuentas"
+      ],
+      "fingerprint": "sha256:3f5c5aff1c904274478b768c74089ede772c90bf8c1a1c39a3071552a27366e2"
+    }
+  ],
+  "relations": [],
+  "evidence": [
+    {
+      "id": "ev-openapi-cliente",
+      "detector": "openapi",
+      "path": "docs/api/openapi.yaml",
+      "symbol": "paths./api/clientes/{clienteId}.get",
+      "lines": {
+        "start": 10,
+        "end": 30
+      },
+      "confidence": "high"
+    },
+    {
+      "id": "ev-openapi-cuentas",
+      "detector": "openapi",
+      "path": "docs/api/openapi.yaml",
+      "symbol": "paths./api/clientes/{clienteId}/cuentas.get",
+      "lines": {
+        "start": 31,
+        "end": 44
+      },
+      "confidence": "high"
+    }
+  ]
+}

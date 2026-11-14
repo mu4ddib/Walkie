@@ -1,0 +1,16 @@
+{
+  "sourceId": "0198f0c0-aaaa-7000-8000-000000000001",
+  "entityKey": "api:GET /api/pedidos/{}",
+  "decision": "linked",
+  "target": {
+    "kind": "catalogItem",
+    "id": "0198f0c0-3333-7000-8000-000000000301",
+    "title": "API Pedidos — consultar"
+  },
+  "entityFingerprint": "sha256:19db75590a30e7613836d8549a761b01a202f1b7ac7b78d2ddb7c3ac7850a02d",
+  "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
+  "applyId": "0198f0c0-4444-7000-8000-000000000401",
+  "decidedBy": "usuario-demo",
+  "decidedAt": "2026-11-14T12:10:00Z",
+  "version": 1
+}

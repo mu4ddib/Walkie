@@ -5,9 +5,7 @@ Basado en `spec.md` (aprobada el 2026-11-14), ADR-0012 y ADR-0013. Issue padre: 
 ## Archivos a tocar
 
 - `packages/schema/`:
-  - `walkie-discovery-pack.schema.json` y `walkie-discovery.schema.json` (tarea 1);
-  - `walkie-discovery-review.schema.json` (tarea 4);
-  - `walkie-discovery-apply.schema.json` (tarea 6);
+  - `walkie-discovery-pack`, `walkie-discovery`, `walkie-discovery-snapshot`, `walkie-discovery-binding`, `walkie-discovery-review`, `walkie-discovery-apply` y `walkie-discovery-apply-result` (tarea 1, ADR-0014);
   - ejemplos en `examples/walkiepack/`.
 - `apps/cli/Walkie.Cli/` y sus pruebas: herramienta .NET (tareas 2, 7 y 8).
 - `apps/api/src/Walkie.Shared/`:
@@ -42,7 +40,12 @@ Basado en `spec.md` (aprobada el 2026-11-14), ADR-0012 y ADR-0013. Issue padre: 
 Cada tarea cabe en una sesión y en un PR.
 
 0. [x] Auditoría, spec, ADR-0012, ADR-0013 y correcciones de documentación.
-1. [x] (#163) Contrato del `.walkiepack`: schemas del manifest y de entidades, relaciones y evidencia; tipos generados; ejemplos válidos; pruebas de que los válidos pasan y los inválidos fallan con la ruta del error; validación de los ejemplos en el CI.
+1. [x] (#163) Contratos y fundamentos de Discovery (ADR-0014):
+   - schemas del paquete (manifest con capacidades y completitud; entidades, relaciones y evidencia con base observada o inferida y fingerprint) y de los registros de Walkie (snapshot, vínculo, revisión y operaciones);
+   - `Walkie.Shared/Discovery`: `DiscoveryKeys`, `DiscoveryFingerprint`, `DiscoveryPackValidator` y `DiscoveryFormat` (versiones y migraciones);
+   - ejemplos completo y parcial, y registros de la API, validados en el CI;
+   - pruebas de schema, integridad, compatibilidad y versiones;
+   - tipos generados en la web.
 2. [ ] (#164) CLI mínimo, `walkie analyze <carpeta> -o <archivo>.walkiepack`:
    - detectores de manifiestos (`.csproj`, `.sln`/`.slnx`, `package.json`), docker-compose y OpenAPI;
    - `.walkie/source.json`, exclusión de secretos y salida determinista;
@@ -56,7 +59,7 @@ Cada tarea cabe en una sesión y en un PR.
    - todo el módulo detrás de `Discovery:Enabled` (404 apagado).
 4. [ ] (#166) Revisión calculada:
    - `GET /api/snapshots/{id}/review`, que empareja por vínculo, por firma y por título (este último solo como sugerencia) y pagina;
-   - `PUT /api/sources/{id}/bindings/{key}` para descartar, vincular o deshacer;
+   - `POST /api/snapshots/{id}/apply` solo con `reject`, `link` y `reset`, para descartar, vincular o deshacer (las creaciones llegan en la tarea 6);
    - `GET /api/apps/{appId}/sources`.
 5. [ ] (#167) Web, cargar y revisar:
    - «Importar proyecto local» en la página de la app (`dryRun` → resumen → confirmar);
@@ -105,4 +108,4 @@ Dependencias:
 
 ## Estado
 
-Última actualización: 2026-11-14 — tarea 0 hecha: auditoría de la fase 0, spec aprobada, ADR-0012 y ADR-0013 aceptados y documentación alineada con el código. Tarea 1 hecha: `walkie-discovery-pack.schema.json` (manifest) y `walkie-discovery.schema.json` (un solo `discovery.json` con entidades, relaciones y evidencia, en vez de tres archivos: la integridad entre ellas se valida en una pasada; ADR-0013 ajustado), ejemplos en `packages/schema/examples/walkiepack/` validados en el job `schema` del CI, `WalkieSchemas.Discovery`/`DiscoveryPack` con `DiscoveryPackSchemaTests` (ejemplos válidos, 23 variantes inválidas con su ruta de error, rutas con puntos que no suben de carpeta) y tipos en `apps/web/src/schema/`. Sigue: tarea 2 (CLI) o 3 (API), que ya pueden empezar en paralelo.
+Última actualización: 2026-11-14 — tarea 0 hecha: auditoría de la fase 0, spec aprobada, ADR-0012 y ADR-0013 aceptados y documentación alineada con el código. Tarea 1 hecha (fase 1, contratos y fundamentos; ADR-0014): siete schemas (`walkie-discovery-pack`, `walkie-discovery`, `walkie-discovery-snapshot`, `walkie-discovery-binding`, `walkie-discovery-review`, `walkie-discovery-apply`, `walkie-discovery-apply-result`); `Walkie.Shared/Discovery` con claves normalizadas (`DiscoveryKeys`), fingerprints en JSON canónico (`DiscoveryFingerprint`), integridad (`DiscoveryPackValidator`: duplicados, referencias, orden, capacidades, parcialidad, fragmentos, estadísticas) y versiones (`DiscoveryFormat`: versión actual, migraciones, rechazo de versiones futuras antes del schema); ejemplos `tienda-demo` (completo) y `parcial` más los registros de la API, validados en el job `schema`; pruebas `DiscoveryPackSchemaTests`, `DiscoveryPackValidatorTests` y `DiscoveryCompatibilityTests` (los fingerprints de los ejemplos los calculó un script independiente y C# los reproduce); tipos en `apps/web/src/schema/`. Cambio de alcance: el `PUT .../bindings/{key}` de la spec se reemplazó por operaciones `reject`/`link`/`reset` en `apply`. Sigue: tarea 2 (CLI) o 3 (API).

@@ -1,0 +1,112 @@
+{
+  "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
+  "sourceId": "0198f0c0-aaaa-7000-8000-000000000001",
+  "counts": {
+    "new": 5,
+    "matched": 1,
+    "linked": 1,
+    "created": 0,
+    "rejected": 1,
+    "changed": 0,
+    "missing": 0
+  },
+  "page": {
+    "index": 0,
+    "size": 4,
+    "total": 8
+  },
+  "items": [
+    {
+      "key": "api:GET /api/pedidos/{}",
+      "kind": "api",
+      "title": "Consultar pedido",
+      "basis": "observed",
+      "confidence": "high",
+      "status": "linked",
+      "fingerprint": "sha256:19db75590a30e7613836d8549a761b01a202f1b7ac7b78d2ddb7c3ac7850a02d",
+      "binding": {
+        "sourceId": "0198f0c0-aaaa-7000-8000-000000000001",
+        "entityKey": "api:GET /api/pedidos/{}",
+        "decision": "linked",
+        "target": {
+          "kind": "catalogItem",
+          "id": "0198f0c0-3333-7000-8000-000000000301",
+          "title": "API Pedidos — consultar"
+        },
+        "entityFingerprint": "sha256:19db75590a30e7613836d8549a761b01a202f1b7ac7b78d2ddb7c3ac7850a02d",
+        "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
+        "applyId": "0198f0c0-4444-7000-8000-000000000401",
+        "decidedBy": "usuario-demo",
+        "decidedAt": "2026-11-14T12:10:00Z",
+        "version": 1
+      },
+      "evidenceCount": 2,
+      "proposal": {
+        "op": "none"
+      }
+    },
+    {
+      "key": "api:POST /api/pedidos",
+      "kind": "api",
+      "title": "Crear pedido",
+      "basis": "observed",
+      "confidence": "high",
+      "status": "matched",
+      "fingerprint": "sha256:b8da614da5f59903fe69961a4ff76682733e00beb6df9534fdd37434ca15a24d",
+      "match": {
+        "target": {
+          "kind": "catalogItem",
+          "id": "0198f0c0-3333-7000-8000-000000000302",
+          "title": "POST /api/pedidos"
+        },
+        "reason": "signature"
+      },
+      "evidenceCount": 1,
+      "proposal": {
+        "op": "link",
+        "target": {
+          "kind": "catalogItem",
+          "id": "0198f0c0-3333-7000-8000-000000000302",
+          "title": "POST /api/pedidos"
+        }
+      }
+    },
+    {
+      "key": "database:postgresql/tienda",
+      "kind": "database",
+      "title": "tienda",
+      "basis": "observed",
+      "confidence": "high",
+      "status": "new",
+      "fingerprint": "sha256:523d2ac5d9751ccffafad02cc2e7bf4c555887f7a24ca52920772eecde8ff730",
+      "evidenceCount": 2,
+      "proposal": {
+        "op": "create"
+      }
+    },
+    {
+      "key": "feature:Ver pedido",
+      "kind": "feature",
+      "title": "Ver pedido",
+      "basis": "inferred",
+      "confidence": "low",
+      "status": "rejected",
+      "fingerprint": "sha256:35ab68930e99f5b237b1fa45aa4ed75aff3eaa173e8149cba681ed9b3d7e0ad0",
+      "binding": {
+        "sourceId": "0198f0c0-aaaa-7000-8000-000000000001",
+        "entityKey": "feature:Ver pedido",
+        "decision": "rejected",
+        "entityFingerprint": "sha256:35ab68930e99f5b237b1fa45aa4ed75aff3eaa173e8149cba681ed9b3d7e0ad0",
+        "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
+        "note": "La pantalla ya está documentada en la feature «Seguimiento de pedidos».",
+        "decidedBy": "usuario-demo",
+        "decidedAt": "2026-11-14T12:11:00Z",
+        "version": 1
+      },
+      "evidenceCount": 1,
+      "proposal": {
+        "op": "none"
+      }
+    }
+  ]
+}
