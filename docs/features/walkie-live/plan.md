@@ -18,6 +18,25 @@ Basado en `spec.md` (aprobada el 2026-11-14), ADR-0012 y ADR-0013. Issue padre: 
 - `apps/web/src/discovery/`, `routes.tsx`, `pages/AppPage.tsx`, `pages/AppsPage.tsx`, `api/hooks.ts` y `test/fakeApi.ts`.
 - `.github/workflows/ci.yml`: ejemplos del paquete y CLI.
 
+## Flujo completo y qué tarea lo cubre
+
+| Etapa | Qué pasa | Tareas |
+|---|---|---|
+| CLI | `walkie analyze` lee el proyecto sin ejecutar nada | 2, 7, 8 |
+| `.walkiepack` | manifest + `discovery.json`, validados con `WalkieSchemas` | 1 (contrato), 2 (escritura) |
+| Importación web | «Importar proyecto local» y «Crear app desde proyecto local»: `dryRun` → resumen (tecnologías, alcance, limitaciones) → confirmar | 3 (API), 5 (web), 10 (crear app) |
+| Discovery Review | hallazgos por tipo y estado, evidencia, filtros y paginación | 4 (API), 5 (web) |
+| Matching | vínculo previo → firma → título (solo sugerencia); descartar y vincular | 4 |
+| Preview Changes | `apply?dryRun=true`: qué se crea, vincula y no cambia, con las validaciones de aplicar | 6 (catálogo), 9 (módulos y features) |
+| Aplicación aprobada | bitácora, ids del cliente, escritura idempotente y compensación; nunca toca lienzos existentes ni borra | 6, 9 |
+| Editor actual | lo creado se abre en el catálogo, el módulo o la feature con el editor de siempre; desde un componente se ve su evidencia | 6, 9 |
+| Reanálisis | cambiado y ya no aparece, sin borrar | 10 |
+
+## Puertas
+
+- **Seguridad (bloqueo):** Walkie Live no se habilita para usuarios reales (piloto ni producción) hasta que exista autorización por app (ADR-0012). Hasta entonces, `Discovery:Enabled` apagado fuera de Development. Encenderlo con usuarios reales exige el ADR de esa autorización.
+- **Compatibilidad:** cada tarea de la API que escribe (6 y 9) prueba que los lienzos existentes (contenido y `version`) y los elementos vinculados no cambian.
+
 ## Tareas
 
 Cada tarea cabe en una sesión y en un PR.
@@ -27,12 +46,14 @@ Cada tarea cabe en una sesión y en un PR.
 2. [ ] (#164) CLI mínimo, `walkie analyze <carpeta> -o <archivo>.walkiepack`:
    - detectores de manifiestos (`.csproj`, `.sln`/`.slnx`, `package.json`), docker-compose y OpenAPI;
    - `.walkie/source.json`, exclusión de secretos y salida determinista;
+   - lector de YAML para compose y OpenAPI (candidato YamlDotNet, MIT; justificar en el PR);
    - valida su salida con `WalkieSchemas`.
 3. [ ] (#165) API, recibir el paquete:
    - módulo Discovery con su migración;
    - `POST /api/apps/{appId}/sources/snapshots` con `dryRun`, límites, errores con ruta e idempotencia por hash;
    - integridad que el schema no expresa: claves únicas, evidencia y extremos existentes, `snippet` solo con `includeSnippets` y `stats` coherentes;
-   - `SafeZip` en `Walkie.Shared`.
+   - `SafeZip` en `Walkie.Shared`;
+   - todo el módulo detrás de `Discovery:Enabled` (404 apagado).
 4. [ ] (#166) Revisión calculada:
    - `GET /api/snapshots/{id}/review`, que empareja por vínculo, por firma y por título (este último solo como sugerencia) y pagina;
    - `PUT /api/sources/{id}/bindings/{key}` para descartar, vincular o deshacer;
@@ -40,7 +61,11 @@ Cada tarea cabe en una sesión y en un PR.
 5. [ ] (#167) Web, cargar y revisar:
    - «Importar proyecto local» en la página de la app (`dryRun` → resumen → confirmar);
    - página de revisión con filtros, motivo de la coincidencia, evidencia, descartar, vincular y vista previa.
-6. [ ] (#168) Aplicar al catálogo: `POST /api/snapshots/{id}/apply` con `applyId`, crear o vincular elementos del catálogo, compensación, y desde un elemento del catálogo ver de qué evidencia viene.
+6. [ ] (#168) Aplicar al catálogo:
+   - `POST /api/snapshots/{id}/apply` con `applyId`; con `dryRun=true` es la vista previa;
+   - bitácora `discovery.applies` (plan con ids antes de escribir; `pending` → `completed` o `compensated`), `IAppWriter.CreateCatalogItemAsync` con id dado y recuperación de una aplicación `pending`;
+   - crear o vincular elementos del catálogo, sin tocar los vinculados ni los lienzos;
+   - desde un elemento del catálogo, ver de qué evidencia viene.
 7. [ ] (#169) Detectores ASP.NET Core y EF con Roslyn solo sintáctico:
    - Minimal APIs y controllers → `api`;
    - `DbContext`/`DbSet` → `database`;

@@ -46,16 +46,23 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 - [ ] Puedo descartar un hallazgo; el descarte se recuerda en los análisis siguientes de la misma fuente.
 - [ ] Puedo vincular un hallazgo a un elemento existente del catálogo o a un módulo en vez de crear uno nuevo; una coincidencia por título nunca se vincula sola.
 - [ ] Puedo elegir qué nuevos elementos del catálogo, módulos (con sus interfaces) y features propuestas crear.
-- [ ] Antes de aplicar veo una vista previa: qué se crea, qué se vincula y qué no cambia.
+- [ ] Antes de aplicar veo una vista previa calculada por la API con las mismas validaciones que aplicar (`dryRun`): qué se crea, qué se vincula, qué se descarta y qué no cambia; si algo no se puede aplicar, lo dice con su motivo antes de confirmar.
 - [ ] Con miles de hallazgos, la revisión pagina y filtra sin bloquear la interfaz.
 
 ### Aplicar
 
 - [ ] Cuando aplico, entonces se crea únicamente lo aprobado: elementos del catálogo, módulos con su lienzo e interfaces y features nuevas con un lienzo inicial (sus pantallas y `ref` a los componentes del catálogo, ubicados sin superponerse).
-- [ ] Aplicar no modifica ningún lienzo existente: ni posiciones, ni tamaños, ni presentación, ni textos escritos a mano (su `version` y su contenido quedan iguales).
+- [ ] Aplicar no modifica ningún lienzo existente: ni nodos, conexiones, referencias, módulos, interfaces, portales, layouts, grupos, notas ni tours (su `version` y su contenido quedan iguales).
+- [ ] Vincular un hallazgo a un elemento existente no cambia ese elemento: ni su título, ni su descripción, ni su contrato.
 - [ ] Aplicar no elimina nada. Lo que ya no aparece en un reanálisis solo se marca en la revisión.
-- [ ] Aplicar dos veces (reintento, doble clic) no duplica nada; si algo falla a mitad, no queda nada a medias (como la importación, ADR-0009).
+- [ ] Aplicar dos veces (reintento, doble clic) no duplica nada; si algo falla a mitad, se deshace lo creado; si el proceso se cae a mitad, el siguiente intento o la siguiente revisión lo completa o lo deshace (bitácora de aplicación, ADR-0012).
 - [ ] Después de aplicar, cada componente creado o vinculado se abre en el editor actual (catálogo, módulo o feature), y desde el componente puedo ver de qué evidencia viene.
+
+### Seguridad
+
+- [ ] Los endpoints de Discovery responden solo con `Discovery:Enabled` encendido (apagado por defecto fuera de Development); apagado, responden 404.
+- [ ] **Bloqueo:** no se habilita la importación de proyectos privados para usuarios reales (piloto ni producción) hasta que exista autorización por app (ADR-0012). Encender `Discovery:Enabled` en un entorno con usuarios reales exige el ADR de esa autorización.
+- [ ] El paquete se lee con límites (tamaño, entradas, descomprimido) y sin seguir rutas fuera del zip; nada del paquete se ejecuta ni se interpreta como HTML en la web.
 
 ## Fuera de alcance
 
@@ -64,7 +71,8 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 - Escribir en lienzos existentes (sumar un `ref` a una feature ya documentada): candidato a una iteración posterior.
 - Análisis incremental (solo archivos cambiados): el formato lo permite, pero el CLI analiza el árbol completo.
 - IA generativa como fuente de descubrimiento.
-- Autorización por app (hoy cualquier usuario autenticado accede a cualquier app): riesgo aceptado y documentado; feature aparte antes del piloto en banca.
+- Autorización por app: deuda técnica anterior a esta feature (hoy cualquier usuario autenticado accede a cualquier app). Va en una feature aparte y es **bloqueo de seguridad** para habilitar Walkie Live con usuarios reales.
+- Actualizar el contenido de un elemento existente con lo descubierto (ej. completar su contrato): candidato a una iteración posterior, como propuesta que la persona acepta campo a campo.
 - Otros lenguajes y frameworks (Java/Spring, Python, Go, Vue…).
 
 ## Impacto en el modelo
@@ -88,16 +96,20 @@ Módulo nuevo `Walkie.Modules.Discovery` (schema `discovery` de Postgres; ADR-00
 - `PUT /api/sources/{sourceId}/bindings/{entityKey}`: descartar, vincular o deshacer (con versión: 409).
 - `POST /api/snapshots/{snapshotId}/apply` (`walkie-discovery-apply`, con `applyId` del cliente): 200 con lo creado y vinculado; 400 con lo inválido; 409 si un vínculo cambió.
 - `GET /api/apps/{appId}/bindings?target=`: de qué evidencia viene un componente.
-- Contratos internos que se extienden (sin romper): `IAppWriter` acepta el id de un elemento del catálogo y lo borra para compensar; la lectura segura del zip pasa de `ImportHandlers` a `Walkie.Shared`.
+- `POST /api/snapshots/{snapshotId}/apply?dryRun=true`: la vista previa (lo que se crearía y vincularía, sin escribir).
+- Contratos internos que se extienden (sin romper): `IAppWriter.CreateCatalogItemAsync` acepta un id dado (borrar ya existe: `DeleteCatalogItemsAsync`); la lectura segura del zip pasa de `ImportHandlers` a `Walkie.Shared`. Ningún endpoint existente cambia.
 
 ## Decisiones
 
 - 2026-11-14, auditoría de la fase 0: CLI como herramienta .NET con análisis estático; detectores OpenAPI, docker-compose, manifiestos, ASP.NET Core + EF y React/Angular; evidencia sin fragmentos de código por defecto; la falta de autorización por app se acepta como riesgo documentado.
 - La procedencia (vínculo hallazgo ↔ componente) no entra en el grafo (ADR-0012).
+- Aplicar: ids del cliente fijados antes de escribir, bitácora `discovery.applies`, escritura idempotente y compensación; la transacción compartida queda como forma de revertir (ADR-0012).
+- Autorización por app: bloqueo de seguridad antes de usuarios reales; mientras, `Discovery:Enabled` (ADR-0012).
+- TypeScript/React/Angular: escáner propio al inicio; prueba de concepto contra tree-sitter y el compilador oficial en Jint en la tarea 8 (ADR-0013).
 - Las propuestas se calculan al pedir la revisión; solo se guardan las decisiones (vínculos y descartes).
 
 ## Preguntas abiertas
 
-- Parser de TypeScript/TSX desde .NET para React y Angular: Acornima trae JSX (paquete Acornima.Extras) pero no TypeScript; las alternativas son tree-sitter con bindings nativos o un escáner de tokens propio. Se decide con una prueba de concepto en su tarea (ADR-0013 lo deja abierto).
+- Parser definitivo de TypeScript/TSX: se decide en la tarea 8 con los criterios de ADR-0013 (sin procesos externos, licencia verificada, precisión, plataformas, tiempo y tamaño).
 - Límites del paquete (tamaño, número de entidades): se fijan al medir con Walkie analizándose a sí mismo.
 - Distribución del CLI (NuGet público, feed interno o binario autocontenido): se decide antes del piloto.
