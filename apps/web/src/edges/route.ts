@@ -15,7 +15,7 @@ const STUB = 16;
 /** Cuánto "cuesta" un doblez frente a un px de largo: prefiere caminos con pocos dobleces. */
 const BEND_COST = 40;
 /** Obstáculos más allá de este margen alrededor de los extremos no se consideran (px). */
-const SEARCH_MARGIN = 400;
+export const SEARCH_MARGIN = 400;
 
 const DIR: Record<Side, Point> = { right: { x: 1, y: 0 }, left: { x: -1, y: 0 }, bottom: { x: 0, y: 1 }, top: { x: 0, y: -1 } };
 const horizontalSide = (side: Side) => side === 'left' || side === 'right';

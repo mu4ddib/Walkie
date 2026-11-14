@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useReactFlow, type Viewport } from '@xyflow/react';
+import { useCamera } from '../canvas/useCamera';
 import { interfaceTarget, useCanvasCatalog } from '../catalog/catalogContext';
 import { useOpenModule } from '../canvas/useOpenModule';
 import { useGraphStore } from '../store/useGraphStore';
@@ -38,6 +39,9 @@ const MAX_ZOOM = 1.25;
  * (reproducir, pausar, continuar, reiniciar, anterior, siguiente, detener), velocidad, encuadrar todo y seguir el paso
  * activo con movimientos suaves. Al salir vuelve la vista que había.
  */
+/** El encuadre sigue al paso con la misma transición que el resto de la cámara, un poco más lenta (se lee el paso). */
+const FLOW_FRAME_MS = 420;
+
 export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, onExit }: FlowPlayerProps) {
   const tour = useGraphStore((s) => s.tours[playing.tourId]);
   const edges = useGraphStore((s) => s.edges);
@@ -49,7 +53,8 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
   const nodes = useGraphStore((s) => s.nodes);
   const { items, modules } = useCanvasCatalog();
   const openModule = useOpenModule();
-  const { getViewport, setViewport } = useReactFlow();
+  const { getViewport } = useReactFlow();
+  const camera = useCamera();
   const reduced = usePrefersReducedMotion();
   const [follow, setFollow] = useState(true);
 
@@ -58,9 +63,9 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
   useEffect(() => {
     saved.current = getViewport();
     return () => {
-      if (saved.current) void setViewport(saved.current);
+      if (saved.current) void camera.to(saved.current);
     };
-  }, [getViewport, setViewport]);
+  }, [getViewport, camera]);
 
   const wait = timeoutOf(playing.step);
   // Las fases avanzan solas mientras se reproduce (o mientras termina el paso elegido a mano).
@@ -83,7 +88,7 @@ export function FlowPlayer({ playing, setPlaying, speed, onSpeed, frames, pane, 
     );
     const x = pane.width / 2 - (rect.x + rect.w / 2) * zoom;
     const y = BAR_SPACE + (pane.height - BAR_SPACE - SIDE_SPACE) / 2 - (rect.y + rect.h / 2) * zoom;
-    void setViewport({ x, y, zoom }, { duration: reduced ? 0 : 450 });
+    void camera.to({ x, y, zoom }, { duration: reduced ? 0 : FLOW_FRAME_MS });
   };
   const stepKey = frames.step ? `${frames.step.x},${frames.step.y},${frames.step.w},${frames.step.h}` : '';
   useEffect(() => {

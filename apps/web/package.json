@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "gen:schema": "node scripts/gen-schema-types.mjs",
     "check:schema": "node scripts/gen-schema-types.mjs --check",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "perf": "playwright test -c playwright.perf.config.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.107.0",

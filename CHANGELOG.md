@@ -5,6 +5,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- Fluidez del lienzo (spec `fluidez`):
+  - **«Ver todo» sin salto:** encuadrar (botón o tecla 0), enfocar al abrir, «Localizar», el modo tour (y su vuelta), los recorridos y el mapa usan una sola cámara. Cada movimiento es una transición de 320 ms desde la vista actual, con desplazamiento y zoom juntos, sin salto al empezar aunque el navegador esté ocupado, sin rebote y sin corrección final. Si ya está encuadrada no se mueve; arrastrar o hacer zoom la interrumpe; con movimiento reducido va directo. Antes, `fitView` de React Flow arrancaba la transición y en el mismo paso reconstruía todos los nodos, así que el primer cuadro llegaba a mitad de camino (lo que se veía en Safari).
+  - **Menos trabajo por cada cambio:** al arrastrar, escribir en el inspector, seleccionar o deshacer, el lienzo solo vuelve a dibujar lo que cambió. Las cajas, conexiones, jerarquía de grupos, obstáculos de cada trazo y etiquetas usan índices y cachés. El contenido de las cajas se actualiza con prioridad baja mientras se escribe (la posición, las altas y las bajas siguen siendo inmediatas).
+  - **Abrir un lienzo con imágenes ya no lo deja «Sin guardar»:** la miniatura de una pantalla tiene su alto desde el principio y la caja no empuja a las de abajo al llegar la imagen.
+  - **Abrir pasos de un recorrido largo** ya no fuerza el cálculo del layout de toda la página.
+  - **Guardar** (también el autoguardado) ya no vuelve a pedir en el acto los resúmenes de módulos.
+  - **Banco de rendimiento** `pnpm --dir apps/web perf`: lienzos de tres escalas, escenarios de cámara, arrastre, escritura, selección, deshacer, recorridos, guardado y navegación, sobre la compilación de producción.
 - Módulos compartidos (spec `modulos-compartidos`, #155): **quitar una interfaz ya no reescribe las features**. El módulo recuerda a qué interfaz pasan sus conexiones (o al módulo completo) y las features lo resuelven al leerlo: quitarla se deshace con Ctrl+Z, llega a todas al guardar el módulo y ningún editor abierto recibe un conflicto. Se quitó `POST /api/modules/{id}/interfaces/{id}/reassign`; el grafo suma `interfaceRedirects` y el resumen, `redirects`.
 
 ### Added

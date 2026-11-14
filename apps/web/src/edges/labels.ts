@@ -73,18 +73,47 @@ export function placePairLabels(
   boxes: readonly Rect[],
   taken: readonly Rect[] = [],
 ): Record<string, PlacedLabel> {
+  // Solo pueden tocarse las cajas y etiquetas cerca de estos trazos (revisión de fluidez: antes se revisaban todas las
+  // del lienzo para cada candidato). El resultado es el mismo: lo descartado está lejos de cualquier posición posible.
+  const near = nearRoutes(labels);
+  const nearBoxes = boxes.filter(near);
+  const nearTaken = taken.filter(near);
   const placed: Rect[] = [];
   const result: Record<string, PlacedLabel> = {};
   for (const label of labels) {
     const spot = CANDIDATES.map((t) => pointAt(label.points, t)).find((p) => {
       const box = boxAt(p, label.size);
-      return ![...placed, ...taken].some((r) => touches(box, r)) && !boxes.some((r) => touches(box, r, 0));
+      return (
+        !placed.some((r) => touches(box, r)) && !nearTaken.some((r) => touches(box, r)) && !nearBoxes.some((r) => touches(box, r, 0))
+      );
     });
-    if (!spot) return joinLabels(labels, boxes, taken);
+    if (!spot) return joinLabels(labels, nearBoxes, nearTaken);
     placed.push(boxAt(spot, label.size));
     result[label.id] = spot;
   }
   return result;
+}
+
+/**
+ * ¿Puede `r` tocar alguna etiqueta de estos trazos? Rectángulo de los trazos agrandado lo que pueden ocupar las
+ * etiquetas (también la compuesta, con sus corrimientos) más el margen.
+ */
+function nearRoutes(labels: readonly PairLabel[]): (r: Rect) => boolean {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const l of labels) {
+    for (const p of l.points) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+  }
+  const w = labels.reduce((sum, l) => sum + l.size.w, 0) + JOIN_GAP * labels.length + LABEL_MARGIN;
+  const h = Math.max(...labels.map((l) => l.size.h)) + Math.max(...JOIN_SHIFTS.map(Math.abs)) + LABEL_MARGIN;
+  return (r) => r.x < maxX + w && r.x + r.w > minX - w && r.y < maxY + h && r.y + r.h > minY - h;
 }
 
 /** Corrimientos (px) que prueba la etiqueta compuesta si a mitad del trazo tapa algo: arriba y abajo, alternando. */

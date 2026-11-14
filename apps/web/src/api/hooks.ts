@@ -187,9 +187,12 @@ export function useSaveCanvas(featureId: string) {
       queryClient.setQueryData(queryKeys.canvas(featureId), saved);
       // Las miniaturas de la galería y el "Se usa en" de los componentes cambian con el lienzo.
       void queryClient.invalidateQueries({ queryKey: ['canvas', 'previews'] });
-      // Un módulo guardado cambia su resumen; una feature guardada, sus usos.
-      void queryClient.invalidateQueries({ queryKey: ['canvas', 'modules'] });
-      void queryClient.invalidateQueries({ queryKey: ['canvas', 'module-usages'] });
+      // Un módulo guardado cambia su resumen; una feature guardada, sus usos. Se marcan como viejos sin pedirlos ya
+      // (revisión de fluidez): el resumen lo arma la API leyendo todos los lienzos de la app y, si llegara distinto, el
+      // lienzo abierto volvería a dibujar todas sus cajas en cada autoguardado. Se piden de nuevo al volver a usarlos
+      // (otra página, otro lienzo, al recuperar el foco).
+      void queryClient.invalidateQueries({ queryKey: ['canvas', 'modules'], refetchType: 'none' });
+      void queryClient.invalidateQueries({ queryKey: ['canvas', 'module-usages'], refetchType: 'none' });
       void queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === 'catalog' && q.queryKey[2] === 'usages',
       });

@@ -2,13 +2,16 @@ import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CatalogContext, toCanvasCatalog } from '../catalog/catalogContext';
+import { CameraContext } from '../canvas/useCamera';
 import { createGraphStore } from '../store/graphStore';
 import { GraphStoreProvider } from '../store/GraphStoreProvider';
 import { GUIDE_SHEETS } from './guideSprites';
 import { TourPlayer } from './TourPlayer';
 import { TOUR_TIMING } from './tourTiming';
 
-const flow = { setCenter: vi.fn(), getViewport: vi.fn(() => ({ x: 10, y: 20, zoom: 0.8 })), setViewport: vi.fn() };
+const flow = { getViewport: vi.fn(() => ({ x: 10, y: 20, zoom: 0.8 })) };
+// La cámara del lienzo (una sola dueña de la vista): el guía centra con ella y al salir vuelve con ella.
+const camera = { centerOn: vi.fn(), to: vi.fn(), fit: vi.fn(), fitBounds: vi.fn(), cancel: vi.fn(), onSettle: vi.fn(), animating: false };
 vi.mock('@xyflow/react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@xyflow/react')>()),
   useReactFlow: () => flow,
@@ -52,6 +55,7 @@ function renderPlayer(step = 0) {
     <MemoryRouter>
       <GraphStoreProvider store={store}>
         <CatalogContext.Provider value={toCanvasCatalog('app-1', [], features, 'feat-1')}>
+          <CameraContext.Provider value={camera}>
           <TourPlayer
             tourId={tour}
             step={step}
@@ -60,6 +64,7 @@ function renderPlayer(step = 0) {
             onStep={onStep}
             onExit={onExit}
           />
+          </CameraContext.Provider>
         </CatalogContext.Provider>
       </GraphStoreProvider>
     </MemoryRouter>,
@@ -78,7 +83,7 @@ describe('TourPlayer', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Paso 1 de 3');
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled();
-    expect(flow.setCenter).toHaveBeenCalledWith(80, 24, expect.objectContaining({ zoom: 1.1 }));
+    expect(camera.centerOn).toHaveBeenCalledWith(80, 24, 1.1, expect.anything());
     expect(guide()).toHaveAttribute('data-animation', 'walk');
 
     act(() => vi.advanceTimersByTime(TOUR_TIMING.walk));
@@ -129,7 +134,8 @@ describe('TourPlayer', () => {
     renderPlayer(1);
 
     expect(bubble()).toHaveTextContent('Solo dígitos.');
-    expect(flow.setCenter).toHaveBeenCalledWith(
+    expect(camera.centerOn).toHaveBeenCalledWith(
+      expect.any(Number),
       expect.any(Number),
       expect.any(Number),
       expect.objectContaining({ duration: 0 }),
@@ -141,6 +147,6 @@ describe('TourPlayer', () => {
 
     ui.unmount();
 
-    expect(flow.setViewport).toHaveBeenCalledWith({ x: 10, y: 20, zoom: 0.8 });
+    expect(camera.to).toHaveBeenCalledWith({ x: 10, y: 20, zoom: 0.8 });
   });
 });

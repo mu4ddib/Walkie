@@ -224,7 +224,7 @@ describe('ZoomControls', () => {
     const onToggle = vi.fn();
     render(
       <ReactFlowProvider>
-        <ZoomControls fitPadding={0} motion={{ on: true, onToggle }} />
+        <ZoomControls onFit={vi.fn()} motion={{ on: true, onToggle }} />
       </ReactFlowProvider>,
     );
 

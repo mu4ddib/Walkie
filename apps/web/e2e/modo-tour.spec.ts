@@ -85,7 +85,8 @@ test('armar un tour de tres pasos, recargar idéntico, recorrerlo y terminar', a
   await expect(bar).toBeHidden();
   await expect(page.locator('.canvas')).not.toHaveClass(/canvas-touring/);
   await expect(page.locator('.react-flow__node.tour-dim')).toHaveCount(0);
-  expect(await viewportTransform(page)).toBe(viewport);
+  // La vista vuelve con la misma transición que el resto de la cámara: se espera a que llegue.
+  await expect.poll(() => viewportTransform(page)).toBe(viewport);
 
   // Esc sale (criterio 7) y el lienzo sigue sin cambios.
   await page.getByRole('button', { name: 'Ver tour' }).click();
