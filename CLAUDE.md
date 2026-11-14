@@ -26,7 +26,7 @@ App → Catálogo (nodos reutilizables: api, service, database, resource; y mód
 | Pruebas web | `pnpm --dir apps/web test` |
 | Lint web | `pnpm --dir apps/web lint` |
 | E2E (requiere Postgres, RustFS y Keycloak levantados) | `pnpm --dir apps/web e2e --trace off` |
-| Medir rendimiento del lienzo (compilación de producción; mismos servicios que E2E) | `pnpm --dir apps/web perf` (`WALKIE_SCALES`, `WALKIE_CPU`, `WALKIE_PERF_LABEL`; resultados en `apps/web/perf/results/`) |
+| Medir rendimiento del lienzo (compilación de producción; mismos servicios que E2E) | `pnpm --dir apps/web perf` (`WALKIE_SCALES`, `WALKIE_CPU`, `WALKIE_PERF_LABEL`, `WALKIE_BROWSER=webkit` para Safari; resultados en `apps/web/perf/results/`) |
 | Regenerar tipos del schema | `pnpm --dir apps/web gen:schema` |
 
 API en http://localhost:5080 (OpenAPI en `/openapi/v1.json` en Development), web en http://localhost:5173, Keycloak en http://localhost:8080 (usuario de prueba `dev` / `walkie_dev`). Actualiza esta tabla si cambian.

@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **«Ver todo» sin saltos en Safari** (spec `fluidez`, criterio 13): con todo el lienzo a la vista, Safari tarda en pintar cada cuadro y la transición de 320 ms se dibujaba en 3 o 4 cuadros (uno cubría más de la mitad del camino). Ahora el reloj de la cámara empieza en el segundo cuadro y ningún cuadro avanza más de un décimo del tiempo: si el equipo va lento, el movimiento dura algo más pero llega en al menos 10 pasos. A 60 fps no cambia nada. El banco mide también en WebKit (`WALKIE_BROWSER=webkit`, escenario `camara`).
+
 ### Changed
 - Fluidez del lienzo (spec `fluidez`):
   - **«Ver todo» sin salto:** encuadrar (botón o tecla 0), enfocar al abrir, «Localizar», el modo tour (y su vuelta), los recorridos y el mapa usan una sola cámara. Cada movimiento es una transición de 320 ms desde la vista actual, con desplazamiento y zoom juntos, sin salto al empezar aunque el navegador esté ocupado, sin rebote y sin corrección final. Si ya está encuadrada no se mueve; arrastrar o hacer zoom la interrumpe; con movimiento reducido va directo. Antes, `fitView` de React Flow arrancaba la transición y en el mismo paso reconstruía todos los nodos, así que el primer cuadro llegaba a mitad de camino (lo que se veía en Safari).

@@ -3,9 +3,11 @@
  * enfocada, el modo tour y los recorridos. Cada movimiento es una única transición desde la vista actual hasta un
  * destino fijo, desplazamiento y escala a la vez:
  *
- * - El reloj empieza en el primer cuadro que se dibuja, no al pedirla: si el hilo principal está ocupado al empezar,
- *   la cámara no «salta» a mitad de camino (lo que pasaba con `fitView`, que arrancaba la transición y en el mismo
- *   paso reconstruía todos los nodos).
+ * - El reloj empieza en el segundo cuadro, no al pedirla: el primero paga lo que cueste arrancar (el render que
+ *   disparó la petición), así la cámara no «salta» a mitad de camino (lo que pasaba con
+ *   `fitView`, que arrancaba la transición y en el mismo paso reconstruía todos los nodos).
+ * - Ningún cuadro avanza más de `MAX_STEP` del recorrido: si el navegador tarda en pintar cada cuadro (Safari con todo
+ *   el lienzo a la vista al encuadrar), el movimiento dura un poco más pero no salta.
  * - Se interpola el punto del lienzo que queda en el centro y el zoom en escala logarítmica: sin el alejarse y volver
  *   a acercar de una interpolación «suave» de d3, sin rebotes ni correcciones al final.
  * - Una nueva petición reemplaza a la pendiente (no se encolan) y parte de donde está la vista en ese cuadro.
@@ -33,6 +35,12 @@ export interface CameraOptions {
 
 /** Duración de los movimientos de cámara: corta, pero perceptible como desplazamiento (no como corte). */
 export const CAMERA_MS = 320;
+
+/**
+ * Fracción máxima del tiempo de la transición que avanza un cuadro: al menos 10 cuadros por movimiento. A 60 fps no
+ * cambia nada (cada cuadro es ~1/19 de 320 ms); solo actúa cuando cada cuadro tarda más de 32 ms.
+ */
+export const MAX_STEP = 1 / 10;
 
 /** Diferencias por debajo de esto no se animan (ni se aplican): la vista ya está ahí. */
 const PIXEL_EPSILON = 0.5;
@@ -122,21 +130,24 @@ export function createCamera(host: CameraHost, env: CameraEnv = browserEnv): Cam
       }
       return new Promise<boolean>((resolve) => {
         finish = resolve;
-        let start: number | null = null;
-        let from: View | null = null;
+        const from = host.getViewport();
+        // Tiempo de la transición ya recorrido (ms) y el cuadro anterior: el reloj avanza con los cuadros, como mucho
+        // `MAX_STEP` por cuadro, y empieza en el segundo (lo que haya bloqueado antes no adelanta la transición).
+        let elapsed = 0;
+        let last: number | null = null;
         const step = (time: number) => {
-          // El reloj empieza en el primer cuadro: lo que haya bloqueado antes no adelanta la transición.
-          if (start === null) {
-            start = time;
-            from = host.getViewport();
-          }
-          const t = Math.min(1, (time - start) / duration);
-          host.setViewport(t >= 1 ? target : interpolateView(from!, target, easeInOutCubic(t), host.size()));
+          if (last !== null) elapsed += Math.min(time - last, duration * MAX_STEP);
+          last = time;
+          const t = Math.min(1, elapsed / duration);
           if (t >= 1) {
+            host.setViewport(target);
             frame = null;
             settled(target);
             stop(true);
-          } else frame = env.raf(step);
+            return;
+          }
+          if (t > 0) host.setViewport(interpolateView(from, target, easeInOutCubic(t), host.size()));
+          frame = env.raf(step);
         };
         frame = env.raf(step);
       });
