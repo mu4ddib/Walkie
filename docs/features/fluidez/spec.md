@@ -40,6 +40,7 @@ Medido con `pnpm --dir apps/web perf` (compilación de producción, Chromium, CP
 - [x] 10. Abrir un lienzo con imágenes no lo deja «Sin guardar» ni corre cajas.
 - [x] 11. Guardar no vuelve a pedir en el acto los resúmenes de módulos.
 - [x] 12. Banco reproducible de tres escalas con mediciones antes y después (`apps/web/perf`).
+- [x] 13. Con cuadros lentos (Safari pintando todo el lienzo al encuadrar), «Ver todo» no salta: el reloj empieza en el segundo cuadro y ningún cuadro avanza más de `MAX_STEP` (1/10) del tiempo; la transición llega en al menos 10 pasos.
 
 ## Resultados (Chromium, compilación de producción, 1512×860)
 
@@ -59,11 +60,20 @@ Habitual con CPU ×1: escribir en el inspector, 50 → 17 ms de peor cuadro; la 
 
 En Chromium el salto inicial de «Ver todo» no aparece en estas escalas (el primer cuadro avanza 0 % en los dos casos): el bloqueo que mostraba la grabación de Safari depende del motor y del equipo. El arreglo elimina su causa —el reloj de la transición empieza en el primer cuadro dibujado— y lo cubre `camera.test.ts`. Safari no se pudo probar en este entorno.
 
+### Seguimiento: Safari (WebKit)
+
+Tras el primer PR, «Ver todo» seguía saltando en Safari (los tours, que desplazan a zoom fijo, iban fluidos). Medido con `perf/camara.perf.ts` en WebKit de Playwright (Linux, sin GPU: las cifras absolutas son peores que en un Mac, la proporción sirve):
+
+- Cada cuadro de «Ver todo» tardaba 130–200 ms, y solo ~10 ms eran JavaScript: el resto es pintar el lienzo entero a otra escala. Con la cámara medida por tiempo, 320 ms daban 3 o 4 cuadros y uno solo avanzaba del 52 al 61 % del recorrido (lienzos habitual y exigente).
+- Con el reloj desde el segundo cuadro y el tope por cuadro: 11 cuadros en las tres escalas, el mayor avance en un cuadro es de 0,28 y el primero, 0. El movimiento dura más cuando los cuadros son lentos (1,1–2 s en este WebKit sin GPU).
+- Chromium no cambia: ~320 ms en 15–20 cuadros (a 60 fps el tope no actúa).
+- Se probó poner el viewport en su propia capa (`will-change`) solo en WebKit: aquí no mejoró de forma medible y en Chromium empeora, así que no se usa. Ocultar el texto de las cajas bajaba el cuadro de ~175 a ~70 ms: el texto es lo más caro de pintar, pero quitarlo cambiaría lo que se ve.
+
 ## Fuera de alcance
 
 - Cálculo incremental de puertos, carriles y etiquetas (solo las conexiones afectadas): cambio grande; queda como siguiente paso medido.
 - Dibujar solo lo visible (`onlyRenderVisibleElements`): exige rehacer la exportación de imagen y la medición de cajas fuera de la vista.
-- Validar en Safari: el entorno solo tiene Chromium.
+- Validar en Safari de macOS: el banco usa el WebKit de Playwright en Linux, que pinta sin GPU.
 
 ## Impacto en el modelo
 

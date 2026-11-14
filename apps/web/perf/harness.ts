@@ -69,8 +69,10 @@ export interface Result {
   camera?: { firstStep: number; biggestStep: number; reverses: number; moveMs: number; stepsMoving: number };
 }
 
-export async function instrument(page: Page): Promise<CDPSession> {
+/** CDP solo existe en Chromium: en WebKit (Safari) se mide con la instrumentación de la página y sin frenar la CPU. */
+export async function instrument(page: Page): Promise<CDPSession | null> {
   await page.addInitScript(INSTRUMENT);
+  if (page.context().browser()?.browserType().name() !== 'chromium') return null;
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Performance.enable');
   const rate = Number(process.env.WALKIE_CPU ?? '4');
@@ -78,7 +80,8 @@ export async function instrument(page: Page): Promise<CDPSession> {
   return cdp;
 }
 
-async function metrics(cdp: CDPSession): Promise<Record<string, number>> {
+async function metrics(cdp: CDPSession | null): Promise<Record<string, number>> {
+  if (!cdp) return {};
   const { metrics: list } = await cdp.send('Performance.getMetrics');
   return Object.fromEntries(list.map((m) => [m.name, m.value]));
 }
@@ -155,7 +158,7 @@ async function settle(page: Page, ms = 500) {
 /** Mide `action` (el escenario) y devuelve sus métricas. */
 export async function measure(
   page: Page,
-  cdp: CDPSession,
+  cdp: CDPSession | null,
   scenario: string,
   action: () => Promise<void>,
   opts: { camera?: boolean; quiet?: number; navigation?: boolean } = {},
@@ -187,7 +190,7 @@ export async function measure(
   const after = await metrics(cdp);
   const gaps = data.frames.slice(1).map(([t], i) => t - data.frames[i]![0]).sort((a, b) => a - b);
   // Al navegar, CDP reinicia sus contadores: esas cifras no se comparan (quedan en 0).
-  const d = (k: string) => (opts.navigation ? 0 : (after[k]! - before[k]!) * 1000);
+  const d = (k: string) => (opts.navigation || !cdp ? 0 : (after[k]! - before[k]!) * 1000);
   return {
     scenario,
     duration,
@@ -205,7 +208,7 @@ export async function measure(
     scriptMs: round(d('ScriptDuration')),
     layoutMs: round(d('LayoutDuration')),
     styleMs: round(d('RecalcStyleDuration')),
-    layouts: opts.navigation ? 0 : Math.round(after.LayoutCount! - before.LayoutCount!),
+    layouts: opts.navigation || !cdp ? 0 : Math.round(after.LayoutCount! - before.LayoutCount!),
     ...(opts.camera ? { camera: cameraOf(data.frames, data.pane) } : {}),
   };
 }

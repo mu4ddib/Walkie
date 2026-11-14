@@ -24,7 +24,8 @@ async function drag(page: Page, x: number, y: number, dx: number, dy: number) {
 
 test(`perfil ${list.join(',')}`, async ({ page }) => {
   test.setTimeout(300_000);
-  const cdp = await instrument(page);
+  // El perfil de CPU necesita CDP (solo Chromium).
+  const cdp = (await instrument(page))!;
   await login(page);
   const { path } = await seed(page, scale, 'perfil');
   await page.goto(path);

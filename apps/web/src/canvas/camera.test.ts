@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCamera, easeInOutCubic, interpolateView, sameView, type View } from './camera';
+import { createCamera, easeInOutCubic, interpolateView, MAX_STEP, sameView, type View } from './camera';
 
 /** Reloj de cuadros falso: cada `frame(ms)` corre los callbacks pendientes con ese tiempo (sin depender de timers reales). */
 function setup(options: { reduced?: boolean; start?: View } = {}) {
@@ -39,20 +39,34 @@ function setup(options: { reduced?: boolean; start?: View } = {}) {
 const target = { x: -800, y: -300, zoom: 0.5 };
 
 describe('cámara del lienzo (revisión de fluidez)', () => {
-  it('una sola transición: el reloj empieza en el primer cuadro (sin salto aunque haya demora) y termina exacta', async () => {
+  it('una sola transición: el reloj empieza en el segundo cuadro (sin salto aunque haya demora) y termina exacta', async () => {
     const { camera, frame, calls, settled } = setup();
     const done = camera.to(target, { duration: 300 });
-    // El primer cuadro llega tarde (el hilo estaba ocupado): aun así empieza desde la vista de partida.
+    // El primer cuadro llega tarde (el hilo estaba ocupado) y paga el arranque: la vista no se mueve todavía.
     frame(1000);
-    expect(calls[0]).toEqual({ x: 0, y: 0, zoom: 1 });
-    frame(1016);
-    expect(Math.abs(calls[1]!.x)).toBeLessThan(5);
-    frame(1150);
-    frame(1300);
+    expect(calls).toEqual([]);
+    // El segundo también tarda (pintar todo el lienzo): avanza poco, no a mitad de camino.
+    frame(1200);
+    // Sin el tope, 200 ms de 300 la dejarían a tres cuartos del camino (x ≈ -600).
+    expect(Math.abs(calls[0]!.x)).toBeLessThan(20);
+    for (let t = 1216; calls.at(-1) !== target && t < 3000; t += 16) frame(t);
     expect(calls.at(-1)).toEqual(target);
     await expect(done).resolves.toBe(true);
     // Recuerda la vista una sola vez, al llegar.
     expect(settled).toEqual([target]);
+  });
+
+  it('con cuadros lentos tarda más pero no salta: al menos 10 pasos y ninguno grande', () => {
+    const { camera, frame, calls } = setup();
+    void camera.to(target, { duration: 320 });
+    // Safari pintando todo el lienzo al encuadrar: ~150 ms por cuadro (sin el tope serían 2 o 3 cuadros).
+    for (let t = 0; calls.at(-1) !== target && t < 10_000; t += 150) frame(t);
+    expect(calls.at(-1)).toEqual(target);
+    expect(calls.length).toBeGreaterThanOrEqual(1 / MAX_STEP);
+    const zooms = [1, ...calls.map((c) => c.zoom)];
+    const progress = zooms.map((z) => Math.log(z) / Math.log(target.zoom));
+    const steps = progress.slice(1).map((p, i) => p - progress[i]!);
+    expect(Math.max(...steps)).toBeLessThan(0.25);
   });
 
   it('avanza siempre hacia el destino: el zoom no se aleja de más ni vuelve atrás', () => {
@@ -74,7 +88,7 @@ describe('cámara del lienzo (revisión de fluidez)', () => {
     await expect(first).resolves.toBe(false);
     frame(200);
     expect(calls.at(-1)).toEqual(where);
-    frame(500);
+    for (let t = 216; t < 2000; t += 16) frame(t);
     expect(calls.at(-1)).toEqual({ x: 0, y: 0, zoom: 2 });
     await expect(second).resolves.toBe(true);
   });

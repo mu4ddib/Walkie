@@ -150,6 +150,7 @@ for (const scale of scales) {
 
     // Navegar entre features y volver: memoria y oyentes tras varios ciclos.
     const heap = async () => {
+      if (!cdp) return { mb: 0, nodes: await page.evaluate(() => document.querySelectorAll('*').length) };
       await cdp.send('HeapProfiler.collectGarbage');
       const { usedSize } = await cdp.send('Runtime.getHeapUsage');
       const listeners = await page.evaluate(() => document.querySelectorAll('*').length);
