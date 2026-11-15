@@ -158,23 +158,36 @@ internal sealed class Binding
 
     public DateTimeOffset DecidedAt { get; set; }
 
-    /// <summary>Concurrencia optimista: sube en cada decisión, también al restablecer.</summary>
+    /// <summary>Concurrencia optimista: sube en cada decisión, también al restablecer y al reservar.</summary>
     public int Version { get; set; }
+
+    /// <summary>
+    /// Aplicación que reservó este hallazgo antes de escribir fuera de Discovery (tarea 6, bitácora de ADR-0012). Mientras
+    /// esa aplicación esté <c>pending</c>, ninguna otra decide sobre él; se limpia al completar o al compensar.
+    /// </summary>
+    public Guid? PendingApplyId { get; set; }
 
     public bool Active => Decision is not null;
 }
 
 /// <summary>
 /// Bitácora de aplicaciones (ADR-0012): una por <c>applyId</c> del cliente, con el hash de la solicitud y su resultado.
-/// Repetir el mismo <c>applyId</c> con la misma solicitud devuelve el mismo resultado; con otra, 409. En la tarea 4
-/// solo hay operaciones de una transacción (reject, link y reset), así que queda <c>completed</c>; las creaciones de
-/// la tarea 6 suman <c>pending</c> y <c>compensated</c> sobre esta misma tabla.
+/// Repetir el mismo <c>applyId</c> con la misma solicitud devuelve el mismo resultado; con otra, 409. Sin creaciones
+/// (reject, link, reset) se escribe ya <c>completed</c>, en la misma transacción que los vínculos. Con creaciones (tarea 6)
+/// se registra antes <c>pending</c> con el plan y sus pasos (<see cref="ApplyStep"/>), y termina <c>completed</c> o
+/// <c>compensated</c>.
 /// </summary>
 internal sealed class ApplyRecord
 {
+    public const string Pending = "pending";
+    public const string Completed = "completed";
+    public const string Compensated = "compensated";
+
     public Guid ApplyId { get; init; }
 
     public Guid AppId { get; init; }
+
+    public Guid SourceId { get; init; }
 
     public Guid SnapshotId { get; init; }
 
@@ -183,10 +196,47 @@ internal sealed class ApplyRecord
 
     public required string Status { get; set; }
 
-    /// <summary>El <c>walkie-discovery-apply-result</c> como <c>jsonb</c>.</summary>
-    public required string Result { get; set; }
+    /// <summary>Las operaciones validadas, con los ids del cliente (<c>jsonb</c>): lo que retoma un reintento. Solo con creaciones.</summary>
+    public string? Plan { get; init; }
+
+    /// <summary>El <c>walkie-discovery-apply-result</c> como <c>jsonb</c>; null mientras está <c>pending</c>.</summary>
+    public string? Result { get; set; }
 
     public required string CreatedBy { get; init; }
 
     public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Un paso de una aplicación que escribe fuera de Discovery (tarea 6): crear un elemento del catálogo con el id del
+/// cliente. Se registra <c>planned</c> antes de escribir y se marca después de cada escritura, así un reintento o una
+/// compensación saben qué creó esta aplicación y nada más. Un id planificado no se puede planificar en otra
+/// aplicación (índice único).
+/// </summary>
+internal sealed class ApplyStep
+{
+    public const string Planned = "planned";
+    public const string Created = "created";
+    public const string Compensated = "compensated";
+
+    /// <summary>Se dejó al compensar porque alguien lo editó o un lienzo lo usa: no se pierde ese cambio.</summary>
+    public const string Kept = "kept";
+
+    public Guid ApplyId { get; init; }
+
+    public int Index { get; init; }
+
+    public required string EntityKey { get; init; }
+
+    /// <summary><c>catalogItem</c> (módulos y features llegan en la tarea 9).</summary>
+    public required string TargetKind { get; init; }
+
+    public Guid TargetId { get; init; }
+
+    /// <summary>Lo que se crea (<c>CreateCatalogItemRequest</c> como <c>jsonb</c>), calculado del hallazgo al planificar.</summary>
+    public required string Item { get; init; }
+
+    public required string Status { get; set; }
 }

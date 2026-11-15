@@ -150,7 +150,7 @@ public sealed class DiscoveryReviewTests(WalkieApiFactory factory)
     [InlineData("modulo-para-una-api", "/operations/0/target/kind")]
     [InlineData("destino-inexistente", "/operations/0/target/id")]
     [InlineData("hallazgo-que-no-esta", "/operations/0/entityKey")]
-    [InlineData("crear-todavia-no", "/operations/0/op")]
+    [InlineData("crear-con-id-que-no-es-v7", "/operations/0/id")]
     [InlineData("misma-clave-dos-veces", "/operations/1/entityKey")]
     [InlineData("restablecer-sin-decision", "/operations/0/entityKey")]
     [InlineData("schema", "/operations/0")]
@@ -166,7 +166,7 @@ public sealed class DiscoveryReviewTests(WalkieApiFactory factory)
             "modulo-para-una-api" => [Link(Get, "module", database, 0)],
             "destino-inexistente" => [Link(Get, "catalogItem", Guid.NewGuid(), 0)],
             "hallazgo-que-no-esta" => [Op("reject", "api:GET /no-existe")],
-            "crear-todavia-no" => [new JsonObject { ["op"] = "create", ["entityKey"] = Get, ["id"] = Guid.CreateVersion7().ToString() }],
+            "crear-con-id-que-no-es-v7" => [new JsonObject { ["op"] = "create", ["entityKey"] = Get, ["id"] = Guid.NewGuid().ToString() }],
             "misma-clave-dos-veces" => [Op("reject", Get), Op("reject", Get)],
             "restablecer-sin-decision" => [Op("reset", Get)],
             "schema" => [new JsonObject { ["op"] = "link", ["entityKey"] = Get }], // link sin target

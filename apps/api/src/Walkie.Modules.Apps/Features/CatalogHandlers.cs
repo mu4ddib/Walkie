@@ -170,7 +170,7 @@ internal sealed class CatalogHandlers(AppsDbContext db, ICatalogUsage usage, Tim
     }
 
     /// <summary>Textos recortados; vacío = sin valor (así la respuesta no trae campos vacíos). El contrato ya cumple el schema.</summary>
-    private static void Apply(
+    internal static void Apply(
         CatalogItem item, string? description, JsonElement? http, JsonElement? database, JsonElement? resource, string? runtime)
     {
         item.Description = Clean(description);

@@ -95,6 +95,14 @@ internal sealed class MatchIndex
             ? (new DiscoveryMatch(found[0].Reference, reason), null)
             : (null, found.OrderBy(t => t.Id).Select(t => new DiscoveryMatch(t.Reference, reason)).ToList());
 
+    /// <summary>Elementos existentes de ese tipo cuya firma es <paramref name="key"/> (crear otro los duplicaría).</summary>
+    public IReadOnlyList<ExistingTarget> WithSignature(string type, string key) =>
+        bySignature.TryGetValue(key, out var found) ? [.. found.Where(t => t.Type == type)] : [];
+
+    /// <summary>Elementos existentes de ese tipo con el mismo título normalizado.</summary>
+    public IReadOnlyList<ExistingTarget> WithTitle(string type, string title) =>
+        byTitle.TryGetValue((type, NormalizeTitle(title)), out var found) ? found : [];
+
     /// <summary>La firma de un elemento del catálogo según su contrato, o null si no la tiene completa.</summary>
     public static string? Signature(string type, JsonElement? http, JsonElement? database, JsonElement? resource)
     {

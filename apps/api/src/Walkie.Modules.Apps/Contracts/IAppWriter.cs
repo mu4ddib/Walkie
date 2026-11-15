@@ -28,6 +28,32 @@ public interface IAppWriter
     /// <summary>Crea un elemento del catálogo con la definición de <paramref name="source"/> y devuelve su id (nuevo).</summary>
     Task<Guid> CreateCatalogItemAsync(Guid appId, CatalogItemResponse source, string userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Errores de <paramref name="item"/> según las reglas oficiales del catálogo (las mismas que
+    /// <c>POST /api/apps/{appId}/catalog</c>), por campo; vacío si es válido. Para validar antes de escribir (Discovery).
+    /// </summary>
+    IReadOnlyDictionary<string, string[]> ValidateCatalogItem(CreateCatalogItemRequest item);
+
+    /// <summary>
+    /// Cómo quedaría <paramref name="item"/> en el catálogo con ese id (versión 1), con la misma limpieza que al crearlo,
+    /// sin escribir nada: la vista previa de Discovery muestra exactamente lo que se creará.
+    /// </summary>
+    CatalogItemResponse PreviewCatalogItem(Guid appId, Guid itemId, CreateCatalogItemRequest item);
+
+    /// <summary>
+    /// Crea un elemento del catálogo con el id que generó el cliente (Discovery, spec walkie-live tarea 6), con las mismas
+    /// reglas y la misma limpieza que el endpoint: <paramref name="item"/> ya pasó <see cref="ValidateCatalogItem"/>.
+    /// Idempotente por id: si ya existe en esa app y con ese tipo (un reintento del mismo plan), no escribe nada.
+    /// </summary>
+    Task<CatalogItemCreation> CreateCatalogItemAsync(
+        Guid appId, Guid itemId, CreateCatalogItemRequest item, string userId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Borra un elemento creado por una operación que se deshace, solo si nadie lo tocó: sigue en su versión 1 y ningún
+    /// lienzo lo usa. Si no, lo deja y dice por qué (compensar nunca pierde un cambio de una persona).
+    /// </summary>
+    Task<CatalogItemRemoval> DeleteUntouchedCatalogItemAsync(Guid appId, Guid itemId, CancellationToken cancellationToken);
+
     /// <summary>Borra features (deshacer una importación).</summary>
     Task DeleteFeaturesAsync(IReadOnlyCollection<Guid> featureIds, CancellationToken cancellationToken);
 

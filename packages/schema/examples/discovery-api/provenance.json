@@ -1,0 +1,70 @@
+{
+  "appId": "0198f0c0-1111-7000-8000-000000000101",
+  "target": {
+    "kind": "catalogItem",
+    "id": "0198f0c0-5555-7000-8000-000000000503",
+    "title": "Consultar pedido"
+  },
+  "targetExists": true,
+  "bindings": [
+    {
+      "source": {
+        "id": "0198f0c0-aaaa-7000-8000-000000000001",
+        "name": "tienda-demo"
+      },
+      "binding": {
+        "sourceId": "0198f0c0-aaaa-7000-8000-000000000001",
+        "entityKey": "api:GET /api/pedidos/{}",
+        "decision": "created",
+        "target": {
+          "kind": "catalogItem",
+          "id": "0198f0c0-5555-7000-8000-000000000503",
+          "title": "Consultar pedido"
+        },
+        "entityFingerprint": "sha256:19db75590a30e7613836d8549a761b01a202f1b7ac7b78d2ddb7c3ac7850a02d",
+        "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
+        "applyId": "0198f0c0-4444-7000-8000-000000000403",
+        "decidedBy": "usuario-demo",
+        "decidedAt": "2026-11-15T10:00:00Z",
+        "version": 2
+      },
+      "entity": {
+        "key": "api:GET /api/pedidos/{}",
+        "kind": "api",
+        "title": "Consultar pedido",
+        "basis": "observed",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "id": "ev-mapget-pedido",
+          "detector": "aspnetcore-endpoints",
+          "path": "src/Tienda.Api/Pedidos/PedidosEndpoints.cs",
+          "symbol": "PedidosEndpoints.MapPedidos",
+          "lines": {
+            "start": 12,
+            "end": 14
+          },
+          "confidence": "high",
+          "note": "MapGet con ruta literal"
+        },
+        {
+          "id": "ev-openapi-pedido",
+          "detector": "openapi",
+          "path": "docs/openapi.json",
+          "symbol": "paths./api/pedidos/{pedidoId}.get",
+          "lines": {
+            "start": 40,
+            "end": 61
+          },
+          "confidence": "high"
+        }
+      ],
+      "evidenceTotal": 2,
+      "latest": {
+        "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
+        "status": "same"
+      }
+    }
+  ]
+}

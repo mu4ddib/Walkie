@@ -75,6 +75,15 @@ Cada escritura es idempotente por id: si el elemento ya existe con ese id, se da
 
 La transacción compartida (A) queda como forma de revertir la decisión, detrás de las mismas interfaces.
 
+**Cómo quedó en la tarea 6 (crear en el catálogo).** Precisiones al diseño de arriba, sin cambiar la opción C:
+
+- **Una ejecución a la vez por `applyId`:** un candado de sesión de Postgres (`pg_try_advisory_lock`) sobre el `applyId`. Un doble clic o un reintento mientras la primera sigue recibe 409 («se está ejecutando»). Si el proceso muere, Postgres suelta el candado con la conexión, así el reintento retoma lo `pending` sin esperar un plazo.
+- **Reserva de los hallazgos:** al registrar `pending`, cada hallazgo de la solicitud queda reservado (`bindings.pending_apply_id`) y su versión sube en la misma transacción. Dos aplicaciones distintas sobre el mismo hallazgo chocan ahí, antes de escribir en Apps: una gana y la otra recibe 409. Un id planificado es de una sola aplicación (índice único en `discovery.apply_steps`).
+- **Pasos:** cada creación es un paso (`planned` → `created`, guardado después de cada escritura), así un reintento sabe qué falta y una compensación sabe qué creó esta aplicación y nada más.
+- **Compensar sin perder datos:** se borra lo creado solo si sigue en su versión 1 y ningún lienzo lo usa (`IAppWriter.DeleteUntouchedCatalogItemAsync`). Lo que alguien ya editó o usó se deja (paso `kept`, aviso `compensation-kept`): queda en el catálogo sin vínculo, documentado en la bitácora y en la respuesta, y se puede vincular desde la revisión. La respuesta no dice que se revirtió lo que no se revirtió.
+- **Cuándo se retoma una caída:** con el mismo `applyId` (el cliente reintenta) o cuando otra aplicación toca un hallazgo reservado por ella: esa la termina y responde 409 para que la persona vuelva a mirar. **Diferencia con el texto de arriba:** decía «o la siguiente revisión de esa fuente»; la revisión (`GET`) se dejó de solo lectura —una lectura que escribe en otro módulo sorprendería y rompería su transacción de lectura repetible—. Mientras tanto, los hallazgos reservados no se pueden decidir (409) hasta que se retome. Si se prefiere que la revisión también la retome, se suma sin cambiar la bitácora.
+- **Lo que no usa el token de la solicitud:** la ejecución y la compensación no se cancelan si el cliente se va; terminan o compensan en vez de quedar a medias.
+
 **Seguridad: bloqueo explícito.** La falta de autorización por app es deuda técnica anterior a Walkie Live. Con Discovery, cualquier usuario autenticado vería rutas de archivos, nombres internos y estructura de proyectos privados. Por eso:
 
 - **No se habilita la importación de proyectos privados para usuarios reales** (piloto ni producción) hasta que exista autorización por app.

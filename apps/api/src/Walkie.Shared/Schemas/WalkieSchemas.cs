@@ -83,7 +83,7 @@ public static class WalkieSchemas
     public static JsonSchema DiscoveryApply { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-apply.schema.json");
 
     /// <summary><c>walkie-discovery-apply-result.schema.json</c>: resultado (o vista previa) de aplicar.</summary>
-    public static JsonSchema DiscoveryApplyResult { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-apply-result.schema.json");
+    public static JsonSchema DiscoveryApplyResult { get; } = LoadAfter(DiscoveryBinding, CatalogItem, "walkie-discovery-apply-result.schema.json");
 
     /// <summary><c>walkie-discovery-upload.schema.json</c>: respuesta de subir un <c>.walkiepack</c> (usa el snapshot).</summary>
     public static JsonSchema DiscoveryUpload { get; } = LoadAfter(DiscoverySnapshot, "walkie-discovery-upload.schema.json");
@@ -93,6 +93,9 @@ public static class WalkieSchemas
 
     /// <summary><c>walkie-discovery-evidence.schema.json</c>: evidencia y relaciones de un hallazgo (usa el discovery).</summary>
     public static JsonSchema DiscoveryEvidence { get; } = LoadAfter(Discovery, "walkie-discovery-evidence.schema.json");
+
+    /// <summary><c>walkie-discovery-provenance.schema.json</c>: de dónde viene un elemento (<c>GET /api/apps/{appId}/bindings</c>, tarea 6).</summary>
+    public static JsonSchema DiscoveryProvenance { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-provenance.schema.json");
 
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
@@ -142,6 +145,12 @@ public static class WalkieSchemas
     {
         _ = dependency; // el schema del que usa $refs tiene que estar registrado antes
         return JsonSchema.FromText(Load(name), Options);
+    }
+
+    private static JsonSchema LoadAfter(JsonSchema dependency, JsonSchema other, string name)
+    {
+        _ = other; // también usa $refs de este (ej. el resultado de aplicar trae elementos del catálogo)
+        return LoadAfter(dependency, name);
     }
 
     private static JsonSchema LoadAfterGraph(string name)

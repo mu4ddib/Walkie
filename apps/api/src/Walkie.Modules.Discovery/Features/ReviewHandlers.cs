@@ -87,7 +87,10 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
             .Where(b => b.AppId == snapshot.AppId && b.SourceId == snapshot.SourceId && b.Decision != null)
             .ToDictionaryAsync(b => b.EntityKey, StringComparer.Ordinal, ct).ConfigureAwait(false);
 
-        var index = new MatchIndex(await ExistingTargetsAsync(snapshot.AppId, ct).ConfigureAwait(false));
+        var existing = await ExistingTargetsAsync(snapshot.AppId, ct).ConfigureAwait(false);
+        var index = new MatchIndex(existing);
+        // Un vínculo cuyo elemento se borró a mano sigue guardado, pero no se presenta como válido.
+        var alive = existing.Select(t => (t.TargetKind, t.Id)).ToHashSet();
         // A qué hallazgo está vinculado cada destino: uno ya tomado no se propone para otro (diccionario, no búsqueda lineal).
         var bound = new Dictionary<(string Kind, Guid Id), string>();
         foreach (var b in bindings.Values.Where(b => b.TargetId is not null).OrderBy(b => b.EntityKey, StringComparer.Ordinal))
@@ -116,7 +119,8 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
             .Select(c => new DiscoveryReviewItem(
                 c.Row.Key, c.Row.Kind, c.Row.Title, c.Row.Basis, c.Row.Confidence, c.Status, c.Row.Fingerprint,
                 c.Binding is null ? null : BindingResponse(c.Binding),
-                c.Match, c.Candidates, evidenceCounts.GetValueOrDefault(c.Row.Key), c.Proposal))
+                c.Match, c.Candidates, evidenceCounts.GetValueOrDefault(c.Row.Key), c.Proposal,
+                c.Binding is { TargetKind: { } targetKind, TargetId: { } targetId } && !alive.Contains((targetKind, targetId)) ? true : null))
             .ToList();
 
         await transaction.CommitAsync(ct).ConfigureAwait(false);

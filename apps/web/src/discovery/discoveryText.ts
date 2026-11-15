@@ -45,6 +45,9 @@ export const STATUS: Record<DiscoveryStatus, { label: string; glyph: string; hel
 
 export const STATUS_ORDER: DiscoveryStatus[] = ['new', 'matched', 'changed', 'missing', 'linked', 'created', 'rejected'];
 
+/** Lo que se puede crear en el catálogo desde un hallazgo (tarea 6). Módulos y features llegan en la tarea 9. */
+export const CREATABLE_KINDS: readonly string[] = ['api', 'service', 'database', 'resource'];
+
 export const KIND: Record<string, string> = {
   api: 'API',
   service: 'Servicio',

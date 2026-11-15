@@ -456,6 +456,8 @@ export type DiscoveryOperation = import('../schema/walkie-discovery-apply').Oper
 export type DiscoveryApplyResult = import('../schema/walkie-discovery-apply-result').WalkieDiscoveryApplyResultV0;
 export type DiscoverySources = import('../schema/walkie-discovery-sources').WalkieDiscoverySourcesV0;
 export type DiscoveryEvidence = import('../schema/walkie-discovery-evidence').WalkieDiscoveryEntityEvidenceV0;
+export type DiscoveryProvenance = import('../schema/walkie-discovery-provenance').WalkieDiscoveryProvenanceV0;
+export type DiscoveryOrigin = import('../schema/walkie-discovery-provenance').Origin;
 
 /** Tamaño máximo de un .walkiepack (el de `DiscoveryLimits.MaxPackBytes` en la API). */
 export const WALKIEPACK_MAX_BYTES = 50 * 1024 * 1024;
@@ -503,6 +505,14 @@ export function applyDiscovery(
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * De qué hallazgos de Walkie Live viene un elemento (`target` = `catalogItem:{id}`, `module:{id}` o `feature:{id}`).
+ * 404 si Discovery está apagado o la app no existe.
+ */
+export function getDiscoveryProvenance(token: string, appId: string, target: string, signal?: AbortSignal): Promise<DiscoveryProvenance> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/bindings?target=${encodeURIComponent(target)}`, { token, signal });
 }
 
 /** Evidencia y relaciones de un hallazgo (solo de ese, no del análisis entero). */

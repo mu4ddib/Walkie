@@ -32,13 +32,16 @@ internal static class ReviewEndpoints
             .WithName("ApplyDiscoveryOperations")
             .WithSummary(
                 "Decide sobre hallazgos del último análisis de una fuente (walkie-discovery-apply → walkie-discovery-apply-result): "
-                + "reject, link y reset (create llega en la tarea 6). Con dryRun=true es la vista previa. Idempotente por applyId. "
-                + "bindingVersion distinto del actual: 409. Nunca modifica el elemento vinculado ni ningún lienzo.")
+                + "create (api, service, database o resource en el catálogo, con el id UUID v7 del cliente), link, reject y reset. "
+                + "Con dryRun=true es la vista previa, con las mismas validaciones y sin escribir. Idempotente por applyId; si se cortó "
+                + "a mitad, repetirlo la termina. bindingVersion distinto del actual: 409. Si falla a mitad, se deshace lo creado "
+                + "(status compensated). Nunca modifica un elemento existente ni ningún lienzo.")
             .Accepts<JsonElement>("application/json")
             .Produces<DiscoveryApplyResult>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         discovery.MapGet("/api/snapshots/{snapshotId:guid}/evidence", Evidence)
             .WithName("GetDiscoveryEvidence")
@@ -46,6 +49,15 @@ internal static class ReviewEndpoints
                 "Evidencia y relaciones de un hallazgo (walkie-discovery-evidence), para el inspector de la revisión: entityKey en la "
                 + "query (las claves llevan / y espacios). Si ya no aparece en el análisis, la del anterior. 404 si no está en ninguno.")
             .Produces<EntityEvidence>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        discovery.MapGet("/api/apps/{appId:guid}/bindings", Provenance)
+            .WithName("GetDiscoveryProvenance")
+            .WithSummary(
+                "De qué hallazgos de Walkie Live viene un elemento (walkie-discovery-provenance): target={kind}:{id}, con kind "
+                + "catalogItem, module o feature. Los vínculos activos con su fuente, hallazgo, evidencia y si el último análisis lo sigue viendo.")
+            .Produces<ProvenanceResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
@@ -79,9 +91,20 @@ internal static class ReviewEndpoints
                 statusCode: StatusCodes.Status409Conflict,
                 title: "La decisión choca con el estado actual.",
                 extensions: new Dictionary<string, object?> { ["errors"] = conflict.Errors }),
+            ApplyOutcome.Unfinished unfinished => TypedResults.Problem(
+                title: "La aplicación quedó pendiente", detail: unfinished.Message, statusCode: StatusCodes.Status500InternalServerError),
             _ => TypedResults.NotFound(),
         };
     }
+
+    private static async Task<Results<Ok<ProvenanceResponse>, NotFound, ValidationProblem>> Provenance(
+        Guid appId, string? target, ProvenanceHandlers handlers, CancellationToken ct) =>
+        await handlers.ForTargetAsync(appId, target, ct).ConfigureAwait(false) switch
+        {
+            ProvenanceResult.Done done => TypedResults.Ok(done.Response),
+            ProvenanceResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
+            _ => TypedResults.NotFound(),
+        };
 
     private static async Task<Results<Ok<EntityEvidence>, NotFound, ValidationProblem>> Evidence(
         Guid snapshotId, string? entityKey, EvidenceHandlers handlers, CancellationToken ct)

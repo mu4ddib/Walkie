@@ -25,6 +25,10 @@ export type Item = {
   fingerprint: string;
   binding?: WalkieDiscoveryBindingV0;
   /**
+   * Solo con un vínculo linked o created cuyo elemento ya no existe en Walkie (se borró a mano): la decisión sigue guardada pero no apunta a nada. Restablécela o vincúlalo a otro elemento
+   */
+  targetMissing?: true;
+  /**
    * Solo en matched: con qué elemento existente coincide y por qué
    */
   match?: {

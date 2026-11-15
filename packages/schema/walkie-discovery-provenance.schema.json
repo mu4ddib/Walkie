@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-provenance.schema.json",
+  "title": "Walkie discovery provenance v0",
+  "description": "Respuesta de GET /api/apps/{appId}/bindings?target={kind}:{id} (spec walkie-live, tarea 6; ADR-0012): de qué hallazgos de Walkie Live viene un elemento de la app. Una entrada por vínculo activo (linked o created) de cualquier fuente de la app, con el hallazgo y su evidencia tal como estaban en el análisis en el que se decidió, y si el último análisis de esa fuente lo sigue viendo. La procedencia vive aquí, fuera del grafo y del elemento: no bloquea editarlo ni se reescribe con análisis nuevos.",
+  "type": "object",
+  "required": [
+    "appId",
+    "target",
+    "targetExists",
+    "bindings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "appId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "target": {
+      "$ref": "walkie-discovery-binding.schema.json#/$defs/target"
+    },
+    "targetExists": {
+      "type": "boolean",
+      "description": "false si el elemento ya no existe en la app (se borró): los vínculos siguen guardados, pero no apuntan a nada"
+    },
+    "bindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/origin"
+      }
+    }
+  },
+  "$defs": {
+    "origin": {
+      "type": "object",
+      "required": [
+        "source",
+        "binding",
+        "evidence",
+        "evidenceTotal",
+        "latest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "required": [
+            "id",
+            "name"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        },
+        "binding": {
+          "$ref": "walkie-discovery-binding.schema.json"
+        },
+        "entity": {
+          "type": "object",
+          "description": "El hallazgo en el análisis en el que se decidió (sin evidencia ni contrato)",
+          "required": [
+            "key",
+            "kind",
+            "title",
+            "basis",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+            },
+            "kind": {
+              "$ref": "walkie-discovery.schema.json#/$defs/entityKind"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "basis": {
+              "$ref": "walkie-discovery.schema.json#/$defs/basis"
+            },
+            "confidence": {
+              "$ref": "walkie-discovery.schema.json#/$defs/confidence"
+            }
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 20,
+          "description": "Evidencia del hallazgo en ese análisis (hasta 20; rutas relativas, líneas, detector y confianza)",
+          "items": {
+            "$ref": "walkie-discovery.schema.json#/$defs/evidence"
+          }
+        },
+        "evidenceTotal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "latest": {
+          "type": "object",
+          "description": "El último análisis de la fuente frente a la decisión. not-found no significa que se haya borrado: ese análisis puede no haber mirado donde estaba",
+          "required": [
+            "snapshotId",
+            "status"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "snapshotId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "status": {
+              "enum": [
+                "same",
+                "changed",
+                "not-found"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

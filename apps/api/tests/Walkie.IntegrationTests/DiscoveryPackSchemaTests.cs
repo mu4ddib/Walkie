@@ -32,6 +32,7 @@ public sealed class DiscoveryPackSchemaTests
     [InlineData("review-ambiguous.json")]
     [InlineData("sources.json")]
     [InlineData("evidence.json")]
+    [InlineData("provenance.json")]
     public void Los_registros_de_ejemplo_cumplen_su_schema(string file)
     {
         Assert.Empty(WalkieSchemas.Errors(RecordSchema(file), Element(Record(file))));
@@ -211,6 +212,7 @@ public sealed class DiscoveryPackSchemaTests
         "review-ambiguous.json" => WalkieSchemas.DiscoveryReview,
         "sources.json" => WalkieSchemas.DiscoverySources,
         "evidence.json" => WalkieSchemas.DiscoveryEvidence,
+        "provenance.json" => WalkieSchemas.DiscoveryProvenance,
         _ => throw new ArgumentOutOfRangeException(nameof(file), file, null),
     };
 }

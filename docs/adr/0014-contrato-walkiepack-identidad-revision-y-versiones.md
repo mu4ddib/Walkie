@@ -125,6 +125,15 @@ Los errores llevan la ruta dentro del paquete (`discovery.json/entities/3/eviden
 - **Versión del vínculo:** restablecer conserva la fila sin decisión, así la versión del vínculo nunca vuelve atrás. `bindingVersion` 0 significa «sin decisión activa».
 - **Solo sobre el último análisis:** las decisiones se toman sobre el último análisis de la fuente. Decidir sobre uno anterior guardaría un fingerprint que ya no es el actual.
 
+**Crear en el catálogo** (agregado en la tarea 6):
+- `create` lleva el id (UUID v7) del cliente: se valida que sea v7, que no esté en el catálogo (de ninguna app) ni planificado por otra aplicación. Solo `api`, `service`, `database` y `resource`; `module` y `feature` llegan en la tarea 9 y una pantalla entra con su feature.
+- Un hallazgo con una decisión activa no se crea: primero se restablece (409).
+- **Transformación hallazgo → elemento:** tipo y título del hallazgo; descripción solo si el análisis la trajo; `http`, `database`, `resource` y `runtime` se copian tal cual (el paquete usa los mismos `$defs` que el catálogo). Nada de la procedencia entra al elemento: lo observado o inferido, la confianza y la evidencia quedan en el hallazgo y su vínculo. La validación es la oficial del catálogo (`IAppWriter.ValidateCatalogItem`) y la vista previa la arma Apps con la misma limpieza que al crear (`IAppWriter.PreviewCatalogItem`).
+- **Sin duplicar:** si ya hay un elemento del mismo tipo con la misma firma, crear da 409 y pide vincular. Un título igual solo avisa (`same-title`).
+- **Avisos** en la vista previa: `inferred`, `low-confidence`, `logical-database` (una base que solo viene de un DbContext de EF es el modelo de la aplicación, no una base física confirmada) y `to-complete` (campos sin evidencia que quedan vacíos).
+- `walkie-discovery-apply-result` suma `created[].item`: el elemento tal como queda (`walkie-catalog-item`), con su id. `walkie-discovery-review` suma `targetMissing`: el elemento vinculado o creado se borró a mano y la decisión ya no apunta a nada.
+- **Procedencia:** `walkie-discovery-provenance.schema.json` es la respuesta de `GET /api/apps/{appId}/bindings?target={kind}:{id}` (la spec la nombraba sin contrato): los vínculos activos que apuntan al elemento, con su fuente, el hallazgo y hasta 20 evidencias del análisis en que se decidió, y si el último análisis lo sigue viendo (`same`, `changed`, `not-found`). `targetExists` dice si el elemento sigue existiendo.
+
 **Evidencia de un hallazgo** (agregado en la tarea 5): `walkie-discovery-evidence.schema.json` es la respuesta de `GET /api/snapshots/{snapshotId}/evidence?entityKey=`: la evidencia (los `$defs` de `walkie-discovery`) y las relaciones (hasta 100) de un solo hallazgo, con `foundIn` (el análisis pedido o, para un `missing`, el anterior). Se agregó porque la revisión trae solo `evidenceCount` (sumar la evidencia a cada ítem multiplicaría el tamaño de cada página) y la web no debe pedir el análisis entero para mostrar un hallazgo.
 
 **Compatibilidad:**

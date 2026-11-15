@@ -51,12 +51,14 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 
 ### Aplicar
 
-- [ ] Cuando aplico, entonces se crea únicamente lo aprobado: elementos del catálogo, módulos con su lienzo e interfaces y features nuevas con un lienzo inicial (sus pantallas y `ref` a los componentes del catálogo, ubicados sin superponerse).
-- [ ] Aplicar no modifica ningún lienzo existente: ni nodos, conexiones, referencias, módulos, interfaces, portales, layouts, grupos, notas ni tours (su `version` y su contenido quedan iguales).
-- [ ] Vincular un hallazgo a un elemento existente no cambia ese elemento: ni su título, ni su descripción, ni su contrato.
-- [ ] Aplicar no elimina nada. Lo que ya no aparece en un reanálisis solo se marca en la revisión.
-- [ ] Aplicar dos veces (reintento, doble clic) no duplica nada; si algo falla a mitad, se deshace lo creado; si el proceso se cae a mitad, el siguiente intento o la siguiente revisión lo completa o lo deshace (bitácora de aplicación, ADR-0012).
-- [ ] Después de aplicar, cada componente creado o vinculado se abre en el editor actual (catálogo, módulo o feature), y desde el componente puedo ver de qué evidencia viene.
+- [ ] Cuando aplico, entonces se crea únicamente lo aprobado: elementos del catálogo, módulos con su lienzo e interfaces y features nuevas con un lienzo inicial (sus pantallas y `ref` a los componentes del catálogo, ubicados sin superponerse). *Elementos del catálogo: hecho (tarea 6). Módulos y features: tarea 9.*
+- [x] Aplicar no modifica ningún lienzo existente: ni nodos, conexiones, referencias, módulos, interfaces, portales, layouts, grupos, notas ni tours (su `version` y su contenido quedan iguales).
+- [x] Vincular un hallazgo a un elemento existente no cambia ese elemento: ni su título, ni su descripción, ni su contrato.
+- [x] Aplicar no elimina nada que ya existiera. Lo que ya no aparece en un reanálisis solo se marca en la revisión. (Deshacer una aplicación fallida borra solo lo que ella misma creó y nadie tocó.)
+- [x] Aplicar dos veces (reintento, doble clic) no duplica nada; si algo falla a mitad, se deshace lo creado que nadie tocó (lo editado o usado se deja y se avisa); si el proceso se cae a mitad, el siguiente intento con el mismo `applyId`, o la siguiente aplicación que toque esos hallazgos, lo completa (bitácora de aplicación, ADR-0012). La revisión no lo retoma: sigue de solo lectura.
+- [ ] Después de aplicar, cada componente creado o vinculado se abre en el editor actual (catálogo, módulo o feature), y desde el componente puedo ver de qué evidencia viene. *Catálogo: hecho (tarea 6, «De dónde viene» en su detalle). Módulos y features: tarea 9.*
+- [x] Crear en el catálogo no inventa datos: copia lo que el análisis vio, avisa lo que queda vacío y si el hallazgo es inferido o una base solo lógica (EF), y no crea un segundo elemento con la misma firma (pide vincular).
+- [x] Si un elemento vinculado o creado se borra a mano, la revisión y su procedencia lo dicen en vez de presentarlo como un vínculo válido.
 
 ### Seguridad
 
@@ -97,8 +99,8 @@ Módulo nuevo `Walkie.Modules.Discovery` (schema `discovery` de Postgres; ADR-00
 - `GET /api/apps/{appId}/sources`: fuentes de la app con su último análisis (`walkie-discovery-sources`).
 - `GET /api/snapshots/{snapshotId}/review?kind=&status=&page=&pageSize=`: la revisión paginada (`walkie-discovery-review`; `page` desde 0, `pageSize` de 1 a 500, por defecto 50; los conteos son del análisis completo).
 - `GET /api/snapshots/{snapshotId}/evidence?entityKey=`: la evidencia y las relaciones (hasta 100) de un hallazgo (`walkie-discovery-evidence`). Si ya no está en ese análisis, la del anterior (`foundIn`). 400 sin `entityKey`; 404 si no está en ninguno de los dos o Discovery está apagado. Agregado en la tarea 5: la revisión solo trae `evidenceCount` y el inspector no debe cargar la evidencia de todo el análisis.
-- `POST /api/snapshots/{snapshotId}/apply` (`walkie-discovery-apply`, con `applyId` del cliente): 200 con `walkie-discovery-apply-result`; 400 con lo inválido; 409 si un vínculo cambió (`bindingVersion`). Descartar, vincular y restablecer también son operaciones de esta lista (ADR-0014): no hay un endpoint aparte para los vínculos.
-- `GET /api/apps/{appId}/bindings?target=`: de qué evidencia viene un componente.
+- `POST /api/snapshots/{snapshotId}/apply` (`walkie-discovery-apply`, con `applyId` del cliente): 200 con `walkie-discovery-apply-result` (`completed`, o `compensated` si falló a mitad y se deshizo); 400 con lo inválido; 409 si un vínculo cambió (`bindingVersion`), si el hallazgo ya tiene decisión, si la firma ya está en el catálogo, si el id ya existe o si esa aplicación se está ejecutando; 500 si no se pudo terminar ni deshacer (queda pendiente: repetir el mismo `applyId` la termina). `create` (tarea 6): elementos del catálogo con el id del cliente. Descartar, vincular y restablecer también son operaciones de esta lista (ADR-0014): no hay un endpoint aparte para los vínculos.
+- `GET /api/apps/{appId}/bindings?target={kind}:{id}` (`kind`: `catalogItem`, `module` o `feature`): de qué evidencia viene un componente (`walkie-discovery-provenance`: fuente, hallazgo, decisión, análisis, fecha, evidencia y si el último análisis lo sigue viendo; `targetExists`). 400 con un `target` mal formado; 404 si la app no existe o Discovery está apagado.
 - `POST /api/snapshots/{snapshotId}/apply?dryRun=true`: la vista previa (lo que se crearía y vincularía, sin escribir).
 - Contratos internos que se extienden (sin romper): `IAppWriter.CreateCatalogItemAsync` acepta un id dado (borrar ya existe: `DeleteCatalogItemsAsync`); la lectura segura del zip pasa de `ImportHandlers` a `Walkie.Shared`. Ningún endpoint existente cambia.
 

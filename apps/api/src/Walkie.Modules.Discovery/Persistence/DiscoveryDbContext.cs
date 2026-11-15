@@ -26,6 +26,8 @@ internal sealed class DiscoveryDbContext(DbContextOptions<DiscoveryDbContext> op
 
     public DbSet<ApplyRecord> Applies => Set<ApplyRecord>();
 
+    public DbSet<ApplyStep> ApplySteps => Set<ApplyStep>();
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         RejectChangesToSnapshots();
@@ -159,6 +161,7 @@ internal sealed class DiscoveryDbContext(DbContextOptions<DiscoveryDbContext> op
             binding.Property(b => b.DecidedBy).HasColumnName("decided_by").HasMaxLength(255);
             binding.Property(b => b.DecidedAt).HasColumnName("decided_at");
             binding.Property(b => b.Version).HasColumnName("version").IsConcurrencyToken();
+            binding.Property(b => b.PendingApplyId).HasColumnName("pending_apply_id");
             binding.Ignore(b => b.Active);
             binding.HasOne<Source>().WithMany().HasForeignKey(b => new { b.AppId, b.SourceId }).OnDelete(DeleteBehavior.Restrict);
             binding.HasOne<Snapshot>().WithMany().HasForeignKey(b => b.SnapshotId).OnDelete(DeleteBehavior.Restrict);
@@ -174,13 +177,37 @@ internal sealed class DiscoveryDbContext(DbContextOptions<DiscoveryDbContext> op
             apply.HasKey(a => a.ApplyId);
             apply.Property(a => a.ApplyId).HasColumnName("apply_id").ValueGeneratedNever();
             apply.Property(a => a.AppId).HasColumnName("app_id");
+            apply.Property(a => a.SourceId).HasColumnName("source_id");
             apply.Property(a => a.SnapshotId).HasColumnName("snapshot_id");
             apply.Property(a => a.RequestHash).HasColumnName("request_hash").HasMaxLength(64).IsFixedLength();
             apply.Property(a => a.Status).HasColumnName("status").HasMaxLength(12);
+            apply.Property(a => a.Plan).HasColumnName("plan").HasColumnType("jsonb");
             apply.Property(a => a.Result).HasColumnName("result").HasColumnType("jsonb");
             apply.Property(a => a.CreatedBy).HasColumnName("created_by").HasMaxLength(255);
             apply.Property(a => a.CreatedAt).HasColumnName("created_at");
+            apply.Property(a => a.UpdatedAt).HasColumnName("updated_at");
             apply.HasOne<Snapshot>().WithMany().HasForeignKey(a => a.SnapshotId).OnDelete(DeleteBehavior.Restrict);
+            // Las pendientes de una fuente (recuperación).
+            apply.HasIndex(a => new { a.AppId, a.SourceId, a.Status }).HasDatabaseName("ix_applies_source_status");
+            apply.ToTable(t => t.HasCheckConstraint("ck_applies_status",
+                "status IN ('pending', 'completed', 'compensated') AND (status = 'pending' OR result IS NOT NULL)"));
+        });
+
+        modelBuilder.Entity<ApplyStep>(step =>
+        {
+            step.ToTable("apply_steps");
+            step.HasKey(s => new { s.ApplyId, s.Index });
+            step.Property(s => s.ApplyId).HasColumnName("apply_id");
+            step.Property(s => s.Index).HasColumnName("index");
+            step.Property(s => s.EntityKey).HasColumnName("entity_key").HasMaxLength(500);
+            step.Property(s => s.TargetKind).HasColumnName("target_kind").HasMaxLength(20);
+            step.Property(s => s.TargetId).HasColumnName("target_id");
+            step.Property(s => s.Item).HasColumnName("item").HasColumnType("jsonb");
+            step.Property(s => s.Status).HasColumnName("status").HasMaxLength(12);
+            step.HasOne<ApplyRecord>().WithMany().HasForeignKey(s => s.ApplyId).OnDelete(DeleteBehavior.Restrict);
+            // Un id del cliente es de una sola aplicación: dos aplicaciones no pueden planificar el mismo elemento.
+            step.HasIndex(s => s.TargetId).IsUnique().HasDatabaseName("ux_apply_steps_target");
+            step.ToTable(t => t.HasCheckConstraint("ck_apply_steps_status", "status IN ('planned', 'created', 'compensated', 'kept')"));
         });
     }
 }

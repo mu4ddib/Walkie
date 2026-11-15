@@ -107,7 +107,7 @@ export function installFakeApi(
       ? json(400, { title: 'Error de validación', errors: { Name: ['El nombre es obligatorio.'] } })
       : null;
 
-  const discovery = fakeDiscovery(seed.discovery, json);
+  const discovery = fakeDiscovery(seed.discovery, json, catalog);
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' ? input : input.toString());

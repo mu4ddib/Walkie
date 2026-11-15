@@ -29,6 +29,8 @@ public static partial class DiscoveryModule
         services.AddScoped<ApplyHandlers>();
         services.AddScoped<SourceHandlers>();
         services.AddScoped<EvidenceHandlers>();
+        services.AddScoped<ProvenanceHandlers>();
+        services.TryAddSingleton<IApplyCheckpoints, NoApplyCheckpoints>();
         services.AddScoped<IDiscoveryReader, DiscoveryReader>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
@@ -36,7 +38,8 @@ public static partial class DiscoveryModule
 
     /// <summary>
     /// <c>POST /api/apps/{appId}/sources/snapshots</c>, <c>GET /api/apps/{appId}/sources</c>,
-    /// <c>GET /api/snapshots/{snapshotId}/review</c> y <c>POST /api/snapshots/{snapshotId}/apply</c>. Si Discovery está encendido fuera de Development, lo avisa en el
+    /// <c>GET /api/snapshots/{snapshotId}/review</c>, <c>GET /api/snapshots/{snapshotId}/evidence</c>,
+    /// <c>POST /api/snapshots/{snapshotId}/apply</c> y <c>GET /api/apps/{appId}/bindings</c>. Si Discovery está encendido fuera de Development, lo avisa en el
     /// log: falta la autorización por app (bloqueo de seguridad de ADR-0012).
     /// </summary>
     public static IEndpointRouteBuilder MapDiscoveryModule(this IEndpointRouteBuilder routes)

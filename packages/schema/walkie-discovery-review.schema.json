@@ -157,6 +157,10 @@
         "binding": {
           "$ref": "walkie-discovery-binding.schema.json"
         },
+        "targetMissing": {
+          "const": true,
+          "description": "Solo con un vínculo linked o created cuyo elemento ya no existe en Walkie (se borró a mano): la decisión sigue guardada pero no apunta a nada. Restablécela o vincúlalo a otro elemento"
+        },
         "match": {
           "type": "object",
           "description": "Solo en matched: con qué elemento existente coincide y por qué",

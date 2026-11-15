@@ -103,3 +103,59 @@ test('importar un proyecto local analizado con la CLI y revisarlo', async ({ pag
   await dialog.getByRole('button', { name: 'Abrir revisión' }).click();
   await expect(page.getByRole('heading', { name: 'Revisión del análisis' })).toBeVisible();
 });
+
+/**
+ * Tarea 6: un hallazgo del análisis real entra al catálogo de la app. Vista previa con el elemento y su id, confirmar,
+ * abrirlo en el catálogo de siempre con su procedencia. No crea features ni lienzos (eso es la tarea 9).
+ */
+test('crear en el catálogo un hallazgo del análisis real y abrirlo con su procedencia', async ({ page }) => {
+  test.setTimeout(240_000);
+  const pack = scanFixture();
+
+  await login(page);
+  const app = `E2E Walkie Live catálogo ${Date.now()}`;
+  await page.getByLabel('Nueva app').fill(app);
+  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('link', { name: app }).click();
+  const appUrl = page.url();
+
+  await page.getByRole('button', { name: 'Importar proyecto local' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Importar proyecto local' });
+  await dialog.getByLabel('Archivo .walkiepack').setInputFiles(pack);
+  await expect(dialog.getByLabel('Resumen del análisis')).toContainText('walkie-cli');
+  await dialog.getByRole('button', { name: 'Guardar análisis' }).click();
+  await expect(page.getByRole('heading', { name: 'Revisión del análisis' })).toBeVisible();
+
+  const list = page.getByRole('list', { name: 'Hallazgos' });
+  const get = list.getByRole('button', { name: /api:GET \/api\/pedidos\/\{\}/ });
+  await get.click();
+  const inspector = page.getByRole('complementary', { name: 'Detalle del hallazgo' });
+  await inspector.getByRole('button', { name: 'Crear en el catálogo…' }).click();
+
+  // Vista previa: lo que se creará, con su id y sus avisos; todavía nada en el catálogo.
+  const preview = inspector.getByRole('region', { name: 'Lo que se creará' });
+  await expect(preview).toContainText('GET /api/pedidos/{pedidoId}');
+  await expect(preview.getByRole('list', { name: 'Avisos' })).toContainText('Sin evidencia para');
+  await capture(page, 'crear-vista-previa');
+  const created = page.waitForResponse((r) => r.url().includes('/apply') && !r.url().includes('dryRun') && r.status() === 200);
+  await inspector.getByRole('button', { name: 'Confirmar y crear' }).click();
+  await created;
+
+  await expect(inspector.getByRole('status')).toContainText('Creado en el catálogo');
+  await expect(get).toContainText('Creado');
+  await inspector.getByRole('link', { name: 'Abrir en el catálogo' }).click();
+
+  // El catálogo de siempre: el elemento es editable y dice de dónde viene.
+  await expect(page).toHaveURL(/\/catalog\/[0-9a-f-]{36}$/);
+  const detail = page.getByRole('complementary', { name: 'Detalle del elemento' });
+  const provenance = detail.getByRole('region', { name: 'De dónde viene' });
+  await expect(provenance).toContainText('Creado desde');
+  await expect(provenance).toContainText('src/Tienda.Api/Program.cs');
+  await expect(detail.getByLabel('Título')).toBeEditable();
+  await capture(page, 'catalogo-procedencia');
+
+  // Ni features ni lienzos nuevos: eso llega con la tarea 9.
+  await page.goto(appUrl);
+  await expect(page.getByRole('heading', { name: 'Aún no hay features' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Features' })).toHaveCount(0);
+});

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { v7 as uuidv7 } from 'uuid';
 import {
   ApiError,
@@ -9,20 +10,25 @@ import {
   type DiscoveryTarget,
 } from '../api/client';
 import { useApplyDiscovery, useCatalog, useDiscoveryEvidence, useFeatures, useModules } from '../api/hooks';
+import { catalogPath } from '../pages/catalogPaths';
 import { formatDayAndTime } from '../share/shareFormat';
-import { BASIS, CONFIDENCE, KIND, REASON, STATUS, TARGET_KIND, targetKindFor } from './discoveryText';
+import { BASIS, CONFIDENCE, CREATABLE_KINDS, KIND, REASON, STATUS, TARGET_KIND, targetKindFor } from './discoveryText';
 
 type Decision =
   | { op: 'reject'; note: string }
   | { op: 'reset' }
-  | { op: 'link'; target: DiscoveryTarget };
+  | { op: 'link'; target: DiscoveryTarget }
+  | { op: 'create'; id: string };
+
+type Warning = DiscoveryApplyResult['warnings'][number];
 
 /**
- * Detalle de un hallazgo (spec walkie-live, tarea 5): qué es y por qué tiene ese estado, su coincidencia o sus
+ * Detalle de un hallazgo (spec walkie-live, tareas 5 y 6): qué es y por qué tiene ese estado, su coincidencia o sus
  * candidatos, la decisión guardada, la evidencia (archivo, ancla, líneas, detector y confianza; se pide al elegirlo) y
- * las decisiones posibles: vincular, descartar o restablecer. Cada decisión se previsualiza (`dryRun`) y se confirma
- * con el mismo `applyId`; un reintento tras un error de red usa el mismo, así no se aplica dos veces. Un 409 recarga la
- * revisión y pide decidir otra vez sobre lo actual. Crear elementos todavía no existe (tarea 6): no hay botón para eso.
+ * las decisiones posibles: crear en el catálogo (api, service, database o resource), vincular, descartar o restablecer.
+ * Cada decisión se previsualiza (`dryRun`) y se confirma con el mismo `applyId` y, al crear, el mismo id del elemento:
+ * un reintento tras un error de red no aplica ni crea dos veces. Un 409 recarga la revisión y pide decidir otra vez.
+ * Crear no agrega el elemento a ningún lienzo.
  */
 export function ReviewInspector({
   appId,
@@ -56,8 +62,8 @@ export function ReviewInspector({
         </dd>
       </dl>
       {item.match && <Match target={item.match.target} reason={item.match.reason} />}
-      {item.binding && <BindingInfo binding={item.binding} />}
-      <Evidence snapshotId={snapshotId} entityKey={item.key} count={item.evidenceCount} />
+      {item.binding && <BindingInfo appId={appId} binding={item.binding} targetMissing={item.targetMissing === true} />}
+      <Evidence snapshotId={snapshotId} entityKey={item.key} count={item.evidenceCount} missing={item.status === 'missing'} />
       {canDecide ? (
         <Decisions key={item.key} appId={appId} snapshotId={snapshotId} item={item} />
       ) : (
@@ -80,38 +86,76 @@ function Match({ target, reason }: { target: DiscoveryTarget; reason: string }) 
   );
 }
 
-function BindingInfo({ binding }: { binding: NonNullable<DiscoveryReviewItem['binding']> }) {
-  const decision = binding.decision === 'rejected' ? 'Descartado' : binding.decision === 'created' ? 'Creado' : 'Vinculado';
+function BindingInfo({
+  appId,
+  binding,
+  targetMissing,
+}: {
+  appId: string;
+  binding: NonNullable<DiscoveryReviewItem['binding']>;
+  targetMissing: boolean;
+}) {
+  const decision =
+    binding.decision === 'rejected' ? 'Descartado' : binding.decision === 'created' ? 'Creado en el catálogo como' : 'Vinculado a';
   return (
     <div className="discovery-box">
       <p>
         {decision}
         {binding.target && (
           <>
-            {' a '}
+            {' '}
             <strong>{binding.target.title ?? binding.target.id}</strong> ({TARGET_KIND[binding.target.kind]?.toLowerCase()})
           </>
         )}{' '}
         el {formatDayAndTime(binding.decidedAt)}.
       </p>
       {binding.note && <p className="panel-help">Nota: {binding.note}</p>}
+      {targetMissing ? (
+        <p role="note" className="discovery-warning">
+          <span aria-hidden="true">⚠</span> Ese elemento ya no existe en Walkie (se borró). La decisión sigue guardada pero no apunta a nada:
+          restablécela para vincularlo a otro o crearlo de nuevo.
+        </p>
+      ) : (
+        binding.target?.kind === 'catalogItem' && (
+          <Link to={catalogPath(appId, binding.target.id)}>Ver en el catálogo</Link>
+        )
+      )}
     </div>
   );
 }
 
-/** La evidencia de este hallazgo solo (no la del análisis entero), con sus relaciones. */
-function Evidence({ snapshotId, entityKey, count }: { snapshotId: string; entityKey: string; count: number }) {
+/**
+ * La evidencia de este hallazgo solo (no la del análisis entero), con sus relaciones. Distingue un hallazgo sin
+ * evidencia guardada (404: no es un fallo) de un error al pedirla (se puede reintentar).
+ */
+function Evidence({ snapshotId, entityKey, count, missing }: { snapshotId: string; entityKey: string; count: number; missing: boolean }) {
   const evidence = useDiscoveryEvidence(snapshotId, entityKey);
+  const absent = evidence.error instanceof ApiError && evidence.error.status === 404;
   return (
     <section className="discovery-evidence" aria-label="Evidencia">
       <h4>Por qué Walkie lo detectó ({count})</h4>
       {evidence.isPending && <p role="status">Cargando la evidencia…</p>}
-      {evidence.isError && <p className="save-error">No se pudo cargar la evidencia.</p>}
+      {absent && (
+        <p className="panel-help">
+          {missing
+            ? 'Ya no aparece en este análisis y la evidencia del anterior no está disponible: no hay nada que mostrar.'
+            : 'Este hallazgo no tiene evidencia guardada en este análisis.'}
+        </p>
+      )}
+      {evidence.isError && !absent && (
+        <p role="alert" className="save-error">
+          No se pudo cargar la evidencia.{' '}
+          <button type="button" className="pixel-button is-ghost" onClick={() => void evidence.refetch()}>
+            Reintentar
+          </button>
+        </p>
+      )}
       {evidence.data && (
         <>
           {evidence.data.foundIn !== snapshotId && (
             <p className="panel-help">Es la evidencia del análisis anterior, donde todavía aparecía.</p>
           )}
+          {evidence.data.evidence.length === 0 && <p className="panel-help">Sin evidencia registrada.</p>}
           <ul>
             {evidence.data.evidence.map((e) => (
               <li key={e.id}>
@@ -163,6 +207,7 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
   const options = useCompatibleTargets(appId, item, targetKind);
   const version = item.binding?.version ?? 0;
   const decided = item.binding !== undefined;
+  const canCreate = CREATABLE_KINDS.includes(item.kind) && !decided && item.status !== 'missing';
 
   function start(next: Decision) {
     applyId.current = uuidv7(); // una decisión nueva: un applyId nuevo
@@ -172,6 +217,8 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
   }
 
   function operation(d: Decision): DiscoveryOperation {
+    // El id del elemento es parte de la decisión: la vista previa y la confirmación (y un reintento) usan el mismo.
+    if (d.op === 'create') return { op: 'create', entityKey: item.key, id: d.id, bindingVersion: version };
     if (d.op === 'link') return { op: 'link', entityKey: item.key, target: { kind: d.target.kind, id: d.target.id }, bindingVersion: version };
     if (d.op === 'reject') return { op: 'reject', entityKey: item.key, bindingVersion: version, ...(d.note ? { note: d.note } : {}) };
     return { op: 'reset', entityKey: item.key, bindingVersion: version };
@@ -195,14 +242,7 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
   const target = known.find((o) => `${o.kind}:${o.id}` === chosen);
 
   if (commit.data) {
-    return (
-      <div className="discovery-box">
-        <p role="status">{done(commit.data)}</p>
-        <button type="button" className="pixel-button is-ghost" onClick={cancel}>
-          Tomar otra decisión
-        </button>
-      </div>
-    );
+    return <Done appId={appId} result={commit.data} onAgain={cancel} />;
   }
 
   return (
@@ -230,6 +270,19 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
                 </label>
               ))}
             </fieldset>
+          )}
+          {canCreate && (
+            <div className="discovery-link">
+              <p className="panel-help">
+                {item.match || item.candidates
+                  ? 'Si no es el mismo que el existente, puedes crearlo aparte.'
+                  : 'Crea un elemento nuevo del catálogo con lo que vio el análisis.'}{' '}
+                No se agrega a ningún lienzo.
+              </p>
+              <button type="button" className="pixel-button is-primary" onClick={() => start({ op: 'create', id: uuidv7() })}>
+                Crear en el catálogo…
+              </button>
+            </div>
           )}
           {targetKind ? (
             item.status !== 'missing' && (
@@ -269,15 +322,24 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
               Restablecer decisión…
             </button>
           )}
-          {item.proposal.op === 'create' && (
-            <p className="panel-help">Crear un elemento nuevo desde este hallazgo llegará más adelante; por ahora puedes vincularlo o descartarlo.</p>
+          {!canCreate && !decided && (item.kind === 'module' || item.kind === 'feature') && (
+            <p className="panel-help">Crear módulos y features desde un hallazgo llegará más adelante; por ahora puedes vincularlo o descartarlo.</p>
           )}
         </>
       )}
       {decision && (
         <div className="discovery-box">
           {preview.isPending && <p role="status">Revisando…</p>}
-          {preview.data && <p>{planned(preview.data)}</p>}
+          {preview.data &&
+            (decision.op === 'create' ? (
+              <CreatePreview result={preview.data} entityKey={item.key} />
+            ) : (
+              <>
+                <p>{planned(preview.data)}</p>
+                <Warnings warnings={preview.data.warnings} />
+              </>
+            ))}
+          {commit.isPending && <p role="status">{decision.op === 'create' ? 'Creando en el catálogo…' : 'Guardando…'}</p>}
           {failure && (
             <p role="alert" className="save-error">
               {failure instanceof ApiError ? failure.userMessage : 'No se pudo conectar con Walkie. Vuelve a intentarlo: no se aplicará dos veces.'}
@@ -285,7 +347,7 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
           )}
           <div className="import-actions">
             <button type="button" className="pixel-button is-primary" disabled={!preview.data || commit.isPending || !!conflict} onClick={confirm}>
-              {commit.isPending ? 'Guardando…' : 'Confirmar'}
+              {commit.isPending ? 'Guardando…' : decision.op === 'create' ? 'Confirmar y crear' : 'Confirmar'}
             </button>
             <button type="button" className="pixel-button is-ghost" onClick={cancel}>
               Cancelar
@@ -312,6 +374,113 @@ function useCompatibleTargets(appId: string, item: DiscoveryReviewItem, targetKi
   }, [targetKind, catalog.data, modules.data, features.data, item.kind]);
 }
 
+/** Lo que se creará, tal como queda en el catálogo (lo calcula la API con las mismas reglas que al crear). */
+function CreatePreview({ result, entityKey }: { result: DiscoveryApplyResult; entityKey: string }) {
+  const item = result.created.find((c) => c.entityKey === entityKey)?.item;
+  if (!item) return null;
+  const database = [item.database?.engine, item.database?.name].filter(Boolean).join(' · ');
+  return (
+    <section className="discovery-create" aria-label="Lo que se creará">
+      <p>Se creará en el catálogo:</p>
+      <dl className="discovery-facts">
+        <dt>Tipo</dt>
+        <dd>{KIND[item.type] ?? item.type}</dd>
+        <dt>Nombre</dt>
+        <dd>{item.title}</dd>
+        {item.description && (
+          <>
+            <dt>Descripción</dt>
+            <dd>{item.description}</dd>
+          </>
+        )}
+        {item.http && (
+          <>
+            <dt>Contrato</dt>
+            <dd>
+              <code>
+                {item.http.method} {item.http.path}
+              </code>
+            </dd>
+          </>
+        )}
+        {item.database && (
+          <>
+            <dt>Base</dt>
+            <dd>{database || 'sin motor ni nombre'}</dd>
+          </>
+        )}
+        {item.resource && (
+          <>
+            <dt>Recurso</dt>
+            <dd>
+              {item.resource.kind}
+              {item.resource.name ? ` · ${item.resource.name}` : ''}
+            </dd>
+          </>
+        )}
+        {item.runtime && (
+          <>
+            <dt>Dónde corre</dt>
+            <dd>{item.runtime}</dd>
+          </>
+        )}
+        <dt>Id</dt>
+        <dd>
+          <code>{item.id}</code>
+        </dd>
+      </dl>
+      <p className="panel-help">
+        No se agrega a ningún lienzo ni cambia nada de lo que ya existe. Lo que el análisis no vio queda vacío para completarlo en el catálogo.
+      </p>
+      <Warnings warnings={result.warnings.filter((w) => !w.entityKey || w.entityKey === entityKey)} />
+    </section>
+  );
+}
+
+function Warnings({ warnings }: { warnings: Warning[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <ul className="discovery-warnings" aria-label="Avisos">
+      {warnings.map((w, i) => (
+        <li key={`${w.code}-${i}`} data-code={w.code}>
+          <span aria-hidden="true">⚠</span> {w.message}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** El resultado real: lo creado con su enlace al catálogo, o que se deshizo (compensated) y por qué. */
+function Done({ appId, result, onAgain }: { appId: string; result: DiscoveryApplyResult; onAgain: () => void }) {
+  const created = result.created[0];
+  if (result.status === 'compensated') {
+    return (
+      <div className="discovery-box">
+        <p role="alert" className="save-error">
+          No se pudo terminar: se deshizo lo que se había creado y no quedó ninguna decisión guardada.
+        </p>
+        <Warnings warnings={result.warnings.filter((w) => w.code !== 'compensated')} />
+        <button type="button" className="pixel-button is-ghost" onClick={onAgain}>
+          Volver a decidir
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="discovery-box">
+      <p role="status">{done(result)}</p>
+      {created && (
+        <Link className="pixel-button is-primary" to={catalogPath(appId, created.target.id)}>
+          Abrir en el catálogo
+        </Link>
+      )}
+      <button type="button" className="pixel-button is-ghost" onClick={onAgain}>
+        Tomar otra decisión
+      </button>
+    </div>
+  );
+}
+
 function planned(result: DiscoveryApplyResult): string {
   if (result.linked[0]) {
     return `Se vinculará a «${result.linked[0].target.title ?? result.linked[0].target.id}». Ese elemento no cambia: el vínculo solo dice de qué código viene.`;
@@ -321,6 +490,7 @@ function planned(result: DiscoveryApplyResult): string {
 }
 
 function done(result: DiscoveryApplyResult): string {
+  if (result.created[0]) return `Creado en el catálogo: «${result.created[0].target.title ?? result.created[0].target.id}».`;
   if (result.linked[0]) return `Vinculado a «${result.linked[0].target.title ?? result.linked[0].target.id}».`;
   if (result.rejected.length > 0) return 'Descartado.';
   return 'Decisión restablecida.';

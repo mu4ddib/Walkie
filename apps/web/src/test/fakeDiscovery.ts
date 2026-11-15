@@ -1,4 +1,5 @@
 import type {
+  CatalogItem,
   DiscoveryApplyResult,
   DiscoveryEvidence,
   DiscoveryOperation,
@@ -23,7 +24,11 @@ export interface DiscoverySeed {
    * crea `snapshot` y su fuente aparece en la lista.
    */
   upload?: { summary: DiscoveryUpload['summary']; snapshot: DiscoverySnapshot; duplicate?: 'pack' | 'content' };
+  /** Contrato de los hallazgos a crear por clave (lo que la API sacaría del paquete); sin él, solo tipo y título. */
+  contracts?: Record<string, Partial<CatalogItem>>;
 }
+
+const CREATABLE = ['api', 'service', 'database', 'resource'];
 
 type Json = (status: number, body: unknown) => Response;
 
@@ -31,18 +36,28 @@ type Json = (status: number, body: unknown) => Response;
  * La parte Discovery de la API falsa (spec walkie-live, tarea 5). Responde como `Walkie.Modules.Discovery`: 404 si la
  * feature está apagada (sin `seed`), 409 si `bindingVersion` no es el actual, la misma respuesta para el mismo
  * `applyId`, y la decisión cambia el estado del hallazgo. Las respuestas se guardan en `applies` para inspeccionarlas.
+ * `create` (tarea 6) agrega el elemento al catálogo de la fake (`catalog`) con el id del cliente; `next.compensate`
+ * hace que la próxima aplicación real termine `compensated` sin crear nada. `GET /api/apps/{appId}/bindings` responde
+ * la procedencia a partir de los vínculos.
  */
-export function fakeDiscovery(seed: DiscoverySeed | undefined, json: Json) {
+export function fakeDiscovery(seed: DiscoverySeed | undefined, json: Json, catalog: CatalogItem[] = []) {
   const sources = Object.fromEntries(Object.entries(seed?.sources ?? {}).map(([k, v]) => [k, [...v]]));
   const reviews = Object.fromEntries(
     Object.entries(seed?.reviews ?? {}).map(([k, v]) => [k, { ...v, items: v.items.map((i) => structuredClone(i)) }]),
   );
   const applies: { snapshotId: string; dryRun: boolean; body: { applyId: string; operations: DiscoveryOperation[] } }[] = [];
   const done = new Map<string, DiscoveryApplyResult>();
-  const next: { uploadErrors?: { status: number; errors?: Record<string, string[]> }; applyStatus?: number } = {};
+  const next: { uploadErrors?: { status: number; errors?: Record<string, string[]> }; applyStatus?: number; compensate?: boolean } = {};
+  const appOf = (sourceId: string) =>
+    Object.entries(sources).find(([, list]) => list.some((s) => s.source.id === sourceId))?.[0] ?? 'app-1';
   const notFound = () => json(404, { title: 'Not Found', status: 404 });
 
   function handle(parts: string[], url: URL, method: string, init?: RequestInit): Response | null {
+    // /api/apps/{appId}/bindings?target=catalogItem:{id} — procedencia (tarea 6).
+    if (parts[1] === 'apps' && parts[3] === 'bindings' && method === 'GET') {
+      if (!seed) return notFound();
+      return provenance(parts[2]!, url.searchParams.get('target') ?? '');
+    }
     // /api/apps/{appId}/sources[/snapshots]
     if (parts[1] === 'apps' && parts[3] === 'sources') {
       if (!seed) return notFound();
@@ -111,6 +126,22 @@ export function fakeDiscovery(seed: DiscoverySeed | undefined, json: Json) {
         return json(status, { title: status === 409 ? 'La decisión cambió' : 'Error', status });
       }
       if (!dryRun && done.has(body.applyId)) return json(200, done.get(body.applyId));
+      if (!dryRun && next.compensate) {
+        delete next.compensate;
+        const compensated: DiscoveryApplyResult = {
+          applyId: body.applyId,
+          dryRun,
+          status: 'compensated',
+          created: [],
+          linked: [],
+          rejected: [],
+          reset: [],
+          unchanged: [],
+          warnings: [{ code: 'compensated', message: 'No se pudo terminar la aplicación: se deshizo lo que había creado.' }],
+        };
+        done.set(body.applyId, compensated);
+        return json(200, compensated);
+      }
       const result: DiscoveryApplyResult = {
         applyId: body.applyId,
         dryRun,
@@ -126,7 +157,29 @@ export function fakeDiscovery(seed: DiscoverySeed | undefined, json: Json) {
         const item = review.items.find((i) => i.key === op.entityKey);
         if (!item) return json(400, { title: 'Hallazgo desconocido', status: 400 });
         if ((item.binding?.version ?? 0) !== op.bindingVersion) return json(409, { title: 'La decisión cambió', status: 409 });
-        if (op.op === 'link') {
+        if (op.op === 'create') {
+          if (!CREATABLE.includes(item.kind)) return json(400, { title: 'Error de validación', status: 400, errors: { '/operations/0/op': ['Todavía no.'] } });
+          if (item.binding) return json(409, { title: 'Ya tiene una decisión', status: 409 });
+          const appId = appOf(review.sourceId);
+          const created: CatalogItem = {
+            id: op.id!,
+            appId,
+            type: item.kind as CatalogItem['type'],
+            title: item.title,
+            version: 1,
+            ...seed.contracts?.[item.key],
+          };
+          const target: DiscoveryTarget = { kind: 'catalogItem', id: op.id!, title: item.title };
+          result.created.push({ entityKey: item.key, target, item: created });
+          result.warnings.push({ code: 'to-complete', message: 'Sin evidencia para descripción: quedan vacíos.', entityKey: item.key });
+          if (item.basis === 'inferred') {
+            result.warnings.push({ code: 'inferred', message: 'Walkie lo dedujo, no lo vio directamente en el código.', entityKey: item.key });
+          }
+          if (!dryRun) {
+            decide(item, 'created', snapshotId, body.applyId, target);
+            if (!catalog.some((c) => c.id === created.id)) catalog.push(created);
+          }
+        } else if (op.op === 'link') {
           const target: DiscoveryTarget = { kind: op.target!.kind!, id: op.target!.id!, title: titleOf(op.target!.kind!, op.target!.id!, item) };
           result.linked.push({ entityKey: item.key, target });
           if (!dryRun) decide(item, 'linked', snapshotId, body.applyId, target);
@@ -154,7 +207,7 @@ export function fakeDiscovery(seed: DiscoverySeed | undefined, json: Json) {
 
   function decide(
     item: DiscoveryReviewItem,
-    decision: 'linked' | 'rejected',
+    decision: 'linked' | 'rejected' | 'created',
     snapshotId: string,
     applyId: string,
     target?: DiscoveryTarget,
@@ -176,6 +229,30 @@ export function fakeDiscovery(seed: DiscoverySeed | undefined, json: Json) {
       decidedAt: '2026-11-14T12:30:00Z',
       version: (item.binding?.version ?? 0) + 1,
     } as DiscoveryReviewItem['binding'];
+  }
+
+  /** Los vínculos activos que apuntan a `target`, con la evidencia sembrada de su análisis. */
+  function provenance(appId: string, target: string) {
+    const [kind, id] = target.split(':');
+    if (!kind || !id) return json(400, { title: 'Error de validación', status: 400, errors: { target: ['Usa target=catalogItem:{id}.'] } });
+    const origins = Object.entries(reviews).flatMap(([snapshotId, review]) =>
+      review.items
+        .filter((i) => i.binding?.target?.kind === kind && i.binding.target.id === id)
+        .map((i) => {
+          const found = seed?.evidence?.[`${snapshotId}|${i.key}`];
+          const source = Object.values(sources).flat().find((s) => s.source.id === review.sourceId);
+          return {
+            source: source?.source ?? { id: review.sourceId, name: 'fuente' },
+            binding: i.binding!,
+            entity: { key: i.key, kind: i.kind, title: i.title, basis: i.basis, confidence: i.confidence },
+            evidence: found?.evidence ?? [],
+            evidenceTotal: found?.evidence.length ?? 0,
+            latest: { snapshotId: source?.latestSnapshot.id ?? snapshotId, status: 'same' },
+          };
+        }),
+    );
+    const exists = kind !== 'catalogItem' || catalog.some((c) => c.id === id);
+    return json(200, { appId, target: { kind, id }, targetExists: exists, bindings: origins });
   }
 
   return { handle, sources, reviews, applies, next };

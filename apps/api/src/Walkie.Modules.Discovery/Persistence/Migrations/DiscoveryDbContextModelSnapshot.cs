@@ -43,6 +43,10 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("created_by");
 
+                    b.Property<string>("Plan")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("plan");
+
                     b.Property<string>("RequestHash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -51,7 +55,6 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                         .IsFixedLength();
 
                     b.Property<string>("Result")
-                        .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("result");
 
@@ -59,17 +62,80 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("snapshot_id");
 
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(12)
                         .HasColumnType("character varying(12)")
                         .HasColumnName("status");
 
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
                     b.HasKey("ApplyId");
 
                     b.HasIndex("SnapshotId");
 
-                    b.ToTable("applies", "discovery");
+                    b.HasIndex("AppId", "SourceId", "Status")
+                        .HasDatabaseName("ix_applies_source_status");
+
+                    b.ToTable("applies", "discovery", t =>
+                        {
+                            t.HasCheckConstraint("ck_applies_status", "status IN ('pending', 'completed', 'compensated') AND (status = 'pending' OR result IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Walkie.Modules.Discovery.Domain.ApplyStep", b =>
+                {
+                    b.Property<Guid>("ApplyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("apply_id");
+
+                    b.Property<int>("Index")
+                        .HasColumnType("integer")
+                        .HasColumnName("index");
+
+                    b.Property<string>("EntityKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("entity_key");
+
+                    b.Property<string>("Item")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("item");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_id");
+
+                    b.Property<string>("TargetKind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("target_kind");
+
+                    b.HasKey("ApplyId", "Index");
+
+                    b.HasIndex("TargetId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_apply_steps_target");
+
+                    b.ToTable("apply_steps", "discovery", t =>
+                        {
+                            t.HasCheckConstraint("ck_apply_steps_status", "status IN ('planned', 'created', 'compensated', 'kept')");
+                        });
                 });
 
             modelBuilder.Entity("Walkie.Modules.Discovery.Domain.Binding", b =>
@@ -115,6 +181,10 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasColumnName("note");
+
+                    b.Property<Guid?>("PendingApplyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pending_apply_id");
 
                     b.Property<Guid?>("SnapshotId")
                         .HasColumnType("uuid")
@@ -422,6 +492,15 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                     b.HasOne("Walkie.Modules.Discovery.Domain.Snapshot", null)
                         .WithMany()
                         .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Walkie.Modules.Discovery.Domain.ApplyStep", b =>
+                {
+                    b.HasOne("Walkie.Modules.Discovery.Domain.ApplyRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ApplyId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

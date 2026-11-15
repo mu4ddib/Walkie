@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Walkie.Modules.Apps.Contracts;
 
 namespace Walkie.Modules.Discovery.Contracts;
 
@@ -43,7 +44,8 @@ public sealed record DiscoveryReviewItem(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiscoveryMatch? Match,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DiscoveryMatch>? Candidates,
     int EvidenceCount,
-    DiscoveryProposal Proposal);
+    DiscoveryProposal Proposal,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? TargetMissing = null);
 
 public sealed record DiscoveryReviewCounts(int New, int Matched, int Linked, int Created, int Rejected, int Changed, int Missing);
 
@@ -58,8 +60,14 @@ public sealed record DiscoveryReviewResponse(
     DiscoveryReviewPage Page,
     IReadOnlyList<DiscoveryReviewItem> Items);
 
-/// <summary>Un elemento creado o vinculado en el resultado de aplicar.</summary>
-public sealed record DiscoveryAppliedTarget(string EntityKey, DiscoveryTarget Target);
+/// <summary>
+/// Un elemento creado o vinculado en el resultado de aplicar. <c>Item</c>: solo al crear en el catálogo, el elemento tal
+/// como queda (<c>walkie-catalog-item</c>).
+/// </summary>
+public sealed record DiscoveryAppliedTarget(
+    string EntityKey,
+    DiscoveryTarget Target,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CatalogItemResponse? Item = null);
 
 public sealed record DiscoveryApplyWarning(
     string Code,

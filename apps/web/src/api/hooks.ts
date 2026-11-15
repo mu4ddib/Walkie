@@ -48,6 +48,7 @@ import {
   ApiError,
   applyDiscovery,
   getDiscoveryEvidence,
+  getDiscoveryProvenance,
   getDiscoveryReview,
   listDiscoverySources,
   uploadSnapshot,
@@ -66,6 +67,9 @@ export const queryKeys = {
   discoveryReviewAll: (snapshotId: string) => ['discovery', 'review', snapshotId] as const,
   discoveryReview: (snapshotId: string, query: ReviewQuery) => ['discovery', 'review', snapshotId, query] as const,
   discoveryEvidence: (snapshotId: string, entityKey: string) => ['discovery', 'evidence', snapshotId, entityKey] as const,
+  /** Procedencia de un elemento de la app (`target` = `catalogItem:{id}`…). */
+  discoveryProvenance: (appId: string, target: string) => ['discovery', 'provenance', appId, target] as const,
+  discoveryProvenanceAll: (appId: string) => ['discovery', 'provenance', appId] as const,
   apps: ['apps'] as const,
   app: (appId: string) => ['apps', appId] as const,
   features: (appId: string) => ['apps', appId, 'features'] as const,
@@ -525,8 +529,22 @@ export function useDiscoveryEvidence(snapshotId: string, entityKey: string | nul
 }
 
 /**
+ * De dónde viene un elemento (spec walkie-live, tarea 6). Con Discovery apagado la API responde 404: quien lo use no
+ * muestra nada. Sin reintentos para el 404.
+ */
+export function useDiscoveryProvenance(appId: string, target: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.discoveryProvenance(appId, target),
+    queryFn: ({ signal }) => getDiscoveryProvenance(token, appId, target, signal),
+    retry: notFoundIsFinal,
+  });
+}
+
+/**
  * Decidir sobre hallazgos. Al guardar (o ante un 409) la revisión de ese análisis queda vieja en todas sus páginas y
- * filtros; las demás consultas no se tocan.
+ * filtros, y la procedencia de los elementos de la app; si se creó algo, también el catálogo. Las demás consultas no se
+ * tocan.
  */
 export function useApplyDiscovery(snapshotId: string, appId: string) {
   const token = useToken();
@@ -534,15 +552,25 @@ export function useApplyDiscovery(snapshotId: string, appId: string) {
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.discoveryReviewAll(snapshotId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.discoverySources(appId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.discoveryProvenanceAll(appId) });
   };
   return useMutation({
     mutationFn: ({ applyId, operations, dryRun }: { applyId: string; operations: DiscoveryOperation[]; dryRun: boolean }) =>
       applyDiscovery(token, snapshotId, { applyId, operations }, dryRun),
     onSuccess: (result) => {
-      if (!result.dryRun) refresh();
+      if (result.dryRun) return;
+      refresh();
+      // Lo creado (o lo que una compensación dejó) está en el catálogo: solo esa lista, no toda la app.
+      if (result.created.length > 0 || result.status === 'compensated') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+      }
     },
     onError: (error) => {
-      if (error instanceof ApiError && error.status === 409) refresh();
+      // 409 (otra decisión ganó) o 500 (quedó pendiente): lo de la revisión y el catálogo pudo cambiar.
+      if (error instanceof ApiError && (error.status === 409 || error.status >= 500)) {
+        refresh();
+        void queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+      }
     },
   });
 }

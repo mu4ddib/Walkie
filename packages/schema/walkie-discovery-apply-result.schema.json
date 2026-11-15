@@ -11,7 +11,7 @@
     "dryRun": { "type": "boolean" },
     "status": {
       "enum": ["planned", "completed", "compensated"],
-      "description": "planned: vista previa; completed: todo escrito; compensated: falló y se deshizo lo creado (bitácora, ADR-0012)"
+      "description": "planned: vista previa; completed: todo escrito; compensated: falló a mitad y se deshizo lo creado que nadie había tocado (bitácora, ADR-0012); lo que no se pudo deshacer sin perder un cambio queda y lo dice un aviso compensation-kept"
     },
     "created": {
       "type": "array",
@@ -22,7 +22,8 @@
         "properties": {
           "entityKey": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" },
           "target": { "$ref": "walkie-discovery-binding.schema.json#/$defs/target" },
-          "includes": { "type": "array", "description": "En una feature: las pantallas y referencias que entran en su lienzo inicial", "items": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" } }
+          "includes": { "type": "array", "description": "En una feature: las pantallas y referencias que entran en su lienzo inicial", "items": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" } },
+          "item": { "$ref": "walkie-catalog-item.schema.json", "description": "Solo en un elemento del catálogo (tarea 6): el elemento tal como queda —o quedaría, en la vista previa— con el id que dio el cliente y version 1. Sale del hallazgo sin agregar nada que el análisis no vio" }
         }
       }
     },
@@ -47,6 +48,7 @@
     },
     "warnings": {
       "type": "array",
+      "description": "Avisos para la persona, ej. inferred (Walkie lo dedujo), logical-database (un modelo de EF, no una base física confirmada), to-complete (campos sin evidencia que quedan vacíos), same-title (ya hay uno con el mismo nombre), target-kept (restablecer no cambia el elemento), compensated y compensation-kept",
       "items": {
         "type": "object",
         "required": ["code", "message"],

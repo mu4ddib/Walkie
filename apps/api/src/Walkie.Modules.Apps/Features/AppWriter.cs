@@ -1,4 +1,6 @@
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Walkie.Modules.Apps.Contracts;
 using Walkie.Modules.Apps.Domain;
 using Walkie.Modules.Apps.Persistence;
@@ -6,7 +8,8 @@ using Walkie.Shared.Time;
 
 namespace Walkie.Modules.Apps.Features;
 
-internal sealed class AppWriter(AppsDbContext db, TimeProvider clock) : IAppWriter
+internal sealed class AppWriter(
+    AppsDbContext db, TimeProvider clock, IValidator<CreateCatalogItemRequest> itemValidator, ICatalogUsage usage) : IAppWriter
 {
     public async Task<Guid> CreateAppAsync(string name, string userId, CancellationToken cancellationToken)
     {
@@ -100,6 +103,105 @@ internal sealed class AppWriter(AppsDbContext db, TimeProvider clock) : IAppWrit
         db.CatalogItems.Add(item);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return item.Id;
+    }
+
+    public IReadOnlyDictionary<string, string[]> ValidateCatalogItem(CreateCatalogItemRequest item) =>
+        itemValidator.Validate(item).Errors
+            .GroupBy(e => e.PropertyName, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray(), StringComparer.Ordinal);
+
+    public CatalogItemResponse PreviewCatalogItem(Guid appId, Guid itemId, CreateCatalogItemRequest item) =>
+        CatalogHandlers.ToResponse(NewItem(appId, itemId, item, "", default));
+
+    public async Task<CatalogItemCreation> CreateCatalogItemAsync(
+        Guid appId, Guid itemId, CreateCatalogItemRequest item, string userId, CancellationToken cancellationToken)
+    {
+        if (await ExistingAsync(appId, itemId, item.Type, cancellationToken).ConfigureAwait(false) is { } existing)
+        {
+            return existing;
+        }
+
+        db.CatalogItems.Add(NewItem(appId, itemId, item, userId, clock.GetUtcNowForDb()));
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Dos pedidos con el mismo id a la vez: el segundo ve lo que guardó el primero.
+            db.ChangeTracker.Clear();
+            return await ExistingAsync(appId, itemId, item.Type, cancellationToken).ConfigureAwait(false) ?? CatalogItemCreation.IdTaken;
+        }
+
+        return CatalogItemCreation.Created;
+    }
+
+    public async Task<CatalogItemRemoval> DeleteUntouchedCatalogItemAsync(Guid appId, Guid itemId, CancellationToken cancellationToken)
+    {
+        var item = await db.CatalogItems.AsNoTracking()
+            .Where(i => i.Id == itemId && i.AppId == appId)
+            .Select(i => new { i.Version })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (item is null)
+        {
+            return CatalogItemRemoval.NotFound;
+        }
+
+        if (item.Version > 1)
+        {
+            return CatalogItemRemoval.Edited;
+        }
+
+        if ((await usage.FeaturesUsingAsync(itemId, cancellationToken).ConfigureAwait(false)).Count > 0)
+        {
+            return CatalogItemRemoval.InUse;
+        }
+
+        // La versión va en la condición: si alguien lo editó entre la lectura y el borrado, no se borra.
+        var deleted = await db.CatalogItems
+            .Where(i => i.Id == itemId && i.AppId == appId && i.Version == 1)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        if (deleted == 1)
+        {
+            return CatalogItemRemoval.Deleted;
+        }
+
+        return await db.CatalogItems.AnyAsync(i => i.Id == itemId, cancellationToken).ConfigureAwait(false)
+            ? CatalogItemRemoval.Edited
+            : CatalogItemRemoval.NotFound;
+    }
+
+    /// <summary>El elemento con la misma limpieza que el endpoint (textos recortados, vacío = sin valor), sin guardar.</summary>
+    private static CatalogItem NewItem(Guid appId, Guid itemId, CreateCatalogItemRequest item, string userId, DateTimeOffset now)
+    {
+        var created = new CatalogItem
+        {
+            Id = itemId,
+            AppId = appId,
+            Type = item.Type,
+            Title = item.Title.Trim(),
+            CreatedBy = userId,
+            CreatedAt = now,
+            UpdatedBy = userId,
+            UpdatedAt = now,
+        };
+        CatalogHandlers.Apply(created, item.Description, item.Http, item.Database, item.Resource, item.Runtime);
+        return created;
+    }
+
+    /// <summary>Si el id ya existe: un reintento (misma app y tipo) o un id tomado. Null si está libre.</summary>
+    private async Task<CatalogItemCreation?> ExistingAsync(Guid appId, Guid itemId, string type, CancellationToken cancellationToken)
+    {
+        var existing = await db.CatalogItems.AsNoTracking()
+            .Where(i => i.Id == itemId)
+            .Select(i => new { i.AppId, i.Type })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        return existing.AppId == appId && existing.Type == type ? CatalogItemCreation.AlreadyCreated : CatalogItemCreation.IdTaken;
     }
 
     public async Task DeleteFeaturesAsync(IReadOnlyCollection<Guid> featureIds, CancellationToken cancellationToken) =>

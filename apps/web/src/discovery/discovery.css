@@ -438,3 +438,62 @@
   font-size: 13px;
   font-weight: 600;
 }
+
+/* Tarea 6: crear en el catálogo y procedencia */
+
+.discovery-create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.discovery-create p {
+  margin: 0;
+}
+
+.discovery-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.discovery-warnings li,
+.discovery-warning {
+  margin: 0;
+  padding: 4px 8px;
+  border-left: 4px solid var(--warn);
+  background: var(--dune-100);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.discovery-provenance {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 2px solid var(--dune-200);
+}
+
+.discovery-provenance h3,
+.discovery-provenance h4,
+.discovery-provenance p {
+  margin: 0;
+}
+
+.discovery-provenance ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.discovery-provenance code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
