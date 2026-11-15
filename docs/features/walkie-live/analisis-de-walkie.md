@@ -62,7 +62,49 @@ Paquete: walkie.walkiepack (10 KB).
 
 ## Qué no encontró, y por qué
 
-- **El front (`apps/web`):** solo se detectan sus tecnologías (React, TypeScript, Vite). Pantallas, rutas y llamadas a la API no, porque falta el parser de TypeScript (ADR-0013, tarea 8). Por eso el análisis es parcial.
+- **El front (`apps/web`):** en esta corrida solo se detectaban sus tecnologías. Desde la tarea 8 se analizan sus rutas y su navegación: ver «El front (tarea 8)» abajo.
 - **OpenAPI:** el repo no tiene un documento OpenAPI versionado; se genera en tiempo de ejecución (`/openapi/v1.json`), así que el detector corrió sin hallazgos.
 - **Keycloak** aparece como recurso «Identidad (OIDC)». Su relación con la API (validación del JWT) es configuración en tiempo de ejecución y no se infiere.
 - **Archivos sensibles:** se excluyeron tres sin leerlos: `.env.example` y los dos `appsettings*.json` de `Walkie.Api`. Excluir un `.env.example` es conservador a propósito: el patrón `.env*` no distingue un ejemplo de uno real.
+
+## El front (tarea 8)
+
+Ejecución del 2026-11-15 sobre el commit `a4830fe` más los cambios de la tarea 8. Es el mismo comando de arriba:
+
+```
+Walkie analizó «Walkie»: 871 archivos en el alcance, 382 leídos, en 1.3 s.
+Componentes:
+  api          44  (44 observados, 0 inferidos)
+  database      6  (6 observados, 0 inferidos)
+  feature       3  (0 observados, 3 inferidos)
+  module        6  (0 observados, 6 inferidos)
+  resource      2  (2 observados, 0 inferidos)
+  screen       11  (11 observados, 0 inferidos)
+  service       2  (2 observados, 0 inferidos)
+Relaciones: 74. Evidencias: 114.
+Detectores: csproj, package-json, compose, openapi, aspnetcore-endpoints, efcore, nextjs, react-router, angular-router, frontend-http, frontend-features.
+Limitaciones:
+  [dynamic-http-url] apps/web/src/api/client.ts: Una llamada GET usa una URL que no se puede resolver sin ejecutar (baseUrl) (…)
+  [dynamic-http-url] apps/web/src/canvas/canvasImage.ts: (3 llamadas: dataUrl, link.href, url) (…)
+  [efcore-logical-database] (…)
+  [secret-excluded] Se excluyeron 3 archivos sensibles (…)
+```
+
+`nextjs` y `angular-router` corrieron y lo dicen en `reason`: «No hay apps Next.js en el alcance», «No hay apps Angular en el alcance».
+
+### Qué encontró
+
+| Hallazgo | Detalle |
+|---|---|
+| `service:@walkie/web` | La app web, por `apps/web/package.json` (observada, alta). |
+| 11 `screen` | Todas las rutas de `apps/web/src/routes.tsx` salvo el comodín `*`: `/`, `/apps`, `/apps/{}`, `/apps/{}/catalog`, `/apps/{}/catalog/{}`, `/apps/{}/features/{}`, `/apps/{}/map`, `/apps/{}/modules/{}`, `/apps/{}/sources/{}`, `/s/{}`, `/s/{}/modules/{}`. Las tres que usan una constante importada (`APPS_PATH`, `SHARED_PATH`, `SHARED_MODULE_PATH` de `workspace/paths.ts` y `share/sharedPath.ts`) se resuelven. El título sale del componente: «Home», «Catalog», «Discovery review»… |
+| 9 `navigates` | `Link` y `navigate()` desde páginas que son pantallas: catálogo → app, catálogo → feature, revisión → apps, mapa → inicio… |
+| 3 `feature` (propuestas) | «Apps» (`/apps` y `/apps/{}`), «Catalog» (`/apps/{}/catalog` y su detalle) y «Modules» (el módulo y su vista compartida). Inferidas, de confianza baja. Son sugerencias para revisar, no features. |
+
+`WalkieRepositoryTests` lo repite sin números fijos: cuenta los `path:` de `routes.tsx`.
+
+### Qué no encontró, y por qué
+
+- **Ninguna llamada a la API.** La web llama siempre por `request()` (`api/client.ts`), que arma la URL con la base de la API y la ruta que recibe: `fetch(baseUrl + path)`. Sin ejecutar no se sabe qué ruta llega a cada llamada, así que queda como `dynamic-http-url` y no se adivina. Es el falso negativo más importante del escáner en proyectos con un cliente propio. Seguirlo exigiría reconocer funciones envoltorio, y eso queda fuera de esta tarea.
+- **Las llamadas de `canvasImage.ts`** (`fetch(dataUrl)`, `fetch(url)`) no son a la API: leen imágenes y fuentes. También son `dynamic-http-url`. Es ruido honesto: no se relacionan con nada.
+- **`Link` y `navigate()` en componentes que no son pantallas** (la barra, los menús) no dan `navigates`, porque no hay una pantalla de origen.

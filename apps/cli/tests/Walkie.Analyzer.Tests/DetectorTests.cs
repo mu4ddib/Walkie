@@ -167,7 +167,7 @@ public sealed class DetectorTests
     }
 
     [Fact]
-    public void Un_package_json_da_tecnologias_y_declara_que_no_analiza_pantallas_ni_rutas()
+    public void Un_package_json_da_tecnologias_y_la_app_como_servicio_y_una_Route_sin_enrutador_no_es_pantalla()
     {
         using var project = new TempProject()
             .Write("web/package.json", """
@@ -180,9 +180,9 @@ public sealed class DetectorTests
         var result = project.Analyze();
 
         Assert.Equal(["angular", "nodejs", "react", "typescript", "vite"], result.TechnologyIds());
-        Assert.Empty(result.Keys()); // ni pantallas ni rutas: no hay parser de TypeScript (ADR-0013)
-        Assert.Contains("frontend-semantics-not-analyzed", result.LimitationCodes());
-        Assert.True(result.Partial);
+        // La app es un servicio. <Route> sin importar react-router (ni elemento) no es una ruta: no se adivina.
+        Assert.Equal(["service:tienda-web"], result.Keys());
+        Assert.DoesNotContain("frontend-semantics-not-analyzed", result.LimitationCodes()); // React y Angular sí se analizan
     }
 
     [Fact]

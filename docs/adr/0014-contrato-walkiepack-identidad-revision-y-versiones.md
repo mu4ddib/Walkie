@@ -125,6 +125,16 @@ Los errores llevan la ruta dentro del paquete (`discovery.json/entities/3/eviden
 - **Versión del vínculo:** restablecer conserva la fila sin decisión, así la versión del vínculo nunca vuelve atrás. `bindingVersion` 0 significa «sin decisión activa».
 - **Solo sobre el último análisis:** las decisiones se toman sobre el último análisis de la fuente. Decidir sobre uno anterior guardaría un fingerprint que ya no es el actual.
 
+**Front y dos puntos pendientes** (tarea 8). El analizador del front no cambió el formato: produce `screen`, `feature` (inferida, con `members`), `api`, `calls`, `navigates` y `exposes` con los contratos de siempre. Dos diferencias quedan para decidir, sin cambiar el comportamiento:
+
+1. **La clave de una pantalla no distingue la app.**
+   - **Qué pasa:** `screen:<ruta>` hace que, en un monorepo, `/pedidos` de dos apps sea una sola pantalla. Hoy se avisa con la limitación `ambiguous-route`.
+   - **Propuesta:** si hace falta separarlas, `screen:<app>:<ruta>` con `formatVersion` 1 y su migración.
+2. **El texto del schema y el validador no dicen lo mismo sobre `skipped`.**
+   - **Qué pasa:** `walkie-discovery-pack` describe `skipped` como «no corrió (no aplica o se excluyó)», pero el validador exige que todos hayan corrido para un análisis `complete`.
+   - **Qué hace el analizador hoy:** un detector sin nada que mirar (no hay apps Angular) informa `ran` con su motivo en `reason`, y `skipped` queda para `--detectors`.
+   - **Propuesta:** corregir solo la descripción del schema a «no corrió porque se excluyó (`--detectors`); un detector sin nada que mirar corre e informa por qué en `reason`».
+
 **Crear en el catálogo** (agregado en la tarea 6):
 - `create` lleva el id (UUID v7) del cliente: se valida que sea v7, que no esté en el catálogo (de ninguna app) ni planificado por otra aplicación. Solo `api`, `service`, `database` y `resource`; `module` y `feature` llegan en la tarea 9 y una pantalla entra con su feature.
 - Un hallazgo con una decisión activa no se crea: primero se restablece (409).

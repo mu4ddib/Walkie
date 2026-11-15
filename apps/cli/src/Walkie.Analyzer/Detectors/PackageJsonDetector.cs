@@ -1,20 +1,21 @@
 using System.Text.Json;
+using Walkie.Analyzer.Frontend;
 
 namespace Walkie.Analyzer.Detectors;
 
 /// <summary>
 /// <c>package.json</c> (fuera de <c>node_modules</c>): tecnologías del front y de Node (React, Angular, Next.js, Vue,
-/// TypeScript…) con su versión declarada. No produce entidades: las pantallas, rutas y llamadas HTTP de React y
-/// Angular necesitan un parser de TypeScript que todavía no está (ADR-0013, tarea 8), y eso se declara como
-/// limitación en vez de adivinarlo.
+/// TypeScript…) con su versión declarada, y cada app de React, Angular o Next.js como <c>service</c> (la aplicación
+/// que se despliega; su nombre es el del paquete). Las pantallas, rutas y llamadas las leen los detectores del front
+/// (tarea 8). Vue y Svelte todavía no se analizan: eso queda como limitación en vez de adivinarlo.
 /// </summary>
 public sealed class PackageJsonDetector : IDetector
 {
     private static readonly (string Package, string Id, string Name, bool Frontend)[] Known =
     [
-        ("react", "react", "React", true),
-        ("@angular/core", "angular", "Angular", true),
-        ("next", "nextjs", "Next.js", true),
+        ("react", "react", "React", false),
+        ("@angular/core", "angular", "Angular", false),
+        ("next", "nextjs", "Next.js", false),
         ("vue", "vue", "Vue", true),
         ("svelte", "svelte", "Svelte", true),
         ("typescript", "typescript", "TypeScript", false),
@@ -25,7 +26,7 @@ public sealed class PackageJsonDetector : IDetector
 
     public string Id => "package-json";
 
-    public IReadOnlyList<string> Entities { get; } = [];
+    public IReadOnlyList<string> Entities { get; } = ["service"];
 
     public IReadOnlyList<string> Relations { get; } = [];
 
@@ -92,9 +93,20 @@ public sealed class PackageJsonDetector : IDetector
                 if (frontends.Count > 0)
                 {
                     context.Findings.Limitation("frontend-semantics-not-analyzed",
-                        $"{string.Join(", ", frontends.Distinct())}: se detectó la tecnología, pero las pantallas, rutas y llamadas HTTP todavía no se analizan (falta el parser de TypeScript, ADR-0013).",
+                        $"{string.Join(", ", frontends.Distinct())}: se detectó la tecnología, pero sus pantallas, rutas y llamadas HTTP no se analizan (solo React, Angular y Next.js, ADR-0013).",
                         Id, file.Path);
                 }
+            }
+        }
+
+        // Cada app de front es un servicio que se despliega (sin dónde corre: el package.json no lo dice).
+        foreach (var app in FrontendModel.Of(context).Apps)
+        {
+            var evidence = context.Findings.Evidence(Id, app.PackagePath, Confidence.High, "name", null, "Aplicación de front");
+            if (context.Findings.Entity(app.ServiceKey, "service", app.Name, Basis.Observed, Confidence.High, evidence) is { } service)
+            {
+                var technology = app.Next ? "nextjs" : app.Angular ? "angular" : "react";
+                service.Technology ??= context.Findings.HasTechnology(technology) ? technology : null;
             }
         }
     }

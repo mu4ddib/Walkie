@@ -17,6 +17,13 @@ public interface IDetector
     IReadOnlyList<string> Relations { get; }
 
     void Run(AnalysisContext context);
+
+    /// <summary>
+    /// Por qué no hay nada que este detector pueda mirar (ej. no hay ninguna app Angular), o null si hay algo. Igual miró
+    /// todo el alcance, así que queda <c>ran</c> (el contrato reserva <c>skipped</c> para lo que no se miró, que deja el
+    /// análisis parcial) y el motivo va en <c>reason</c> para que se vea por qué no encontró nada.
+    /// </summary>
+    string? NotApplicable(AnalysisContext context) => null;
 }
 
 /// <summary>Un proyecto .NET (<c>.csproj</c>) del alcance.</summary>
@@ -59,6 +66,9 @@ public sealed class AnalysisContext(string root, IReadOnlyList<SourceFile> files
     public string Root { get; } = root;
 
     public IReadOnlyList<SourceFile> Files { get; } = files;
+
+    /// <summary>Lo que comparten los detectores del front (apps, archivos escaneados, pantallas); se arma al usarlo.</summary>
+    internal Frontend.FrontendModel? Frontend { get; set; }
 
     public Findings Findings { get; } = findings;
 

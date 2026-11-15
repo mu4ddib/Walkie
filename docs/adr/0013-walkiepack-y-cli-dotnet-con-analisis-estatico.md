@@ -1,6 +1,6 @@
 # ADR-0013: Formato `.walkiepack` y CLI .NET con análisis estático
 
-- Estado: aceptado (el parser de TypeScript se decide en la tarea 8 de `walkie-live`, con los criterios de abajo; implementado sin él en las tareas 2 y 7, ver «Estado de la implementación»)
+- Estado: aceptado. El lector de TypeScript se decidió en la tarea 8 con la prueba de concepto: escáner propio (opción a). Ver «Decisión del lector de TypeScript (tarea 8)».
 - Fecha: 2026-11-14 (revisado el mismo día: justificación del CLI .NET y evaluación de TypeScript, React y Angular)
 
 ## Contexto
@@ -94,12 +94,55 @@ Cualquier otra dependencia necesita justificación en el PR.
 
 El resultado se registra aquí. Si se elige (b) o (c), se reemplaza el escáner detrás del mismo detector, sin cambiar el formato.
 
+### Decisión del lector de TypeScript (tarea 8, 2026-11-15)
+
+**Se elige (a), el escáner propio.**
+
+**Cómo se midió.** Mismo corpus y mismas reglas de extracción para los tres lectores. El banco y el generador del corpus están en `apps/cli/poc/parser-typescript/`, con cómo repetirlo y todas las tablas.
+
+- **Corpus ficticio:** 1.929 archivos, 7,8 MB, con 31 rutas, 16 llamadas y 4 expresiones dinámicas conocidas, y trampas para un escáner (comentarios, cadenas y regex con rutas, apóstrofes en JSX, genéricos, plantillas anidadas, tipos con `path`, un archivo roto).
+- **Código real:** `apps/web/src` de Walkie, 246 archivos.
+
+**Criterios de arriba, en su orden:**
+
+| Criterio | (a) escáner | (b) tree-sitter | (c) TypeScript en Jint |
+|---|---|---|---|
+| 1. Sin procesos externos | sí | sí | sí |
+| 2. Licencia verificada | propia | MIT | Apache-2.0 + BSD-2-Clause |
+| 3. Precisión (meta ≥ 90 % de las rutas literales) | 31/31 rutas, 16/16 llamadas, 0 falsos positivos; 0 errores falsos en código real | 31/31, 16/16, 0 falsos positivos; **4 archivos válidos de Walkie marcados como rotos** (no acepta tipos `import('…')` en genéricos) | 31/31, 16/16, **1 falso positivo** (en un archivo roto); 0 errores falsos |
+| 4. Windows, Linux y macOS en x64 y arm64 sin pasos extra | sí (código administrado) | sí con los 9 RID del paquete; **no** en linux-musl (Alpine) | sí (código administrado) |
+| 5. Menos de 1 minuto para 2.000 archivos | 0,48 s (CLI completa: 1,1 s) | 1,0 s | 28,4 s |
+| 6. Tamaño de la herramienta | +0 | +53 MB (`.nupkg`), 617 MB descomprimido | +~10 MB (Jint y `typescript.js`) |
+
+**Por qué (a):**
+- iguala a (b) y (c) en precisión sobre el corpus y es el único sin errores falsos ni falsos positivos también en código real;
+- no agrega dependencias, código nativo ni tamaño;
+- es el más rápido.
+
+**Su costo:**
+- el lexer es nuestro y tiene casos borde: la prueba encontró dos y se corrigieron (argumentos de tipo en un elemento TSX y el genérico `>>>`);
+- no entiende tipos ni valores: lo que no es literal (una ruta calculada, una URL de una variable) queda en `limitations` y no se adivina;
+- sus rutas salen con confianza `medium`, y las de Next.js `high`, porque salen de las carpetas.
+
+**Por qué no las otras:**
+- **(b)** pierde por la precisión en código real (la gramática del paquete llega tarde a sintaxis vigente) y por el código nativo: 617 MB y sin Alpine.
+- **(c)** es exacta en sintaxis, pero 60 veces más lenta que (a). Con proyectos más grandes queda cerca del límite de un minuto, y obliga a incrustar 9 MB de JavaScript por versión de TypeScript.
+
+**Si un proyecto real muestra rutas que (a) no lee bien:** se reemplaza el escáner detrás de `ScriptFacts`, sin cambiar los detectores ni el formato. (c) es la alternativa si la precisión manda sobre el tiempo.
+
 ## Estado de la implementación (tareas 2 y 7, 2026-11-14)
 
 - **CLI y Analyzer separados.** `apps/cli/src/Walkie.Analyzer` es una biblioteca sin consola, API, lienzo ni base. `apps/cli/src/Walkie.Cli` es la herramienta `walkie` (`dotnet tool`, `walkie scan [carpeta] -o <archivo>`), y por defecto escribe `./architecture.walkiepack`. La distribución sigue siendo `dotnet tool`; un binario autocontenido queda para antes del piloto.
 - **Dependencias confirmadas** (licencia leída en su `nuspec`): `Microsoft.CodeAnalysis.CSharp` 4.14.0 (MIT) y `YamlDotNet` 16.3.0 (MIT).
 - **Contrato no duplicado.** El Analyzer referencia `Walkie.Shared` (claves, fingerprints, validador, schemas). Costo aceptado: `Walkie.Shared` trae `FrameworkReference` a `Microsoft.AspNetCore.App` (por el filtro de validación de endpoints), así que la herramienta necesita el runtime de ASP.NET Core, que viene con el SDK de .NET. Si un binario autocontenido o un analizador sin ASP.NET lo pide, se separa el contrato de Discovery en su propio proyecto.
-- **TypeScript, React y Angular: sin análisis semántico todavía.** No se implementó ninguna de las opciones (a), (b) ni (c). `package-json` detecta las tecnologías y declara la limitación `frontend-semantics-not-analyzed`, que deja el análisis como parcial. No se proponen pantallas, rutas ni llamadas HTTP del front. La prueba de concepto y la decisión siguen en la tarea 8, con los mismos criterios.
+- **TypeScript, React y Angular (tarea 8):** escáner propio (`Walkie.Analyzer/Frontend`: `TsLexer`, `ScriptFacts`, `FrontendModel`, `RouteScreens`) y cinco detectores:
+  - `nextjs`: pantallas por carpetas y route handlers como APIs;
+  - `react-router`;
+  - `angular-router`: `loadChildren` y `loadComponent`, NgModules con `forChild`, `routerLink`;
+  - `frontend-http`: `fetch`, `axios` y `HttpClient`, hacia la misma clave de API que el backend;
+  - `frontend-features`: candidatos por carga diferida o por recurso.
+
+  `package-json` suma cada app de front como `service`. `frontend-semantics-not-analyzed` queda solo para Vue, Svelte y enrutadores no soportados. El detalle está en `apps/cli/CLAUDE.md`.
 - **Límites:** 20.000 archivos, 1 MB por archivo, 20.000 entidades y 50 MB de paquete (`AnalyzerLimits`).
 
 ## Consecuencias

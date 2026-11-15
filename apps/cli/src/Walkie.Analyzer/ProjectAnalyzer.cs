@@ -62,6 +62,12 @@ public static partial class ProjectAnalyzer
         new OpenApiDetector(),
         new AspNetCoreEndpointsDetector(),
         new EfCoreDetector(),
+        // Front (tarea 8): después del backend, así una API que ya vio OpenAPI o ASP.NET Core conserva su título y contrato.
+        new NextJsDetector(),
+        new ReactRouterDetector(),
+        new AngularRouterDetector(),
+        new FrontendHttpDetector(),
+        new FrontendFeaturesDetector(),
     ];
 
     /// <summary>Ids de los detectores disponibles.</summary>
@@ -113,6 +119,12 @@ public static partial class ProjectAnalyzer
 
             try
             {
+                if (detector.NotApplicable(context) is { } reason)
+                {
+                    runs.Add(new DetectorRun(detector.Id, "ran", reason));
+                    continue;
+                }
+
                 detector.Run(context);
                 runs.Add(new DetectorRun(detector.Id, "ran", null));
             }

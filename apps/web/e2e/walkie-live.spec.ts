@@ -24,6 +24,20 @@ function scanFixture(): string {
       'app.Run();',
     ].join('\n'),
     'docker-compose.yml': ['services:', '  db:', '    image: postgres:17', '    environment:', '      POSTGRES_DB: tienda'].join('\n'),
+    // Un front React (tarea 8): rutas → pantallas, y una llamada a la misma API que expone el backend.
+    'web/package.json': JSON.stringify({ name: 'tienda-web', dependencies: { react: '^19.0.0', 'react-router-dom': '^7.0.0' } }),
+    'web/src/main.tsx': [
+      "import { createBrowserRouter } from 'react-router-dom';",
+      "import { Pedidos, Pedido } from './pages';",
+      'export const router = createBrowserRouter([',
+      "  { path: '/pedidos', element: <Pedidos /> },",
+      "  { path: '/pedidos/:id', element: <Pedido /> },",
+      ']);',
+    ].join('\n'),
+    'web/src/pages.tsx': [
+      'export function Pedidos() { return null; }',
+      "export function Pedido({ id }: { id: string }) { fetch(`/api/pedidos/${id}`); return null; }",
+    ].join('\n'),
   };
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(dirname(join(project, path)), { recursive: true });
@@ -75,6 +89,12 @@ test('importar un proyecto local analizado con la CLI y revisarlo', async ({ pag
   const post = list.getByRole('button', { name: /api:POST \/api\/pedidos/ });
   await expect(post).toContainText('Nuevo');
   await expect(page.getByRole('group', { name: 'Hallazgos por estado' })).toContainText('Nuevo');
+  // El front: sus pantallas y la propuesta de feature, con la API que llama (la misma que expone el backend).
+  await expect(list.getByRole('button', { name: /screen:\/pedidos\/\{\}/ })).toContainText('Pantalla');
+  const feature = list.getByRole('button', { name: /feature:Pedidos/ });
+  await expect(feature).toContainText('inferido');
+  await feature.click();
+  await expect(page.getByRole('complementary', { name: 'Detalle del hallazgo' })).toContainText('Crear módulos y features desde un hallazgo llegará más adelante');
 
   await post.click();
   const inspector = page.getByRole('complementary', { name: 'Detalle del hallazgo' });

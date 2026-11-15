@@ -39,7 +39,8 @@ public sealed partial class WalkieRepositoryTests
             .Select(d => "module:" + Path.GetFileName(d))
             .Order(StringComparer.Ordinal);
 
-        Assert.Equal(["service:Walkie.Api"], result.Keys("service"));
+        // El host de la API y la app web (apps/web/package.json, tarea 8).
+        Assert.Equal(["service:@walkie/web", "service:Walkie.Api"], result.Keys("service"));
         Assert.Equal(modules, result.Keys("module"));
         Assert.All(result.Keys("module"), m => Assert.Contains($"depends-on:service:Walkie.Api->{m}", result.RelationKeys()));
         Assert.Contains("depends-on:module:Walkie.Modules.Canvas->module:Walkie.Modules.Apps", result.RelationKeys());
@@ -55,7 +56,24 @@ public sealed partial class WalkieRepositoryTests
         Assert.Contains("resource:storage/rustfs", result.Keys("resource"));
         Assert.Contains("resource:custom/keycloak", result.Keys("resource"));
         Assert.Contains("react", result.TechnologyIds());
-        Assert.Contains("frontend-semantics-not-analyzed", result.LimitationCodes());
+    }
+
+    [Fact]
+    public void Cada_ruta_de_la_web_es_una_pantalla_y_las_llamadas_por_el_cliente_propio_quedan_como_limitacion()
+    {
+        var result = Result.Value;
+        var routes = File.ReadAllText(Path.Combine(SafetyAndStabilityTests.RepoRoot(), "apps", "web", "src", "routes.tsx"));
+        var declared = RoutePath().Matches(routes).Count(m => m.Groups[1].Value != "'*'");
+
+        // Todas las rutas de routes.tsx salvo el comodín, también las que usan una constante importada (APPS_PATH).
+        Assert.Equal(declared, result.Keys("screen").Length);
+        Assert.Contains("screen:/apps", result.Keys("screen"));
+        Assert.Contains("screen:/apps/{}/catalog/{}", result.Keys("screen"));
+        Assert.Contains("screen:/s/{}", result.Keys("screen"));
+        Assert.DoesNotContain("frontend-semantics-not-analyzed", result.LimitationCodes());
+        // La web llama a la API por request() con una URL armada en tiempo de ejecución: no se adivina.
+        Assert.Contains("dynamic-http-url", result.LimitationCodes());
+        Assert.DoesNotContain(result.RelationKeys(), k => k.StartsWith("calls:", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -67,4 +85,7 @@ public sealed partial class WalkieRepositoryTests
 
     [GeneratedRegex(@"\.Map(Get|Post|Put|Patch|Delete)\(", RegexOptions.CultureInvariant)]
     private static partial Regex MapCall();
+
+    [GeneratedRegex(@"\bpath:\s*('[^']*'|[A-Z_]+)", RegexOptions.CultureInvariant)]
+    private static partial Regex RoutePath();
 }

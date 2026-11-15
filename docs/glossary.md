@@ -27,6 +27,8 @@
 | **Hallazgo** | Entidad o relación de un `.walkiepack`, **observada** (declarada tal cual en el código) o **inferida** (deducida), con clave estable, fingerprint de contenido y evidencia (archivo relativo, ancla, detector, confianza). |
 | **Análisis (snapshot)** | Un `.walkiepack` cargado en Walkie: inmutable, con su procedencia. |
 | **Vínculo** | Decisión de una persona sobre un hallazgo: vinculado a un elemento existente, creado al aplicar o descartado. Es la única confirmación; persiste entre análisis y no cambia el elemento. |
+| **Pantalla descubierta** (`screen`) | Ruta técnica de un front (React Router, Next.js, Angular) con el componente que muestra, encontrada en el código. No es una feature ni un nodo `screen` de un lienzo: entra a un lienzo con su feature (tarea 9). Un componente que ninguna ruta muestra no es pantalla. |
+| **Candidato a feature** | Propuesta del analizador de agrupar pantallas (las de una misma carga diferida, o una lista y su detalle) con las APIs que llaman. Siempre inferida y explicada; no crea nada. Una **feature** de Walkie existe solo cuando una persona la decide. |
 | **Layout** | Posición `x, y` de cada nodo, guardada aparte del contenido. |
 
 ## Regla de corte
