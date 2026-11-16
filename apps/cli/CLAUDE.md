@@ -77,7 +77,7 @@ Analizar el propio repo sin escribir en él: `--source-id <uuid>`. Así no se cr
   - una URL de otro dominio da `external-http-url`, que no deja el análisis parcial;
   - un `loadChildren` que no se sigue da `lazy-routes-unresolved`.
 - **Qué se deja fuera:** pruebas, historias y `.d.ts`; también los archivos que no están bajo una app de front (un `package.json` con React, Angular o Next.js).
-- **Monorepo:** la clave de una pantalla es su ruta (ADR-0014), así que dos apps con la misma ruta dan una sola pantalla y la limitación `ambiguous-route`.
+- **Monorepo (ADR-0014, `formatVersion` 1):** la clave de una pantalla y de un candidato a feature lleva el ámbito de su app (`screen:<ámbito>:<ruta>`, `feature:<ámbito>:<nombre>` y el campo `app`): la carpeta de la app (`.` en la raíz) o el que fije el equipo en `.walkie/source.json` (`"apps": { "<carpeta>": "<ámbito>" }`, se lee y nunca se escribe). La misma ruta en dos apps son dos pantallas. Las APIs no llevan ámbito; si dos servicios publican la misma, limitación `ambiguous-api`.
 - **De qué pantalla es una llamada o un enlace** (`FrontendModel.ScreensAt`):
   - si la pantalla es el archivo entero (Next.js, `lazy`), de todas las de ese archivo;
   - si el archivo tiene un solo componente de pantalla, de ese, también desde sus componentes auxiliares del mismo archivo;
@@ -96,6 +96,7 @@ Analizar el propio repo sin escribir en él: `--source-id <uuid>`. Así no se cr
 - **Un objeto con `path` no es una ruta por sí solo:** también necesita componente, carga diferida, hijos, redirección o `index`, o ser hijo de una ruta. Si no, los contratos de prueba (`{ path: '/api/x', method }`) daban rutas falsas. Un `path: string` (un tipo) tampoco es una ruta.
 - **`forChild` sin `loadChildren` que lo monte no se cuelga de la raíz.** Antes daba pantallas en `/` que no existen; ahora queda como `lazy-routes-unresolved`.
 - **Proyectos de prueba del front:** necesitan un `package.json` con React, Angular o Next.js en la carpeta de la app, o sus archivos no se analizan.
+- **Un `AnalyzerException` dentro de un detector detiene el análisis**: el `catch` que deja un detector `failed` lo excluye. Así un ámbito repetido en `.walkie/source.json` (que aparece al armar `FrontendModel`, dentro de `package-json`) es un error claro y no un detector fallido.
 - **`TargetFramework` en `Directory.Build.props`**: si solo se lee el `.csproj`, .NET no aparece como tecnología. `CsprojDetector` busca el `Directory.Build.props` más cercano hacia arriba, dentro de la raíz; no sigue `<Import>`.
 - **Imágenes de compose con registro** (`mcr.microsoft.com/mssql/server`): el último segmento no dice qué es. `ComposeDetector.Classify` mira cada segmento: igual al patrón es confianza alta, que empiece por él (`redis-exporter`) es media.
 - **`${POSTGRES_DB:-walkie}`**: el nombre real puede venir de una variable. Se usa el valor por defecto literal con confianza media, nunca el `.env`.

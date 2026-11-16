@@ -156,6 +156,7 @@ internal sealed class DiscoveryDbContext(DbContextOptions<DiscoveryDbContext> op
             binding.Property(b => b.TargetTitle).HasColumnName("target_title").HasMaxLength(120);
             binding.Property(b => b.EntityFingerprint).HasColumnName("entity_fingerprint").HasMaxLength(71);
             binding.Property(b => b.SnapshotId).HasColumnName("snapshot_id");
+            binding.Property(b => b.DecidedKey).HasColumnName("decided_key").HasMaxLength(500);
             binding.Property(b => b.ApplyId).HasColumnName("apply_id");
             binding.Property(b => b.Note).HasColumnName("note").HasMaxLength(500);
             binding.Property(b => b.DecidedBy).HasColumnName("decided_by").HasMaxLength(255);

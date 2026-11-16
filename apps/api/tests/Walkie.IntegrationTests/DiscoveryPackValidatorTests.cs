@@ -95,6 +95,8 @@ public sealed class DiscoveryPackValidatorTests
     [InlineData("fingerprint-que-no-coincide", "discovery.json/entities/0/fingerprint")]
     [InlineData("clave-de-api-sin-normalizar", "discovery.json/entities/0/key")]
     [InlineData("clave-de-pantalla-sin-normalizar", "discovery.json/entities/6/key")]
+    [InlineData("pantalla-de-otra-app", "discovery.json/entities/6/key")]
+    [InlineData("feature-de-otra-app", "discovery.json/entities/3/key")]
     [InlineData("clave-de-otro-tipo", "discovery.json/entities/2/key")]
     [InlineData("clave-de-relacion-que-no-coincide", "discovery.json/relations/0/key")]
     [InlineData("entidades-fuera-de-orden", "discovery.json/entities/1/key")]
@@ -110,7 +112,9 @@ public sealed class DiscoveryPackValidatorTests
         {
             case "fingerprint-que-no-coincide": entities[0]!["title"] = "Otro título"; break;
             case "clave-de-api-sin-normalizar": Rekey(discovery, "api:GET /api/pedidos/{}", "api:GET /api/pedidos/{pedidoId}"); break;
-            case "clave-de-pantalla-sin-normalizar": Rekey(discovery, "screen:/pedidos/{}", "screen:/pedidos/:pedidoId"); break;
+            case "clave-de-pantalla-sin-normalizar": Rekey(discovery, "screen:web:/pedidos/{}", "screen:web:/pedidos/:pedidoId"); break;
+            case "pantalla-de-otra-app": discovery["entities"]![6]!["app"] = "admin"; break;
+            case "feature-de-otra-app": discovery["entities"]![3]!["app"] = "admin"; break;
             case "clave-de-otro-tipo": Rekey(discovery, "database:postgresql/tienda", "databases:postgresql/tienda"); break;
             case "clave-de-relacion-que-no-coincide": discovery["relations"]![0]!["key"] = "calls:otra"; break;
             case "entidades-fuera-de-orden": Swap(entities, 0, 1); break;
@@ -220,7 +224,7 @@ public sealed class DiscoveryPackValidatorTests
 
         Assert.Equal(DiscoveryFormat.CurrentVersion,
             schema.RootElement.GetProperty("properties").GetProperty("formatVersion").GetProperty("const").GetInt32());
-        // Una migración por versión anterior (hoy, la 0, ninguna). Con una variable: xUnit2013 pide Assert.Empty ante un 0 literal.
+        // Una migración por versión anterior (hoy, 0 → 1). Con una variable: xUnit2013 pide Assert.Single ante un 1 literal.
         var migrationsExpected = DiscoveryFormat.CurrentVersion;
         Assert.Equal(migrationsExpected, DiscoveryFormat.Migrations.Count);
     }
@@ -237,6 +241,69 @@ public sealed class DiscoveryPackValidatorTests
         Assert.Equal(DiscoveryFormat.CurrentVersion, upgradedManifest["formatVersion"]!.GetValue<int>());
         Assert.Throws<ArgumentOutOfRangeException>(() => DiscoveryFormat.Upgrade(DiscoveryFormat.CurrentVersion + 1, manifest, discovery));
     }
+
+    [Theory]
+    [InlineData("tienda-demo")]
+    [InlineData("parcial")]
+    public void Cada_ejemplo_congelado_de_la_version_0_se_migra_a_su_ejemplo_actual_y_es_valido(string project)
+    {
+        // ADR-0014: los ejemplos de una versión vieja se conservan y se suben con el schema nuevo. Los actuales se
+        // escribieron fuera de .NET con la misma regla: si coinciden, la migración hace lo que dice el ADR.
+        var (manifest, discovery) = DiscoveryFormat.Upgrade(0, V0(project, "manifest.json"), V0(project, "discovery.json"));
+
+        Assert.True(JsonElement.DeepEquals(Element(Pack(project, "discovery.json")), Element(discovery)));
+        Assert.True(JsonElement.DeepEquals(Element(Pack(project, "manifest.json")), Element(manifest)));
+        Assert.Empty(Validate(manifest, discovery));
+    }
+
+    [Fact]
+    public void La_migracion_no_cambia_el_fingerprint_de_lo_que_no_es_pantalla_ni_feature_y_el_legado_coincide()
+    {
+        var old = V0("tienda-demo", "discovery.json")["entities"]!.AsArray().ToDictionary(e => e!["key"]!.GetValue<string>(), e => e!);
+        var migrated = Pack("tienda-demo", "discovery.json")["entities"]!.AsArray();
+
+        foreach (var entity in migrated)
+        {
+            var key = entity!["key"]!.GetValue<string>();
+            var legacy = DiscoveryKeys.WithoutScope(key) ?? key;
+            Assert.Equal(old[legacy]!["fingerprint"]!.GetValue<string>(), FormatV1.LegacyFingerprint(Element(entity)));
+            if (legacy == key)
+            {
+                Assert.Equal(old[key]!["fingerprint"]!.GetValue<string>(), entity["fingerprint"]!.GetValue<string>());
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("varias-apps", "su evidencia está en varias apps")]
+    [InlineData("fuera-de-una-app", "ningún archivo de su evidencia")]
+    public void Una_pantalla_v0_sin_app_inequivoca_no_se_migra_y_pide_reanalizar(string variant, string why)
+    {
+        var manifest = V0("tienda-demo", "manifest.json");
+        var discovery = V0("tienda-demo", "discovery.json");
+        var evidence = discovery["evidence"]!.AsArray();
+        var screen = discovery["entities"]!.AsArray().Single(e => e!["kind"]!.GetValue<string>() == "screen")!;
+        if (variant == "varias-apps")
+        {
+            evidence.Add(new JsonObject { ["id"] = "ev-package-admin", ["detector"] = "package-json", ["path"] = "admin/package.json", ["symbol"] = "dependencies.react", ["confidence"] = "high" });
+            evidence.Add(new JsonObject { ["id"] = "ev-route-admin", ["detector"] = "react-router", ["path"] = "admin/src/routes.tsx", ["confidence"] = "medium" });
+            screen["evidence"]!.AsArray().Add("ev-route-admin");
+        }
+        else
+        {
+            evidence.Single(e => e!["id"]!.GetValue<string>() == "ev-route-pedido")!["path"] = "otra/routes.tsx";
+        }
+
+        var error = Assert.Throws<DiscoveryMigrationException>(() => DiscoveryFormat.Upgrade(0, manifest, discovery));
+
+        var messages = error.Errors.Values.SelectMany(m => m).ToList();
+        Assert.Contains(messages, m => m.Contains("screen:/pedidos/{}", StringComparison.Ordinal) && m.Contains(why, StringComparison.Ordinal)
+            && m.Contains("vuelve a analizar", StringComparison.Ordinal));
+        Assert.Contains(messages, m => m.Contains("feature:Ver pedido", StringComparison.Ordinal)); // su feature tampoco se asigna
+    }
+
+    private static JsonObject V0(string project, string file) =>
+        JsonNode.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "packages", "schema", "walkiepack", "v0", "examples", project, file)))!.AsObject();
 
     private static (JsonObject Manifest, JsonObject Discovery) TiendaDemo() =>
         (Pack("tienda-demo", "manifest.json"), Pack("tienda-demo", "discovery.json"));

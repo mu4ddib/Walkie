@@ -302,11 +302,12 @@ public sealed class NextJsDetector : IDetector
                 if (kind == "page")
                 {
                     var evidence = context.Findings.Evidence(Id, file.Path, Confidence.High, "página " + route, new Lines(1, 1));
-                    if (context.Findings.Entity(DiscoveryKeys.Screen(route), "screen", route, Basis.Observed, Confidence.High, evidence) is { } screen)
+                    if (context.Findings.Entity(app.ScreenKey(route), "screen", route, Basis.Observed, Confidence.High, evidence) is { } screen)
                     {
                         screen.Route ??= route;
+                        screen.App ??= app.Scope;
                         screen.Technology ??= context.Findings.HasTechnology("nextjs") ? "nextjs" : null;
-                        model.AddScreen(new ScreenRecord(app, screen.Key, route, null, file.Path, 1), file.Path, null, Id);
+                        model.AddScreen(new ScreenRecord(app, screen.Key, route, null, file.Path, 1), file.Path, null);
                     }
 
                     if (model.Facts(file, Id) is { } facts)
@@ -496,13 +497,13 @@ public sealed class FrontendFeaturesDetector : IDetector
     {
         var model = FrontendModel.Of(context);
         var lazy = model.Screens.Where(s => s.LazyMount is not null)
-            .GroupBy(s => (s.App.Dir, Name: LastStatic(s.LazyMount!)))
+            .GroupBy(s => (s.App.Scope, Name: LastStatic(s.LazyMount!)))
             .Where(g => g.Key.Name is not null);
         var byResource = model.Screens.Where(s => s.LazyMount is null && model.Screens.All(o => o.Key != s.Key || o.LazyMount is null))
-            .GroupBy(s => (s.App.Dir, Name: LastStatic(s.Route)))
+            .GroupBy(s => (s.App.Scope, Name: LastStatic(s.Route)))
             .Where(g => g.Key.Name is not null);
         foreach (var (group, isLazy) in lazy.Select(g => (g, true)).Concat(byResource.Select(g => (g, false)))
-                     .OrderBy(x => x.g.Key.Dir, StringComparer.Ordinal).ThenBy(x => x.g.Key.Name, StringComparer.Ordinal))
+                     .OrderBy(x => x.g.Key.Scope, StringComparer.Ordinal).ThenBy(x => x.g.Key.Name, StringComparer.Ordinal))
         {
             Propose(context, model, group.Key.Name!, [.. group], isLazy);
         }
@@ -523,13 +524,16 @@ public sealed class FrontendFeaturesDetector : IDetector
         foreach (var screen in screens)
         {
             var evidence = context.Findings.Evidence(Id, screen.Path, confidence, "pantalla " + screen.Route, new Lines(screen.Line, screen.Line));
-            feature = context.Findings.Entity(DiscoveryKeys.Feature(title), "feature", title, Basis.Inferred, confidence, evidence);
+            // La clave lleva la app (ADR-0014): «Pedidos» de dos apps son dos candidatos.
+            feature = context.Findings.Entity(DiscoveryKeys.Feature(screens[0].App.Scope, title), "feature", title, Basis.Inferred, confidence, evidence);
         }
 
         if (feature is null)
         {
             return;
         }
+
+        feature.App ??= screens[0].App.Scope;
 
         var why = lazy ? $"se cargan juntas bajo /{segment}" : $"comparten el recurso «{segment}»";
         feature.Description ??= Text.Truncate(

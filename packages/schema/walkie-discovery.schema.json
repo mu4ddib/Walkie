@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery.schema.json",
-  "title": "Walkie discovery v0",
+  "title": "Walkie discovery v1",
   "description": "discovery.json de un .walkiepack (spec walkie-live, ADR-0013 y ADR-0014): lo que el análisis estático observó o infirió (entidades y relaciones) y la evidencia que lo respalda. Toda entidad y relación cita al menos una evidencia. No hay confirmaciones: las decide una persona en Walkie (walkie-discovery-binding). Orden estable por clave (entidades, relaciones) e id (evidencia) y sin fechas: el mismo árbol da el mismo archivo. Lo que el schema no expresa (claves e ids únicos, referencias que existen, fingerprints, orden, claves normalizadas) lo valida DiscoveryPackValidator (Walkie.Shared).",
   "type": "object",
   "required": ["entities", "relations", "evidence"],
@@ -25,7 +25,14 @@
       "minLength": 3,
       "maxLength": 500,
       "pattern": "^(api|service|database|resource|screen|module|feature):\\S.*$",
-      "description": "Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ruta normalizada>, module:<nombre>, feature:<nombre>. DiscoveryKeys (Walkie.Shared) las arma"
+      "description": "Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ámbito de la app>:<ruta normalizada>, module:<nombre>, feature:<ámbito de la app>:<nombre> (formatVersion 1; en la 0, screen:<ruta> y feature:<nombre>, que siguen siendo válidas en los registros de la API: un vínculo decidido antes conserva su clave). DiscoveryKeys (Walkie.Shared) las arma"
+    },
+    "appScope": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9._~@+%-]+(/[A-Za-z0-9._~@+%-]+)*$",
+      "description": "Ámbito de una app dentro de la fuente (ADR-0014): por defecto su carpeta relativa a la raíz analizada (apps/web; . en la raíz; un carácter fuera de [A-Za-z0-9._~@+-] como %XX), o el nombre que le da .walkie/source.json (apps). Nunca tiene ':'. AppScope (Walkie.Shared) lo calcula"
     },
     "relationKey": {
       "type": "string",
@@ -80,6 +87,7 @@
         "resource": { "$ref": "walkie-graph.schema.json#/$defs/resource", "description": "Subtipo y detalles (solo resource; obligatorio en él)" },
         "runtime": { "$ref": "walkie-graph.schema.json#/$defs/runtime", "description": "Dónde corre (solo service)" },
         "route": { "type": "string", "minLength": 1, "maxLength": 500, "description": "Ruta de la pantalla en el front, ej. /apps/:appId (solo screen)" },
+        "app": { "$ref": "#/$defs/appScope", "description": "App del front a la que pertenece (solo screen y feature; obligatorio en ellas): es parte de su clave" },
         "members": {
           "type": "array",
           "description": "Claves de las entidades que agrupa (solo module y feature)",
@@ -105,6 +113,8 @@
         { "if": { "properties": { "kind": { "const": "api" } } }, "then": { "required": ["http"] } },
         { "if": { "properties": { "kind": { "const": "resource" } } }, "then": { "required": ["resource"] } },
         { "if": { "properties": { "kind": { "const": "screen" } } }, "then": { "required": ["route"] } },
+        { "if": { "properties": { "kind": { "enum": ["screen", "feature"] } } }, "then": { "required": ["app"] } },
+        { "if": { "properties": { "kind": { "not": { "enum": ["screen", "feature"] } } } }, "then": { "not": { "required": ["app"] } } },
         { "if": { "properties": { "kind": { "enum": ["module", "feature"] } } }, "then": { "required": ["members"] } },
         { "if": { "properties": { "kind": { "not": { "const": "api" } } } }, "then": { "not": { "required": ["http"] } } },
         { "if": { "properties": { "kind": { "not": { "const": "database" } } } }, "then": { "not": { "required": ["database"] } } },

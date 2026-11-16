@@ -167,6 +167,11 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("decided_by");
 
+                    b.Property<string>("DecidedKey")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("decided_key");
+
                     b.Property<string>("Decision")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)")

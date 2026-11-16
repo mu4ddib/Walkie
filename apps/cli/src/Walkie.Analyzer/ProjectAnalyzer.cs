@@ -106,7 +106,7 @@ public static partial class ProjectAnalyzer
                 $"Se alcanzó el límite de {options.Limits.MaxFiles} archivos: el resto del proyecto no se miró."));
         }
 
-        var context = new AnalysisContext(root, listing.Files, findings, options.Limits);
+        var context = new AnalysisContext(root, listing.Files, findings, options.Limits) { AppScopes = SourceIdentity.AppScopes(root) };
         var runs = new List<DetectorRun>();
         var detectors = CreateDetectors();
         foreach (var detector in detectors)
@@ -129,7 +129,7 @@ public static partial class ProjectAnalyzer
                 runs.Add(new DetectorRun(detector.Id, "ran", null));
             }
 #pragma warning disable CA1031 // un detector que falla no tumba el análisis: queda failed y el paquete, parcial
-            catch (Exception ex) when (ex is not OutOfMemoryException)
+            catch (Exception ex) when (ex is not OutOfMemoryException and not AnalyzerException)
 #pragma warning restore CA1031
             {
                 runs.Add(new DetectorRun(detector.Id, "failed", $"Error inesperado ({ex.GetType().Name}); lo encontrado antes se conserva."));
@@ -139,6 +139,15 @@ public static partial class ProjectAnalyzer
         if (runs.Any(r => r.Id == "csproj" && r.Status == "ran"))
         {
             CsprojDetector.LinkProjects(context);
+        }
+
+        // La clave de una API es método y ruta, sin el servicio (ADR-0014): así el front y el catálogo la encuentran. Si
+        // dos servicios publican la misma, quedan como una sola; se avisa sin cambiar la clave.
+        foreach (var (api, services) in findings.SharedApis())
+        {
+            findings.Limitation("ambiguous-api",
+                $"{api["api:".Length..]} la publican {string.Join(", ", services.Select(s => s["service:".Length..]))}: la clave de una API es su método y su ruta, así que Walkie la propone como una sola. Revísala antes de decidir.",
+                incomplete: false);
         }
 
         var discovery = findings.DiscoveryJson();
@@ -315,6 +324,55 @@ internal static class SourceIdentity
         Directory.CreateDirectory(Path.Combine(root, ".walkie"));
         File.WriteAllText(file, new JsonObject { ["id"] = newId.ToString(), ["name"] = name }.ToJsonString(ProjectAnalyzer.JsonOptions) + "\n");
         return (newId, name, true);
+    }
+
+    /// <summary>
+    /// Los ámbitos que el equipo eligió para sus apps (<c>"apps": { "&lt;carpeta&gt;": "&lt;ámbito&gt;" }</c> en
+    /// <c>.walkie/source.json</c>, ADR-0014): conservan la identidad de las pantallas al mover una carpeta. Se leen y
+    /// nunca se escriben. Sin archivo o sin <c>apps</c>, ninguno: el ámbito de cada app es su carpeta.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> AppScopes(string root)
+    {
+        var scopes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var file = Path.Combine(root, ".walkie", "source.json");
+        if (!File.Exists(file))
+        {
+            return scopes;
+        }
+
+        JsonNode? apps;
+        try
+        {
+            apps = JsonNode.Parse(File.ReadAllText(file))?["apps"];
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return scopes; // Resolve ya rechazó un archivo ilegible
+        }
+
+        if (apps is null)
+        {
+            return scopes;
+        }
+
+        if (apps is not JsonObject map)
+        {
+            throw new AnalyzerException("invalid-source-file", $"{FilePath}: apps tiene que ser un objeto {{ \"<carpeta>\": \"<ámbito>\" }}.");
+        }
+
+        foreach (var (dir, value) in map)
+        {
+            var scope = value is JsonValue v && v.TryGetValue<string>(out var text) ? text.Trim() : null;
+            if (!AppScope.IsValid(scope))
+            {
+                throw new AnalyzerException("invalid-source-file",
+                    $"{FilePath}: el ámbito de «{dir}» tiene que ser letras, números, «.», «_», «~», «@», «+», «-» o «%», en partes separadas por «/», sin «:» ni espacios (hasta {AppScope.MaxLength}).");
+            }
+
+            scopes[dir.Replace('\\', '/').Trim('/')] = scope!;
+        }
+
+        return scopes;
     }
 
     private static string? Clean(string? name)

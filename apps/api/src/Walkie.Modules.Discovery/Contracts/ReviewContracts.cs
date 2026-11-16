@@ -21,7 +21,8 @@ public sealed record DiscoveryBindingResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Note,
     string DecidedBy,
     DateTimeOffset DecidedAt,
-    int Version);
+    int Version,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DecidedKey = null);
 
 /// <summary>Con qué coincide y por qué (<c>match</c> y <c>candidates</c> de la revisión).</summary>
 public sealed record DiscoveryMatch(DiscoveryTarget Target, string Reason);
@@ -45,7 +46,8 @@ public sealed record DiscoveryReviewItem(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DiscoveryMatch>? Candidates,
     int EvidenceCount,
     DiscoveryProposal Proposal,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? TargetMissing = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? TargetMissing = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiscoveryBindingResponse? LegacyBinding = null);
 
 public sealed record DiscoveryReviewCounts(int New, int Matched, int Linked, int Created, int Rejected, int Changed, int Missing);
 

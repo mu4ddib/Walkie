@@ -51,22 +51,23 @@
       "fingerprint": "sha256:523d2ac5d9751ccffafad02cc2e7bf4c555887f7a24ca52920772eecde8ff730"
     },
     {
-      "key": "feature:Ver pedido",
+      "key": "feature:web:Ver pedido",
       "kind": "feature",
       "title": "Ver pedido",
       "basis": "inferred",
       "confidence": "low",
       "derivedFrom": [
-        "screen:/pedidos/{}"
+        "screen:web:/pedidos/{}"
       ],
       "members": [
-        "screen:/pedidos/{}",
+        "screen:web:/pedidos/{}",
         "api:GET /api/pedidos/{}"
       ],
       "evidence": [
         "ev-route-pedido"
       ],
-      "fingerprint": "sha256:35ab68930e99f5b237b1fa45aa4ed75aff3eaa173e8149cba681ed9b3d7e0ad0"
+      "fingerprint": "sha256:e4d330764c04d6e4d36239402241cee0055badf96235ffc355d74e4976f66c6f",
+      "app": "web"
     },
     {
       "key": "module:Tienda.Pedidos",
@@ -114,7 +115,7 @@
       "fingerprint": "sha256:05e5725fbc271fc27fe0ba2ae49a2eb6d0cd46beb7867a65fff3dcaa59adbd37"
     },
     {
-      "key": "screen:/pedidos/{}",
+      "key": "screen:web:/pedidos/{}",
       "kind": "screen",
       "title": "Detalle del pedido",
       "technology": "react",
@@ -124,7 +125,8 @@
       "evidence": [
         "ev-route-pedido"
       ],
-      "fingerprint": "sha256:8283fc271740e2ee20e7ab0408f1f2e3f964cc6c6a76cddccf0ba717abcde046"
+      "fingerprint": "sha256:16289fce30a969d8a13521b8ebdabe083819ecfa3487e9169d21cc3373114c7a",
+      "app": "web"
     },
     {
       "key": "service:Tienda.Api",
@@ -143,9 +145,9 @@
   ],
   "relations": [
     {
-      "key": "calls:screen:/pedidos/{}->api:GET /api/pedidos/{}",
+      "key": "calls:screen:web:/pedidos/{}->api:GET /api/pedidos/{}",
       "kind": "calls",
-      "from": "screen:/pedidos/{}",
+      "from": "screen:web:/pedidos/{}",
       "to": "api:GET /api/pedidos/{}",
       "basis": "inferred",
       "confidence": "medium",

@@ -157,6 +157,10 @@
         "binding": {
           "$ref": "walkie-discovery-binding.schema.json"
         },
+        "legacyBinding": {
+          "$ref": "walkie-discovery-binding.schema.json",
+          "description": "Una decisión tomada con la clave de la versión 0 del formato (screen:<ruta>, feature:<nombre>, sin la app) que le corresponde a este hallazgo y a otro de otra app (ADR-0014). Walkie no elige: la decisión sigue activa con su clave vieja y no cuenta como missing. Decide sobre la clave nueva y restablece la vieja (reset con su entityKey y version)"
+        },
         "targetMissing": {
           "const": true,
           "description": "Solo con un vínculo linked o created cuyo elemento ya no existe en Walkie (se borró a mano): la decisión sigue guardada pero no apunta a nada. Restablécela o vincúlalo a otro elemento"

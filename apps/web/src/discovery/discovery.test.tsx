@@ -316,7 +316,7 @@ describe('revisión de un análisis', () => {
 
   it('una pantalla no se vincula sola y no hay botón de crear', async () => {
     await openReview();
-    await userEvent.click(row(/screen:\/pedidos/));
+    await userEvent.click(row(/screen:web:\/pedidos/));
     const inspector = screen.getByRole('complementary', { name: 'Detalle del hallazgo' });
     expect(inspector).toHaveTextContent('Una pantalla no se vincula sola');
     expect(within(inspector).queryByRole('button', { name: /Vincular/ })).not.toBeInTheDocument();
@@ -344,6 +344,38 @@ describe('revisión de un análisis', () => {
     expect(reset.body.applyId).not.toBe(api.discovery.applies[0]!.body.applyId);
     await userEvent.click(within(inspector).getByRole('button', { name: 'Confirmar' }));
     expect(await within(inspector).findByText('Decisión restablecida.')).toBeInTheDocument();
+  });
+
+  it('una decisión de antes de distinguir la app se muestra en cada contraparte y se restablece aparte', async () => {
+    const legacyBinding = {
+      sourceId: SOURCE.id,
+      entityKey: 'screen:/pedidos',
+      decision: 'rejected' as const,
+      entityFingerprint: `sha256:${'1'.repeat(64)}`,
+      snapshotId: OLD_SNAPSHOT_ID,
+      decidedBy: 'persona',
+      decidedAt: '2026-11-01T10:00:00Z',
+      version: 3,
+    };
+    const items = [
+      item({ key: 'screen:admin:/pedidos', kind: 'screen', title: 'Pedidos (admin)', proposal: { op: 'none' }, legacyBinding }),
+      item({ key: 'screen:tienda:/pedidos', kind: 'screen', title: 'Pedidos (tienda)', proposal: { op: 'none' }, legacyBinding }),
+    ];
+    const api = await openReview(
+      seed({
+        reviews: { [SNAPSHOT_ID]: { sourceId: SOURCE.id, items } },
+        evidence: Object.fromEntries(items.map((i) => [`${SNAPSHOT_ID}|${i.key}`, evidenceOf(i.key)])),
+      }),
+    );
+    await userEvent.click(row(/screen:tienda:\/pedidos/));
+    const inspector = screen.getByRole('complementary', { name: 'Detalle del hallazgo' });
+
+    expect(inspector).toHaveTextContent('screen:/pedidos');
+    expect(inspector).toHaveTextContent('antes de que Walkie distinguiera la app');
+    expect(inspector).toHaveTextContent('no se marca como desaparecida');
+    await userEvent.click(within(inspector).getByRole('button', { name: 'Restablecer la decisión vieja…' }));
+    await waitFor(() => expect(api.discovery.applies.length).toBeGreaterThan(0));
+    expect(api.discovery.applies.at(-1)!.body.operations[0]).toEqual({ op: 'reset', entityKey: 'screen:/pedidos', bindingVersion: 3 });
   });
 
   it('un 409 avisa, recarga la revisión y no reintenta solo', async () => {

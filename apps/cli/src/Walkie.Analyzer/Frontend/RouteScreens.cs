@@ -87,7 +87,7 @@ internal static partial class RouteScreens
             }
 
             var name = decl.Component ?? decl.LoadComponent?.Member ?? (componentFile is null ? null : Pascal(Path.GetFileNameWithoutExtension(componentFile.Path)));
-            var key = DiscoveryKeys.Screen(route.FullPath);
+            var key = app.ScreenKey(route.FullPath);
             var confidence = Confidence.Medium;
             var evidence = context.Findings.Evidence(detector, file.Path, confidence, name ?? "ruta", new Lines(line, line),
                 route.Lazy ? "Ruta dentro de una carga diferida" : null);
@@ -97,6 +97,7 @@ internal static partial class RouteScreens
             }
 
             screen.Route ??= Text.Truncate(route.FullPath, 500);
+            screen.App ??= app.Scope;
             if (context.Findings.HasTechnology(technology))
             {
                 screen.Technology ??= technology;
@@ -110,7 +111,7 @@ internal static partial class RouteScreens
 
             // El componente en su archivo: el nombre declarado, o null si la ruta trae el archivo entero (lazy sin miembro).
             var declared = decl.Component ?? decl.LoadComponent?.Member;
-            model.AddScreen(new ScreenRecord(app, key, route.FullPath, route.LazyMount, file.Path, line), componentFile?.Path, declared, detector);
+            model.AddScreen(new ScreenRecord(app, key, route.FullPath, route.LazyMount, file.Path, line), componentFile?.Path, declared);
             added++;
         }
 
@@ -130,7 +131,7 @@ internal static partial class RouteScreens
                 continue;
             }
 
-            var key = DiscoveryKeys.Screen(target);
+            var key = app.ScreenKey(target);
             var (to, confidence) = screens.Contains(key)
                 ? (key, Confidence.Medium)
                 : (screens.Where(s => Matches(s, key)).ToList() is [var only] ? only : null, Confidence.Low);
@@ -147,7 +148,7 @@ internal static partial class RouteScreens
         }
     }
 
-    /// <summary><c>screen:/pedidos/{}</c> acepta <c>screen:/pedidos/nuevo</c>: mismo largo y cada parte igual o parámetro.</summary>
+    /// <summary><c>screen:web:/pedidos/{}</c> acepta <c>screen:web:/pedidos/nuevo</c>: mismo largo y cada parte igual o parámetro.</summary>
     private static bool Matches(string pattern, string key)
     {
         var p = pattern.Split('/');

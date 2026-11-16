@@ -29,9 +29,9 @@
   ],
   "relations": [
     {
-      "key": "calls:screen:/pedidos/{}->api:GET /api/pedidos/{}",
+      "key": "calls:screen:web:/pedidos/{}->api:GET /api/pedidos/{}",
       "kind": "calls",
-      "from": "screen:/pedidos/{}",
+      "from": "screen:web:/pedidos/{}",
       "to": "api:GET /api/pedidos/{}",
       "basis": "inferred",
       "confidence": "medium",

@@ -3,8 +3,12 @@ using Walkie.Shared.Discovery;
 
 namespace Walkie.Analyzer.Frontend;
 
-/// <summary>Una aplicación de front: la carpeta de un <c>package.json</c> que declara React, Angular o Next.js.</summary>
-internal sealed record FrontendApp(string Dir, string Name, string PackagePath, IReadOnlySet<string> Dependencies)
+/// <summary>
+/// Una aplicación de front: la carpeta de un <c>package.json</c> que declara React, Angular o Next.js. <see cref="Scope"/>
+/// es su ámbito (ADR-0014): la carpeta o el que eligió el equipo en <c>.walkie/source.json</c>; va en la clave de sus
+/// pantallas y candidatos a feature.
+/// </summary>
+internal sealed record FrontendApp(string Dir, string Name, string PackagePath, IReadOnlySet<string> Dependencies, string Scope)
 {
     public bool React => Dependencies.Contains("react");
 
@@ -13,6 +17,9 @@ internal sealed record FrontendApp(string Dir, string Name, string PackagePath, 
     public bool Next => Dependencies.Contains("next");
 
     public string ServiceKey => DiscoveryKeys.Service(Name);
+
+    /// <summary>La clave de una pantalla de esta app.</summary>
+    public string ScreenKey(string route) => DiscoveryKeys.Screen(Scope, route);
 
     /// <summary>Ruta relativa con barra final (o vacía en la raíz), para saber si un archivo es de esta app.</summary>
     public string Prefix => Dir.Length == 0 ? "" : Dir + "/";
@@ -139,7 +146,15 @@ internal sealed class FrontendModel
 
             var dir = Path.GetDirectoryName(file.Path)?.Replace('\\', '/') ?? "";
             var appName = string.IsNullOrWhiteSpace(name) ? (dir.Length == 0 ? "frontend" : Path.GetFileName(dir)) : name.Trim();
-            apps.Add(new FrontendApp(dir, Text.Truncate(appName, 120), file.Path, dependencies));
+            var scope = context.AppScopes.TryGetValue(dir, out var chosen) ? chosen : AppScope.FromDirectory(dir);
+            apps.Add(new FrontendApp(dir, Text.Truncate(appName, 120), file.Path, dependencies, scope));
+        }
+
+        // Un ámbito elegido que repite el de otra app juntaría dos apps en una: mejor parar y decirlo.
+        if (apps.GroupBy(a => a.Scope, StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1) is { } repeated)
+        {
+            throw new AnalyzerException("invalid-source-file",
+                $"{SourceIdentity.FilePath}: el ámbito «{repeated.Key}» quedó para varias apps ({string.Join(", ", repeated.Select(a => a.Dir.Length == 0 ? "." : a.Dir))}); cada app necesita uno propio.");
         }
 
         return [.. apps.OrderBy(a => a.Dir, StringComparer.Ordinal)];
@@ -340,20 +355,11 @@ internal sealed class FrontendModel
     }
 
     /// <summary>
-    /// Registra una pantalla y su componente. Varias rutas con la misma clave suman evidencia (la misma pantalla). Si la
-    /// misma ruta viene de otra app (un monorepo), se avisa: la clave de una pantalla es su ruta y no distingue la app
-    /// (ADR-0014), así que quedan como una sola.
+    /// Registra una pantalla y su componente. Varias rutas con la misma clave suman evidencia (la misma pantalla). La
+    /// misma ruta en otra app es otra pantalla: la clave lleva el ámbito de la app (ADR-0014, formatVersion 1).
     /// </summary>
-    public void AddScreen(ScreenRecord screen, string? componentFile, string? componentName, string detector)
+    public void AddScreen(ScreenRecord screen, string? componentFile, string? componentName)
     {
-        var others = Screens.Where(s => s.Key == screen.Key && s.App != screen.App).Select(s => s.App.Name).Distinct().Order(StringComparer.Ordinal).ToList();
-        if (others.Count > 0)
-        {
-            context.Findings.Limitation("ambiguous-route",
-                $"La ruta {screen.Route} está en {screen.App.Name} y en {string.Join(", ", others)}: la clave de una pantalla es su ruta, así que Walkie las propone como una sola. Revísala antes de decidir.",
-                detector, screen.Path, incomplete: false);
-        }
-
         Screens.Add(screen);
         if (componentFile is not null)
         {

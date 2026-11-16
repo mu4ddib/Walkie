@@ -132,7 +132,7 @@ describe('crear en el catálogo desde la revisión', () => {
     };
     await openReview(
       seed([
-        item({ key: 'screen:/pedidos', kind: 'screen', title: 'Pedidos' }),
+        item({ key: 'screen:web:/pedidos', kind: 'screen', title: 'Pedidos' }),
         item({ key: 'module:Tienda.Pedidos', kind: 'module', title: 'Pedidos (módulo)', basis: 'inferred', confidence: 'medium' }),
         decided,
         item({ key: 'api:DELETE /api/viejo', status: 'missing', proposal: { op: 'none' } }),

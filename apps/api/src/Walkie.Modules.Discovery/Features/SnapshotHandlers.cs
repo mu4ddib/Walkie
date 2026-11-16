@@ -141,10 +141,19 @@ internal sealed class SnapshotHandlers(DiscoveryDbContext db, IAppDirectory apps
         var formatVersion = manifest.GetProperty("formatVersion").GetInt32();
         if (formatVersion < DiscoveryFormat.CurrentVersion)
         {
-            var (upgradedManifest, upgradedDiscovery) = DiscoveryFormat.Upgrade(
-                formatVersion, JsonNode.Parse(manifest.GetRawText())!.AsObject(), JsonNode.Parse(discovery.GetRawText())!.AsObject());
-            manifest = JsonSerializer.SerializeToElement(upgradedManifest);
-            discovery = JsonSerializer.SerializeToElement(upgradedDiscovery);
+            try
+            {
+                var (upgradedManifest, upgradedDiscovery) = DiscoveryFormat.Upgrade(
+                    formatVersion, JsonNode.Parse(manifest.GetRawText())!.AsObject(), JsonNode.Parse(discovery.GetRawText())!.AsObject());
+                manifest = JsonSerializer.SerializeToElement(upgradedManifest);
+                discovery = JsonSerializer.SerializeToElement(upgradedDiscovery);
+            }
+            catch (DiscoveryMigrationException ex)
+            {
+                // Un paquete viejo que no se sube sin adivinar (ej. de qué app es una pantalla): se pide reanalizar.
+                Merge(errors, ex.Errors.ToDictionary(e => e.Key, e => e.Value, StringComparer.Ordinal));
+                return null;
+            }
         }
 
         // Límites antes del validador: así un paquete enorme no se recorre entero.
@@ -256,9 +265,54 @@ internal sealed class SnapshotHandlers(DiscoveryDbContext db, IAppDirectory apps
             Data = e.GetRawText(),
         }));
 
+        await CarryLegacyDecisionsAsync(appId, sourceId, discovery, ct).ConfigureAwait(false);
+
         // Un solo SaveChanges: una transacción de Postgres. Si algo falla, no queda nada del análisis a medias.
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return snapshot;
+    }
+
+    /// <summary>
+    /// Decisiones de la versión 0 sobre pantallas y candidatos a feature que tienen una sola contraparte en este
+    /// análisis: pasan a la clave con ámbito (<see cref="LegacyBindings"/>). Las ambiguas, las reservadas por una
+    /// aplicación en curso y las que chocan con una decisión ya tomada sobre la clave nueva no se tocan.
+    /// </summary>
+    private async Task CarryLegacyDecisionsAsync(Guid appId, Guid sourceId, JsonElement discovery, CancellationToken ct)
+    {
+        var entities = discovery.GetProperty("entities").EnumerateArray().ToDictionary(e => e.GetProperty("key").GetString()!, StringComparer.Ordinal);
+        var counterparts = LegacyBindings.Counterparts(entities.Keys);
+        if (counterparts.Count == 0)
+        {
+            return;
+        }
+
+        var bindings = await db.Bindings.Where(b => b.AppId == appId && b.SourceId == sourceId).ToListAsync(ct).ConfigureAwait(false);
+        var byKey = bindings.ToDictionary(b => b.EntityKey, StringComparer.Ordinal);
+        var legacy = await LegacyBindings.FindAsync(db, bindings.Where(b => b.PendingApplyId is null), entities.Keys.ToHashSet(StringComparer.Ordinal), counterparts, ct)
+            .ConfigureAwait(false);
+        foreach (var (key, binding) in legacy.OrderBy(l => l.Key, StringComparer.Ordinal))
+        {
+            if (counterparts[key] is not [var newKey])
+            {
+                continue; // varias apps: decide una persona
+            }
+
+            if (byKey.TryGetValue(newKey, out var target))
+            {
+                if (target.Decision is not null || target.PendingApplyId is not null)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                target = new Binding { AppId = appId, SourceId = sourceId, EntityKey = newKey, DecidedBy = binding.DecidedBy, Version = 0 };
+                db.Bindings.Add(target);
+                byKey[newKey] = target;
+            }
+
+            LegacyBindings.Carry(binding, target, entities[newKey]);
+        }
     }
 
     private IQueryable<Snapshot> Latest(Guid appId, Guid sourceId) =>

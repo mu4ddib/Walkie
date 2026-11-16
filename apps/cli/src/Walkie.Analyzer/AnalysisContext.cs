@@ -67,6 +67,9 @@ public sealed class AnalysisContext(string root, IReadOnlyList<SourceFile> files
 
     public IReadOnlyList<SourceFile> Files { get; } = files;
 
+    /// <summary>Ámbitos elegidos en <c>.walkie/source.json</c> por carpeta de app (ADR-0014); vacío = cada app usa su carpeta.</summary>
+    public IReadOnlyDictionary<string, string> AppScopes { get; init; } = new Dictionary<string, string>();
+
     /// <summary>Lo que comparten los detectores del front (apps, archivos escaneados, pantallas); se arma al usarlo.</summary>
     internal Frontend.FrontendModel? Frontend { get; set; }
 

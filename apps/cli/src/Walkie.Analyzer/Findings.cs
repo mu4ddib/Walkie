@@ -64,6 +64,9 @@ public sealed class EntityDraft
     /// <summary>Ruta de la pantalla (solo screen).</summary>
     public string? Route { get; set; }
 
+    /// <summary>Ámbito de la app (solo screen y feature, ADR-0014): parte de la clave.</summary>
+    public string? App { get; set; }
+
     internal SortedSet<string> Evidence { get; } = new(StringComparer.Ordinal);
 
     internal SortedSet<string> DerivedFrom { get; } = new(StringComparer.Ordinal);
@@ -205,6 +208,14 @@ public sealed class Findings(AnalyzerLimits limits)
 
         relations[key] = (kind, from, to, basis, confidence, new SortedSet<string>(StringComparer.Ordinal) { evidenceId });
     }
+
+    /// <summary>Las APIs que publica (<c>exposes</c>) más de un servicio, con esos servicios en orden.</summary>
+    public IEnumerable<(string Api, IReadOnlyList<string> Services)> SharedApis() =>
+        relations.Values.Where(r => r.Kind == "exposes")
+            .GroupBy(r => r.To, StringComparer.Ordinal)
+            .Select(g => (g.Key, (IReadOnlyList<string>)[.. g.Select(r => r.From).Distinct().Order(StringComparer.Ordinal)]))
+            .Where(g => g.Item2.Count > 1)
+            .OrderBy(g => g.Key, StringComparer.Ordinal);
 
     /// <summary>Una tecnología detectada (lenguaje, framework, motor) con su evidencia.</summary>
     public void Technology(string id, string name, string? version, string evidenceId)
@@ -397,6 +408,11 @@ public sealed class Findings(AnalyzerLimits limits)
         if (entity.Runtime is not null)
         {
             item["runtime"] = entity.Runtime;
+        }
+
+        if (entity.App is not null)
+        {
+            item["app"] = entity.App;
         }
 
         if (entity.Route is not null)

@@ -150,6 +150,13 @@ internal sealed class Binding
     /// <summary>Análisis en el que se decidió.</summary>
     public Guid? SnapshotId { get; set; }
 
+    /// <summary>
+    /// Clave con la que se decidió en <see cref="SnapshotId"/>, si no es <see cref="EntityKey"/>: una decisión sobre una
+    /// pantalla o un candidato a feature de la versión 0 del formato que pasó a su clave con ámbito (ADR-0014). Null en
+    /// lo demás. Sirve para leer el hallazgo y su evidencia tal como se vieron al decidir.
+    /// </summary>
+    public string? DecidedKey { get; set; }
+
     public Guid? ApplyId { get; set; }
 
     public string? Note { get; set; }

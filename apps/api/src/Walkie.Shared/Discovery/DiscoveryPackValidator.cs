@@ -194,6 +194,13 @@ public static class DiscoveryPackValidator
                 errors.Add($"{path}/key", $"La clave no está normalizada: tendría que ser «{expected}».");
             }
 
+            // Un candidato a feature lleva el ámbito de su app delante del nombre (formatVersion 1).
+            if (kind == "feature" && entity.TryGetProperty("app", out var app)
+                && !key.StartsWith($"feature:{app.GetString()}:", StringComparison.Ordinal))
+            {
+                errors.Add($"{path}/key", $"La clave de un candidato a feature empieza por «feature:{app.GetString()}:» (su app).");
+            }
+
             if (DiscoveryFingerprint.Entity(entity) != entity.GetProperty("fingerprint").GetString())
             {
                 errors.Add($"{path}/fingerprint", "No coincide con el contenido de la entidad.");
@@ -263,13 +270,13 @@ public static class DiscoveryPackValidator
         }
     }
 
-    /// <summary>La clave que tiene que tener una api (por su contrato) o una screen (por su ruta); null en las demás.</summary>
+    /// <summary>La clave que tiene que tener una api (por su contrato) o una screen (por su app y su ruta); null en las demás.</summary>
     private static string? ExpectedKey(JsonElement entity, string kind) => kind switch
     {
         "api" when entity.GetProperty("http") is var http
             && http.TryGetProperty("method", out var method) && http.TryGetProperty("path", out var route)
             => DiscoveryKeys.Api(method.GetString()!, route.GetString()!),
-        "screen" => DiscoveryKeys.Screen(entity.GetProperty("route").GetString()!),
+        "screen" => DiscoveryKeys.Screen(entity.GetProperty("app").GetString()!, entity.GetProperty("route").GetString()!),
         _ => null,
     };
 

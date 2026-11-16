@@ -93,11 +93,11 @@ public sealed class FrontendDetectorTests
         var result = project.Analyze();
 
         Assert.Equal(
-            ["screen:/", "screen:/admin", "screen:/admin/usuarios", "screen:/admin/usuarios/{}", "screen:/clientes", "screen:/login", "screen:/pedidos", "screen:/pedidos/{}"],
+            ["screen:web:/", "screen:web:/admin", "screen:web:/admin/usuarios", "screen:web:/admin/usuarios/{}", "screen:web:/clientes", "screen:web:/login", "screen:web:/pedidos", "screen:web:/pedidos/{}"],
             result.Keys("screen"));
-        var home = result.EntityOf("screen:/")!;
+        var home = result.EntityOf("screen:web:/")!;
         Assert.Equal("Home", home["title"]!.GetValue<string>()); // el índice gana al layout en la misma ruta
-        var pedido = result.EntityOf("screen:/pedidos/{}")!;
+        var pedido = result.EntityOf("screen:web:/pedidos/{}")!;
         Assert.Equal("/pedidos/:pedidoId", pedido["route"]!.GetValue<string>());
         Assert.Equal("observed", pedido["basis"]!.GetValue<string>());
         Assert.Equal("medium", pedido["confidence"]!.GetValue<string>());
@@ -107,7 +107,7 @@ public sealed class FrontendDetectorTests
         Assert.Equal("web/src/main.tsx", evidence["path"]!.GetValue<string>());
         Assert.Equal(15, evidence["lines"]!["start"]!.GetValue<int>());
         Assert.Contains("dynamic-route", result.LimitationCodes());
-        Assert.Equal("Usuario", result.EntityOf("screen:/admin/usuarios/{}")!["title"]!.GetValue<string>());
+        Assert.Equal("Usuario", result.EntityOf("screen:web:/admin/usuarios/{}")!["title"]!.GetValue<string>());
         Assert.Contains("service:tienda-web", result.Keys("service"));
     }
 
@@ -118,9 +118,9 @@ public sealed class FrontendDetectorTests
 
         var result = project.Analyze();
 
-        Assert.DoesNotContain("screen:/menu", result.Keys());
-        Assert.Contains("navigates:screen:/pedidos->screen:/pedidos/{}", result.RelationKeys());
-        Assert.Contains("navigates:screen:/pedidos->screen:/login", result.RelationKeys());
+        Assert.DoesNotContain("screen:web:/menu", result.Keys());
+        Assert.Contains("navigates:screen:web:/pedidos->screen:web:/pedidos/{}", result.RelationKeys());
+        Assert.Contains("navigates:screen:web:/pedidos->screen:web:/login", result.RelationKeys());
     }
 
     // ---------- Llamadas HTTP ----------
@@ -132,14 +132,14 @@ public sealed class FrontendDetectorTests
 
         var result = project.Analyze();
 
-        Assert.Contains("calls:screen:/pedidos->api:GET /api/pedidos", result.RelationKeys());
-        Assert.Contains("calls:screen:/pedidos->api:POST /api/pedidos", result.RelationKeys());
-        Assert.Contains("calls:screen:/pedidos->api:DELETE /api/pedidos/{}", result.RelationKeys());
+        Assert.Contains("calls:screen:web:/pedidos->api:GET /api/pedidos", result.RelationKeys());
+        Assert.Contains("calls:screen:web:/pedidos->api:POST /api/pedidos", result.RelationKeys());
+        Assert.Contains("calls:screen:web:/pedidos->api:DELETE /api/pedidos/{}", result.RelationKeys());
         Assert.Contains("calls:service:tienda-web->api:GET /api/pedidos/{}", result.RelationKeys()); // el loader está en main.tsx
         var api = result.EntityOf("api:DELETE /api/pedidos/{}")!;
         Assert.Equal("inferred", api["basis"]!.GetValue<string>());
         Assert.Equal("/api/pedidos/{id}", api["http"]!["path"]!.GetValue<string>());
-        Assert.Equal(["screen:/pedidos"], api["derivedFrom"]!.AsArray().Select(k => k!.GetValue<string>()));
+        Assert.Equal(["screen:web:/pedidos"], api["derivedFrom"]!.AsArray().Select(k => k!.GetValue<string>()));
         Assert.Contains("dynamic-http-url", result.LimitationCodes());
         Assert.DoesNotContain(result.Keys("api"), k => k.Contains("comentada", StringComparison.Ordinal));
     }
@@ -164,10 +164,10 @@ public sealed class FrontendDetectorTests
         var result = project.Analyze();
 
         Assert.Equal(
-            ["calls:screen:/pedidos->api:POST /api/pedidos", "calls:screen:/pedidos/{}->api:GET /api/pedidos/{}", "calls:service:w->api:GET /api/al-cargar"],
+            ["calls:screen:web:/pedidos->api:POST /api/pedidos", "calls:screen:web:/pedidos/{}->api:GET /api/pedidos/{}", "calls:service:w->api:GET /api/al-cargar"],
             result.RelationKeys().Where(k => k.StartsWith("calls:", StringComparison.Ordinal)));
         Assert.Equal(
-            ["navigates:screen:/pedidos->screen:/pedidos/{}", "navigates:screen:/pedidos/{}->screen:/pedidos"],
+            ["navigates:screen:web:/pedidos->screen:web:/pedidos/{}", "navigates:screen:web:/pedidos/{}->screen:web:/pedidos"],
             result.RelationKeys().Where(k => k.StartsWith("navigates:", StringComparison.Ordinal)));
     }
 
@@ -219,13 +219,13 @@ public sealed class FrontendDetectorTests
 
         var result = project.Analyze();
 
-        Assert.Equal(["screen:/", "screen:/docs/{}", "screen:/pedidos", "screen:/pedidos/{}"], result.Keys("screen"));
-        Assert.Equal("high", result.EntityOf("screen:/pedidos/{}")!["confidence"]!.GetValue<string>());
-        Assert.Equal("/pedidos/[id]", result.EntityOf("screen:/pedidos/{}")!["route"]!.GetValue<string>());
+        Assert.Equal(["screen:next:/", "screen:next:/docs/{}", "screen:next:/pedidos", "screen:next:/pedidos/{}"], result.Keys("screen"));
+        Assert.Equal("high", result.EntityOf("screen:next:/pedidos/{}")!["confidence"]!.GetValue<string>());
+        Assert.Equal("/pedidos/[id]", result.EntityOf("screen:next:/pedidos/{}")!["route"]!.GetValue<string>());
         Assert.Equal(["api:GET /api/pedidos", "api:POST /api/pedidos"], result.Keys("api"));
         Assert.Equal("observed", result.EntityOf("api:GET /api/pedidos")!["basis"]!.GetValue<string>());
         Assert.Contains("exposes:service:tienda-next->api:POST /api/pedidos", result.RelationKeys());
-        Assert.Contains("navigates:screen:/pedidos->screen:/pedidos/{}", result.RelationKeys());
+        Assert.Contains("navigates:screen:next:/pedidos->screen:next:/pedidos/{}", result.RelationKeys());
     }
 
     [Fact]
@@ -243,7 +243,7 @@ public sealed class FrontendDetectorTests
 
         var result = project.Analyze();
 
-        Assert.Equal(["screen:/", "screen:/pedidos", "screen:/pedidos/{}"], result.Keys("screen"));
+        Assert.Equal(["screen:site:/", "screen:site:/pedidos", "screen:site:/pedidos/{}"], result.Keys("screen"));
         Assert.Contains("next-pages-api", result.LimitationCodes());
         Assert.Empty(result.Keys("api"));
     }
@@ -258,14 +258,14 @@ public sealed class FrontendDetectorTests
         var result = project.Analyze();
 
         Assert.Equal(
-            ["screen:/", "screen:/admin", "screen:/admin/usuarios", "screen:/pedidos", "screen:/pedidos/{}", "screen:/perfil"],
+            ["screen:ng:/", "screen:ng:/admin", "screen:ng:/admin/usuarios", "screen:ng:/pedidos", "screen:ng:/pedidos/{}", "screen:ng:/perfil"],
             result.Keys("screen"));
-        Assert.Equal("Pedido detalle", result.EntityOf("screen:/pedidos/{}")!["title"]!.GetValue<string>());
-        Assert.Equal("angular", result.EntityOf("screen:/perfil")!["technology"]!.GetValue<string>());
+        Assert.Equal("Pedido detalle", result.EntityOf("screen:ng:/pedidos/{}")!["title"]!.GetValue<string>());
+        Assert.Equal("angular", result.EntityOf("screen:ng:/perfil")!["technology"]!.GetValue<string>());
         Assert.Contains("calls:service:tienda-angular->api:GET /api/pedidos", result.RelationKeys());
         Assert.Contains("calls:service:tienda-angular->api:PUT /api/pedidos/{}", result.RelationKeys());
-        Assert.Contains("navigates:screen:/pedidos->screen:/perfil", result.RelationKeys()); // routerLink de la plantilla
-        Assert.Contains("navigates:screen:/pedidos->screen:/pedidos/{}", result.RelationKeys()); // [routerLink]="['/pedidos', p.id]"
+        Assert.Contains("navigates:screen:ng:/pedidos->screen:ng:/perfil", result.RelationKeys()); // routerLink de la plantilla
+        Assert.Contains("navigates:screen:ng:/pedidos->screen:ng:/pedidos/{}", result.RelationKeys()); // [routerLink]="['/pedidos', p.id]"
         Assert.Contains("dynamic-http-url", result.LimitationCodes());
         Assert.DoesNotContain(result.Keys(), k => k.StartsWith("module:", StringComparison.Ordinal));
     }
@@ -277,9 +277,9 @@ public sealed class FrontendDetectorTests
 
         var result = project.Analyze();
 
-        Assert.Equal(["screen:/inicio", "screen:/ventas", "screen:/ventas/{}"], result.Keys("screen"));
-        Assert.Contains("calls:screen:/ventas->api:GET /api/ventas/resumen", result.RelationKeys());
-        Assert.Contains("navigates:screen:/ventas->screen:/inicio", result.RelationKeys());
+        Assert.Equal(["screen:ventas:/inicio", "screen:ventas:/ventas", "screen:ventas:/ventas/{}"], result.Keys("screen"));
+        Assert.Contains("calls:screen:ventas:/ventas->api:GET /api/ventas/resumen", result.RelationKeys());
+        Assert.Contains("navigates:screen:ventas:/ventas->screen:ventas:/inicio", result.RelationKeys());
         Assert.DoesNotContain("lazy-routes-unresolved", result.LimitationCodes());
         Assert.DoesNotContain(result.Keys(), k => k.StartsWith("module:", StringComparison.Ordinal)); // un NgModule no es un módulo de Walkie
     }
@@ -291,7 +291,7 @@ public sealed class FrontendDetectorTests
 
         var result = project.Analyze();
 
-        Assert.Equal(["screen:/inicio"], result.Keys("screen"));
+        Assert.Equal(["screen:ventas:/inicio"], result.Keys("screen"));
         Assert.Contains("lazy-routes-unresolved", result.LimitationCodes());
         Assert.True(result.Partial);
     }
@@ -305,26 +305,26 @@ public sealed class FrontendDetectorTests
 
         var result = project.Analyze();
 
-        var pedidos = result.EntityOf("feature:Pedidos")!;
+        var pedidos = result.EntityOf("feature:web:Pedidos")!;
         Assert.Equal("inferred", pedidos["basis"]!.GetValue<string>());
         Assert.Equal("low", pedidos["confidence"]!.GetValue<string>());
         Assert.Equal(
-            ["api:DELETE /api/pedidos/{}", "api:GET /api/pedidos", "api:POST /api/pedidos", "screen:/pedidos", "screen:/pedidos/{}"],
+            ["api:DELETE /api/pedidos/{}", "api:GET /api/pedidos", "api:POST /api/pedidos", "screen:web:/pedidos", "screen:web:/pedidos/{}"],
             pedidos["members"]!.AsArray().Select(m => m!.GetValue<string>()));
         Assert.Contains("comparten el recurso «pedidos»", pedidos["description"]!.GetValue<string>(), StringComparison.Ordinal);
-        var ventas = result.EntityOf("feature:Ventas")!;
+        var ventas = result.EntityOf("feature:ventas:Ventas")!;
         Assert.Equal("medium", ventas["confidence"]!.GetValue<string>());
         Assert.Contains("se cargan juntas", ventas["description"]!.GetValue<string>(), StringComparison.Ordinal);
         // Una pantalla sola (login, clientes, perfil) o la raíz no proponen nada.
-        Assert.DoesNotContain("feature:Login", result.Keys());
-        Assert.DoesNotContain("feature:Clientes", result.Keys());
+        Assert.DoesNotContain("feature:web:Login", result.Keys());
+        Assert.DoesNotContain("feature:web:Clientes", result.Keys());
         Assert.Equal(["frontend-features"], Evidence(result, pedidos)["detector"]!.GetValue<string>() is var d ? [d] : []);
     }
 
     // ---------- Monorepo, parcial y robustez ----------
 
     [Fact]
-    public void En_un_monorepo_cada_app_es_un_servicio_y_una_misma_ruta_en_dos_apps_se_avisa()
+    public void En_un_monorepo_cada_app_es_un_servicio_y_la_misma_ruta_en_dos_apps_son_dos_pantallas()
     {
         using var project = new TempProject().React().AngularStandalone();
 
@@ -332,9 +332,14 @@ public sealed class FrontendDetectorTests
 
         Assert.Contains("service:tienda-web", result.Keys("service"));
         Assert.Contains("service:tienda-angular", result.Keys("service"));
-        Assert.Contains("ambiguous-route", result.LimitationCodes());
-        Assert.Contains(result.Manifest["limitations"]!.AsArray(),
-            l => l!["code"]!.GetValue<string>() == "ambiguous-route" && l["message"]!.GetValue<string>().Contains("/pedidos", StringComparison.Ordinal));
+        // Aceptación 2 (ADR-0014): /pedidos en React y en Angular son dos pantallas, cada una con su app y su evidencia.
+        Assert.Contains("screen:web:/pedidos", result.Keys("screen"));
+        Assert.Contains("screen:ng:/pedidos", result.Keys("screen"));
+        Assert.Equal("web", result.EntityOf("screen:web:/pedidos")!["app"]!.GetValue<string>());
+        Assert.Equal("ng", result.EntityOf("screen:ng:/pedidos")!["app"]!.GetValue<string>());
+        Assert.All(EvidencePaths(result, "screen:web:/pedidos"), p => Assert.StartsWith("web/", p, StringComparison.Ordinal));
+        Assert.All(EvidencePaths(result, "screen:ng:/pedidos"), p => Assert.StartsWith("ng/", p, StringComparison.Ordinal));
+        Assert.DoesNotContain("ambiguous-route", result.LimitationCodes());
     }
 
     [Fact]
@@ -373,7 +378,7 @@ public sealed class FrontendDetectorTests
         var result = project.Analyze();
 
         Assert.Contains("unparsed-file", result.LimitationCodes());
-        Assert.Contains("screen:/pedidos", result.Keys());
+        Assert.Contains("screen:web:/pedidos", result.Keys());
         Assert.True(result.Partial);
     }
 
@@ -426,9 +431,9 @@ public sealed class FrontendDetectorTests
         var a = before.Analyze().Keys("screen");
         var b = after.Analyze().Keys("screen");
 
-        Assert.Contains("screen:/login", a);
-        Assert.DoesNotContain("screen:/login", b);
-        Assert.Contains("screen:/ingresar", b);
+        Assert.Contains("screen:web:/login", a);
+        Assert.DoesNotContain("screen:web:/login", b);
+        Assert.Contains("screen:web:/ingresar", b);
     }
 
     [Fact]
@@ -462,6 +467,12 @@ public sealed class FrontendDetectorTests
     {
         var id = entity["evidence"]!.AsArray()[0]!.GetValue<string>();
         return result.Discovery["evidence"]!.AsArray().Single(e => e!["id"]!.GetValue<string>() == id)!.AsObject();
+    }
+
+    private static IEnumerable<string> EvidencePaths(AnalysisResult result, string key)
+    {
+        var ids = result.EntityOf(key)!["evidence"]!.AsArray().Select(e => e!.GetValue<string>()).ToHashSet();
+        return result.Discovery["evidence"]!.AsArray().Where(e => ids.Contains(e!["id"]!.GetValue<string>())).Select(e => e!["path"]!.GetValue<string>());
     }
 
     private static string[] Fingerprints(AnalysisResult result) =>

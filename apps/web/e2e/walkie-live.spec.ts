@@ -90,8 +90,8 @@ test('importar un proyecto local analizado con la CLI y revisarlo', async ({ pag
   await expect(post).toContainText('Nuevo');
   await expect(page.getByRole('group', { name: 'Hallazgos por estado' })).toContainText('Nuevo');
   // El front: sus pantallas y la propuesta de feature, con la API que llama (la misma que expone el backend).
-  await expect(list.getByRole('button', { name: /screen:\/pedidos\/\{\}/ })).toContainText('Pantalla');
-  const feature = list.getByRole('button', { name: /feature:Pedidos/ });
+  await expect(list.getByRole('button', { name: /screen:web:\/pedidos\/\{\}/ })).toContainText('Pantalla');
+  const feature = list.getByRole('button', { name: /feature:web:Pedidos/ });
   await expect(feature).toContainText('inferido');
   await feature.click();
   await expect(page.getByRole('complementary', { name: 'Detalle del hallazgo' })).toContainText('Crear módulos y features desde un hallazgo llegará más adelante');

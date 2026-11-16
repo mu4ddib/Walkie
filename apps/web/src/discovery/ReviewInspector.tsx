@@ -17,6 +17,7 @@ import { BASIS, CONFIDENCE, CREATABLE_KINDS, KIND, REASON, STATUS, TARGET_KIND, 
 type Decision =
   | { op: 'reject'; note: string }
   | { op: 'reset' }
+  | { op: 'reset-legacy' }
   | { op: 'link'; target: DiscoveryTarget }
   | { op: 'create'; id: string };
 
@@ -63,6 +64,7 @@ export function ReviewInspector({
       </dl>
       {item.match && <Match target={item.match.target} reason={item.match.reason} />}
       {item.binding && <BindingInfo appId={appId} binding={item.binding} targetMissing={item.targetMissing === true} />}
+      {item.legacyBinding && <LegacyBindingInfo binding={item.legacyBinding} />}
       <Evidence snapshotId={snapshotId} entityKey={item.key} count={item.evidenceCount} missing={item.status === 'missing'} />
       {canDecide ? (
         <Decisions key={item.key} appId={appId} snapshotId={snapshotId} item={item} />
@@ -120,6 +122,32 @@ function BindingInfo({
           <Link to={catalogPath(appId, binding.target.id)}>Ver en el catálogo</Link>
         )
       )}
+    </div>
+  );
+}
+
+/**
+ * Una decisión tomada con la clave de la versión 0 (sin la app) que corresponde a este hallazgo y a otro de otra app
+ * (ADR-0014). Walkie no elige a cuál pasa: decide sobre este y restablece la vieja.
+ */
+function LegacyBindingInfo({ binding }: { binding: NonNullable<DiscoveryReviewItem['legacyBinding']> }) {
+  const decision = binding.decision === 'rejected' ? 'descartó' : 'vinculó';
+  return (
+    <div className="discovery-box" role="note">
+      <p className="discovery-warning">
+        <span aria-hidden="true">⚠</span> El {formatDayAndTime(binding.decidedAt)} se {decision} <code>{binding.entityKey}</code>
+        {binding.target && (
+          <>
+            {' '}
+            a <strong>{binding.target.title ?? binding.target.id}</strong>
+          </>
+        )}
+        , antes de que Walkie distinguiera la app. Esa ruta está ahora en más de una app, así que no se sabe a cuál se refería.
+      </p>
+      <p className="panel-help">
+        Decide sobre este hallazgo (y sobre el de la otra app) y después restablece la decisión vieja. Mientras tanto no se marca
+        como desaparecida.
+      </p>
     </div>
   );
 }
@@ -221,6 +249,9 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
     if (d.op === 'create') return { op: 'create', entityKey: item.key, id: d.id, bindingVersion: version };
     if (d.op === 'link') return { op: 'link', entityKey: item.key, target: { kind: d.target.kind, id: d.target.id }, bindingVersion: version };
     if (d.op === 'reject') return { op: 'reject', entityKey: item.key, bindingVersion: version, ...(d.note ? { note: d.note } : {}) };
+    if (d.op === 'reset-legacy' && item.legacyBinding) {
+      return { op: 'reset', entityKey: item.legacyBinding.entityKey, bindingVersion: item.legacyBinding.version };
+    }
     return { op: 'reset', entityKey: item.key, bindingVersion: version };
   }
 
@@ -320,6 +351,11 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
           {decided && (
             <button type="button" className="pixel-button is-ghost" onClick={() => start({ op: 'reset' })}>
               Restablecer decisión…
+            </button>
+          )}
+          {item.legacyBinding && (
+            <button type="button" className="pixel-button is-ghost" onClick={() => start({ op: 'reset-legacy' })}>
+              Restablecer la decisión vieja…
             </button>
           )}
           {!canCreate && !decided && (item.kind === 'module' || item.kind === 'feature') && (

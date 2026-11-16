@@ -113,6 +113,7 @@ Los errores llevan la ruta dentro del paquete (`discovery.json/entities/3/eviden
   - sus ejemplos se conservan;
   - una prueba los sube y valida con el schema nuevo.
 - La versión 0 se definió en la tarea 1, sin consumidores ni paquetes en circulación, y esta tarea la reescribe sin subirla. La política rige desde que llega a `main`.
+- La versión 1 (cierre de la tarea 8) es la primera que la sigue: la 0 está congelada en `packages/schema/walkiepack/v0/`, con `$id` propio y sus ejemplos.
 - Los registros de la API (snapshot, vínculo, revisión, operaciones) siguen la regla del resto de schemas del repo: si cambian, cambian en el mismo PR que la API y la web.
 
 **Respuesta de la subida** (agregado en la tarea 3): `walkie-discovery-upload.schema.json` es la respuesta de `POST /api/apps/{appId}/sources/snapshots`, con `status` (`preview`, `created` o `existing`), `duplicate` (`pack` o `content`), el `snapshot` y un `summary` del paquete. Se agregó porque `walkie-discovery-snapshot` exige `id` e `importedAt`, que una vista previa (`dryRun`) no tiene. Los schemas anteriores no cambian: reutiliza sus `$defs` por `$ref`.
@@ -125,15 +126,43 @@ Los errores llevan la ruta dentro del paquete (`discovery.json/entities/3/eviden
 - **Versión del vínculo:** restablecer conserva la fila sin decisión, así la versión del vínculo nunca vuelve atrás. `bindingVersion` 0 significa «sin decisión activa».
 - **Solo sobre el último análisis:** las decisiones se toman sobre el último análisis de la fuente. Decidir sobre uno anterior guardaría un fingerprint que ya no es el actual.
 
-**Front y dos puntos pendientes** (tarea 8). El analizador del front no cambió el formato: produce `screen`, `feature` (inferida, con `members`), `api`, `calls`, `navigates` y `exposes` con los contratos de siempre. Dos diferencias quedan para decidir, sin cambiar el comportamiento:
+**Front** (tarea 8). El analizador del front produce `screen`, `feature` (inferida, con `members`), `api`, `calls`, `navigates` y `exposes`. Dejó dos diferencias que se resolvieron al cerrar la tarea:
 
-1. **La clave de una pantalla no distingue la app.**
-   - **Qué pasa:** `screen:<ruta>` hace que, en un monorepo, `/pedidos` de dos apps sea una sola pantalla. Hoy se avisa con la limitación `ambiguous-route`.
-   - **Propuesta:** si hace falta separarlas, `screen:<app>:<ruta>` con `formatVersion` 1 y su migración.
-2. **El texto del schema y el validador no dicen lo mismo sobre `skipped`.**
-   - **Qué pasa:** `walkie-discovery-pack` describe `skipped` como «no corrió (no aplica o se excluyó)», pero el validador exige que todos hayan corrido para un análisis `complete`.
-   - **Qué hace el analizador hoy:** un detector sin nada que mirar (no hay apps Angular) informa `ran` con su motivo en `reason`, y `skipped` queda para `--detectors`.
-   - **Propuesta:** corregir solo la descripción del schema a «no corrió porque se excluyó (`--detectors`); un detector sin nada que mirar corre e informa por qué en `reason`».
+**1. Identidad con el ámbito de la app (`formatVersion` 1).**
+- **Qué pasaba:** `screen:<ruta>` y `feature:<nombre>` no distinguían la app. En un monorepo, `/pedidos` de React y de Angular eran una sola pantalla (con la evidencia de las dos), y dos candidatos «Pedidos» de dos apps, uno solo.
+- **Decisión:** `screen:<ámbito>:<ruta normalizada>` y `feature:<ámbito>:<nombre>`, con el ámbito también en el campo `app` (obligatorio en `screen` y `feature`, prohibido en el resto). El validador recalcula la clave de una pantalla con `app` y `route`, y exige que la de un candidato empiece por `feature:<app>:`.
+- **El ámbito (`appScope`, `AppScope` en `Walkie.Shared`):**
+  - por defecto, la carpeta de la app relativa a la raíz analizada (`apps/web`; `.` en la raíz);
+  - es único dentro de la fuente (dos apps no comparten carpeta), determinista y no depende del nombre del paquete;
+  - nunca tiene `:` (así la clave se separa sin ambigüedad): un carácter fuera de `[A-Za-z0-9._~@+-]` se escribe `%XX`, así dos carpetas distintas nunca dan el mismo;
+  - el equipo puede fijarlo en `.walkie/source.json` (`"apps": { "apps/web": "web" }`). La CLI lo lee y nunca lo escribe. Un ámbito inválido o repetido detiene el análisis (`invalid-source-file`).
+- **Renombrar y mover:**
+  - renombrar el paquete (`name` del `package.json`) no cambia ninguna clave; cambia el nombre del `service` de la app, como antes;
+  - mover la carpeta cambia el ámbito y, con él, las claves: se ve como pantallas que desaparecen y otras nuevas, y la persona vuelve a decidir. Para evitarlo, se fija el ámbito viejo en `.walkie/source.json` antes de reanalizar;
+  - cambiar una ruta cambia la clave de su pantalla, como antes.
+- **APIs:** la clave sigue siendo `api:<MÉTODO> <ruta>`, sin el servicio, porque así el front la encuentra (una llamada no sabe a qué backend va) y la firma del catálogo la compara. Si dos servicios publican la misma (`exposes`), el analizador lo avisa con la limitación `ambiguous-api`, que no deja el análisis parcial, y no cambia la clave.
+- **Migración pura 0 → 1 (`FormatV1`):**
+  - las apps de un paquete v0 son las carpetas de los `package.json` con evidencia de `package-json` sobre React, Angular o Next.js (`dependencies.react`…), las mismas que reconoce el analizador;
+  - una pantalla es de la app más interna que contiene cada archivo de su evidencia; un candidato a feature, de la app de sus pantallas;
+  - reescribe todo lo que nombra esas claves: relaciones y sus claves, `members`, `derivedFrom` e interfaces. Recalcula solo los fingerprints de lo que cambió (pantallas y candidatos: `app` y `members`) y vuelve a ordenar. La evidencia, los conteos y el manifest (salvo la versión) no cambian;
+  - **si el ámbito no es inequívoco, no se elige uno.** Pasa cuando la pantalla cita archivos de dos apps (la versión 0 juntaba la misma ruta), cuando ningún archivo está en una app, o cuando un candidato mezcla pantallas de varias apps. La migración falla con el error en la ruta de la entidad y pide volver a analizar con la CLI actual. La API responde 400 y no guarda nada.
+- **Análisis y decisiones guardados antes (v0):**
+  - los análisis son inmutables y no se migran: siguen con sus claves viejas;
+  - las decisiones sí se mueven, sin borrar nada, al subir el primer análisis v1 de la fuente (`LegacyBindings`, en la misma transacción). Una decisión es v0 si el hallazgo sobre el que se tomó no tiene `app`, y eso se mira en el análisis en que se decidió, no por la forma de la clave;
+  - **una sola contraparte** (la misma ruta o el mismo nombre en una sola app), sin decisión propia: la decisión pasa a la clave nueva con quién, cuándo, el destino y el análisis en que se decidió. El vínculo guarda la clave vieja en `decidedKey`, para que la procedencia muestre el hallazgo tal como se vio. La fila vieja queda sin decisión y con una nota que dice adónde fue;
+  - **sin `changed` falso:** si el contenido no cambió (`FormatV1.LegacyFingerprint`: el fingerprint sin `app` y con los `members` sin ámbito es el decidido), el vínculo nuevo guarda el fingerprint nuevo. Si cambió, conserva el viejo y sale `changed`, como debe;
+  - **varias contrapartes** (la misma ruta en dos apps): no se reasigna. La decisión sigue activa con su clave vieja, no cuenta como `missing`, y la revisión la muestra en cada contraparte (`legacyBinding`). La persona decide sobre las claves nuevas y restablece la vieja (`reset` con su `entityKey` y versión);
+  - **ninguna contraparte:** es un hallazgo que no está, con las reglas de siempre para `missing`;
+  - una decisión reservada por una aplicación en curso, o una contraparte que ya tiene decisión, no se mueve. Se reintenta en la siguiente subida.
+- **Contratos:** `walkie-discovery` suma `$defs/appScope` y `app`; `walkie-discovery-pack` pasa a `formatVersion: 1`; `walkie-discovery-binding` suma `decidedKey`; `walkie-discovery-review` suma `legacyBinding`. `entityKey` sigue aceptando las claves v0, porque los registros de la API (vínculos, revisión) pueden nombrarlas. La versión 0 queda congelada en `packages/schema/walkiepack/v0/` con sus ejemplos, y una prueba los migra y los compara con los ejemplos actuales.
+- **Base:** columna `bindings.decided_key` (migración `DecidedKey`).
+
+**2. Qué significa `skipped`.** Solo cambió la descripción del schema, no el comportamiento:
+- `ran`: corrió sobre todo su alcance, aunque no hubiera nada que mirar (entonces dice por qué en `reason`; ej. no hay apps Angular);
+- `skipped`: no corrió porque se excluyó (`--detectors`);
+- `failed`: empezó y no terminó.
+
+Las reglas de completitud y de `missing` no cambian: un análisis `complete` exige que todo haya corrido, y `skipped` lo deja parcial.
 
 **Crear en el catálogo** (agregado en la tarea 6):
 - `create` lleva el id (UUID v7) del cliente: se valida que sea v7, que no esté en el catálogo (de ninguna app) ni planificado por otra aplicación. Solo `api`, `service`, `database` y `resource`; `module` y `feature` llegan en la tarea 9 y una pantalla entra con su feature.

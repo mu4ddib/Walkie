@@ -117,8 +117,17 @@ Dependencias:
 - **Qué es pantalla:** una ruta con componente; un componente sin ruta no. Las rutas siguen `children`, `index`, `lazy`, `loadChildren` (también NgModules con `forChild`) y `loadComponent`, y las constantes importadas.
 - **Llamadas:** van desde la pantalla cuyo componente llama, o desde la app, a la misma clave de API que el backend.
 - **Candidatos a feature:** por carga diferida (media) o por recurso, una lista y su detalle (baja), con sus pantallas y APIs como miembros.
-- **Sin cambios de contrato:** las limitaciones nuevas son `dynamic-http-url`, `external-http-url`, `lazy-routes-unresolved`, `next-pages-api`, `frontend-routes-not-found` y `ambiguous-route`. Un detector sin nada que mirar queda `ran` con su motivo.
+- **Limitaciones nuevas:** `dynamic-http-url`, `external-http-url`, `lazy-routes-unresolved`, `next-pages-api` y `frontend-routes-not-found`. Un detector sin nada que mirar queda `ran` con su motivo.
 - **Walkie analizado:** 11 de sus 11 rutas no comodín como pantallas, 9 navegaciones y 3 candidatos. Sus llamadas van por `request()` con una URL armada en tiempo de ejecución y quedan como limitación.
 - **Pruebas:** 33 nuevas de la CLI (escáner, React, Next.js, Angular standalone y NgModules, HTTP, atribución por componente, features, monorepo, parcial, archivo roto, identidad y determinismo) y 2 de integración (un paquete de front se sube y se revisa; lo decidido que desaparece se marca sin borrar).
+
+**Cierre de la tarea 8** (ADR-0014, decisiones del 2026-11-15):
+
+- **Identidad con la app (`formatVersion` 1):** `screen:<ámbito>:<ruta>` y `feature:<ámbito>:<nombre>`, con `app` en la entidad. El ámbito es la carpeta de la app (`.` en la raíz) o el que fija el equipo en `.walkie/source.json` (`apps`). Renombrar el paquete no cambia nada; mover la carpeta sí, salvo que se fije el ámbito. Ya no existe `ambiguous-route`: la misma ruta en dos apps son dos pantallas.
+- **APIs:** la clave no cambia; si dos servicios publican la misma, limitación `ambiguous-api`.
+- **Migración 0 → 1 (`FormatV1`):** asigna la app por la evidencia; si no es inequívoca, rechaza el paquete y pide reanalizar. La versión 0 queda congelada en `packages/schema/walkiepack/v0/` con sus ejemplos.
+- **Decisiones guardadas con claves v0:** con una sola contraparte pasan a la clave nueva al subir el análisis (sin `changed` ni `missing` falsos; `decidedKey` conserva la vieja para la procedencia). Con varias, no se reasignan: la revisión las muestra (`legacyBinding`) y una persona decide y restablece la vieja. Migración `DecidedKey`.
+- **`skipped`:** solo cambió su descripción en el schema.
+- **Pruebas:** 12 de la CLI (`AppScopeTests` y monorepo), 5 de integración (`DiscoveryAppScopeTests`: paquete v0 migrado igual que uno nuevo, v0 ambiguo rechazado, decisiones v0 movidas sin `changed`/`missing` falsos, ambiguas sin reasignar, sin contraparte = `missing`), 4 puras de la migración y los ejemplos congelados, 1 de Vitest (`legacyBinding`).
 
 Sigue: revisar la precisión de lo descubierto en el front antes de la tarea 9.

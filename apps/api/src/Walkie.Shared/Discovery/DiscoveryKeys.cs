@@ -18,8 +18,14 @@ public static class DiscoveryKeys
         return $"api:{method.Trim().ToUpperInvariant()} {NormalizePath(path)}";
     }
 
-    /// <summary><c>screen:&lt;ruta normalizada&gt;</c>.</summary>
-    public static string Screen(string route) => $"screen:{NormalizePath(route)}";
+    /// <summary>
+    /// <c>screen:&lt;ámbito&gt;:&lt;ruta normalizada&gt;</c> (formatVersion 1): la misma ruta en dos apps de un monorepo son dos
+    /// pantallas. El ámbito es el de <see cref="AppScope"/>.
+    /// </summary>
+    public static string Screen(string scope, string route) => $"screen:{CheckScope(scope)}:{NormalizePath(route)}";
+
+    /// <summary><c>screen:&lt;ruta normalizada&gt;</c>: la clave de la versión 0, sin la app. Solo para migrar y reconocer decisiones viejas.</summary>
+    public static string ScreenV0(string route) => $"screen:{NormalizePath(route)}";
 
     /// <summary><c>service:&lt;nombre&gt;</c> (nombre del proyecto o del servicio de compose).</summary>
     public static string Service(string name) => Simple("service", name);
@@ -45,8 +51,58 @@ public static class DiscoveryKeys
     /// <summary><c>module:&lt;nombre&gt;</c>.</summary>
     public static string Module(string name) => Simple("module", name);
 
-    /// <summary><c>feature:&lt;nombre&gt;</c>.</summary>
-    public static string Feature(string name) => Simple("feature", name);
+    /// <summary><c>feature:&lt;ámbito&gt;:&lt;nombre&gt;</c> (formatVersion 1): dos apps con un candidato del mismo nombre son dos candidatos.</summary>
+    public static string Feature(string scope, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return $"feature:{CheckScope(scope)}:{name.Trim()}";
+    }
+
+    /// <summary><c>feature:&lt;nombre&gt;</c>: la clave de la versión 0. Solo para migrar y reconocer decisiones viejas.</summary>
+    public static string FeatureV0(string name) => Simple("feature", name);
+
+    /// <summary>
+    /// Separa una clave con ámbito (<c>screen:web:/pedidos</c>, <c>feature:web:Pedidos</c>) en el ámbito y el resto (la
+    /// ruta o el nombre). El ámbito nunca tiene <c>:</c>, así que el primero lo cierra. False si no es de ese tipo o no
+    /// tiene ámbito (una clave de la versión 0: <c>screen:/pedidos</c>).
+    /// </summary>
+    public static bool TryParseScoped(string key, string kind, out string scope, out string rest)
+    {
+        scope = rest = "";
+        var prefix = kind + ":";
+        if (!key.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var body = key[prefix.Length..];
+        var colon = body.IndexOf(':', StringComparison.Ordinal);
+        if (colon <= 0 || (kind == "screen" && body[0] == '/'))
+        {
+            return false;
+        }
+
+        scope = body[..colon];
+        rest = body[(colon + 1)..];
+        return AppScope.IsValid(scope) && rest.Length > 0 && (kind != "screen" || rest[0] == '/');
+    }
+
+    /// <summary>La clave de la versión 0 que corresponde a una clave con ámbito (sin la app); null si no tiene ámbito.</summary>
+    public static string? WithoutScope(string key)
+    {
+        foreach (var kind in new[] { "screen", "feature" })
+        {
+            if (TryParseScoped(key, kind, out _, out var rest))
+            {
+                return $"{kind}:{rest}";
+            }
+        }
+
+        return null;
+    }
+
+    private static string CheckScope(string scope) =>
+        AppScope.IsValid(scope) ? scope : throw new ArgumentException($"Ámbito de app inválido: «{scope}».", nameof(scope));
 
     /// <summary><c>&lt;kind&gt;:&lt;from&gt;-&gt;&lt;to&gt;</c>.</summary>
     public static string Relation(string kind, string from, string to) => $"{kind}:{from}->{to}";

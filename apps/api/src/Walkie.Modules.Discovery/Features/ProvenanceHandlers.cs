@@ -86,11 +86,12 @@ internal sealed class ProvenanceHandlers(
         foreach (var binding in bindings)
         {
             var decidedIn = binding.SnapshotId!.Value;
+            var decidedKey = binding.DecidedKey ?? binding.EntityKey; // una decisión de la versión 0 conserva su clave vieja ahí
             var entity = await db.Entities.AsNoTracking()
-                .Where(e => e.SnapshotId == decidedIn && e.Key == binding.EntityKey)
+                .Where(e => e.SnapshotId == decidedIn && e.Key == decidedKey)
                 .Select(e => new ProvenanceEntity(e.Key, e.Kind, e.Title, e.Basis, e.Confidence))
                 .FirstOrDefaultAsync(ct).ConfigureAwait(false);
-            var found = await evidence.EvidenceAsync(decidedIn, binding.EntityKey, ct).ConfigureAwait(false);
+            var found = await evidence.EvidenceAsync(decidedIn, decidedKey, ct).ConfigureAwait(false);
             var latestId = latestBySource[binding.SourceId];
             var latestFingerprint = await db.Entities.AsNoTracking()
                 .Where(e => e.SnapshotId == latestId && e.Key == binding.EntityKey)

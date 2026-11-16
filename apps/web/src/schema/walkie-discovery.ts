@@ -33,6 +33,10 @@ export type Entity = {
    */
   route?: string;
   /**
+   * App del front a la que pertenece (solo screen y feature; obligatorio en ellas): es parte de su clave
+   */
+  app?: string;
+  /**
    * Claves de las entidades que agrupa (solo module y feature)
    */
   members?: EntityKey[];
@@ -50,7 +54,7 @@ export type Entity = {
   evidence: [EvidenceId, ...EvidenceId[]];
 };
 /**
- * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ruta normalizada>, module:<nombre>, feature:<nombre>. DiscoveryKeys (Walkie.Shared) las arma
+ * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ámbito de la app>:<ruta normalizada>, module:<nombre>, feature:<ámbito de la app>:<nombre> (formatVersion 1; en la 0, screen:<ruta> y feature:<nombre>, que siguen siendo válidas en los registros de la API: un vínculo decidido antes conserva su clave). DiscoveryKeys (Walkie.Shared) las arma
  */
 export type EntityKey = string;
 /**
@@ -94,7 +98,7 @@ export type RelativePath = string;
 /**
  * discovery.json de un .walkiepack (spec walkie-live, ADR-0013 y ADR-0014): lo que el análisis estático observó o infirió (entidades y relaciones) y la evidencia que lo respalda. Toda entidad y relación cita al menos una evidencia. No hay confirmaciones: las decide una persona en Walkie (walkie-discovery-binding). Orden estable por clave (entidades, relaciones) e id (evidencia) y sin fechas: el mismo árbol da el mismo archivo. Lo que el schema no expresa (claves e ids únicos, referencias que existen, fingerprints, orden, claves normalizadas) lo valida DiscoveryPackValidator (Walkie.Shared).
  */
-export interface WalkieDiscoveryV0 {
+export interface WalkieDiscoveryV1 {
   entities: Entity[];
   relations: Relation[];
   evidence: Evidence[];

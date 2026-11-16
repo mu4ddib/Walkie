@@ -13,7 +13,7 @@ export type Detectors = [
     id: string;
     version: string;
     /**
-     * ran: corrió sobre todo su alcance; skipped: no corrió (no aplica o se excluyó); failed: empezó y no terminó
+     * ran: corrió sobre todo su alcance, aunque no encontrara nada que mirar (entonces dice por qué en reason, ej. no hay apps Angular); skipped: no corrió porque se excluyó (--detectors); failed: empezó y no terminó
      */
     status: 'ran' | 'skipped' | 'failed';
     /**
@@ -40,7 +40,7 @@ export type Detectors = [
     id: string;
     version: string;
     /**
-     * ran: corrió sobre todo su alcance; skipped: no corrió (no aplica o se excluyó); failed: empezó y no terminó
+     * ran: corrió sobre todo su alcance, aunque no encontrara nada que mirar (entonces dice por qué en reason, ej. no hay apps Angular); skipped: no corrió porque se excluyó (--detectors); failed: empezó y no terminó
      */
     status: 'ran' | 'skipped' | 'failed';
     /**

@@ -41,6 +41,12 @@ jobs:
             check walkie-discovery-pack.schema.json "${pack}manifest.json"
             check walkie-discovery.schema.json "${pack}discovery.json"
           done
+          # La versión 0 congelada (ADR-0014): sus ejemplos siguen cumpliendo su schema.
+          for pack in packages/schema/walkiepack/v0/examples/*/; do
+            v0=packages/schema/walkiepack/v0
+            npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s "$v0/walkie-discovery-pack.schema.json" -r "$v0/walkie-discovery.schema.json" -r packages/schema/walkie-graph.schema.json -d "${pack}manifest.json"
+            npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s "$v0/walkie-discovery.schema.json" -r packages/schema/walkie-graph.schema.json -d "${pack}discovery.json"
+          done
           api=packages/schema/examples/discovery-api
           check walkie-discovery-snapshot.schema.json "$api/snapshot.json"
           check walkie-discovery-binding.schema.json "$api/binding-linked.json"

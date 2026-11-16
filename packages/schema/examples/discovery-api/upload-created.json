@@ -162,7 +162,7 @@
       "evidence": 12
     },
     "packSha256": "9b2f0c6e1d4a3b5c7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9012345678ab",
-    "contentFingerprint": "sha256:199a63de5c776a090afbe433e238b7b16e221d66835211a817fa2975bdfad99a"
+    "contentFingerprint": "sha256:722707eccd1283edcc523786616198882c05e5650794f3acdea1ffd484784257"
   },
   "summary": {
     "appId": "0198f0c0-1111-7000-8000-000000000101",
@@ -332,6 +332,6 @@
       "service": 1
     },
     "packSha256": "9b2f0c6e1d4a3b5c7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9012345678ab",
-    "contentFingerprint": "sha256:199a63de5c776a090afbe433e238b7b16e221d66835211a817fa2975bdfad99a"
+    "contentFingerprint": "sha256:722707eccd1283edcc523786616198882c05e5650794f3acdea1ffd484784257"
   }
 }

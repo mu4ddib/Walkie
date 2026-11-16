@@ -99,8 +99,21 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         }
 
         var current = new HashSet<string>(entities.Select(e => e.Key), StringComparer.Ordinal);
+        // Decisiones de la versión 0 con varias contrapartes (la misma ruta en dos apps): no son missing; se muestran
+        // en cada contraparte para que decida una persona (ADR-0014).
+        var counterparts = LegacyBindings.Counterparts(current);
+        var legacy = await LegacyBindings.FindAsync(db, bindings.Values, current, counterparts, ct).ConfigureAwait(false);
+        var legacyOf = new Dictionary<string, Binding>(StringComparer.Ordinal);
+        foreach (var (key, binding) in legacy.OrderBy(l => l.Key, StringComparer.Ordinal))
+        {
+            foreach (var counterpart in counterparts[key])
+            {
+                legacyOf.TryAdd(counterpart, binding);
+            }
+        }
+
         var classified = entities.Select(e => Classify(e, bindings.GetValueOrDefault(e.Key), index, bound)).ToList();
-        classified.AddRange(await MissingAsync(snapshot, bindings, current, ct).ConfigureAwait(false));
+        classified.AddRange(await MissingAsync(snapshot, bindings, current, legacy.Keys.ToHashSet(StringComparer.Ordinal), ct).ConfigureAwait(false));
 
         var counts = new DiscoveryReviewCounts(
             Count(classified, "new"), Count(classified, "matched"), Count(classified, "linked"), Count(classified, "created"),
@@ -120,7 +133,8 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
                 c.Row.Key, c.Row.Kind, c.Row.Title, c.Row.Basis, c.Row.Confidence, c.Status, c.Row.Fingerprint,
                 c.Binding is null ? null : BindingResponse(c.Binding),
                 c.Match, c.Candidates, evidenceCounts.GetValueOrDefault(c.Row.Key), c.Proposal,
-                c.Binding is { TargetKind: { } targetKind, TargetId: { } targetId } && !alive.Contains((targetKind, targetId)) ? true : null))
+                c.Binding is { TargetKind: { } targetKind, TargetId: { } targetId } && !alive.Contains((targetKind, targetId)) ? true : null,
+                !c.FromPrevious && legacyOf.TryGetValue(c.Row.Key, out var old) ? BindingResponse(old) : null))
             .ToList();
 
         await transaction.CommitAsync(ct).ConfigureAwait(false);
@@ -167,14 +181,15 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
     /// Hallazgos con vínculo que estaban en el análisis anterior y no en este. Solo los que el análisis actual podía
     /// ver (<see cref="MissingRules"/>); los demás no se muestran, porque su ausencia no prueba nada.
     /// </summary>
-    private async Task<List<Classified>> MissingAsync(Snapshot snapshot, Dictionary<string, Binding> bindings, HashSet<string> current, CancellationToken ct)
+    private async Task<List<Classified>> MissingAsync(
+        Snapshot snapshot, Dictionary<string, Binding> bindings, HashSet<string> current, HashSet<string> unresolvedLegacy, CancellationToken ct)
     {
         if (snapshot.PreviousSnapshotId is not { } previousId)
         {
             return [];
         }
 
-        var absent = bindings.Keys.Where(k => !current.Contains(k)).ToList();
+        var absent = bindings.Keys.Where(k => !current.Contains(k) && !unresolvedLegacy.Contains(k)).ToList();
         if (absent.Count == 0)
         {
             return [];
@@ -252,7 +267,8 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         binding.Note,
         binding.DecidedBy,
         binding.DecidedAt,
-        binding.Version);
+        binding.Version,
+        binding.DecidedKey);
 
     private static List<string> EvidenceIds(string data)
     {

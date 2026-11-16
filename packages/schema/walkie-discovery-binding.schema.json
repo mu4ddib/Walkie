@@ -13,6 +13,7 @@
     "target": { "$ref": "#/$defs/target" },
     "entityFingerprint": { "$ref": "walkie-discovery.schema.json#/$defs/fingerprint", "description": "Fingerprint de la entidad cuando se decidió: si cambia en un análisis posterior, la revisión la marca changed" },
     "snapshotId": { "type": "string", "format": "uuid", "description": "Análisis en el que se decidió" },
+    "decidedKey": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey", "description": "Clave con la que se decidió en snapshotId, si no es entityKey: una decisión sobre una pantalla o un candidato a feature de la versión 0 del formato que pasó a su clave con la app (ADR-0014)" },
     "applyId": { "type": "string", "format": "uuid", "description": "Aplicación que lo escribió (bitácora, ADR-0012)" },
     "note": { "type": "string", "maxLength": 500, "description": "Por qué se descartó o vinculó así" },
     "decidedBy": { "type": "string", "minLength": 1, "description": "Claim sub de quien decidió (ADR-0003)" },

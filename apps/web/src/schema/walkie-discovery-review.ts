@@ -2,7 +2,7 @@
 
 export type Item = {
   /**
-   * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ruta normalizada>, module:<nombre>, feature:<nombre>. DiscoveryKeys (Walkie.Shared) las arma
+   * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ámbito de la app>:<ruta normalizada>, module:<nombre>, feature:<ámbito de la app>:<nombre> (formatVersion 1; en la 0, screen:<ruta> y feature:<nombre>, que siguen siendo válidas en los registros de la API: un vínculo decidido antes conserva su clave). DiscoveryKeys (Walkie.Shared) las arma
    */
   key: string;
   /**
@@ -24,6 +24,7 @@ export type Item = {
    */
   fingerprint: string;
   binding?: WalkieDiscoveryBindingV0;
+  legacyBinding?: WalkieDiscoveryBindingV01;
   /**
    * Solo con un vínculo linked o created cuyo elemento ya no existe en Walkie (se borró a mano): la decisión sigue guardada pero no apunta a nada. Restablécela o vincúlalo a otro elemento
    */
@@ -79,7 +80,7 @@ export type Status = 'new' | 'matched' | 'linked' | 'created' | 'rejected' | 'ch
 export type WalkieDiscoveryBindingV0 = {
   sourceId: string;
   /**
-   * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ruta normalizada>, module:<nombre>, feature:<nombre>. DiscoveryKeys (Walkie.Shared) las arma
+   * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ámbito de la app>:<ruta normalizada>, module:<nombre>, feature:<ámbito de la app>:<nombre> (formatVersion 1; en la 0, screen:<ruta> y feature:<nombre>, que siguen siendo válidas en los registros de la API: un vínculo decidido antes conserva su clave). DiscoveryKeys (Walkie.Shared) las arma
    */
   entityKey: string;
   decision: 'linked' | 'created' | 'rejected';
@@ -92,6 +93,51 @@ export type WalkieDiscoveryBindingV0 = {
    * Análisis en el que se decidió
    */
   snapshotId: string;
+  /**
+   * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ámbito de la app>:<ruta normalizada>, module:<nombre>, feature:<ámbito de la app>:<nombre> (formatVersion 1; en la 0, screen:<ruta> y feature:<nombre>, que siguen siendo válidas en los registros de la API: un vínculo decidido antes conserva su clave). DiscoveryKeys (Walkie.Shared) las arma
+   */
+  decidedKey?: string;
+  /**
+   * Aplicación que lo escribió (bitácora, ADR-0012)
+   */
+  applyId?: string;
+  /**
+   * Por qué se descartó o vinculó así
+   */
+  note?: string;
+  /**
+   * Claim sub de quien decidió (ADR-0003)
+   */
+  decidedBy: string;
+  decidedAt: string;
+  /**
+   * Concurrencia optimista: una operación con versión vieja responde 409
+   */
+  version: number;
+};
+/**
+ * Vínculo de un hallazgo con Walkie (spec walkie-live, ADR-0012 y ADR-0014): la única confirmación que existe. Lo decide una persona y se guarda en Walkie, nunca en el .walkiepack. Une la clave estable de una entidad de una fuente con un elemento del catálogo, un módulo o una feature (linked: ya existía; created: lo creó una aplicación) o la descarta (rejected). Persiste entre análisis de la misma fuente y no cambia el elemento al que apunta.
+ */
+export type WalkieDiscoveryBindingV01 = {
+  sourceId: string;
+  /**
+   * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ámbito de la app>:<ruta normalizada>, module:<nombre>, feature:<ámbito de la app>:<nombre> (formatVersion 1; en la 0, screen:<ruta> y feature:<nombre>, que siguen siendo válidas en los registros de la API: un vínculo decidido antes conserva su clave). DiscoveryKeys (Walkie.Shared) las arma
+   */
+  entityKey: string;
+  decision: 'linked' | 'created' | 'rejected';
+  target?: Target;
+  /**
+   * Fingerprint de la entidad cuando se decidió: si cambia en un análisis posterior, la revisión la marca changed
+   */
+  entityFingerprint: string;
+  /**
+   * Análisis en el que se decidió
+   */
+  snapshotId: string;
+  /**
+   * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ámbito de la app>:<ruta normalizada>, module:<nombre>, feature:<ámbito de la app>:<nombre> (formatVersion 1; en la 0, screen:<ruta> y feature:<nombre>, que siguen siendo válidas en los registros de la API: un vínculo decidido antes conserva su clave). DiscoveryKeys (Walkie.Shared) las arma
+   */
+  decidedKey?: string;
   /**
    * Aplicación que lo escribió (bitácora, ADR-0012)
    */

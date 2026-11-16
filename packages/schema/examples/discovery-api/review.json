@@ -85,18 +85,18 @@
       }
     },
     {
-      "key": "feature:Ver pedido",
+      "key": "feature:web:Ver pedido",
       "kind": "feature",
       "title": "Ver pedido",
       "basis": "inferred",
       "confidence": "low",
       "status": "rejected",
-      "fingerprint": "sha256:35ab68930e99f5b237b1fa45aa4ed75aff3eaa173e8149cba681ed9b3d7e0ad0",
+      "fingerprint": "sha256:e4d330764c04d6e4d36239402241cee0055badf96235ffc355d74e4976f66c6f",
       "binding": {
         "sourceId": "0198f0c0-aaaa-7000-8000-000000000001",
-        "entityKey": "feature:Ver pedido",
+        "entityKey": "feature:web:Ver pedido",
         "decision": "rejected",
-        "entityFingerprint": "sha256:35ab68930e99f5b237b1fa45aa4ed75aff3eaa173e8149cba681ed9b3d7e0ad0",
+        "entityFingerprint": "sha256:e4d330764c04d6e4d36239402241cee0055badf96235ffc355d74e4976f66c6f",
         "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
         "note": "La pantalla ya está documentada en la feature «Seguimiento de pedidos».",
         "decidedBy": "usuario-demo",

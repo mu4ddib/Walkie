@@ -24,7 +24,7 @@
     },
     {
       "op": "reset",
-      "entityKey": "feature:Ver pedido",
+      "entityKey": "feature:web:Ver pedido",
       "bindingVersion": 1
     }
   ]

@@ -67,9 +67,9 @@ public sealed partial class WalkieRepositoryTests
 
         // Todas las rutas de routes.tsx salvo el comodín, también las que usan una constante importada (APPS_PATH).
         Assert.Equal(declared, result.Keys("screen").Length);
-        Assert.Contains("screen:/apps", result.Keys("screen"));
-        Assert.Contains("screen:/apps/{}/catalog/{}", result.Keys("screen"));
-        Assert.Contains("screen:/s/{}", result.Keys("screen"));
+        Assert.Contains("screen:apps/web:/apps", result.Keys("screen"));
+        Assert.Contains("screen:apps/web:/apps/{}/catalog/{}", result.Keys("screen"));
+        Assert.Contains("screen:apps/web:/s/{}", result.Keys("screen"));
         Assert.DoesNotContain("frontend-semantics-not-analyzed", result.LimitationCodes());
         // La web llama a la API por request() con una URL armada en tiempo de ejecución: no se adivina.
         Assert.Contains("dynamic-http-url", result.LimitationCodes());

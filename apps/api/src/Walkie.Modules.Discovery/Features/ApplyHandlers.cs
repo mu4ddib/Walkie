@@ -704,6 +704,7 @@ internal sealed partial class ApplyHandlers(
         binding.TargetTitle = op.Target?.Title is { } title ? Truncate(title, 120) : null;
         binding.EntityFingerprint = op.Op == "reset" ? null : op.Fingerprint;
         binding.SnapshotId = op.Op == "reset" ? null : snapshotId;
+        binding.DecidedKey = null;
         binding.ApplyId = applyId;
         binding.Note = op.Note;
         binding.DecidedBy = userId;

@@ -25,6 +25,7 @@
 | **Fuente (Walkie Live)** | Proyecto local analizado, con un id estable que el analizador guarda en `.walkie/source.json`. Una app puede tener sus fuentes (ADR-0012). |
 | **`.walkiepack`** | Paquete que genera el analizador local: `manifest.json` y `discovery.json` con lo que encontró en el código y su evidencia. No es un lienzo (ADR-0013 y ADR-0014). |
 | **Hallazgo** | Entidad o relación de un `.walkiepack`, **observada** (declarada tal cual en el código) o **inferida** (deducida), con clave estable, fingerprint de contenido y evidencia (archivo relativo, ancla, detector, confianza). |
+| **Ámbito de app** | Parte de la clave de una pantalla o de un candidato a feature que distingue las apps de un monorepo (`screen:<ámbito>:<ruta>`; ADR-0014): la carpeta de la app (`.` en la raíz) o el que fija el equipo en `.walkie/source.json`. Renombrar el paquete no lo cambia; mover la carpeta sí, salvo que se fije. |
 | **Análisis (snapshot)** | Un `.walkiepack` cargado en Walkie: inmutable, con su procedencia. |
 | **Vínculo** | Decisión de una persona sobre un hallazgo: vinculado a un elemento existente, creado al aplicar o descartado. Es la única confirmación; persiste entre análisis y no cambia el elemento. |
 | **Pantalla descubierta** (`screen`) | Ruta técnica de un front (React Router, Next.js, Angular) con el componente que muestra, encontrada en el código. No es una feature ni un nodo `screen` de un lienzo: entra a un lienzo con su feature (tarea 9). Un componente que ninguna ruta muestra no es pantalla. |

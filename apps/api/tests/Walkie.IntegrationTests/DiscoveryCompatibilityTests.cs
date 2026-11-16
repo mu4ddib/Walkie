@@ -96,13 +96,48 @@ public sealed class DiscoveryCompatibilityTests
     }
 
     [Theory]
-    [InlineData("/pedidos/:pedidoId", "screen:/pedidos/{}")]
-    [InlineData("/pedidos/[pedidoId]", "screen:/pedidos/{}")]
-    [InlineData("/blog/[...slug]#arriba", "screen:/blog/{}")]
-    [InlineData("pedidos", "screen:/pedidos")]
+    [InlineData("/pedidos/:pedidoId", "screen:web:/pedidos/{}")]
+    [InlineData("/pedidos/[pedidoId]", "screen:web:/pedidos/{}")]
+    [InlineData("/blog/[...slug]#arriba", "screen:web:/blog/{}")]
+    [InlineData("pedidos", "screen:web:/pedidos")]
     public void La_clave_de_una_pantalla_es_la_misma_en_React_Router_Next_y_Angular(string route, string key)
     {
-        Assert.Equal(key, DiscoveryKeys.Screen(route));
+        Assert.Equal(key, DiscoveryKeys.Screen("web", route));
+        Assert.Equal(key.Replace("web:", "", StringComparison.Ordinal), DiscoveryKeys.ScreenV0(route));
+    }
+
+    [Theory]
+    [InlineData("", ".")]
+    [InlineData("web", "web")]
+    [InlineData("apps/web/", "apps/web")]
+    [InlineData("apps\\admin", "apps/admin")]
+    [InlineData("mi app:2", "mi%20app%3A2")]
+    [InlineData(".config/web", ".config/web")]
+    public void El_ambito_de_una_app_es_su_carpeta_sin_dos_puntos(string directory, string scope)
+    {
+        Assert.Equal(scope, AppScope.FromDirectory(directory));
+        Assert.True(AppScope.IsValid(scope));
+        Assert.DoesNotContain(':', scope);
+    }
+
+    [Theory]
+    [InlineData("screen:apps/web:/pedidos/{}", "screen", "apps/web", "/pedidos/{}")]
+    [InlineData("screen:.:/", "screen", ".", "/")]
+    [InlineData("feature:web:Pedidos: activos", "feature", "web", "Pedidos: activos")]
+    public void Una_clave_con_ambito_se_separa_sin_ambiguedad(string key, string kind, string scope, string rest)
+    {
+        Assert.True(DiscoveryKeys.TryParseScoped(key, kind, out var parsedScope, out var parsedRest));
+        Assert.Equal((scope, rest), (parsedScope, parsedRest));
+        Assert.Equal($"{kind}:{rest}", DiscoveryKeys.WithoutScope(key));
+    }
+
+    [Theory]
+    [InlineData("screen:/pedidos")]
+    [InlineData("feature:Pedidos")]
+    [InlineData("api:GET /api/pedidos")]
+    public void Una_clave_de_la_version_0_no_tiene_ambito(string key)
+    {
+        Assert.Null(DiscoveryKeys.WithoutScope(key));
     }
 
     [Fact]
@@ -112,7 +147,7 @@ public sealed class DiscoveryCompatibilityTests
         Assert.Equal("database:postgresql/tienda", DiscoveryKeys.Database("PostgreSQL", "tienda"));
         Assert.Equal("resource:queue/pedidos-creados", DiscoveryKeys.Resource("queue", "pedidos-creados"));
         Assert.Equal("module:Tienda.Pedidos", DiscoveryKeys.Module("Tienda.Pedidos"));
-        Assert.Equal("feature:Ver pedido", DiscoveryKeys.Feature("Ver pedido"));
+        Assert.Equal("feature:web:Ver pedido", DiscoveryKeys.Feature("web", "Ver pedido"));
         Assert.Equal("calls:screen:/a->api:GET /a", DiscoveryKeys.Relation("calls", "screen:/a", "api:GET /a"));
     }
 }

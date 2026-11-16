@@ -28,21 +28,21 @@ public sealed class DiscoveryFrontendTests(WalkieApiFactory factory)
         var review = await ReviewAsync(client, snapshotId);
 
         var screens = Keys(review, "screen");
-        Assert.Equal(["screen:/login", "screen:/pedidos", "screen:/pedidos/{}"], screens);
-        var feature = Item(review, "feature:Pedidos");
+        Assert.Equal(["screen:web:/login", "screen:web:/pedidos", "screen:web:/pedidos/{}"], screens);
+        var feature = Item(review, "feature:web:Pedidos");
         Assert.Equal("inferred", feature.GetProperty("basis").GetString());
         Assert.Equal("create", feature.GetProperty("proposal").GetProperty("op").GetString());
-        Assert.Equal("none", Item(review, "screen:/pedidos").GetProperty("proposal").GetProperty("op").GetString()); // entra con su feature
+        Assert.Equal("none", Item(review, "screen:web:/pedidos").GetProperty("proposal").GetProperty("op").GetString()); // entra con su feature
         Assert.Equal("new", Item(review, "api:GET /api/pedidos").GetProperty("status").GetString());
 
         var evidence = await JsonAsync(await client.GetAsync(new Uri(
-            $"/api/snapshots/{snapshotId}/evidence?entityKey={Uri.EscapeDataString("screen:/pedidos/{}")}", UriKind.Relative)), HttpStatusCode.OK);
+            $"/api/snapshots/{snapshotId}/evidence?entityKey={Uri.EscapeDataString("screen:web:/pedidos/{}")}", UriKind.Relative)), HttpStatusCode.OK);
         Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.DiscoveryEvidence, evidence));
         Assert.Equal("react-router", evidence.GetProperty("evidence")[0].GetProperty("detector").GetString());
         Assert.Equal("web/src/main.tsx", evidence.GetProperty("evidence")[0].GetProperty("path").GetString());
 
         // Crear pantallas o features es de la tarea 9.
-        foreach (var key in new[] { "screen:/pedidos", "feature:Pedidos" })
+        foreach (var key in new[] { "screen:web:/pedidos", "feature:web:Pedidos" })
         {
             var refused = await ApplyAsync(client, snapshotId, new JsonObject { ["op"] = "create", ["entityKey"] = key, ["id"] = Guid.CreateVersion7().ToString() });
             Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
@@ -57,16 +57,16 @@ public sealed class DiscoveryFrontendTests(WalkieApiFactory factory)
         using var client = factory.CreateAuthenticatedClient();
         var appId = await CreateAppAsync(client);
         var first = await UploadAsync(client, appId, Pack(withLogin: true));
-        var decided = await ApplyAsync(client, first, new JsonObject { ["op"] = "reject", ["entityKey"] = "screen:/login", ["bindingVersion"] = 0 });
+        var decided = await ApplyAsync(client, first, new JsonObject { ["op"] = "reject", ["entityKey"] = "screen:web:/login", ["bindingVersion"] = 0 });
         Assert.Equal(HttpStatusCode.OK, decided.StatusCode);
 
         var second = await UploadAsync(client, appId, Pack(withLogin: false));
         var review = await ReviewAsync(client, second);
 
-        var missing = Item(review, "screen:/login");
+        var missing = Item(review, "screen:web:/login");
         Assert.Equal("missing", missing.GetProperty("status").GetString()); // react-router corrió y miró ese archivo
         Assert.Equal("rejected", missing.GetProperty("binding").GetProperty("decision").GetString());
-        Assert.Equal("new", Item(review, "screen:/pedidos").GetProperty("status").GetString());
+        Assert.Equal("new", Item(review, "screen:web:/pedidos").GetProperty("status").GetString());
     }
 
     private byte[] Pack(bool withLogin) => Scan(new Dictionary<string, string>

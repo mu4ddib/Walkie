@@ -8,12 +8,12 @@ export type Glob = string;
 /**
  * manifest.json de un .walkiepack (spec walkie-live, ADR-0013 y ADR-0014): un .zip que genera un analizador local de forma estática. Junto al manifest va discovery.json (walkie-discovery.schema.json: entidades, relaciones y evidencia). Un .walkiepack no es un lienzo: no trae posiciones, ni código fuente completo, ni secretos, ni confirmaciones (las decide una persona en Walkie). Se lee primero: format y formatVersion se revisan antes que el resto (mensaje propio para una versión desconocida). La integridad que el schema no expresa la valida DiscoveryPackValidator (Walkie.Shared).
  */
-export interface WalkieDiscoveryPackManifestV0 {
+export interface WalkieDiscoveryPackManifestV1 {
   format: 'walkiepack';
   /**
-   * Versión de este formato (ADR-0014). Un lector rechaza una versión mayor que la suya con un mensaje propio; las anteriores las sube con migraciones puras
+   * Versión de este formato (ADR-0014; la 0 está congelada en walkiepack/v0/). Un lector rechaza una versión mayor que la suya con un mensaje propio; las anteriores las sube con migraciones puras
    */
-  formatVersion: 0;
+  formatVersion: 1;
   /**
    * schemaVersion de walkie-graph de los $defs que usan las entidades (http, database, resource, runtime); no puede ser mayor que el del lector
    */
@@ -70,7 +70,7 @@ export interface WalkieDiscoveryPackManifestV0 {
       id: string;
       version: string;
       /**
-       * ran: corrió sobre todo su alcance; skipped: no corrió (no aplica o se excluyó); failed: empezó y no terminó
+       * ran: corrió sobre todo su alcance, aunque no encontrara nada que mirar (entonces dice por qué en reason, ej. no hay apps Angular); skipped: no corrió porque se excluyó (--detectors); failed: empezó y no terminó
        */
       status: 'ran' | 'skipped' | 'failed';
       /**
@@ -97,7 +97,7 @@ export interface WalkieDiscoveryPackManifestV0 {
       id: string;
       version: string;
       /**
-       * ran: corrió sobre todo su alcance; skipped: no corrió (no aplica o se excluyó); failed: empezó y no terminó
+       * ran: corrió sobre todo su alcance, aunque no encontrara nada que mirar (entonces dice por qué en reason, ej. no hay apps Angular); skipped: no corrió porque se excluyó (--detectors); failed: empezó y no terminó
        */
       status: 'ran' | 'skipped' | 'failed';
       /**

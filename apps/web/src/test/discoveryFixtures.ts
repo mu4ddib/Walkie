@@ -73,7 +73,7 @@ export const ITEMS: DiscoveryReviewItem[] = [
     ],
   }),
   item({ key: 'api:POST /api/pedidos', title: '<img src=x onerror="alert(1)">', basis: 'inferred', confidence: 'medium' }),
-  item({ key: 'screen:/pedidos', kind: 'screen', title: 'Pedidos' }),
+  item({ key: 'screen:web:/pedidos', kind: 'screen', title: 'Pedidos' }),
 ];
 
 export function evidenceOf(key: string): DiscoveryEvidence {
