@@ -234,6 +234,13 @@ El fallo en el CI (`8a970a5`, primer intento) fue: después de seleccionar con u
 
 No se encontraron otros patrones de clic seguido de `Supr` en los E2E. Si vuelve a fallar con la espera puesta, la causa es otra: revisar el reporte del CI.
 
+**`modo-tour` (también intermitente, encontrado en las repeticiones de esta tarea):**
+
+- Al cerrar con Esc el **segundo** tour, la vista vuelve a `translate(0.035px, 0.027px) scale(1.00001)` en vez de la vista exacta que se guardó al abrirlo (`0,0,1`).
+- Se repite 2 de 8 veces con el encuadre inicial que considera las etiquetas y 1 de 5 sin él. Es anterior a esta tarea, y la corrección del encuadre puede hacerlo más frecuente.
+- Ya se corrigieron dos carreras reales de la prueba: guardar la vista de referencia antes de que el encuadre inicial termine, y comparar sin esperar la transición de la cámara.
+- Lo que queda es una deriva real de la vista (un `fitView` o un `fitAll` que corre entre los dos tours). Queda abierta como tarea aparte, sin agrandar timeouts. Si el CI la muestra, no es de Walkie Live.
+
 ## 12. Experiencia visual y accesibilidad
 
 - **Navegadores:** Chromium en local y en el CI. WebKit en local, ver el resultado abajo; no se afirma compatibilidad con Safari real ni con Firefox (no se ejecutaron).
@@ -320,6 +327,7 @@ Los binarios autocontenidos y un envoltorio npm son opcionales y se deciden desp
 | Baja | Referencia agregada durante una compensación: queda pendiente, o el lienzo no se puede guardar hasta quitar la caja | Residual, ventana de milisegundos (§10) |
 | Baja | Páginas de Walkie Live sin probar en anchos chicos | §12 |
 | Baja | Un E2E intermitente sin reproducir (`deshacer-y-cajas`) | Prueba sincronizada; vigilar el CI (§11) |
+| Baja | `modo-tour`: la vista no vuelve exacta al cerrar el segundo tour (anterior a Walkie Live; ~1 de 5 a 2 de 8 en local) | Tarea aparte (§11) |
 
 **Recomendación:**
 
