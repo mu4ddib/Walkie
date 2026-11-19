@@ -124,6 +124,9 @@ internal static class DiscoveryPacks
         return await client.PostAsync(new Uri($"/api/apps/{appId}/sources/snapshots{(dryRun ? "?dryRun=true" : "")}", UriKind.Relative), content);
     }
 
+    /// <summary><c>walkie scan</c> sobre una carpeta que ya existe (medir: no escribe nada en ella con <c>--source-id</c>).</summary>
+    public static byte[] ScanDirectory(string root, params string[] extra) => Run(root, new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero), extra);
+
     private static byte[] ScanRepository(DateTimeOffset at) => Run(RepoRoot(), at, "--source-id", WalkieSource.ToString());
 
     private static byte[] Run(string root, DateTimeOffset at, params string[] extra)

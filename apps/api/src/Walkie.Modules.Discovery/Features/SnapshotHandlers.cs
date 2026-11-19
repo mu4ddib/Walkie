@@ -208,6 +208,13 @@ internal sealed class SnapshotHandlers(DiscoveryDbContext db, IAppDirectory apps
     internal async Task<Snapshot> SaveAsync(Guid appId, Guid sourceId, string sourceName, int formatVersion, JsonElement manifest,
         JsonElement discovery, string packSha256, string contentFingerprint, string userId, CancellationToken ct, Action<Snapshot>? alsoSave = null)
     {
+        // Tarea 11: dos análisis de la misma fuente a la vez (su primera vez en la app, o dos reanálisis) chocaban al crear
+        // la fuente (500) o apuntaban los dos al mismo «anterior». Se guardan de a uno por (app, fuente): un candado de
+        // transacción que espera (milisegundos) y se suelta solo al confirmar o deshacer.
+        var transaction = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false) : null;
+        await using var _ = transaction;
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({SaveLockSpace}, {SaveLockKey(appId, sourceId)})", ct).ConfigureAwait(false);
+
         var now = clock.GetUtcNowForDb();
         var source = await db.Sources.FirstOrDefaultAsync(s => s.AppId == appId && s.Id == sourceId, ct).ConfigureAwait(false);
         if (source is null)
@@ -274,10 +281,21 @@ internal sealed class SnapshotHandlers(DiscoveryDbContext db, IAppDirectory apps
         await CarryLegacyDecisionsAsync(appId, sourceId, discovery, ct).ConfigureAwait(false);
         alsoSave?.Invoke(snapshot);
 
-        // Un solo SaveChanges: una transacción de Postgres. Si algo falla, no queda nada del análisis a medias.
+        // Un solo SaveChanges en la transacción del candado. Si algo falla, no queda nada del análisis a medias.
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+        }
+
         return snapshot;
     }
+
+    /// <summary>Espacio de los candados de guardado (la forma de dos enteros no choca con los de <c>ApplyLock</c>).</summary>
+    private const int SaveLockSpace = 0x57_4C_53_56; // «WLSV»
+
+    private static int SaveLockKey(Guid appId, Guid sourceId) =>
+        BitConverter.ToInt32(System.Security.Cryptography.SHA256.HashData([.. appId.ToByteArray(), .. sourceId.ToByteArray()]), 0);
 
     /// <summary>
     /// Decisiones de la versión 0 sobre pantallas y candidatos a feature que tienen una sola contraparte en este

@@ -115,10 +115,10 @@ public sealed class DiscoveryReviewPerformanceTests(WalkieApiFactory factory, IT
 
     private static string Path(int i) => string.Create(CultureInfo.InvariantCulture, $"/escala/{i:D5}");
 
-    private static string Key(int i) => DiscoveryKeys.Api("GET", Path(i));
+    internal static string Key(int i) => DiscoveryKeys.Api("GET", Path(i));
 
     /// <summary>Un paquete válido con <paramref name="count"/> APIs, cada una con su evidencia.</summary>
-    private static byte[] SyntheticPack(int count, Guid sourceId, bool reanalysis = false)
+    internal static byte[] SyntheticPack(int count, Guid sourceId, bool reanalysis = false)
     {
         var entities = new JsonArray();
         var evidence = new JsonArray();
