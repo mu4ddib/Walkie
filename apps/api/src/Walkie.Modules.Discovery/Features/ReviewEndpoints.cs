@@ -1,3 +1,5 @@
+using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Apps;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
@@ -26,7 +28,8 @@ internal static class ReviewEndpoints
                 + "paginación con page (desde 0) y pageSize (1 a 500, por defecto 50). Los conteos son del análisis completo. No se guarda.")
             .Produces<DiscoveryReviewResponse>()
             .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .RequireAppRole(AppRole.Viewer);
 
         discovery.MapPost("/api/snapshots/{snapshotId:guid}/apply", Apply)
             .WithName("ApplyDiscoveryOperations")
@@ -41,7 +44,8 @@ internal static class ReviewEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
-            .ProducesProblem(StatusCodes.Status500InternalServerError);
+            .ProducesProblem(StatusCodes.Status500InternalServerError)
+            .RequireAppRole(AppRole.Editor);
 
         discovery.MapGet("/api/snapshots/{snapshotId:guid}/evidence", Evidence)
             .WithName("GetDiscoveryEvidence")
@@ -50,7 +54,8 @@ internal static class ReviewEndpoints
                 + "query (las claves llevan / y espacios). Si ya no aparece en el análisis, la del anterior. 404 si no está en ninguno.")
             .Produces<EntityEvidence>()
             .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .RequireAppRole(AppRole.Viewer);
 
         discovery.MapGet("/api/apps/{appId:guid}/bindings", Provenance)
             .WithName("GetDiscoveryProvenance")
@@ -59,13 +64,15 @@ internal static class ReviewEndpoints
                 + "catalogItem, module o feature. Los vínculos activos con su fuente, hallazgo, evidencia y si el último análisis lo sigue viendo.")
             .Produces<ProvenanceResponse>()
             .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .RequireAppRole(AppRole.Viewer);
 
         discovery.MapGet("/api/apps/{appId:guid}/sources", Sources)
             .WithName("ListDiscoverySources")
             .WithSummary("Fuentes locales de la app con su último análisis (walkie-discovery-sources). Solo las de esa app.")
             .Produces<DiscoverySourcesResponse>()
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .RequireAppRole(AppRole.Viewer);
 
         return discovery;
     }

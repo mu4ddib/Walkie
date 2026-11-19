@@ -1,3 +1,5 @@
+using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Apps;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -16,12 +18,14 @@ internal static class AssetEndpoints
             .WithName("UploadAsset")
             .WithSummary("Sube una imagen (PNG, JPEG o WebP, hasta 5 MB) a la app; campo multipart file.")
             .DisableAntiforgery() // La API usa tokens bearer, no cookies.
-            .ProducesValidationProblem();
+            .ProducesValidationProblem()
+            .RequireAppRole(AppRole.Editor);
 
         routes.MapGet("/api/assets/{assetId:guid}", Download)
             .WithTags("Files")
             .WithName("GetAsset")
-            .WithSummary("Bytes de la imagen. No cambia nunca: se puede guardar en caché.");
+            .WithSummary("Bytes de la imagen. No cambia nunca: se puede guardar en caché.")
+            .RequireAppRole(AppRole.Viewer);
 
         return routes;
     }

@@ -11,6 +11,8 @@ internal sealed class AppsDbContext(DbContextOptions<AppsDbContext> options) : D
     public DbSet<App> Apps => Set<App>();
     public DbSet<Feature> Features => Set<Feature>();
     public DbSet<CatalogItem> CatalogItems => Set<CatalogItem>();
+    public DbSet<AppMembership> Memberships => Set<AppMembership>();
+    public DbSet<AppUser> Users => Set<AppUser>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +27,31 @@ internal sealed class AppsDbContext(DbContextOptions<AppsDbContext> options) : D
             app.Property(a => a.CreatedBy).HasColumnName("created_by").HasMaxLength(255);
             app.Property(a => a.CreatedAt).HasColumnName("created_at");
             app.HasMany(a => a.Features).WithOne().HasForeignKey(f => f.AppId).OnDelete(DeleteBehavior.Cascade);
+            app.HasMany(a => a.Members).WithOne().HasForeignKey(m => m.AppId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AppMembership>(member =>
+        {
+            member.ToTable("memberships", t => t.HasCheckConstraint("ck_memberships_role", "role IN ('owner', 'editor', 'viewer')"));
+            member.HasKey(m => new { m.AppId, m.UserId });
+            member.Property(m => m.AppId).HasColumnName("app_id");
+            member.Property(m => m.UserId).HasColumnName("user_id").HasMaxLength(255);
+            member.Property(m => m.Role).HasColumnName("role").HasMaxLength(16);
+            member.Property(m => m.GrantedBy).HasColumnName("granted_by").HasMaxLength(255);
+            member.Property(m => m.GrantedAt).HasColumnName("granted_at");
+            member.HasIndex(m => m.UserId).HasDatabaseName("ix_memberships_user_id");
+        });
+
+        modelBuilder.Entity<AppUser>(user =>
+        {
+            user.ToTable("users");
+            user.HasKey(u => u.Id);
+            user.Property(u => u.Id).HasColumnName("id").HasMaxLength(255).ValueGeneratedNever();
+            user.Property(u => u.Email).HasColumnName("email").HasMaxLength(AppUser.EmailMaxLength);
+            user.Property(u => u.Name).HasColumnName("name").HasMaxLength(AppUser.NameMaxLength);
+            user.Property(u => u.FirstSeenAt).HasColumnName("first_seen_at");
+            user.Property(u => u.LastSeenAt).HasColumnName("last_seen_at");
+            user.HasIndex(u => u.Email).HasDatabaseName("ix_users_email");
         });
 
         modelBuilder.Entity<Feature>(feature =>

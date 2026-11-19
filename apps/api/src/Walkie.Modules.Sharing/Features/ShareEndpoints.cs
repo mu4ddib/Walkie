@@ -1,3 +1,5 @@
+using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Apps;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -17,13 +19,16 @@ internal static class ShareEndpoints
         group.MapPost("/features/{featureId:guid}/shares", Create)
             .WithName("CreateShare")
             .WithSummary("Crea un enlace de solo lectura (7, 30 o 90 días). El token solo viaja en esta respuesta.")
-            .WithValidation<CreateShareRequest>();
+            .WithValidation<CreateShareRequest>()
+            .RequireAppRole(AppRole.Owner);
         group.MapGet("/features/{featureId:guid}/shares", List)
             .WithName("ListShares")
-            .WithSummary("Enlaces activos de la feature (sin revocar ni caducados), sin token.");
+            .WithSummary("Enlaces activos de la feature (sin revocar ni caducados), sin token.")
+            .RequireAppRole(AppRole.Owner);
         group.MapDelete("/shares/{shareId:guid}", Revoke)
             .WithName("RevokeShare")
-            .WithSummary("Revoca el enlace: deja de funcionar en el acto.");
+            .WithSummary("Revoca el enlace: deja de funcionar en el acto.")
+            .RequireAppRole(AppRole.Owner);
 
         return routes;
     }

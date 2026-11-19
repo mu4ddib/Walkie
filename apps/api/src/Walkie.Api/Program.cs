@@ -40,6 +40,7 @@ app.UseStatusCodePages();
 app.UseCors(WebCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseKnownUsers(); // anota a quien entra (ADR-0015: sumarlo a una app por correo)
 
 if (app.Environment.IsDevelopment())
 {

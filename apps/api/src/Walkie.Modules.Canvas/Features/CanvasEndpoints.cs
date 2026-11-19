@@ -1,3 +1,5 @@
+using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Apps;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
@@ -16,30 +18,35 @@ internal static class CanvasEndpoints
 
         canvas.MapGet("/", GetCanvas)
             .WithName("GetCanvas")
-            .WithSummary("Grafo del lienzo (packages/schema/walkie-graph.schema.json). Feature nueva: grafo vacío con version 0.");
+            .WithSummary("Grafo del lienzo (packages/schema/walkie-graph.schema.json). Feature nueva: grafo vacío con version 0.")
+            .RequireAppRole(AppRole.Viewer);
 
         canvas.MapPut("/", SaveCanvas)
             .WithName("SaveCanvas")
             .WithSummary("Guarda el grafo si su version coincide con la guardada; responde el grafo con version + 1.")
             .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAppRole(AppRole.Editor);
 
         routes.MapGet("/api/apps/{appId:guid}/canvas-previews", GetPreviews)
             .WithTags("Canvas")
             .WithName("GetCanvasPreviews")
-            .WithSummary("Vista previa del último lienzo guardado de cada feature de la app (miniaturas de la galería).");
+            .WithSummary("Vista previa del último lienzo guardado de cada feature de la app (miniaturas de la galería).")
+            .RequireAppRole(AppRole.Viewer);
 
         var map = routes.MapGroup("/api/apps/{appId:guid}/map").WithTags("Canvas");
 
         map.MapGet("/", GetMap)
             .WithName("GetAppMap")
-            .WithSummary("Mapa de la app (packages/schema/walkie-app-map.schema.json): features, conexiones por portal, uso del catálogo y distribución guardada.");
+            .WithSummary("Mapa de la app (packages/schema/walkie-app-map.schema.json): features, conexiones por portal, uso del catálogo y distribución guardada.")
+            .RequireAppRole(AppRole.Viewer);
 
         map.MapPut("/layout", SaveMapLayout)
             .WithName("SaveAppMapLayout")
             .WithSummary("Guarda la distribución del mapa ($defs/layout) si su version coincide con la guardada; responde la distribución con version + 1.")
             .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAppRole(AppRole.Editor);
 
         return routes;
     }

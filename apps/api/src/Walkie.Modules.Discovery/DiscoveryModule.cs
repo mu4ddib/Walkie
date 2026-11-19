@@ -25,6 +25,7 @@ public static partial class DiscoveryModule
         services.AddDbContext<DiscoveryDbContext>(options => options.UseNpgsql(connectionString, ConfigureNpgsql));
         services.Configure<DiscoveryOptions>(configuration.GetSection(DiscoveryOptions.Section));
         services.AddScoped<SnapshotHandlers>();
+        services.AddScoped<Walkie.Modules.Apps.Contracts.IAppScopeResolver, SnapshotScope>();
         services.AddScoped<SourceImportHandlers>();
         services.TryAddSingleton<ISourceImportCheckpoints, NoSourceImportCheckpoints>();
         services.AddScoped<ReviewHandlers>();

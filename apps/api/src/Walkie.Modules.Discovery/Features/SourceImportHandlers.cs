@@ -59,6 +59,7 @@ internal sealed partial class SourceImportHandlers(
     DiscoveryDbContext db,
     SnapshotHandlers snapshots,
     IAppWriter apps,
+    IAppAccess access,
     ISourceImportCheckpoints checkpoints,
     TimeProvider clock,
     ILogger<SourceImportHandlers> logger)
@@ -81,7 +82,7 @@ internal sealed partial class SourceImportHandlers(
         var sourceName = manifest.GetProperty("source").GetProperty("name").GetString()!;
         var summary = SnapshotHandlers.Summary(null, sourceId, sourceName, false, formatVersion, manifest, discovery, packSha256, contentFingerprint);
 
-        var names = (await apps.AppNamesAsync(ct).ConfigureAwait(false)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var names = (await apps.AppNamesAsync(userId, ct).ConfigureAwait(false)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var chosen = name?.Trim();
         if (name is not null && (chosen!.Length == 0 || chosen.Length > AppNameMaxLength))
         {
@@ -89,7 +90,7 @@ internal sealed partial class SourceImportHandlers(
         }
 
         var appName = chosen ?? UniqueName(sourceName, names);
-        var warnings = await WarningsAsync(sourceId, ct).ConfigureAwait(false);
+        var warnings = await WarningsAsync(sourceId, userId, ct).ConfigureAwait(false);
         if (dryRun)
         {
             return new SourceImportResult.Done(new DiscoverySourceImportResponse(
@@ -299,9 +300,12 @@ internal sealed partial class SourceImportHandlers(
     }
 
     /// <summary>Avisos de la vista previa: la fuente ya está en otras apps (se vincula a una nueva, no a esas).</summary>
-    private async Task<IReadOnlyList<DiscoveryApplyWarning>> WarningsAsync(Guid sourceId, CancellationToken ct)
+    private async Task<IReadOnlyList<DiscoveryApplyWarning>> WarningsAsync(Guid sourceId, string userId, CancellationToken ct)
     {
-        var others = await db.Sources.AsNoTracking().Where(s => s.Id == sourceId).Select(s => s.AppId).Distinct().CountAsync(ct).ConfigureAwait(false);
+        // Solo las apps de quien pregunta (ADR-0015): no se revela que el proyecto esté en apps de otras personas.
+        var mine = await access.AppsOfAsync(userId, ct).ConfigureAwait(false);
+        var others = (await db.Sources.AsNoTracking().Where(s => s.Id == sourceId).Select(s => s.AppId).Distinct().ToListAsync(ct).ConfigureAwait(false))
+            .Count(mine.Contains);
         var pending = await db.SourceImports.AsNoTracking().AnyAsync(i => i.SourceId == sourceId && i.Status == SourceImport.Pending, ct).ConfigureAwait(false);
         var warnings = new List<DiscoveryApplyWarning>();
         if (others > 0)

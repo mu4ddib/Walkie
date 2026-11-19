@@ -15,16 +15,18 @@ internal static class AppsEndpoints
         var apps = routes.MapGroup("/api/apps").WithTags("Apps");
 
         apps.MapPost("/", CreateApp).WithName("CreateApp").WithValidation<CreateAppRequest>();
-        apps.MapGet("/", ListApps).WithName("ListApps");
-        apps.MapGet("/{appId:guid}", GetApp).WithName("GetApp");
-        apps.MapPost("/{appId:guid}/features", CreateFeature).WithName("CreateFeature").WithValidation<CreateFeatureRequest>();
-        apps.MapGet("/{appId:guid}/features", ListFeatures).WithName("ListFeatures");
+        apps.MapGet("/", ListApps).WithName("ListApps").WithSummary("Las apps de las que eres miembro, con tu rol (ADR-0015).");
+        apps.MapGet("/{appId:guid}", GetApp).WithName("GetApp").RequireAppRole(AppRole.Viewer);
+        apps.MapPost("/{appId:guid}/features", CreateFeature).WithName("CreateFeature").WithValidation<CreateFeatureRequest>()
+            .RequireAppRole(AppRole.Editor);
+        apps.MapGet("/{appId:guid}/features", ListFeatures).WithName("ListFeatures").RequireAppRole(AppRole.Viewer);
 
         routes.MapGroup("/api/features").WithTags("Apps")
             .MapPut("/{featureId:guid}", UpdateFeature)
             .WithName("UpdateFeature")
             .WithSummary("Renombra la feature y cambia su descripción.")
-            .WithValidation<UpdateFeatureRequest>();
+            .WithValidation<UpdateFeatureRequest>()
+            .RequireAppRole(AppRole.Editor);
 
         return routes;
     }
@@ -42,12 +44,12 @@ internal static class AppsEndpoints
         return TypedResults.Created($"/api/apps/{app.Id}", app);
     }
 
-    private static async Task<Ok<IReadOnlyList<AppResponse>>> ListApps(AppsHandlers handlers, CancellationToken ct) =>
-        TypedResults.Ok(await handlers.ListAppsAsync(ct).ConfigureAwait(false));
+    private static async Task<Ok<IReadOnlyList<AppResponse>>> ListApps(ClaimsPrincipal user, AppsHandlers handlers, CancellationToken ct) =>
+        TypedResults.Ok(await handlers.ListAppsAsync(UserId(user), ct).ConfigureAwait(false));
 
     private static async Task<Results<Ok<AppResponse>, NotFound>> GetApp(
-        Guid appId, AppsHandlers handlers, CancellationToken ct) =>
-        await handlers.GetAppAsync(appId, ct).ConfigureAwait(false) is { } app
+        Guid appId, ClaimsPrincipal user, AppsHandlers handlers, CancellationToken ct) =>
+        await handlers.GetAppAsync(appId, UserId(user), ct).ConfigureAwait(false) is { } app
             ? TypedResults.Ok(app)
             : TypedResults.NotFound();
 

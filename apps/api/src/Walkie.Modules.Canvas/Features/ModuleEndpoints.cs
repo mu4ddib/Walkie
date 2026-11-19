@@ -1,3 +1,5 @@
+using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Apps;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -16,32 +18,38 @@ internal static class ModuleEndpoints
 
         app.MapGet("/", List)
             .WithName("ListModules")
-            .WithSummary("Resúmenes de los módulos de la app (packages/schema/walkie-module-summary.schema.json).");
+            .WithSummary("Resúmenes de los módulos de la app (packages/schema/walkie-module-summary.schema.json).")
+            .RequireAppRole(AppRole.Viewer);
 
         app.MapPost("/", Create)
             .WithName("CreateModule")
             .WithSummary("Crea un módulo vacío; el id lo puede generar el cliente (reintentar no duplica).")
             .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAppRole(AppRole.Editor);
 
         app.MapPost("/extract", Extract)
             .WithName("ExtractModule")
             .WithSummary("Convierte una selección en módulo: crea el módulo con su lienzo y guarda la feature, o no deja nada.")
             .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAppRole(AppRole.Editor);
 
         var module = routes.MapGroup("/api/modules/{moduleId:guid}").WithTags("Modules");
 
-        module.MapGet("/", Get).WithName("GetModule").WithSummary("Resumen de un módulo.");
+        module.MapGet("/", Get).WithName("GetModule").WithSummary("Resumen de un módulo.")
+            .RequireAppRole(AppRole.Viewer);
 
         module.MapDelete("/", Delete)
             .WithName("DeleteModule")
             .WithSummary("Borra el módulo y su lienzo; si alguna feature lo usa responde 409 salvo con ?force=true (sus cajas quedan pendientes).")
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAppRole(AppRole.Owner);
 
         module.MapGet("/usages", Usages)
             .WithName("GetModuleUsages")
-            .WithSummary("Lienzos que referencian el módulo, con sus cajas y las conexiones a cada interfaz.");
+            .WithSummary("Lienzos que referencian el módulo, con sus cajas y las conexiones a cada interfaz.")
+            .RequireAppRole(AppRole.Viewer);
 
         return routes;
     }
