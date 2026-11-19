@@ -11,13 +11,14 @@ const LATEST: Record<string, string> = {
 };
 
 /**
- * «De dónde viene» en el detalle de un elemento del catálogo (spec walkie-live, tarea 6): los hallazgos de Walkie Live
+ * «De dónde viene» de un elemento del catálogo, un módulo o una feature (`target`: `catalogItem:{id}`, `module:{id}` o
+ * `feature:{id}`; spec walkie-live, tareas 6 y 9): los hallazgos de Walkie Live
  * vinculados a él, con su fuente, la decisión, la evidencia del análisis en que se decidió y un enlace a la revisión.
  * Solo informa: no bloquea editar ni reescribe nada con análisis nuevos. Sin Discovery (404) o sin vínculos, no se
  * muestra. El texto viene del paquete y se pinta como texto.
  */
-export function ItemProvenance({ appId, itemId }: { appId: string; itemId: string }) {
-  const provenance = useDiscoveryProvenance(appId, `catalogItem:${itemId}`);
+export function ItemProvenance({ appId, target }: { appId: string; target: string }) {
+  const provenance = useDiscoveryProvenance(appId, target);
   const origins = provenance.data?.bindings ?? [];
   if (origins.length === 0) return null;
 

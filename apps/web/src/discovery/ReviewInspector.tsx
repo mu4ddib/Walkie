@@ -11,15 +11,17 @@ import {
 } from '../api/client';
 import { useApplyDiscovery, useCatalog, useDiscoveryEvidence, useFeatures, useModules } from '../api/hooks';
 import { catalogPath } from '../pages/catalogPaths';
+import { featurePath, modulePath } from '../workspace/paths';
 import { formatDayAndTime } from '../share/shareFormat';
-import { BASIS, CONFIDENCE, CREATABLE_KINDS, KIND, REASON, STATUS, TARGET_KIND, targetKindFor } from './discoveryText';
+import { BASIS, CONFIDENCE, CONTAINER_KINDS, CREATABLE_KINDS, KIND, REASON, STATUS, TARGET_KIND, targetKindFor } from './discoveryText';
+import { planInitialCanvas, type CanvasDraft, type CanvasInput } from './initialCanvas';
 
 type Decision =
   | { op: 'reject'; note: string }
   | { op: 'reset' }
   | { op: 'reset-legacy' }
   | { op: 'link'; target: DiscoveryTarget }
-  | { op: 'create'; id: string };
+  | { op: 'create'; id: string; withApis?: Record<string, string> };
 
 type Warning = DiscoveryApplyResult['warnings'][number];
 
@@ -236,19 +238,54 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
   const version = item.binding?.version ?? 0;
   const decided = item.binding !== undefined;
   const canCreate = CREATABLE_KINDS.includes(item.kind) && !decided && item.status !== 'missing';
+  const container = CONTAINER_KINDS.includes(item.kind);
+  const canCreateContainer = container && !decided && item.status !== 'missing';
+  // Ids y posiciones del lienzo inicial: se calculan una vez por borrador y se reutilizan en un reintento.
+  const canvasInput = useRef<CanvasInput | undefined>(undefined);
+  // Nombre elegido (null: el que propone la vista previa).
+  const [name, setName] = useState<string | null>(null);
 
   function start(next: Decision) {
     applyId.current = uuidv7(); // una decisión nueva: un applyId nuevo
+    canvasInput.current = undefined;
+    setName(null);
     setDecision(next);
     commit.reset();
-    preview.mutate({ applyId: applyId.current, operations: [operation(next)], dryRun: true });
+    preview.mutate({ applyId: applyId.current, operations: operations(next), dryRun: true });
+  }
+
+  /**
+   * Las operaciones de la decisión: la principal y, al crear un módulo o una feature, las APIs que la persona eligió
+   * crear también en el catálogo (van primero: el lienzo las referencia). `canvas` solo al confirmar.
+   */
+  function operations(d: Decision, canvas?: CanvasInput): DiscoveryOperation[] {
+    const main = operation(d);
+    if (d.op !== 'create' || !container) return [main];
+    const apis = Object.entries(d.withApis ?? {}).map(
+      ([entityKey, id]): DiscoveryOperation => ({ op: 'create', entityKey, id, bindingVersion: 0 }),
+    );
+    const chosen = name?.trim();
+    const suggested = preview.data?.created.find((c) => c.entityKey === item.key)?.target.title;
+    return [
+      ...apis,
+      { ...main, ...(chosen && chosen !== suggested ? { name: chosen } : {}), ...(canvas ? { canvas } : {}) },
+    ];
+  }
+
+  /** Suma o quita las APIs que faltan en el catálogo y vuelve a pedir la vista previa (mismo applyId). */
+  function toggleApis(keys: string[], on: boolean) {
+    if (decision?.op !== 'create' || !applyId.current) return;
+    const next: Decision = { ...decision, withApis: on ? Object.fromEntries(keys.map((k) => [k, uuidv7()])) : undefined };
+    setDecision(next);
+    canvasInput.current = undefined;
+    preview.mutate({ applyId: applyId.current, operations: operations(next), dryRun: true });
   }
 
   function operation(d: Decision): DiscoveryOperation {
     // El id del elemento es parte de la decisión: la vista previa y la confirmación (y un reintento) usan el mismo.
     if (d.op === 'create') return { op: 'create', entityKey: item.key, id: d.id, bindingVersion: version };
-    if (d.op === 'link') return { op: 'link', entityKey: item.key, target: { kind: d.target.kind, id: d.target.id }, bindingVersion: version };
     if (d.op === 'reject') return { op: 'reject', entityKey: item.key, bindingVersion: version, ...(d.note ? { note: d.note } : {}) };
+    if (d.op === 'link') return { op: 'link', entityKey: item.key, target: { kind: d.target.kind, id: d.target.id }, bindingVersion: version };
     if (d.op === 'reset-legacy' && item.legacyBinding) {
       return { op: 'reset', entityKey: item.legacyBinding.entityKey, bindingVersion: item.legacyBinding.version };
     }
@@ -258,7 +295,13 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
   function confirm() {
     if (!decision || !applyId.current) return;
     // El mismo applyId que la vista previa: si la red falla y se reintenta, la API no lo aplica dos veces.
-    commit.mutate({ applyId: applyId.current, operations: [operation(decision)], dryRun: false });
+    let canvas: CanvasInput | undefined;
+    if (decision.op === 'create' && container) {
+      const draft = preview.data?.created.find((c) => c.entityKey === item.key)?.canvas;
+      if (!draft) return;
+      canvas = canvasInput.current = planInitialCanvas(draft, canvasInput.current);
+    }
+    commit.mutate({ applyId: applyId.current, operations: operations(decision, canvas), dryRun: false });
   }
 
   function cancel() {
@@ -273,7 +316,7 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
   const target = known.find((o) => `${o.kind}:${o.id}` === chosen);
 
   if (commit.data) {
-    return <Done appId={appId} result={commit.data} onAgain={cancel} />;
+    return <Done appId={appId} entityKey={item.key} result={commit.data} onAgain={cancel} />;
   }
 
   return (
@@ -358,8 +401,17 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
               Restablecer la decisión vieja…
             </button>
           )}
-          {!canCreate && !decided && (item.kind === 'module' || item.kind === 'feature') && (
-            <p className="panel-help">Crear módulos y features desde un hallazgo llegará más adelante; por ahora puedes vincularlo o descartarlo.</p>
+          {canCreateContainer && (
+            <div className="discovery-link">
+              <p className="panel-help">
+                {item.kind === 'feature'
+                  ? 'Crea una feature nueva con un lienzo inicial: sus pantallas, la navegación y las llamadas que el análisis vio. No cambia ningún lienzo existente.'
+                  : 'Crea un módulo nuevo con un lienzo inicial: sus APIs y las interfaces que ofrece. No cambia ningún lienzo existente.'}
+              </p>
+              <button type="button" className="pixel-button is-primary" onClick={() => start({ op: 'create', id: uuidv7() })}>
+                {item.kind === 'feature' ? 'Crear feature…' : 'Crear módulo…'}
+              </button>
+            </div>
           )}
         </>
       )}
@@ -367,7 +419,17 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
         <div className="discovery-box">
           {preview.isPending && <p role="status">Revisando…</p>}
           {preview.data &&
-            (decision.op === 'create' ? (
+            (decision.op === 'create' && container ? (
+              <CanvasPreview
+                result={preview.data}
+                entityKey={item.key}
+                kind={item.kind}
+                name={name}
+                onName={setName}
+                withApis={decision.withApis !== undefined}
+                onApis={toggleApis}
+              />
+            ) : decision.op === 'create' ? (
               <CreatePreview result={preview.data} entityKey={item.key} />
             ) : (
               <>
@@ -375,14 +437,19 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
                 <Warnings warnings={preview.data.warnings} />
               </>
             ))}
-          {commit.isPending && <p role="status">{decision.op === 'create' ? 'Creando en el catálogo…' : 'Guardando…'}</p>}
+          {commit.isPending && <p role="status">{decision.op === 'create' ? (container ? 'Creando…' : 'Creando en el catálogo…') : 'Guardando…'}</p>}
           {failure && (
             <p role="alert" className="save-error">
               {failure instanceof ApiError ? failure.userMessage : 'No se pudo conectar con Walkie. Vuelve a intentarlo: no se aplicará dos veces.'}
             </p>
           )}
           <div className="import-actions">
-            <button type="button" className="pixel-button is-primary" disabled={!preview.data || commit.isPending || !!conflict} onClick={confirm}>
+            <button
+              type="button"
+              className="pixel-button is-primary"
+              disabled={!preview.data || preview.isPending || commit.isPending || !!conflict}
+              onClick={confirm}
+            >
               {commit.isPending ? 'Guardando…' : decision.op === 'create' ? 'Confirmar y crear' : 'Confirmar'}
             </button>
             <button type="button" className="pixel-button is-ghost" onClick={cancel}>
@@ -473,6 +540,108 @@ function CreatePreview({ result, entityKey }: { result: DiscoveryApplyResult; en
   );
 }
 
+const OMITTED_HELP: Record<string, string> = {
+  'api-undecided': 'Sin decidir',
+  'api-rejected': 'Descartada',
+  'api-target-missing': 'Su elemento se borró',
+  'ambiguous-api': 'Ambigua',
+  'screen-rejected': 'Descartada',
+  'screen-decided': 'Ya en otra feature',
+};
+
+/**
+ * La vista previa de un módulo o una feature (tarea 9): el nombre, qué cajas, conexiones e interfaces tendrá su lienzo
+ * inicial, qué queda fuera y por qué, y los avisos. Lo arma la API con las mismas reglas que al crear.
+ */
+function CanvasPreview({
+  result,
+  entityKey,
+  kind,
+  name,
+  onName,
+  withApis,
+  onApis,
+}: {
+  result: DiscoveryApplyResult;
+  entityKey: string;
+  kind: string;
+  name: string | null;
+  onName: (name: string) => void;
+  withApis: boolean;
+  onApis: (keys: string[], on: boolean) => void;
+}) {
+  const created = result.created.find((c) => c.entityKey === entityKey);
+  const draft: CanvasDraft | undefined = created?.canvas;
+  if (!created || !draft) return null;
+  const screens = draft.nodes.filter((n) => n.type === 'screen');
+  const targets = draft.nodes.filter((n) => n.type !== 'screen');
+  const navigation = draft.edges.filter((e) => e.kind === 'navigation').length;
+  const calls = draft.edges.filter((e) => e.kind === 'request').length;
+  const undecided = draft.omitted.filter((o) => o.code === 'api-undecided').map((o) => o.key);
+  const alsoCreated = result.created.filter((c) => c.entityKey !== entityKey);
+  const title = (key: string) => draft.nodes.find((n) => n.key === key)?.title ?? key;
+  return (
+    <section className="discovery-create" aria-label="Lo que se creará">
+      <p>{kind === 'feature' ? 'Se creará una feature nueva con su lienzo inicial:' : 'Se creará un módulo nuevo con su lienzo inicial:'}</p>
+      <label>
+        Nombre
+        <input value={name ?? created.target.title ?? ''} maxLength={120} onChange={(e) => onName(e.target.value)} />
+      </label>
+      <dl className="discovery-facts">
+        {kind === 'feature' && (
+          <>
+            <dt>Pantallas</dt>
+            <dd>{screens.length === 0 ? 'ninguna' : screens.map((s) => `${s.title}${s.route ? ` (${s.route})` : ''}`).join(', ')}</dd>
+          </>
+        )}
+        <dt>{kind === 'feature' ? 'Llama a' : 'APIs'}</dt>
+        <dd>{targets.length === 0 ? 'ninguna' : targets.map((t) => (t.type === 'module' ? `${t.title} (módulo)` : t.title)).join(', ')}</dd>
+        <dt>Conexiones</dt>
+        <dd>
+          {kind === 'feature'
+            ? `${navigation} de navegación y ${calls} solicitud${calls === 1 ? '' : 'es'} HTTP, tal como las vio el análisis`
+            : 'ninguna'}
+        </dd>
+        {draft.interfaces.length > 0 && (
+          <>
+            <dt>Interfaces</dt>
+            <dd>{draft.interfaces.map((i) => `${i.name} (ofrece ${title(i.node)})`).join(', ')}</dd>
+          </>
+        )}
+        {alsoCreated.length > 0 && (
+          <>
+            <dt>También en el catálogo</dt>
+            <dd>{alsoCreated.map((c) => c.target.title ?? c.entityKey).join(', ')}</dd>
+          </>
+        )}
+      </dl>
+      {draft.omitted.length > 0 && (
+        <>
+          <p>No entra al lienzo:</p>
+          <ul className="discovery-omitted" aria-label="Lo que no entra">
+            {draft.omitted.map((o) => (
+              <li key={o.key} data-code={o.code}>
+                <strong>{OMITTED_HELP[o.code] ?? o.code}:</strong> {o.message}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {(undecided.length > 0 || withApis) && (
+        <label className="discovery-check">
+          <input type="checkbox" checked={withApis} onChange={(e) => onApis(undecided, e.target.checked)} /> Crear también en el catálogo las APIs que
+          faltan{undecided.length > 0 ? ` (${undecided.length})` : ''}
+        </label>
+      )}
+      <p className="panel-help">
+        Sin respuestas, códigos ni pasos internos: solo lo que el análisis observó. Después lo editas en el lienzo como cualquier otro; un análisis nuevo
+        nunca lo sobrescribe.
+      </p>
+      <Warnings warnings={result.warnings.filter((w) => w.code !== 'omitted')} />
+    </section>
+  );
+}
+
 function Warnings({ warnings }: { warnings: Warning[] }) {
   if (warnings.length === 0) return null;
   return (
@@ -487,8 +656,8 @@ function Warnings({ warnings }: { warnings: Warning[] }) {
 }
 
 /** El resultado real: lo creado con su enlace al catálogo, o que se deshizo (compensated) y por qué. */
-function Done({ appId, result, onAgain }: { appId: string; result: DiscoveryApplyResult; onAgain: () => void }) {
-  const created = result.created[0];
+function Done({ appId, entityKey, result, onAgain }: { appId: string; entityKey: string; result: DiscoveryApplyResult; onAgain: () => void }) {
+  const created = result.created.find((c) => c.entityKey === entityKey) ?? result.created[0];
   if (result.status === 'compensated') {
     return (
       <div className="discovery-box">
@@ -504,11 +673,21 @@ function Done({ appId, result, onAgain }: { appId: string; result: DiscoveryAppl
   }
   return (
     <div className="discovery-box">
-      <p role="status">{done(result)}</p>
-      {created && (
-        <Link className="pixel-button is-primary" to={catalogPath(appId, created.target.id)}>
-          Abrir en el catálogo
+      <p role="status">{done(result, created)}</p>
+      {created?.target.kind === 'feature' ? (
+        <Link className="pixel-button is-primary" to={featurePath(appId, created.target.id)}>
+          Abrir la feature
         </Link>
+      ) : created?.target.kind === 'module' ? (
+        <Link className="pixel-button is-primary" to={modulePath(appId, created.target.id)}>
+          Abrir el módulo
+        </Link>
+      ) : (
+        created && (
+          <Link className="pixel-button is-primary" to={catalogPath(appId, created.target.id)}>
+            Abrir en el catálogo
+          </Link>
+        )
       )}
       <button type="button" className="pixel-button is-ghost" onClick={onAgain}>
         Tomar otra decisión
@@ -525,8 +704,10 @@ function planned(result: DiscoveryApplyResult): string {
   return 'Se quitará la decisión. El elemento al que estaba vinculado sigue en Walkie sin cambios.';
 }
 
-function done(result: DiscoveryApplyResult): string {
-  if (result.created[0]) return `Creado en el catálogo: «${result.created[0].target.title ?? result.created[0].target.id}».`;
+function done(result: DiscoveryApplyResult, created: DiscoveryApplyResult['created'][number] | undefined): string {
+  if (created?.target.kind === 'feature') return `Feature creada: «${created.target.title ?? created.target.id}», con su lienzo inicial.`;
+  if (created?.target.kind === 'module') return `Módulo creado: «${created.target.title ?? created.target.id}», con su lienzo e interfaces.`;
+  if (created) return `Creado en el catálogo: «${created.target.title ?? created.target.id}».`;
   if (result.linked[0]) return `Vinculado a «${result.linked[0].target.title ?? result.linked[0].target.id}».`;
   if (result.rejected.length > 0) return 'Descartado.';
   return 'Decisión restablecida.';

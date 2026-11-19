@@ -47,6 +47,73 @@ internal sealed class AppWriter(
         return feature.Id;
     }
 
+    public async Task<FeatureCreation> CreateFeatureAsync(
+        Guid appId, Guid featureId, string kind, string name, string? description, string userId, CancellationToken cancellationToken)
+    {
+        if (kind is not (FeatureKind.Feature or FeatureKind.Module))
+        {
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "Tiene que ser feature o module.");
+        }
+
+        var existing = await db.Features.AsNoTracking().Where(f => f.Id == featureId).Select(f => new { f.AppId, f.Kind })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (existing is not null)
+        {
+            return existing.AppId == appId && existing.Kind == kind ? FeatureCreation.AlreadyCreated : FeatureCreation.IdTaken;
+        }
+
+        var now = clock.GetUtcNowForDb();
+        db.Features.Add(new Feature
+        {
+            Id = featureId,
+            AppId = appId,
+            Kind = kind,
+            Name = name.Trim(),
+            Description = description?.Trim() ?? "",
+            CreatedBy = userId,
+            CreatedAt = now,
+            UpdatedAt = now,
+        });
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return FeatureCreation.Created;
+        }
+        catch (DbUpdateException)
+        {
+            // Dos pedidos con el mismo id a la vez: el segundo mira de nuevo qué quedó.
+            db.ChangeTracker.Clear();
+            var after = await db.Features.AsNoTracking().Where(f => f.Id == featureId).Select(f => new { f.AppId, f.Kind })
+                .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            return after is not null && after.AppId == appId && after.Kind == kind ? FeatureCreation.AlreadyCreated : FeatureCreation.IdTaken;
+        }
+    }
+
+    public async Task<FeatureRemoval> DeleteUntouchedFeatureAsync(
+        Guid appId, Guid featureId, string name, string? description, CancellationToken cancellationToken)
+    {
+        var feature = await db.Features.AsNoTracking().Where(f => f.Id == featureId && f.AppId == appId)
+            .Select(f => new { f.Name, f.Description })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (feature is null)
+        {
+            return FeatureRemoval.NotFound;
+        }
+
+        var expectedName = name.Trim();
+        var expectedDescription = description?.Trim() ?? "";
+        if (feature.Name != expectedName || feature.Description != expectedDescription)
+        {
+            return FeatureRemoval.Edited;
+        }
+
+        // El nombre y la descripción van en la condición: si alguien los cambió entre la lectura y el borrado, no se borra.
+        var deleted = await db.Features
+            .Where(f => f.Id == featureId && f.AppId == appId && f.Name == expectedName && f.Description == expectedDescription)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        return deleted == 1 ? FeatureRemoval.Deleted : FeatureRemoval.Edited;
+    }
+
     public async Task<bool> CreateModuleAsync(
         Guid appId, Guid moduleId, string name, string? description, string userId, CancellationToken cancellationToken)
     {

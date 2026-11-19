@@ -173,6 +173,12 @@ Las reglas de completitud y de `missing` no cambian: un análisis `complete` exi
 - `walkie-discovery-apply-result` suma `created[].item`: el elemento tal como queda (`walkie-catalog-item`), con su id. `walkie-discovery-review` suma `targetMissing`: el elemento vinculado o creado se borró a mano y la decisión ya no apunta a nada.
 - **Procedencia:** `walkie-discovery-provenance.schema.json` es la respuesta de `GET /api/apps/{appId}/bindings?target={kind}:{id}` (la spec la nombraba sin contrato): los vínculos activos que apuntan al elemento, con su fuente, el hallazgo y hasta 20 evidencias del análisis en que se decidió, y si el último análisis lo sigue viendo (`same`, `changed`, `not-found`). `targetExists` dice si el elemento sigue existiendo.
 
+**Módulos y features con su lienzo** (agregado en la tarea 9, ADR-0012):
+- `walkie-discovery-apply`: `create` de `module` o `feature` acepta `name` (el nombre con que se crea; sin él, el del hallazgo, y si ya hay uno igual en la app, con su app técnica entre paréntesis, ej. «Pedidos (admin)») y `canvas` (ids UUID v7 del cliente y posiciones para cada clave del borrador: `nodes`, `edges`, `interfaces`, `layout`). `canvas` es obligatorio al aplicar; en la vista previa, sin él se devuelve el borrador.
+- `walkie-discovery-apply-result`: `created[].canvas` es el borrador del lienzo inicial (cajas, conexiones e interfaces por clave, `omitted` con código y porqué y, con los ids de la solicitud, el `graph` tal como se guarda) y `created[].includes`, las claves de sus cajas. Avisos nuevos: `ambiguous-api` y `omitted`.
+- Las pantallas de una feature creada quedan con un vínculo `created` hacia la feature; un vínculo puede apuntar a una feature o a un módulo como ya admitía el schema. La API ya no rechaza `create` de módulos y features; una pantalla sigue sin crearse sola.
+- Ninguna versión de formato cambia: son registros de la API, no el `.walkiepack`.
+
 **Evidencia de un hallazgo** (agregado en la tarea 5): `walkie-discovery-evidence.schema.json` es la respuesta de `GET /api/snapshots/{snapshotId}/evidence?entityKey=`: la evidencia (los `$defs` de `walkie-discovery`) y las relaciones (hasta 100) de un solo hallazgo, con `foundIn` (el análisis pedido o, para un `missing`, el anterior). Se agregó porque la revisión trae solo `evidenceCount` (sumar la evidencia a cada ítem multiplicaría el tamaño de cada página) y la web no debe pedir el análisis entero para mostrar un hallazgo.
 
 **Compatibilidad:**

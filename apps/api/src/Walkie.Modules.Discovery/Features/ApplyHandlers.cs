@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Canvas.Contracts;
 using Walkie.Modules.Discovery.Contracts;
 using Walkie.Modules.Discovery.Domain;
 using Walkie.Modules.Discovery.Persistence;
@@ -64,11 +65,16 @@ internal sealed partial class ApplyHandlers(
     ReviewHandlers review,
     IAppWriter apps,
     ICatalogDirectory catalog,
+    IFeatureDirectory features,
+    ICanvasWriter canvases,
+    ICanvasReader canvasReader,
     IApplyCheckpoints checkpoints,
     TimeProvider clock,
     ILogger<ApplyHandlers> logger)
 {
     private const string CatalogItem = "catalogItem";
+    private const string FeatureTarget = "feature";
+    private const string ModuleTarget = "module";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public async Task<ApplyOutcome> ApplyAsync(Guid snapshotId, JsonElement body, bool dryRun, string userId, CancellationToken ct)
@@ -140,7 +146,28 @@ internal sealed partial class ApplyHandlers(
             return (null, Conflict("snapshotId", $"Hay un análisis más nuevo de esta fuente ({latest}): decide sobre ese."));
         }
 
-        var keys = operations.Select(o => o.EntityKey).Distinct(StringComparer.Ordinal).ToList();
+        var requested = operations.Select(o => o.EntityKey).Distinct(StringComparer.Ordinal).ToList();
+
+        // Lo que hace falta para crear: el hallazgo completo (y, de un módulo o una feature, sus miembros).
+        var createKeys = operations.Where(o => o.Op == "create").Select(c => c.EntityKey).ToList();
+        var createData = createKeys.Count == 0
+            ? []
+            : await db.Entities.AsNoTracking()
+                .Where(e => e.SnapshotId == snapshot.Id && createKeys.Contains(e.Key))
+                .ToDictionaryAsync(e => e.Key, e => e.Data, StringComparer.Ordinal, ct).ConfigureAwait(false);
+        var members = new List<string>();
+        foreach (var (key, data) in createData)
+        {
+            using var document = JsonDocument.Parse(data);
+            if (document.RootElement.GetProperty("kind").GetString() is "feature" or "module"
+                && document.RootElement.TryGetProperty("members", out var list))
+            {
+                members.AddRange(list.EnumerateArray().Select(m => m.GetString()!));
+            }
+        }
+
+        // Las pantallas de una feature se reservan y se deciden con ella; sus APIs se leen para saber si están decididas.
+        var keys = requested.Concat(members).Distinct(StringComparer.Ordinal).ToList();
 
         // Hallazgos reservados por otra aplicación con creaciones que no terminó.
         var claims = await db.Bindings.AsNoTracking()
@@ -164,7 +191,7 @@ internal sealed partial class ApplyHandlers(
 
         var entities = await db.Entities.AsNoTracking()
             .Where(e => e.SnapshotId == snapshot.Id && keys.Contains(e.Key))
-            .Select(e => new { e.Key, e.Kind, e.Fingerprint })
+            .Select(e => new EntityRow(e.Key, e.Kind, e.Fingerprint))
             .ToDictionaryAsync(e => e.Key, StringComparer.Ordinal, ct).ConfigureAwait(false);
         var bindingQuery = db.Bindings.Where(b => b.AppId == snapshot.AppId && b.SourceId == snapshot.SourceId && keys.Contains(b.EntityKey));
         var bindings = await (track ? bindingQuery : bindingQuery.AsNoTracking())
@@ -185,15 +212,21 @@ internal sealed partial class ApplyHandlers(
                 .Select(b => new { b.TargetKind, b.TargetId, b.EntityKey })
                 .ToListAsync(ct).ConfigureAwait(false);
 
-        // Lo que hace falta para crear: el hallazgo completo, de qué detectores es su evidencia, y que los ids estén libres.
-        var createKeys = creates.Select(c => c.EntityKey).ToList();
-        var createData = createKeys.Count == 0
-            ? []
-            : await db.Entities.AsNoTracking()
-                .Where(e => e.SnapshotId == snapshot.Id && createKeys.Contains(e.Key))
-                .ToDictionaryAsync(e => e.Key, e => e.Data, StringComparer.Ordinal, ct).ConfigureAwait(false);
+        // Que los ids estén libres (en el catálogo, en las features y módulos, y en otras aplicaciones).
         var createIds = creates.Where(c => c.Id is not null).Select(c => c.Id!.Value).Distinct().ToList();
         var takenIds = (await catalog.ItemsByIdAsync(createIds, ct).ConfigureAwait(false)).Select(i => i.Id).ToHashSet();
+        foreach (var id in createIds)
+        {
+            if (await features.AppOfFeatureAsync(id, ct).ConfigureAwait(false) is not null)
+            {
+                takenIds.Add(id);
+            }
+        }
+
+        var drafting = creates.Any(c => entities.TryGetValue(c.EntityKey, out var e) && e.Kind is "feature" or "module")
+            ? await DraftContextAsync(snapshot, operations, bindings, createData, members, existing, ct).ConfigureAwait(false)
+            : null;
+        var plannedNames = new List<(string Type, string Name)>();
         var plannedIds = createIds.Count == 0
             ? []
             : (await db.ApplySteps.AsNoTracking().Where(s => createIds.Contains(s.TargetId))
@@ -282,11 +315,36 @@ internal sealed partial class ApplyHandlers(
                     }
 
                     break;
+                case "create" when entity!.Kind is "feature" or "module":
+                    if (CreateContainer(op, i, path, entity.Kind, binding) is { } container)
+                    {
+                        steps.Add(container.Step);
+                        var target = new DiscoveryTarget(container.Step.Kind, container.Step.Id, container.Step.Name);
+                        stored.Add(new StoredOp(op.Op, op.EntityKey, entity.Fingerprint, target, op.Note));
+                        foreach (var screen in container.Draft.Screens)
+                        {
+                            if (requested.Contains(screen))
+                            {
+                                errors[$"{path}/entityKey"] = [$"La pantalla {screen} entra con esta feature: no la decidas aparte en la misma solicitud."];
+                                continue;
+                            }
+
+                            // Cada pantalla queda decidida con su feature: creada en ella.
+                            stored.Add(new StoredOp("create", screen, entities[screen].Fingerprint, target, null));
+                        }
+
+                        created.Add(new DiscoveryAppliedTarget(op.EntityKey, target,
+                            Includes: [.. container.Draft.Nodes.Select(n => n.Key)],
+                            Canvas: container.Draft.Contract(container.Step.Graph)));
+                        warnings.AddRange(container.Warnings);
+                    }
+
+                    break;
                 case "create":
                     if (Create(op, i, path, entity!.Kind, binding) is { } step)
                     {
                         steps.Add(step);
-                        var target = new DiscoveryTarget(CatalogItem, step.Id, step.Item.Title.Trim());
+                        var target = new DiscoveryTarget(CatalogItem, step.Id, step.Item!.Title.Trim());
                         stored.Add(new StoredOp(op.Op, op.EntityKey, entity.Fingerprint, target, op.Note));
                         created.Add(new DiscoveryAppliedTarget(op.EntityKey, target, apps.PreviewCatalogItem(snapshot.AppId, step.Id, step.Item)));
                     }
@@ -305,12 +363,12 @@ internal sealed partial class ApplyHandlers(
             return (null, new ApplyOutcome.Conflict(conflicts));
         }
 
-        foreach (var step in steps)
+        foreach (var step in steps.Where(s => s.Item is not null))
         {
             using var document = JsonDocument.Parse(createData[step.EntityKey]);
             warnings.AddRange(CatalogDraft.Warnings(step.EntityKey, document.RootElement,
                 await DetectorsAsync(snapshot.Id, document.RootElement, ct).ConfigureAwait(false)));
-            foreach (var same in index.WithTitle(step.Item.Type, step.Item.Title))
+            foreach (var same in index.WithTitle(step.Item!.Type, step.Item.Title))
             {
                 warnings.Add(new DiscoveryApplyWarning("same-title", Truncate(
                     $"Ya hay «{same.Title}» en el catálogo con el mismo nombre: revisa que no sea el mismo antes de crear otro. Si lo es, vincúlalo.", 500),
@@ -336,36 +394,16 @@ internal sealed partial class ApplyHandlers(
         {
             if (!CatalogDraft.Kinds.Contains(kind))
             {
-                errors[$"{path}/op"] = [kind == "screen"
-                    ? "Una pantalla no se crea sola: entra con su feature (tarea 9)."
-                    : "Crear módulos y features llega en la tarea 9: por ahora vincúlalo a uno existente o descártalo."];
+                errors[$"{path}/op"] = ["Una pantalla no se crea sola: entra con su feature."];
+                return null;
+            }
+
+            if (!FreeId(op, path, binding))
+            {
                 return null;
             }
 
             var id = op.Id!.Value;
-            if (id.Version != 7)
-            {
-                errors[$"{path}/id"] = ["Tiene que ser un UUID v7 generado por el cliente para esta decisión."];
-                return null;
-            }
-
-            if (!ids.Add(id))
-            {
-                errors[$"{path}/id"] = ["Otra operación de esta solicitud usa el mismo id."];
-                return null;
-            }
-
-            if (takenIds.Contains(id) || plannedIds.Contains(id))
-            {
-                conflicts[$"{path}/id"] = ["Ese id ya es de otro elemento o de otra aplicación: genera uno nuevo para esta decisión."];
-                return null;
-            }
-
-            if (binding?.Active == true)
-            {
-                conflicts[$"{path}/entityKey"] = [$"Ya tiene una decisión ({binding.Decision}): restablécela antes de crear un elemento para él."];
-                return null;
-            }
 
             using var document = JsonDocument.Parse(createData[op.EntityKey]);
             var item = CatalogDraft.From(document.RootElement);
@@ -387,8 +425,194 @@ internal sealed partial class ApplyHandlers(
                 return null;
             }
 
-            return new CreateStep(opIndex, op.EntityKey, id, item);
+            return new CreateStep(opIndex, op.EntityKey, CatalogItem, id, item, item.Title.Trim(), null, null);
         }
+
+        // El id es v7, es único en la solicitud y libre, y el hallazgo no tiene una decisión activa.
+        bool FreeId(Operation op, string path, Binding? binding)
+        {
+            var id = op.Id!.Value;
+            if (id.Version != 7)
+            {
+                errors[$"{path}/id"] = ["Tiene que ser un UUID v7 generado por el cliente para esta decisión."];
+                return false;
+            }
+
+            if (!ids.Add(id))
+            {
+                errors[$"{path}/id"] = ["Otra operación de esta solicitud usa el mismo id."];
+                return false;
+            }
+
+            if (takenIds.Contains(id) || plannedIds.Contains(id))
+            {
+                conflicts[$"{path}/id"] = ["Ese id ya es de otro elemento o de otra aplicación: genera uno nuevo para esta decisión."];
+                return false;
+            }
+
+            if (binding?.Active == true)
+            {
+                conflicts[$"{path}/entityKey"] = [$"Ya tiene una decisión ({binding.Decision}): restablécela antes de crear un elemento para él."];
+                return false;
+            }
+
+            return true;
+        }
+
+        // Un módulo o una feature: su lienzo inicial (borrador y, con los ids y posiciones, el grafo validado), su nombre y avisos.
+        (CreateStep Step, Draft Draft, List<DiscoveryApplyWarning> Warnings)? CreateContainer(Operation op, int opIndex, string path, string kind, Binding? binding)
+        {
+            if (!FreeId(op, path, binding))
+            {
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(createData[op.EntityKey]);
+            var finding = document.RootElement;
+            var draft = kind == "feature" ? CanvasDraft.Feature(finding, drafting!) : CanvasDraft.Module(finding, drafting!);
+            if (draft.Errors.Count > 0)
+            {
+                errors[$"{path}/entityKey"] = [.. draft.Errors];
+                return null;
+            }
+
+            var title = finding.GetProperty("title").GetString()!.Trim();
+            var app = finding.TryGetProperty("app", out var scope) ? scope.GetString() : null;
+            var type = kind == "feature" ? FeatureTarget : ModuleTarget;
+            bool Taken(string name) =>
+                index.WithTitle(type, name).Count > 0 || plannedNames.Any(n => n.Type == type && MatchIndex.NormalizeTitle(n.Name) == MatchIndex.NormalizeTitle(name));
+            // El nombre: el que eligió la persona, o el del hallazgo; si ya hay uno igual, con su app técnica para distinguirlo.
+            var name = op.Name?.Trim() is { Length: > 0 } chosen ? chosen
+                : Taken(title) && app is { } a && a != "." ? $"{title} ({a})"
+                : title;
+            name = Truncate(name, 120);
+            plannedNames.Add((type, name));
+            var description = finding.TryGetProperty("description", out var text) ? Truncate(text.GetString()!, 500) : null;
+
+            var warnings = new List<DiscoveryApplyWarning>
+            {
+                new("inferred", kind == "feature"
+                    ? "Walkie dedujo esta feature de las rutas: un grupo de pantallas no es por sí solo un objetivo funcional. Revisa el nombre y lo que agrupa."
+                    : "Walkie dedujo este módulo de un proyecto con endpoints: no todo proyecto es un módulo reutilizable. Revisa qué ofrece.", op.EntityKey),
+            };
+            warnings.AddRange(draft.Omitted.Where(o => o.Code == "ambiguous-api").Select(o => new DiscoveryApplyWarning("ambiguous-api", o.Message, op.EntityKey)));
+            if (draft.Omitted.Any(o => o.Code != "ambiguous-api"))
+            {
+                warnings.Add(new DiscoveryApplyWarning("omitted", Truncate(
+                    $"{draft.Omitted.Count(o => o.Code != "ambiguous-api")} parte(s) del hallazgo no entran al lienzo: la vista previa dice cuáles y por qué.", 500), op.EntityKey));
+            }
+
+            if (Taken(name) && index.WithTitle(type, name).Count > 0)
+            {
+                warnings.Add(new DiscoveryApplyWarning("same-title", Truncate(
+                    $"Ya hay {(kind == "feature" ? "una feature" : "un módulo")} «{name}» en la app: revisa que no sea {(kind == "feature" ? "la misma" : "el mismo")}. Si lo es, vincúlalo.", 500), op.EntityKey));
+            }
+
+            JsonElement? graph = null;
+            if (op.Canvas is { } canvas)
+            {
+                var (built, graphErrors) = CanvasDraft.Graph(draft, CanvasInput.Read(canvas), $"{path}/canvas");
+                foreach (var (field, messages) in graphErrors)
+                {
+                    errors[field] = messages;
+                }
+
+                if (built is null)
+                {
+                    return null;
+                }
+
+                graph = JsonSerializer.SerializeToElement(built);
+                foreach (var (field, messages) in canvases.Validate(graph.Value))
+                {
+                    errors[$"{path}/canvas/graph{field}"] = messages;
+                }
+            }
+            else if (track)
+            {
+                errors[$"{path}/canvas"] = ["Falta el lienzo inicial: pide la vista previa y manda los ids y las posiciones de sus cajas."];
+                return null;
+            }
+
+            return (new CreateStep(opIndex, op.EntityKey, type, op.Id!.Value, null, name, description, graph), draft, warnings);
+        }
+    }
+
+    /// <summary>
+    /// Lo que el borrador del lienzo necesita leer: miembros y relaciones del análisis, decisiones activas de la fuente,
+    /// lo que esta solicitud crea en el catálogo, el catálogo vivo, las APIs que publican varios servicios y las interfaces
+    /// de los módulos que ya existen cuya caja es un <c>ref</c>.
+    /// </summary>
+    private async Task<DraftContext> DraftContextAsync(
+        Snapshot snapshot, List<Operation> operations, Dictionary<string, Binding> bindings,
+        Dictionary<string, string> createData, List<string> members, IReadOnlyList<ExistingTarget> existing, CancellationToken ct)
+    {
+        var memberSet = members.ToHashSet(StringComparer.Ordinal);
+        var memberData = await db.Entities.AsNoTracking()
+            .Where(e => e.SnapshotId == snapshot.Id && memberSet.Contains(e.Key))
+            .ToDictionaryAsync(e => e.Key, e => JsonDocument.Parse(e.Data).RootElement.Clone(), StringComparer.Ordinal, ct).ConfigureAwait(false);
+        var relations = await db.Relations.AsNoTracking()
+            .Where(r => r.SnapshotId == snapshot.Id && (r.Kind == "navigates" || r.Kind == "calls") && memberSet.Contains(r.FromKey))
+            .Select(r => new DraftRelation(r.Key, r.Kind, r.FromKey, r.ToKey))
+            .ToListAsync(ct).ConfigureAwait(false);
+        var apis = members.Concat(relations.Select(r => r.To)).Where(k => k.StartsWith("api:", StringComparison.Ordinal)).Distinct(StringComparer.Ordinal).ToList();
+        var exposes = await db.Relations.AsNoTracking()
+            .Where(r => r.SnapshotId == snapshot.Id && r.Kind == "exposes" && apis.Contains(r.ToKey))
+            .Select(r => new { r.FromKey, r.ToKey })
+            .ToListAsync(ct).ConfigureAwait(false);
+        var ambiguous = exposes.GroupBy(r => r.ToKey, StringComparer.Ordinal)
+            .Select(g => (g.Key, Services: (IReadOnlyList<string>)[.. g.Select(r => r.FromKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)]))
+            .Where(g => g.Services.Count > 1)
+            .ToDictionary(g => g.Key, g => g.Services, StringComparer.Ordinal);
+
+        // Decisiones de las APIs que se llaman pero no son miembros (también pueden estar en el catálogo).
+        var extra = apis.Where(k => !bindings.ContainsKey(k)).ToList();
+        var decisions = bindings.Values.Concat(extra.Count == 0 ? [] : await db.Bindings.AsNoTracking()
+                .Where(b => b.AppId == snapshot.AppId && b.SourceId == snapshot.SourceId && extra.Contains(b.EntityKey))
+                .ToListAsync(ct).ConfigureAwait(false))
+            .Where(b => b.Active)
+            .ToDictionary(b => b.EntityKey, b => new DraftDecision(b.Decision!, b.TargetKind, b.TargetId), StringComparer.Ordinal);
+
+        var planned = new Dictionary<string, (Guid Id, string Title)>(StringComparer.Ordinal);
+        foreach (var op in operations.Where(o => o.Op == "create" && o.Id is not null && createData.ContainsKey(o.EntityKey)))
+        {
+            using var document = JsonDocument.Parse(createData[op.EntityKey]);
+            if (CatalogDraft.Kinds.Contains(document.RootElement.GetProperty("kind").GetString()!))
+            {
+                planned[op.EntityKey] = (op.Id!.Value, CatalogDraft.From(document.RootElement).Title.Trim());
+            }
+        }
+
+        var catalogTitles = existing.Where(t => t.TargetKind == CatalogItem).ToDictionary(t => t.Id, t => t.Title);
+        var interfaces = new Dictionary<Guid, List<ModuleInterface>>();
+        foreach (var module in existing.Where(t => t.TargetKind == ModuleTarget))
+        {
+            var graph = await canvasReader.GraphOfFeatureAsync(module.Id, ct).ConfigureAwait(false);
+            if (!graph.TryGetProperty("interfaces", out var list) || !graph.TryGetProperty("nodes", out var nodes))
+            {
+                continue;
+            }
+
+            foreach (var item in list.EnumerateObject().Select(p => p.Value))
+            {
+                if (item.GetProperty("kind").GetString() == "provides"
+                    && nodes.TryGetProperty(item.GetProperty("nodeId").GetString()!, out var node)
+                    && node.GetProperty("type").GetString() == "ref"
+                    && Guid.TryParse(node.GetProperty("catalogId").GetString(), out var catalogId))
+                {
+                    if (!interfaces.TryGetValue(catalogId, out var found))
+                    {
+                        interfaces[catalogId] = found = [];
+                    }
+
+                    found.Add(new ModuleInterface(module.Id, module.Title, item.GetProperty("id").GetString()!, item.GetProperty("name").GetString()!));
+                }
+            }
+        }
+
+        return new DraftContext(
+            memberData, relations, decisions, planned, catalogTitles, ambiguous,
+            interfaces.ToDictionary(p => p.Key, p => (IReadOnlyList<ModuleInterface>)p.Value));
     }
 
     /// <summary>Los detectores de la evidencia de un hallazgo (para avisar de una base que solo es un modelo de EF).</summary>
@@ -470,9 +694,11 @@ internal sealed partial class ApplyHandlers(
                 ApplyId = applyId,
                 Index = step.Index,
                 EntityKey = step.EntityKey,
-                TargetKind = CatalogItem,
+                TargetKind = step.Kind,
                 TargetId = step.Id,
-                Item = JsonSerializer.Serialize(step.Item, Json),
+                Item = step.Item is not null
+                    ? JsonSerializer.Serialize(step.Item, Json)
+                    : JsonSerializer.Serialize(new { name = step.Name, description = step.Description }, Json),
                 Status = ApplyStep.Planned,
             });
         }
@@ -512,24 +738,20 @@ internal sealed partial class ApplyHandlers(
         {
             var record = await db.Applies.FirstAsync(a => a.ApplyId == applyId).ConfigureAwait(false);
             var plan = JsonSerializer.Deserialize<StoredPlan>(record.Plan!, Json)!;
-            var steps = await db.ApplySteps.Where(s => s.ApplyId == applyId).OrderBy(s => s.Index).ToListAsync().ConfigureAwait(false);
-            foreach (var step in steps.Where(s => s.Status == ApplyStep.Planned))
+            var steps = (await db.ApplySteps.Where(s => s.ApplyId == applyId).ToListAsync().ConfigureAwait(false))
+                .OrderBy(s => Phase(s.TargetKind)).ThenBy(s => s.Index).ToList();
+            // Por fases: el catálogo, después los módulos y al final las features (el lienzo de cada uno puede apuntar a lo
+            // anterior). Cada paso que se termina se marca, así un reintento sigue donde quedó.
+            foreach (var step in steps)
             {
-                var item = plan.Creates.Single(c => c.Index == step.Index).Item;
-                var outcome = await apps.CreateCatalogItemAsync(record.AppId, step.TargetId, item, record.CreatedBy, CancellationToken.None)
-                    .ConfigureAwait(false);
-                if (outcome == CatalogItemCreation.IdTaken)
+                if (step.TargetKind == CatalogItem && step.Status == ApplyStep.Planned)
                 {
-                    // El id es de otro elemento: nada de esta aplicación que deshacer en ese paso.
-                    step.Status = ApplyStep.Compensated;
-                    await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
-                    throw new InvalidOperationException($"El id {step.TargetId} ya es de otro elemento del catálogo.");
+                    await CreateCatalogStepAsync(record, plan, step).ConfigureAwait(false);
                 }
-
-                step.Status = ApplyStep.Created;
-                record.UpdatedAt = clock.GetUtcNowForDb();
-                await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
-                await checkpoints.ReachedAsync(string.Create(CultureInfo.InvariantCulture, $"created:{step.Index}"), applyId).ConfigureAwait(false);
+                else if (step.TargetKind != CatalogItem && step.Status is ApplyStep.Planned or ApplyStep.Created)
+                {
+                    await CreateContainerStepAsync(record, plan, step).ConfigureAwait(false);
+                }
             }
 
             await checkpoints.ReachedAsync("finalize", applyId).ConfigureAwait(false);
@@ -570,6 +792,65 @@ internal sealed partial class ApplyHandlers(
         }
     }
 
+    /// <summary>Orden de ejecución por tipo: catálogo, módulos, features (al compensar, al revés).</summary>
+    private static int Phase(string targetKind) => targetKind switch { CatalogItem => 0, ModuleTarget => 1, _ => 2 };
+
+    private async Task CreateCatalogStepAsync(ApplyRecord record, StoredPlan plan, ApplyStep step)
+    {
+        var item = plan.Creates.Single(c => c.Index == step.Index).Item!;
+        var outcome = await apps.CreateCatalogItemAsync(record.AppId, step.TargetId, item, record.CreatedBy, CancellationToken.None)
+            .ConfigureAwait(false);
+        if (outcome == CatalogItemCreation.IdTaken)
+        {
+            // El id es de otro elemento: nada de esta aplicación que deshacer en ese paso.
+            step.Status = ApplyStep.Compensated;
+            await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+            throw new InvalidOperationException($"El id {step.TargetId} ya es de otro elemento del catálogo.");
+        }
+
+        step.Status = ApplyStep.Created;
+        record.UpdatedAt = clock.GetUtcNowForDb();
+        await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+        await checkpoints.ReachedAsync(string.Create(CultureInfo.InvariantCulture, $"created:{step.Index}"), step.ApplyId).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Un módulo o una feature en dos pasos que se marcan por separado: la fila (<c>created</c>) y su primer lienzo con
+    /// sus interfaces, que se guardan juntos en el mismo guardado del lienzo (<c>saved</c>). Los dos son idempotentes: un
+    /// reintento no duplica la fila ni pisa un lienzo que ya existe (aunque una persona ya lo haya editado).
+    /// </summary>
+    private async Task CreateContainerStepAsync(ApplyRecord record, StoredPlan plan, ApplyStep step)
+    {
+        var create = plan.Creates.Single(c => c.Index == step.Index);
+        if (step.Status == ApplyStep.Planned)
+        {
+            var outcome = await apps.CreateFeatureAsync(record.AppId, step.TargetId, step.TargetKind, create.Name, create.Description, record.CreatedBy, CancellationToken.None)
+                .ConfigureAwait(false);
+            if (outcome == FeatureCreation.IdTaken)
+            {
+                step.Status = ApplyStep.Compensated;
+                await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+                throw new InvalidOperationException($"El id {step.TargetId} ya es de otra feature o módulo.");
+            }
+
+            step.Status = ApplyStep.Created;
+            record.UpdatedAt = clock.GetUtcNowForDb();
+            await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+            await checkpoints.ReachedAsync(string.Create(CultureInfo.InvariantCulture, $"created:{step.Index}"), step.ApplyId).ConfigureAwait(false);
+        }
+
+        var (canvas, errors) = await canvases.CreateInitialAsync(step.TargetId, create.Graph!.Value, record.CreatedBy, CancellationToken.None).ConfigureAwait(false);
+        if (canvas == InitialCanvas.Invalid)
+        {
+            throw new InvalidOperationException("El lienzo inicial no se pudo guardar: " + string.Join("; ", errors.Select(e => $"{e.Key}: {string.Join(" ", e.Value)}")));
+        }
+
+        step.Status = ApplyStep.Saved;
+        record.UpdatedAt = clock.GetUtcNowForDb();
+        await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+        await checkpoints.ReachedAsync(string.Create(CultureInfo.InvariantCulture, $"canvas:{step.Index}"), step.ApplyId).ConfigureAwait(false);
+    }
+
     /// <summary>
     /// Deshace una aplicación que falló: borra lo que creó solo si nadie lo tocó, libera las reservas y la deja
     /// <c>compensated</c>. Lo que no se puede borrar sin perder un cambio se deja (paso <c>kept</c>) y se avisa.
@@ -580,28 +861,36 @@ internal sealed partial class ApplyHandlers(
         {
             var record = await db.Applies.FirstAsync(a => a.ApplyId == applyId).ConfigureAwait(false);
             var plan = JsonSerializer.Deserialize<StoredPlan>(record.Plan!, Json)!;
-            var steps = await db.ApplySteps.Where(s => s.ApplyId == applyId).OrderByDescending(s => s.Index).ToListAsync().ConfigureAwait(false);
+            var steps = (await db.ApplySteps.Where(s => s.ApplyId == applyId).ToListAsync().ConfigureAwait(false))
+                .OrderByDescending(s => Phase(s.TargetKind)).ThenByDescending(s => s.Index).ToList();
             var warnings = new List<DiscoveryApplyWarning>
             {
                 new("compensated", "No se pudo terminar la aplicación: se deshizo lo que había creado y no quedó ninguna decisión guardada."),
             };
             var kept = new List<DiscoveryTarget>();
             // Un paso planned también se intenta: pudo crearse justo antes de que fallara marcarlo.
-            foreach (var step in steps.Where(s => s.Status is ApplyStep.Created or ApplyStep.Planned))
+            foreach (var step in steps.Where(s => s.Status is ApplyStep.Created or ApplyStep.Planned or ApplyStep.Saved))
             {
-                var removal = await apps.DeleteUntouchedCatalogItemAsync(record.AppId, step.TargetId, CancellationToken.None).ConfigureAwait(false);
-                if (removal is CatalogItemRemoval.Deleted or CatalogItemRemoval.NotFound)
+                var create = plan.Creates.Single(c => c.Index == step.Index);
+                var why = step.TargetKind == CatalogItem
+                    ? await apps.DeleteUntouchedCatalogItemAsync(record.AppId, step.TargetId, CancellationToken.None).ConfigureAwait(false) switch
+                    {
+                        CatalogItemRemoval.Deleted or CatalogItemRemoval.NotFound => null,
+                        CatalogItemRemoval.Edited => "alguien ya lo editó",
+                        _ => "un lienzo ya lo usa",
+                    }
+                    : await RemoveContainerAsync(record.AppId, step.TargetId, create).ConfigureAwait(false);
+                if (why is null)
                 {
                     step.Status = ApplyStep.Compensated;
                 }
                 else
                 {
                     step.Status = ApplyStep.Kept;
-                    var title = plan.Creates.Single(c => c.Index == step.Index).Item.Title.Trim();
-                    kept.Add(new DiscoveryTarget(CatalogItem, step.TargetId, title));
+                    kept.Add(new DiscoveryTarget(step.TargetKind, step.TargetId, create.Name));
+                    var where = step.TargetKind == CatalogItem ? "en el catálogo" : "en la app";
                     warnings.Add(new DiscoveryApplyWarning("compensation-kept", Truncate(
-                        $"«{title}» se creó y no se borró: {(removal == CatalogItemRemoval.Edited ? "alguien ya lo editó" : "un lienzo ya lo usa")}. "
-                        + "Quedó en el catálogo sin vínculo; vincúlalo desde la revisión si corresponde.", 500), step.EntityKey));
+                        $"«{create.Name}» se creó y no se borró: {why}. Quedó {where} sin vínculo; vincúlalo desde la revisión si corresponde.", 500), step.EntityKey));
                 }
 
                 await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
@@ -643,6 +932,24 @@ internal sealed partial class ApplyHandlers(
             return new ApplyOutcome.Unfinished(
                 "No se pudo terminar ni deshacer la aplicación: quedó pendiente. Reintenta con el mismo applyId para terminarla.");
         }
+    }
+
+    /// <summary>
+    /// Deshace un módulo o una feature de esta aplicación sin perder nada de una persona: primero su lienzo (solo si
+    /// sigue en la versión 1 y ningún otro lienzo lo usa) y después la fila (solo si conserva su nombre y descripción).
+    /// Null si se deshizo o nunca se creó; si no, por qué se dejó.
+    /// </summary>
+    private async Task<string?> RemoveContainerAsync(Guid appId, Guid id, CreateStep create)
+    {
+        var canvas = await canvases.DeleteUntouchedAsync(id, CancellationToken.None).ConfigureAwait(false);
+        if (canvas != CanvasRemoval.Deleted)
+        {
+            return canvas == CanvasRemoval.Edited ? "alguien ya editó su lienzo" : "otro lienzo ya lo usa";
+        }
+
+        return await apps.DeleteUntouchedFeatureAsync(appId, id, create.Name, create.Description, CancellationToken.None).ConfigureAwait(false) == FeatureRemoval.Edited
+            ? "alguien ya le cambió el nombre o la descripción"
+            : null;
     }
 
     /// <summary>
@@ -745,9 +1052,17 @@ internal sealed partial class ApplyHandlers(
     /// <summary>Una decisión validada: con su destino (vinculado o creado) y el fingerprint del hallazgo.</summary>
     private sealed record StoredOp(string Op, string EntityKey, string? Fingerprint, DiscoveryTarget? Target, string? Note);
 
-    private sealed record CreateStep(int Index, string EntityKey, Guid Id, CreateCatalogItemRequest Item);
+    /// <summary>
+    /// Un paso que escribe fuera de Discovery: un elemento del catálogo (<see cref="Item"/>) o un módulo o una feature
+    /// (<see cref="Name"/>, <see cref="Description"/> y su primer lienzo, <see cref="Graph"/>, ya validado).
+    /// </summary>
+    private sealed record CreateStep(
+        int Index, string EntityKey, string Kind, Guid Id, CreateCatalogItemRequest? Item, string Name, string? Description, JsonElement? Graph);
 
-    private sealed record Operation(string Op, string EntityKey, DiscoveryTarget? Target, Guid? Id, int? BindingVersion, string? Note)
+    private sealed record EntityRow(string Key, string Kind, string Fingerprint);
+
+    private sealed record Operation(
+        string Op, string EntityKey, DiscoveryTarget? Target, Guid? Id, int? BindingVersion, string? Note, string? Name = null, JsonElement? Canvas = null)
     {
         public static Operation Read(JsonElement op) => new(
             op.GetProperty("op").GetString()!,
@@ -757,6 +1072,8 @@ internal sealed partial class ApplyHandlers(
                 : null,
             op.TryGetProperty("id", out var id) ? id.GetGuid() : null,
             op.TryGetProperty("bindingVersion", out var version) ? version.GetInt32() : null,
-            op.TryGetProperty("note", out var note) ? note.GetString() : null);
+            op.TryGetProperty("note", out var note) ? note.GetString() : null,
+            op.TryGetProperty("name", out var name) ? name.GetString() : null,
+            op.TryGetProperty("canvas", out var canvas) ? canvas.Clone() : null);
     }
 }

@@ -166,7 +166,7 @@ public sealed class DiscoveryCatalogTests(WalkieApiFactory factory)
     }
 
     [Theory]
-    [InlineData("modulo-todavia-no", "/operations/0/op")]
+    [InlineData("modulo-sin-apis-en-el-catalogo", "/operations/0/entityKey")]
     [InlineData("titulo-en-blanco", "/operations/0/item/Title")]
     [InlineData("id-repetido-en-la-solicitud", "/operations/1/id")]
     [InlineData("crear-sin-id", "/operations/0")]
@@ -187,7 +187,7 @@ public sealed class DiscoveryCatalogTests(WalkieApiFactory factory)
         var id = Guid.CreateVersion7();
         JsonObject[] operations = variant switch
         {
-            "modulo-todavia-no" => [Create(Module, id)],
+            "modulo-sin-apis-en-el-catalogo" => [Create(Module, id)], // tarea 9: su lienzo necesita sus APIs en el catálogo
             "titulo-en-blanco" => [Create(Get, id)],
             "id-repetido-en-la-solicitud" => [Create(Get, id), Create(Post, id)],
             "crear-sin-id" => [new JsonObject { ["op"] = "create", ["entityKey"] = Get }],

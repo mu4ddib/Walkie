@@ -2,8 +2,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Walkie.Shared\Walkie.Shared.csproj" />
-    <!-- Solo para saber si la app existe (IAppDirectory). Discovery no escribe en ningún otro módulo en esta tarea. -->
+    <!-- Apps: la app, el catálogo, crear elementos, features y módulos (IAppWriter). Canvas: el primer lienzo de lo que
+         se crea (ICanvasWriter) y las interfaces de los módulos que ya existen (ICanvasReader). Ninguno depende de Discovery. -->
     <ProjectReference Include="..\Walkie.Modules.Apps\Walkie.Modules.Apps.csproj" />
+    <ProjectReference Include="..\Walkie.Modules.Canvas\Walkie.Modules.Canvas.csproj" />
   </ItemGroup>
 
   <ItemGroup>

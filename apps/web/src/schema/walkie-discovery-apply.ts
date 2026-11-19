@@ -19,6 +19,11 @@ export type Operation = {
    */
   bindingVersion?: number;
   note?: string;
+  /**
+   * Solo en create de module o feature: el nombre con que se crea (sin él, el del hallazgo; si ya hay uno igual, con su app técnica entre paréntesis)
+   */
+  name?: string;
+  canvas?: Canvas;
 } & {
   /**
    * create: crea el elemento (api/service/database/resource → catálogo; module → módulo con su lienzo e interfaces; feature → feature con su lienzo inicial y sus pantallas) con el id dado; link: vincula a un elemento existente sin cambiarlo; reject: descarta; reset: quita el vínculo (el elemento creado o vinculado sigue igual)
@@ -38,6 +43,11 @@ export type Operation = {
    */
   bindingVersion?: number;
   note?: string;
+  /**
+   * Solo en create de module o feature: el nombre con que se crea (sin él, el del hallazgo; si ya hay uno igual, con su app técnica entre paréntesis)
+   */
+  name?: string;
+  canvas?: Canvas;
 };
 
 /**
@@ -67,4 +77,39 @@ export interface Target {
    * Último nombre conocido (informativo, como el title de un ref)
    */
   title?: string;
+}
+/**
+ * Solo en create de module o feature (tarea 9): los ids (UUID v7 del cliente) y las posiciones de cada clave del borrador del lienzo que devolvió la vista previa (created[].canvas). Obligatorio al aplicar; en la vista previa, sin él se devuelve el borrador y con él, también el grafo validado. Tiene que cubrir exactamente las claves del borrador, sin ids repetidos ni cajas encimadas
+ */
+export interface Canvas {
+  nodes: Ids;
+  edges: Ids1;
+  interfaces?: Ids2;
+  /**
+   * Clave de cada caja → posición
+   */
+  layout: {
+    [k: string]: {
+      x: number;
+      y: number;
+    };
+  };
+}
+/**
+ * Clave de cada caja del borrador → id del nodo
+ */
+export interface Ids {
+  [k: string]: string;
+}
+/**
+ * Clave de cada conexión → id de la conexión
+ */
+export interface Ids1 {
+  [k: string]: string;
+}
+/**
+ * Clave de cada interfaz (solo module) → id de la interfaz
+ */
+export interface Ids2 {
+  [k: string]: string;
 }

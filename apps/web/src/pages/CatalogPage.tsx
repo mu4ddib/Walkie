@@ -189,7 +189,7 @@ function ItemDetail({ appId, itemId }: { appId: string; itemId: string }) {
           />
           <Usages appId={appId} itemId={itemId} />
           {/* Walkie Live (tarea 6): de qué hallazgos viene; no aparece sin Discovery ni sin vínculos. */}
-          <ItemProvenance appId={appId} itemId={itemId} />
+          <ItemProvenance appId={appId} target={`catalogItem:${itemId}`} />
           <DeleteItem appId={appId} itemId={itemId} />
         </>
       )}

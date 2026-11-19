@@ -79,7 +79,7 @@ Cada tarea cabe en una sesión y en un PR.
    - rutas → `screen` y candidatos a feature;
    - llamadas HTTP con URL verificable → relación con `api`;
    - navegación → `navigates`.
-9. [ ] (#171) Aplicar módulos y features: módulo con su lienzo e interfaces `provides` y feature con lienzo inicial (pantallas y `ref`, ubicadas con `freeSpot`/`autoLayout`).
+9. [x] (#171) Aplicar módulos y features: módulo con su lienzo e interfaces `provides` y feature con lienzo inicial (pantallas y `ref`, ubicadas con `autoLayout`).
 10. [ ] (#172) Reanalizar: diferencias con el análisis anterior (cambiado, ya no aparece; sin borrar nada) y «Crear app desde proyecto local» (`POST /api/sources/import`).
 11. [ ] (#173) Rendimiento y E2E de punta a punta con Walkie analizándose a sí mismo; límites del paquete medidos.
 
@@ -130,4 +130,24 @@ Dependencias:
 - **`skipped`:** solo cambió su descripción en el schema.
 - **Pruebas:** 12 de la CLI (`AppScopeTests` y monorepo), 5 de integración (`DiscoveryAppScopeTests`: paquete v0 migrado igual que uno nuevo, v0 ambiguo rechazado, decisiones v0 movidas sin `changed`/`missing` falsos, ambiguas sin reasignar, sin contraparte = `missing`), 4 puras de la migración y los ejemplos congelados, 1 de Vitest (`legacyBinding`).
 
-Sigue: revisar la precisión de lo descubierto en el front antes de la tarea 9.
+Tarea 9 hecha (crear módulos y features con su lienzo; ADR-0012):
+
+- **API:** `create` de `module` y `feature` en `POST /api/snapshots/{id}/apply`.
+  - **Borrador (`CanvasDraft`, puro):**
+    - feature: pantallas de una sola app técnica, navegación observada, llamadas a lo ya decidido o creado en la misma solicitud, y por la interfaz del único módulo que la ofrece;
+    - módulo: sus APIs en el catálogo y sus interfaces `provides`;
+    - fuera, con código y porqué: lo descartado, lo sin decidir, lo ambiguo (`ambiguous-api`).
+  - **Ids y posiciones:** del cliente (`canvas`), validados (cubren el borrador, sin repetir ni encimar) y con `ICanvasWriter.Validate`.
+  - **Nombre:** con la app técnica si ya hay uno igual («Pedidos (admin)») o el que elige la persona (`name`).
+  - **Bitácora:** pasos catálogo → módulos → features; `created` (fila, `IAppWriter.CreateFeatureAsync` idempotente) y `saved` (lienzo e interfaces juntos, `ICanvasWriter.CreateInitialAsync`, nunca pisa uno existente). Compensación sin perder ediciones (`ICanvasWriter.DeleteUntouchedAsync`, `IAppWriter.DeleteUntouchedFeatureAsync`). Migración `ApplyContainers` (estado `saved`).
+  - **Vínculos:** la feature y cada una de sus pantallas (`created` hacia la feature).
+- **Web:**
+  - «Crear feature…» y «Crear módulo…» en el inspector, con una vista previa: nombre editable, pantallas, a qué llama, conexiones, interfaces, lo que no entra y avisos; y «Crear también en el catálogo las APIs que faltan».
+  - `initialCanvas.ts` da los ids y ubica con `autoLayout` (ahora con medidas, `LayoutMetrics`).
+  - «Abrir la feature» o «Abrir el módulo»; «De dónde viene» en el lienzo de una feature (franja) y de un módulo (su franja).
+- **Pruebas:**
+  - 13 de integración (`DiscoveryCanvasTests`): feature con navegación y llamadas sin tocar otros lienzos; dos «Pedidos»; módulo con interfaces y feature que lo usa; tres caídas; compensación con y sin edición; reanalizar sin sobrescribir; lienzos mal armados.
+  - 8 de Vitest (`initialCanvas.test.ts`, `createContainer.test.tsx`).
+  - El E2E `walkie-live-lienzos.spec.ts`: monorepo, dos «Pedidos», módulo, feature con navegación, catálogo existente, API ambigua, interrupción de red, edición manual y reanálisis. Abre los lienzos en menos de 250 ms, y «Ver todo» corre a 60 cuadros sin tareas largas.
+
+Sigue: revisión técnica, funcional y visual antes de la tarea 10.

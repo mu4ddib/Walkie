@@ -26,6 +26,8 @@ export interface DiscoverySeed {
   upload?: { summary: DiscoveryUpload['summary']; snapshot: DiscoverySnapshot; duplicate?: 'pack' | 'content' };
   /** Contrato de los hallazgos a crear por clave (lo que la API sacaría del paquete); sin él, solo tipo y título. */
   contracts?: Record<string, Partial<CatalogItem>>;
+  /** Borrador del lienzo inicial de cada módulo o feature por clave (tarea 9): lo que la API armaría del análisis. */
+  drafts?: Record<string, NonNullable<DiscoveryApplyResult['created'][number]['canvas']>>;
 }
 
 const CREATABLE = ['api', 'service', 'database', 'resource'];
@@ -157,7 +159,25 @@ export function fakeDiscovery(seed: DiscoverySeed | undefined, json: Json, catal
         const item = review.items.find((i) => i.key === op.entityKey);
         if (!item) return json(400, { title: 'Hallazgo desconocido', status: 400 });
         if ((item.binding?.version ?? 0) !== op.bindingVersion) return json(409, { title: 'La decisión cambió', status: 409 });
-        if (op.op === 'create') {
+        if (op.op === 'create' && (item.kind === 'feature' || item.kind === 'module')) {
+          // Tarea 9: un módulo o una feature con su lienzo inicial. Al aplicar exige los ids y posiciones de cada clave.
+          const draft = seed.drafts?.[item.key];
+          if (!draft) return json(400, { title: 'Error de validación', status: 400, errors: { '/operations/0/entityKey': ['Sin borrador.'] } });
+          if (item.binding) return json(409, { title: 'Ya tiene una decisión', status: 409 });
+          const keys = draft.nodes.map((n) => n.key).sort();
+          if (!dryRun && (!op.canvas || Object.keys(op.canvas.nodes).sort().join() !== keys.join() || Object.keys(op.canvas.layout).sort().join() !== keys.join())) {
+            return json(400, { title: 'Error de validación', status: 400, errors: { '/operations/0/canvas': ['Falta el lienzo inicial o no coincide.'] } });
+          }
+          const alsoCreated = new Set(body.operations.filter((o) => o.op === 'create').map((o) => o.entityKey));
+          const canvas = { ...draft, omitted: draft.omitted.filter((o) => !alsoCreated.has(o.key)) };
+          const target: DiscoveryTarget = { kind: item.kind, id: op.id!, title: op.name ?? item.title };
+          result.created.push({ entityKey: item.key, target, includes: keys, canvas });
+          result.warnings.push({ code: 'inferred', message: 'Walkie dedujo esta feature de las rutas: revisa el nombre y lo que agrupa.', entityKey: item.key });
+          for (const o of canvas.omitted.filter((x) => x.code === 'ambiguous-api')) {
+            result.warnings.push({ code: 'ambiguous-api', message: o.message, entityKey: item.key });
+          }
+          if (!dryRun) decide(item, 'created', snapshotId, body.applyId, target);
+        } else if (op.op === 'create') {
           if (!CREATABLE.includes(item.kind)) return json(400, { title: 'Error de validación', status: 400, errors: { '/operations/0/op': ['Todavía no.'] } });
           if (item.binding) return json(409, { title: 'Ya tiene una decisión', status: 409 });
           const appId = appOf(review.sourceId);

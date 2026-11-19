@@ -226,6 +226,9 @@ internal sealed class ApplyStep
 {
     public const string Planned = "planned";
     public const string Created = "created";
+
+    /// <summary>Módulo o feature con su primer lienzo (y sus interfaces) guardado: el paso terminó.</summary>
+    public const string Saved = "saved";
     public const string Compensated = "compensated";
 
     /// <summary>Se dejó al compensar porque alguien lo editó o un lienzo lo usa: no se pierde ese cambio.</summary>
@@ -237,12 +240,15 @@ internal sealed class ApplyStep
 
     public required string EntityKey { get; init; }
 
-    /// <summary><c>catalogItem</c> (módulos y features llegan en la tarea 9).</summary>
+    /// <summary><c>catalogItem</c>, <c>module</c> o <c>feature</c> (tarea 9).</summary>
     public required string TargetKind { get; init; }
 
     public Guid TargetId { get; init; }
 
-    /// <summary>Lo que se crea (<c>CreateCatalogItemRequest</c> como <c>jsonb</c>), calculado del hallazgo al planificar.</summary>
+    /// <summary>
+    /// Lo que se crea, calculado del hallazgo al planificar: un <c>CreateCatalogItemRequest</c>, o el nombre y la
+    /// descripción de un módulo o una feature (su lienzo va en el plan), como <c>jsonb</c>.
+    /// </summary>
     public required string Item { get; init; }
 
     public required string Status { get; set; }

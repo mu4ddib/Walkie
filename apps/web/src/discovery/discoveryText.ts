@@ -48,6 +48,9 @@ export const STATUS_ORDER: DiscoveryStatus[] = ['new', 'matched', 'changed', 'mi
 /** Lo que se puede crear en el catálogo desde un hallazgo (tarea 6). Módulos y features llegan en la tarea 9. */
 export const CREATABLE_KINDS: readonly string[] = ['api', 'service', 'database', 'resource'];
 
+/** Hallazgos que se crean con su lienzo inicial (tarea 9). Una pantalla entra con su feature. */
+export const CONTAINER_KINDS: readonly string[] = ['module', 'feature'];
+
 export const KIND: Record<string, string> = {
   api: 'API',
   service: 'Servicio',

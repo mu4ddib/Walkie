@@ -16,6 +16,35 @@
     }
   },
   "$defs": {
+    "canvas": {
+      "type": "object",
+      "description": "Solo en create de module o feature (tarea 9): los ids (UUID v7 del cliente) y las posiciones de cada clave del borrador del lienzo que devolvió la vista previa (created[].canvas). Obligatorio al aplicar; en la vista previa, sin él se devuelve el borrador y con él, también el grafo validado. Tiene que cubrir exactamente las claves del borrador, sin ids repetidos ni cajas encimadas",
+      "required": ["nodes", "edges", "layout"],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": { "$ref": "#/$defs/ids", "description": "Clave de cada caja del borrador → id del nodo" },
+        "edges": { "$ref": "#/$defs/ids", "description": "Clave de cada conexión → id de la conexión" },
+        "interfaces": { "$ref": "#/$defs/ids", "description": "Clave de cada interfaz (solo module) → id de la interfaz" },
+        "layout": {
+          "type": "object",
+          "maxProperties": 1000,
+          "propertyNames": { "maxLength": 500 },
+          "description": "Clave de cada caja → posición",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["x", "y"],
+            "additionalProperties": false,
+            "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+          }
+        }
+      }
+    },
+    "ids": {
+      "type": "object",
+      "maxProperties": 1000,
+      "propertyNames": { "maxLength": 500 },
+      "additionalProperties": { "type": "string", "format": "uuid" }
+    },
     "operation": {
       "type": "object",
       "required": ["op", "entityKey"],
@@ -29,12 +58,14 @@
         "id": { "type": "string", "format": "uuid", "description": "Solo en create: UUID v7 del cliente para lo que se crea (idempotente)" },
         "target": { "$ref": "walkie-discovery-binding.schema.json#/$defs/target", "description": "Solo en link" },
         "bindingVersion": { "type": "integer", "minimum": 0, "description": "Versión del vínculo que se espera (0: que no haya ninguno); si no coincide, 409" },
-        "note": { "type": "string", "maxLength": 500 }
+        "note": { "type": "string", "maxLength": 500 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Solo en create de module o feature: el nombre con que se crea (sin él, el del hallazgo; si ya hay uno igual, con su app técnica entre paréntesis)" },
+        "canvas": { "$ref": "#/$defs/canvas" }
       },
       "allOf": [
         { "if": { "properties": { "op": { "const": "create" } } }, "then": { "required": ["id"], "not": { "required": ["target"] } } },
-        { "if": { "properties": { "op": { "const": "link" } } }, "then": { "required": ["target"], "not": { "required": ["id"] } } },
-        { "if": { "properties": { "op": { "enum": ["reject", "reset"] } } }, "then": { "not": { "anyOf": [{ "required": ["id"] }, { "required": ["target"] }] } } }
+        { "if": { "properties": { "op": { "const": "link" } } }, "then": { "required": ["target"], "not": { "anyOf": [{ "required": ["id"] }, { "required": ["name"] }, { "required": ["canvas"] }] } } },
+        { "if": { "properties": { "op": { "enum": ["reject", "reset"] } } }, "then": { "not": { "anyOf": [{ "required": ["id"] }, { "required": ["target"] }, { "required": ["name"] }, { "required": ["canvas"] }] } } }
       ]
     }
   }

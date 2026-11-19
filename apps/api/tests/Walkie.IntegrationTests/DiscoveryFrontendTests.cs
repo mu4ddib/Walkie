@@ -41,7 +41,7 @@ public sealed class DiscoveryFrontendTests(WalkieApiFactory factory)
         Assert.Equal("react-router", evidence.GetProperty("evidence")[0].GetProperty("detector").GetString());
         Assert.Equal("web/src/main.tsx", evidence.GetProperty("evidence")[0].GetProperty("path").GetString());
 
-        // Crear pantallas o features es de la tarea 9.
+        // Una pantalla no se crea sola, y una feature no se crea sin su lienzo inicial (tarea 9: ids y posiciones del cliente).
         foreach (var key in new[] { "screen:web:/pedidos", "feature:web:Pedidos" })
         {
             var refused = await ApplyAsync(client, snapshotId, new JsonObject { ["op"] = "create", ["entityKey"] = key, ["id"] = Guid.CreateVersion7().ToString() });

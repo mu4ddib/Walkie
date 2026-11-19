@@ -94,7 +94,7 @@ test('importar un proyecto local analizado con la CLI y revisarlo', async ({ pag
   const feature = list.getByRole('button', { name: /feature:web:Pedidos/ });
   await expect(feature).toContainText('inferido');
   await feature.click();
-  await expect(page.getByRole('complementary', { name: 'Detalle del hallazgo' })).toContainText('Crear módulos y features desde un hallazgo llegará más adelante');
+  await expect(page.getByRole('complementary', { name: 'Detalle del hallazgo' }).getByRole('button', { name: 'Crear feature…' })).toBeVisible();
 
   await post.click();
   const inspector = page.getByRole('complementary', { name: 'Detalle del hallazgo' });
@@ -174,7 +174,7 @@ test('crear en el catálogo un hallazgo del análisis real y abrirlo con su proc
   await expect(detail.getByLabel('Título')).toBeEditable();
   await capture(page, 'catalogo-procedencia');
 
-  // Ni features ni lienzos nuevos: eso llega con la tarea 9.
+  // Crear en el catálogo no crea features ni lienzos (eso es «Crear feature…» o «Crear módulo…», tarea 9).
   await page.goto(appUrl);
   await expect(page.getByRole('heading', { name: 'Aún no hay features' })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Features' })).toHaveCount(0);

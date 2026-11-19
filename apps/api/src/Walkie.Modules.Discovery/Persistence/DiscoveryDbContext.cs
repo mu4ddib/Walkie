@@ -208,7 +208,7 @@ internal sealed class DiscoveryDbContext(DbContextOptions<DiscoveryDbContext> op
             step.HasOne<ApplyRecord>().WithMany().HasForeignKey(s => s.ApplyId).OnDelete(DeleteBehavior.Restrict);
             // Un id del cliente es de una sola aplicación: dos aplicaciones no pueden planificar el mismo elemento.
             step.HasIndex(s => s.TargetId).IsUnique().HasDatabaseName("ux_apply_steps_target");
-            step.ToTable(t => t.HasCheckConstraint("ck_apply_steps_status", "status IN ('planned', 'created', 'compensated', 'kept')"));
+            step.ToTable(t => t.HasCheckConstraint("ck_apply_steps_status", "status IN ('planned', 'created', 'saved', 'compensated', 'kept')"));
         });
     }
 }

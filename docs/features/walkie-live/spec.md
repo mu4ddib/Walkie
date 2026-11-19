@@ -45,18 +45,18 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 - [x] Cada hallazgo muestra su evidencia (archivo, líneas, detector, confianza) y sus relaciones.
 - [x] Puedo descartar un hallazgo; el descarte se recuerda en los análisis siguientes de la misma fuente.
 - [x] Puedo vincular un hallazgo a un elemento existente del catálogo o a un módulo en vez de crear uno nuevo; una coincidencia por título nunca se vincula sola.
-- [ ] Puedo elegir qué nuevos elementos del catálogo, módulos (con sus interfaces) y features propuestas crear.
+- [x] Puedo elegir qué nuevos elementos del catálogo, módulos (con sus interfaces) y features propuestas crear.
 - [ ] Antes de aplicar veo una vista previa calculada por la API con las mismas validaciones que aplicar (`dryRun`): qué se crea, qué se vincula, qué se descarta y qué no cambia; si algo no se puede aplicar, lo dice con su motivo antes de confirmar.
 - [x] Con miles de hallazgos, la revisión pagina y filtra sin bloquear la interfaz.
 
 ### Aplicar
 
-- [ ] Cuando aplico, entonces se crea únicamente lo aprobado: elementos del catálogo, módulos con su lienzo e interfaces y features nuevas con un lienzo inicial (sus pantallas y `ref` a los componentes del catálogo, ubicados sin superponerse). *Elementos del catálogo: hecho (tarea 6). Módulos y features: tarea 9.*
+- [x] Cuando aplico, entonces se crea únicamente lo aprobado: elementos del catálogo, módulos con su lienzo e interfaces y features nuevas con un lienzo inicial (sus pantallas y `ref` a los componentes del catálogo, ubicados sin superponerse). *Elementos del catálogo: hecho (tarea 6). Módulos y features: hecho (tarea 9); la distribución sale de `autoLayout` y las conexiones son solo las observadas.*
 - [x] Aplicar no modifica ningún lienzo existente: ni nodos, conexiones, referencias, módulos, interfaces, portales, layouts, grupos, notas ni tours (su `version` y su contenido quedan iguales).
 - [x] Vincular un hallazgo a un elemento existente no cambia ese elemento: ni su título, ni su descripción, ni su contrato.
 - [x] Aplicar no elimina nada que ya existiera. Lo que ya no aparece en un reanálisis solo se marca en la revisión. (Deshacer una aplicación fallida borra solo lo que ella misma creó y nadie tocó.)
 - [x] Aplicar dos veces (reintento, doble clic) no duplica nada; si algo falla a mitad, se deshace lo creado que nadie tocó (lo editado o usado se deja y se avisa); si el proceso se cae a mitad, el siguiente intento con el mismo `applyId`, o la siguiente aplicación que toque esos hallazgos, lo completa (bitácora de aplicación, ADR-0012). La revisión no lo retoma: sigue de solo lectura.
-- [ ] Después de aplicar, cada componente creado o vinculado se abre en el editor actual (catálogo, módulo o feature), y desde el componente puedo ver de qué evidencia viene. *Catálogo: hecho (tarea 6, «De dónde viene» en su detalle). Módulos y features: tarea 9.*
+- [x] Después de aplicar, cada componente creado o vinculado se abre en el editor actual (catálogo, módulo o feature), y desde el componente puedo ver de qué evidencia viene. *Catálogo: hecho (tarea 6, «De dónde viene» en su detalle). Módulos y features: hecho (tarea 9, «De dónde viene» en su franja).*
 - [x] Crear en el catálogo no inventa datos: copia lo que el análisis vio, avisa lo que queda vacío y si el hallazgo es inferido o una base solo lógica (EF), y no crea un segundo elemento con la misma firma (pide vincular).
 - [x] Si un elemento vinculado o creado se borra a mano, la revisión y su procedencia lo dicen en vez de presentarlo como un vínculo válido.
 

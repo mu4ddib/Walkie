@@ -134,7 +134,7 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
 
                     b.ToTable("apply_steps", "discovery", t =>
                         {
-                            t.HasCheckConstraint("ck_apply_steps_status", "status IN ('planned', 'created', 'compensated', 'kept')");
+                            t.HasCheckConstraint("ck_apply_steps_status", "status IN ('planned', 'created', 'saved', 'compensated', 'kept')");
                         });
                 });
 

@@ -54,6 +54,21 @@ public interface IAppWriter
     /// </summary>
     Task<CatalogItemRemoval> DeleteUntouchedCatalogItemAsync(Guid appId, Guid itemId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Crea una feature o un módulo (<paramref name="kind"/>: <c>feature</c> o <c>module</c>) con el id que generó el
+    /// cliente (Discovery, spec walkie-live tarea 9). Idempotente por id: si ya existe en esa app y con ese tipo (un
+    /// reintento del mismo plan), no escribe nada. Nombre y descripción ya dentro de sus límites.
+    /// </summary>
+    Task<FeatureCreation> CreateFeatureAsync(
+        Guid appId, Guid featureId, string kind, string name, string? description, string userId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Borra una feature o un módulo creado por una operación que se deshace, solo si nadie le cambió el nombre ni la
+    /// descripción (<paramref name="name"/> y <paramref name="description"/> son los que se crearon). Su lienzo lo
+    /// borra antes <c>ICanvasWriter</c>, con sus propias reglas: este método no lo mira.
+    /// </summary>
+    Task<FeatureRemoval> DeleteUntouchedFeatureAsync(Guid appId, Guid featureId, string name, string? description, CancellationToken cancellationToken);
+
     /// <summary>Borra features (deshacer una importación).</summary>
     Task DeleteFeaturesAsync(IReadOnlyCollection<Guid> featureIds, CancellationToken cancellationToken);
 

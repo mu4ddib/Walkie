@@ -5,6 +5,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Walkie Live, **crear módulos y features con su lienzo inicial** (spec `walkie-live`, tarea 9, #171; ADR-0012):
+  - **Feature:** en la revisión, «Crear feature…» convierte un candidato en una feature nueva, con sus pantallas, la navegación que el análisis vio entre ellas y sus llamadas a las APIs que ya están en el catálogo (o a la interfaz del módulo que las ofrece).
+  - **Módulo:** «Crear módulo…» crea un módulo con sus APIs y las interfaces que su código justifica.
+  - **Vista previa:** antes de crear, muestra el nombre (editable), qué entra al lienzo y qué no, con el porqué: una pantalla descartada, una API sin decidir (se puede crear en la misma solicitud) o una API que publican varios backends, que no se conecta para no adivinar a cuál llama.
+  - **Qué no se inventa ni se mezcla:** no hay respuestas, códigos ni pasos que el análisis no vio, y no se mezclan pantallas de apps distintas: dos «Pedidos» de dos apps son dos features («Pedidos» y «Pedidos (admin)»).
+  - **El lienzo:** se distribuye como el mapa de la app, sin cajas encimadas, y se abre en el editor de siempre, con «De dónde viene».
+  - **Sin duplicar ni perder trabajo:** un reintento o una caída a mitad no duplica nada. Si algo falla, se deshace solo lo que nadie tocó. Un análisis nuevo nunca sobrescribe lo que alguien editó.
 - Walkie Live, **el front entra al análisis** (spec `walkie-live`, tarea 8, #170; ADR-0013): `walkie scan` descubre las pantallas, la navegación y las llamadas a la API de apps **React Router, Next.js (App Router y Pages Router) y Angular**, sin ejecutar nada.
   - **Pantallas:** una pantalla es una ruta con componente, nunca un componente cualquiera. Se siguen las rutas anidadas, los índices, las cargas diferidas (`lazy`, `loadChildren` también con NgModules, `loadComponent`) y las constantes importadas.
   - **Llamadas:** `fetch`, `axios` y `HttpClient` con una URL verificable se relacionan con la misma API que ya vio el backend, sin duplicarla.

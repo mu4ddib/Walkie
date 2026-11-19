@@ -497,3 +497,37 @@
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+
+/* Tarea 9: origen de una feature o un módulo, lo que no entra al lienzo inicial. */
+.discovery-origin-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--dune-200);
+  background: var(--sand);
+  font-size: 13px;
+}
+
+.discovery-origin .discovery-provenance {
+  max-width: 420px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.discovery-omitted {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+}
+
+.discovery-omitted li + li {
+  margin-top: 4px;
+}
+
+.discovery-check {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}

@@ -118,7 +118,7 @@ describe('crear en el catálogo desde la revisión', () => {
     expect(api.discovery.applies).toHaveLength(0);
   });
 
-  it('no ofrece crear pantallas, módulos, lo ya decidido ni lo que ya no aparece', async () => {
+  it('no ofrece crear en el catálogo pantallas, módulos, lo ya decidido ni lo que ya no aparece', async () => {
     const decided = item({ key: 'database:postgresql/tienda', kind: 'database', title: 'tienda', status: 'rejected' });
     decided.binding = {
       sourceId: SOURCE.id,
@@ -143,8 +143,11 @@ describe('crear en el catálogo desde la revisión', () => {
       await userEvent.click(row(name));
       expect(within(inspector()).queryByRole('button', { name: /Crear en el catálogo/ })).not.toBeInTheDocument();
     }
+    // Un módulo se crea con su lienzo (tarea 9), no en el catálogo; una pantalla entra con su feature.
     await userEvent.click(row(/module:/));
-    expect(inspector()).toHaveTextContent('Crear módulos y features desde un hallazgo llegará más adelante');
+    expect(within(inspector()).getByRole('button', { name: 'Crear módulo…' })).toBeInTheDocument();
+    await userEvent.click(row(/screen:/));
+    expect(within(inspector()).queryByRole('button', { name: /^Crear/ })).not.toBeInTheDocument();
   });
 
   it('si la API compensa, lo dice y no muestra un elemento creado', async () => {

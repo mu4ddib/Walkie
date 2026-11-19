@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Walkie.Modules.Apps.Contracts;
 
@@ -69,7 +70,48 @@ public sealed record DiscoveryReviewResponse(
 public sealed record DiscoveryAppliedTarget(
     string EntityKey,
     DiscoveryTarget Target,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CatalogItemResponse? Item = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CatalogItemResponse? Item = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Includes = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiscoveryCanvasDraft? Canvas = null);
+
+/// <summary>
+/// El lienzo inicial de un módulo o una feature que se crea (tarea 9): sus cajas, conexiones e interfaces por clave del
+/// borrador, lo que se dejó fuera y por qué, y —cuando la solicitud trae los ids y las posiciones— el grafo tal como se
+/// guardará (<c>walkie-graph</c>).
+/// </summary>
+public sealed record DiscoveryCanvasDraft(
+    IReadOnlyList<DiscoveryDraftNode> Nodes,
+    IReadOnlyList<DiscoveryDraftEdge> Edges,
+    IReadOnlyList<DiscoveryDraftInterface> Interfaces,
+    IReadOnlyList<DiscoveryDraftOmission> Omitted,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Graph = null);
+
+/// <summary>Una caja del borrador: pantalla propia, <c>ref</c> a un elemento del catálogo o caja de un módulo.</summary>
+public sealed record DiscoveryDraftNode(
+    string Key,
+    string Type,
+    string Title,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Route = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? CatalogId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ModuleId = null);
+
+/// <summary>Una conexión del borrador, de una relación observada (<c>navigates</c> o <c>calls</c>).</summary>
+public sealed record DiscoveryDraftEdge(
+    string Key,
+    string From,
+    string To,
+    string Kind,
+    string Operation,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiscoveryInterfaceRef? ToInterface = null);
+
+/// <summary>Una interfaz de un módulo existente en un extremo de una conexión (id estable y último nombre).</summary>
+public sealed record DiscoveryInterfaceRef(string Id, string Name);
+
+/// <summary>Una interfaz del módulo que se crea, implementada por la caja <see cref="Node"/>.</summary>
+public sealed record DiscoveryDraftInterface(string Key, string Name, string Kind, string Node);
+
+/// <summary>Algo del hallazgo que no entra al lienzo, con un código estable y el porqué.</summary>
+public sealed record DiscoveryDraftOmission(string Key, string Code, string Message);
 
 public sealed record DiscoveryApplyWarning(
     string Code,
