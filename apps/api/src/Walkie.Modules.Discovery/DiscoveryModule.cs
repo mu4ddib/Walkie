@@ -43,7 +43,8 @@ public static partial class DiscoveryModule
     /// <c>POST /api/apps/{appId}/sources/snapshots</c>, <c>GET /api/apps/{appId}/sources</c>,
     /// <c>GET /api/snapshots/{snapshotId}/review</c>, <c>GET /api/snapshots/{snapshotId}/evidence</c>,
     /// <c>POST /api/snapshots/{snapshotId}/apply</c> y <c>GET /api/apps/{appId}/bindings</c>. Si Discovery está encendido fuera de Development, lo avisa en el
-    /// log: falta la autorización por app (bloqueo de seguridad de ADR-0012).
+    /// log: la autorización por app (ADR-0015) ya protege los análisis, pero el piloto sigue bloqueado por lo que falta
+    /// (validacion.md §17 y §18).
     /// </summary>
     public static IEndpointRouteBuilder MapDiscoveryModule(this IEndpointRouteBuilder routes)
     {
@@ -70,6 +71,6 @@ public static partial class DiscoveryModule
         npgsql.MigrationsHistoryTable("__ef_migrations_history", DiscoveryDbContext.Schema);
 
     [LoggerMessage(Level = LogLevel.Warning,
-        Message = "Discovery está encendido fuera de Development. Falta la autorización por app (ADR-0012): cualquier usuario autenticado vería los análisis de cualquier app. No lo uses con proyectos privados ni usuarios reales.")]
+        Message = "Discovery está encendido fuera de Development. La autorización por app (ADR-0015) protege los análisis, pero faltan la retención de datos, la CLI firmada y la precisión del analizador (docs/features/walkie-live/validacion.md §17 y §18). No lo uses todavía con usuarios reales.")]
     private static partial void LogEnabledOutsideDevelopment(ILogger logger);
 }

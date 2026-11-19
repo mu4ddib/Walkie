@@ -17,31 +17,31 @@ Que cada app solo la vean y cambien las personas que son miembros, con un rol (`
 
 **Membresías y roles**
 
-- [ ] Dada una app nueva (creada vacía, importada de un `.walkie` o desde un proyecto local), cuando se crea, entonces quien la creó queda como `owner` en la misma operación.
-- [ ] Dadas las apps que ya existían, cuando se migra la base, entonces cada una tiene como `owner` a quien la creó (`created_by`), y nada más cambia.
-- [ ] Dado un `viewer`, entonces lee todo lo de la app (features, módulos, catálogo, lienzos, imágenes, mapa, export, análisis, evidencia, procedencia) y no puede cambiar nada.
-- [ ] Dado un `editor`, entonces además crea y edita features, módulos, catálogo, lienzos, mapa, imágenes, importa a la app, sube análisis y decide en la revisión. No borra elementos del catálogo ni módulos, no maneja enlaces de solo lectura ni miembros.
-- [ ] Dado un `owner`, entonces además borra, crea, lista y revoca enlaces de solo lectura, y administra miembros.
+- [x] Dada una app nueva (creada vacía, importada de un `.walkie` o desde un proyecto local), cuando se crea, entonces quien la creó queda como `owner` en la misma operación.
+- [x] Dadas las apps que ya existían, cuando se migra la base, entonces cada una tiene como `owner` a quien la creó (`created_by`), y nada más cambia.
+- [x] Dado un `viewer`, entonces lee todo lo de la app (features, módulos, catálogo, lienzos, imágenes, mapa, export, análisis, evidencia, procedencia) y no puede cambiar nada.
+- [x] Dado un `editor`, entonces además crea y edita features, módulos, catálogo, lienzos, mapa, imágenes, importa a la app, sube análisis y decide en la revisión. No borra elementos del catálogo ni módulos, no maneja enlaces de solo lectura ni miembros.
+- [x] Dado un `owner`, entonces además borra, crea, lista y revoca enlaces de solo lectura, y administra miembros.
 
 **Acceso indebido**
 
-- [ ] Dada una persona que no es miembro, cuando pide cualquier recurso de esa app (por id de app, feature, módulo, elemento, imagen, enlace o análisis), entonces recibe **404**, como si no existiera.
-- [ ] Dado un miembro con rol insuficiente, cuando intenta una acción de un rol mayor, entonces recibe **403** con un mensaje claro.
-- [ ] Dado `GET /api/apps`, entonces solo lista las apps de las que soy miembro, cada una con mi rol.
-- [ ] Dado un endpoint nuevo con un recurso de app en la ruta y sin protección, entonces una prueba automática falla.
-- [ ] Los enlaces públicos de solo lectura (ADR-0005) siguen funcionando sin sesión.
+- [x] Dada una persona que no es miembro, cuando pide cualquier recurso de esa app (por id de app, feature, módulo, elemento, imagen, enlace o análisis), entonces recibe **404**, como si no existiera.
+- [x] Dado un miembro con rol insuficiente, cuando intenta una acción de un rol mayor, entonces recibe **403** con un mensaje claro.
+- [x] Dado `GET /api/apps`, entonces solo lista las apps de las que soy miembro, cada una con mi rol.
+- [x] Dado un endpoint nuevo con un recurso de app en la ruta y sin protección, entonces una prueba automática falla.
+- [x] Los enlaces públicos de solo lectura (ADR-0005) siguen funcionando sin sesión.
 
 **Miembros**
 
-- [ ] Dado un `owner`, cuando agrega a alguien por correo con un rol, entonces esa persona pasa a ver la app; si el correo es de alguien que nunca entró a Walkie, se le dice que primero inicie sesión.
-- [ ] Dado un `owner`, cuando cambia un rol o quita a alguien, entonces se aplica de inmediato. Cualquier miembro puede quitarse a sí mismo.
-- [ ] Siempre queda al menos un `owner` (409 si se intenta quitar o degradar al último).
+- [x] Dado un `owner`, cuando agrega a alguien por correo con un rol, entonces esa persona pasa a ver la app; si el correo es de alguien que nunca entró a Walkie, se le dice que primero inicie sesión.
+- [x] Dado un `owner`, cuando cambia un rol o quita a alguien, entonces se aplica de inmediato. Cualquier miembro puede quitarse a sí mismo.
+- [x] Siempre queda al menos un `owner` (409 si se intenta quitar o degradar al último).
 
 **Web**
 
-- [ ] Dado un `viewer`, entonces ve los lienzos en solo lectura (sin paleta, edición, guardar ni compartir) y no ve acciones de crear, editar, borrar, importar ni decidir; exportar sigue disponible.
-- [ ] Dado un `owner`, entonces tiene «Miembros» en la página de la app: lista con rol, agregar por correo, cambiar rol, quitar.
-- [ ] Dado un 404 o 403 de acceso, entonces la web dice «No tienes acceso a esta app» (o el motivo del 403), sin pantallas rotas.
+- [x] Dado un `viewer`, entonces ve los lienzos en solo lectura (sin paleta, edición, guardar ni compartir) y no ve acciones de crear, editar, borrar, importar ni decidir; exportar sigue disponible.
+- [x] Dado un `owner`, entonces tiene «Miembros» en la página de la app: lista con rol, agregar por correo, cambiar rol, quitar.
+- [x] Dado un 404 o 403 de acceso, entonces la web dice «No tienes acceso a esta app» (o el motivo del 403), sin pantallas rotas.
 
 ## Fuera de alcance
 

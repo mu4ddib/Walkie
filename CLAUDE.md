@@ -32,7 +32,7 @@ App → Catálogo (nodos reutilizables: api, service, database, resource; y mód
 | Analizar un proyecto local (Walkie Live) | `dotnet run --project apps/cli/src/Walkie.Cli -- scan <carpeta> -o <archivo>.walkiepack` (o instalada: `walkie scan .`) |
 | Pruebas del analizador y la CLI (sin Docker) | `dotnet test apps/cli/Walkie.Cli.slnx` |
 
-API en http://localhost:5080 (OpenAPI en `/openapi/v1.json` en Development), web en http://localhost:5173, Keycloak en http://localhost:8080 (usuario de prueba `dev` / `walkie_dev`). Actualiza esta tabla si cambian.
+API en http://localhost:5080 (OpenAPI en `/openapi/v1.json` en Development), web en http://localhost:5173, Keycloak en http://localhost:8080 (usuarios de prueba `dev` / `walkie_dev` y `dev2` / `walkie_dev2`, ficticios). Actualiza esta tabla si cambian.
 
 ## Reglas
 

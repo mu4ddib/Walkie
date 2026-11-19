@@ -16,7 +16,7 @@ Basado en `spec.md` (aprobada el 2026-11-19) y ADR-0015. Es el incremento D1 de 
 1. [x] (#175) Membresías, usuarios y filtro en la API, aplicado a todos los endpoints; owner al crear; `GET /api/apps` filtrado.
 2. [x] Miembros (API y schema) y pruebas: guardia de cobertura, matriz IDOR, migración.
 3. [x] Web: rol, solo lectura para viewer, «Miembros», mensajes de acceso.
-4. [ ] E2E con dos usuarios reales, documentación y validación completa.
+4. [x] E2E con dos usuarios reales, documentación y validación completa.
 
 ## Pruebas
 
@@ -26,4 +26,4 @@ Basado en `spec.md` (aprobada el 2026-11-19) y ADR-0015. Es el incremento D1 de 
 
 ## Estado
 
-Última actualización: 2026-11-19, nube — tareas 1 y 2 hechas: membresías, filtro único en todos los endpoints, miembros, schema `walkie-app-member` y pruebas (guardia de cobertura, matriz IDOR, migración). Tarea 3 hecha: rol en la app, solo lectura para viewer (lienzo, catálogo, módulos, mapa, revisión), «Miembros» y mensajes de acceso. Sigue la tarea 4 (E2E con `dev2`, documentación y validación).
+Última actualización: 2026-11-19, nube — las cuatro tareas hechas. API: membresías, filtro único en todos los endpoints, miembros, schema `walkie-app-member`; pruebas de guardia, matriz IDOR, miembros y migración (614 pruebas de integración en verde). Web: rol, solo lectura para viewer, «Miembros» y mensajes de acceso (521 Vitest). E2E `autorizacion-por-app.spec.ts` con `dev` y `dev2` y la suite completa en verde (66). Pendiente: revisión del PR draft; D2 y D3 van en PR aparte.

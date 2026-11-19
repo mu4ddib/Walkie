@@ -5,6 +5,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Autorización por app** (spec `autorizacion-por-app`, #175; ADR-0015):
+  - **Miembros y roles:** cada app tiene miembros `owner`, `editor` o `viewer`. Quien crea una app (vacía, importada de un `.walkie` o desde un proyecto local) queda como owner en la misma operación, y la migración da owner a quien creó cada app existente.
+  - **En toda la API:** un solo filtro protege apps, features, módulos, catálogo, lienzos, mapa, imágenes, enlaces, export e import, análisis, evidencia y procedencia. Quien no es miembro recibe 404, como si no existiera; un rol menor, 403 con el motivo. `GET /api/apps` lista solo mis apps, con mi rol. Una prueba falla si un endpoint nuevo queda sin protección. Los enlaces públicos siguen igual.
+  - **«Miembros»:** en la página de la app, el owner suma por correo a alguien que ya entró a Walkie, cambia roles y quita; cualquiera sale. La app nunca queda sin owner. `GET/POST /api/apps/{appId}/members`, `PUT/DELETE …/members/{userId}` y `walkie-app-member.schema.json`.
+  - **Solo lectura para viewer:** lienzos, catálogo, módulos, mapa y revisión de Walkie Live se ven sin poder cambiarlos; exportar sigue. Compartir y borrar son del owner.
+  - **Desarrollo:** usuario ficticio `dev2` en el realm de Keycloak para probar con dos personas.
 - Walkie Live, **validación integral** (spec `walkie-live`, tarea 11, #173): Walkie analizándose a sí mismo de punta a punta, verificación no destructiva sobre una app documentada a mano, límites, concurrencia, matriz de rendimiento, migraciones de ida y vuelta, E2E en WebKit y ADR-0015 (autorización por app, propuesto y bloqueante para el piloto). Resultados en `docs/features/walkie-live/validacion.md`.
 - Walkie Live, **reanalizar y crear una app desde un proyecto local** (spec `walkie-live`, tarea 10, #172; ADR-0012 y ADR-0014):
   - **Comparar con el análisis anterior:** la revisión dice con qué análisis se compara (fecha, commit, completo o parcial) y marca qué es nuevo, qué cambió, qué sigue igual y qué requiere revisión; cada cifra filtra la lista. Lo decidido que el análisis nuevo no podía ver (un detector que no corrió, fuera del alcance) queda «Sin cobertura» con el porqué, nunca como «Ya no aparece». Nada se borra, ningún lienzo, catálogo, módulo, interfaz ni tour cambia, y las decisiones se conservan.

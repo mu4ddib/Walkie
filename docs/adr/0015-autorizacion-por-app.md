@@ -1,6 +1,6 @@
 # ADR-0015: Autorización por app con membresías y roles
 
-- Estado: aceptado (2026-11-19). Se implementa en `docs/features/autorizacion-por-app`; hasta que esté en `main`, sigue siendo bloqueante para cualquier piloto de Walkie Live con proyectos privados
+- Estado: aceptado (2026-11-19). Implementado en la rama `feat/autorizacion-por-app` (`docs/features/autorizacion-por-app`); hasta que esté en `main`, sigue siendo bloqueante para cualquier piloto de Walkie Live con proyectos privados
 - Fecha: 2026-11-19
 
 ## Contexto
