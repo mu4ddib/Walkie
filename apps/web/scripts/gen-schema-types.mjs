@@ -37,6 +37,20 @@ const targets = [
   { schema: 'walkie-module-summary.schema.json', out: 'walkie-module-summary.ts', name: 'WalkieModuleSummary' },
   { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },
   { schema: 'walkie-app-map.schema.json', out: 'walkie-app-map.ts', name: 'WalkieAppMap' },
+  // .walkiepack (spec walkie-live, ADR-0013). Sin `imports`: declaran los `$defs` del grafo y del discovery que usan.
+  { schema: 'walkie-discovery.schema.json', out: 'walkie-discovery.ts', name: 'WalkieDiscovery' },
+  { schema: 'walkie-discovery-pack.schema.json', out: 'walkie-discovery-pack.ts', name: 'WalkieDiscoveryPack' },
+  { schema: 'walkie-discovery-binding.schema.json', out: 'walkie-discovery-binding.ts', name: 'WalkieDiscoveryBinding' },
+  { schema: 'walkie-discovery-snapshot.schema.json', out: 'walkie-discovery-snapshot.ts', name: 'WalkieDiscoverySnapshot' },
+  { schema: 'walkie-discovery-review.schema.json', out: 'walkie-discovery-review.ts', name: 'WalkieDiscoveryReview' },
+  { schema: 'walkie-discovery-apply.schema.json', out: 'walkie-discovery-apply.ts', name: 'WalkieDiscoveryApply' },
+  { schema: 'walkie-discovery-apply-result.schema.json', out: 'walkie-discovery-apply-result.ts', name: 'WalkieDiscoveryApplyResult' },
+  { schema: 'walkie-discovery-upload.schema.json', out: 'walkie-discovery-upload.ts', name: 'WalkieDiscoveryUpload' },
+  { schema: 'walkie-discovery-sources.schema.json', out: 'walkie-discovery-sources.ts', name: 'WalkieDiscoverySources' },
+  { schema: 'walkie-discovery-evidence.schema.json', out: 'walkie-discovery-evidence.ts', name: 'WalkieDiscoveryEvidence' },
+  { schema: 'walkie-discovery-provenance.schema.json', out: 'walkie-discovery-provenance.ts', name: 'WalkieDiscoveryProvenance' },
+  { schema: 'walkie-discovery-source-import.schema.json', out: 'walkie-discovery-source-import.ts', name: 'WalkieDiscoverySourceImport' },
+  { schema: 'walkie-discovery-status.schema.json', out: 'walkie-discovery-status.ts', name: 'WalkieDiscoveryStatus' },
   // Usa `$ref` a otros schemas: sus tipos se importan de su propio archivo en vez de repetirse.
   {
     schema: 'walkie-shared-feature.schema.json',

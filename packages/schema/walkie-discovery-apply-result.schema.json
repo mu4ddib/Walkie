@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-apply-result.schema.json",
+  "title": "Walkie discovery apply result v0",
+  "description": "Resultado de walkie-discovery-apply (spec walkie-live, ADR-0012): con dryRun, la vista previa (status planned, nada escrito); sin él, lo que quedó escrito. unchanged lista lo que las operaciones no tocan a propósito, para que la vista previa diga también qué no cambia.",
+  "type": "object",
+  "required": [
+    "applyId",
+    "dryRun",
+    "status",
+    "created",
+    "linked",
+    "rejected",
+    "reset",
+    "unchanged",
+    "warnings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "applyId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "planned",
+        "completed",
+        "compensated"
+      ],
+      "description": "planned: vista previa; completed: todo escrito; compensated: falló a mitad y se deshizo lo creado que nadie había tocado (bitácora, ADR-0012); lo que no se pudo deshacer sin perder un cambio queda y lo dice un aviso compensation-kept"
+    },
+    "created": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "entityKey",
+          "target"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entityKey": {
+            "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+          },
+          "target": {
+            "$ref": "walkie-discovery-binding.schema.json#/$defs/target"
+          },
+          "includes": {
+            "type": "array",
+            "description": "En un módulo o una feature: las claves de las cajas de su lienzo inicial (pantallas, APIs y módulos)",
+            "items": {
+              "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+            }
+          },
+          "item": {
+            "$ref": "walkie-catalog-item.schema.json",
+            "description": "Solo en un elemento del catálogo (tarea 6): el elemento tal como queda —o quedaría, en la vista previa— con el id que dio el cliente y version 1. Sale del hallazgo sin agregar nada que el análisis no vio"
+          },
+          "canvas": {
+            "$ref": "#/$defs/canvas",
+            "description": "Solo en un módulo o una feature (tarea 9): su lienzo inicial"
+          }
+        }
+      }
+    },
+    "linked": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "entityKey",
+          "target"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entityKey": {
+            "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+          },
+          "target": {
+            "$ref": "walkie-discovery-binding.schema.json#/$defs/target"
+          }
+        }
+      }
+    },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+      }
+    },
+    "reset": {
+      "type": "array",
+      "items": {
+        "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+      }
+    },
+    "unchanged": {
+      "type": "array",
+      "description": "Elementos de Walkie que las operaciones no modifican (lienzos existentes que usan lo vinculado, elementos vinculados)",
+      "items": {
+        "$ref": "walkie-discovery-binding.schema.json#/$defs/target"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Avisos para la persona, ej. inferred (Walkie lo dedujo), logical-database (un modelo de EF, no una base física confirmada), to-complete (campos sin evidencia que quedan vacíos), same-title (ya hay uno con el mismo nombre), target-kept (restablecer no cambia el elemento), compensated, compensation-kept, ambiguous-api (una llamada a una API que publican varios servicios no se conecta) y omitted (partes del hallazgo que no entran al lienzo)",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "maxLength": 60
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "entityKey": {
+            "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "canvas": {
+      "type": "object",
+      "description": "Borrador del lienzo inicial de un módulo o una feature (spec walkie-live, tarea 9): solo lo que el análisis observó y una persona ya decidió. Las claves son de este borrador (de hallazgos, de relaciones o walkie-module:<id> para la caja de un módulo existente); la solicitud les da ids y posiciones. Sin respuestas, códigos ni pasos internos que el análisis no vio",
+      "required": [
+        "nodes",
+        "edges",
+        "interfaces",
+        "omitted"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "type",
+              "title"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "type": {
+                "enum": [
+                  "screen",
+                  "ref",
+                  "module"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "route": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "Solo screen: su ruta (va en la descripción de la caja)"
+              },
+              "catalogId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Solo ref: el elemento del catálogo (decidido o creado en esta solicitud)"
+              },
+              "moduleId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Solo module: el módulo existente que ofrece la interfaz"
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "from",
+              "to",
+              "kind",
+              "operation"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "from": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "to": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "kind": {
+                "enum": [
+                  "navigation",
+                  "request"
+                ]
+              },
+              "operation": {
+                "enum": [
+                  "navigation",
+                  "http.request"
+                ]
+              },
+              "toInterface": {
+                "$ref": "walkie-graph.schema.json#/$defs/interfaceRef",
+                "description": "Interfaz del módulo de destino que ofrece esa API"
+              }
+            }
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "name",
+              "kind",
+              "node"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "kind": {
+                "enum": [
+                  "provides",
+                  "event",
+                  "requires"
+                ]
+              },
+              "node": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          }
+        },
+        "omitted": {
+          "type": "array",
+          "description": "Lo que no entra y por qué: screen-rejected, screen-decided, api-undecided, api-rejected, api-target-missing, ambiguous-api",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "code",
+              "message"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "code": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "maxLength": 60
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          }
+        },
+        "graph": {
+          "$ref": "walkie-graph.schema.json",
+          "description": "Con los ids y las posiciones de la solicitud: el grafo tal como se guarda (versión 0 antes de guardar)"
+        }
+      }
+    }
+  }
+}

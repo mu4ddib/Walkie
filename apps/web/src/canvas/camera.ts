@@ -122,7 +122,16 @@ export function createCamera(host: CameraHost, env: CameraEnv = browserEnv): Cam
       // Una petición nueva reemplaza a la pendiente: la anterior resuelve `false` y esta parte de la vista actual.
       stop(false);
       const duration = env.reducedMotion() ? 0 : (options.duration ?? CAMERA_MS);
-      if (sameView(host.getViewport(), target)) return Promise.resolve(true);
+      const current = host.getViewport();
+      if (sameView(current, target)) {
+        // Casi igual no es igual: sin animar (sería invisible), pero se fija el destino exacto. Si no, un movimiento
+        // cortado en su primer cuadro (ej. salir de un tour enseguida) dejaba la vista corrida para siempre.
+        if (current.x !== target.x || current.y !== target.y || current.zoom !== target.zoom) {
+          host.setViewport(target);
+          settled(target);
+        }
+        return Promise.resolve(true);
+      }
       if (duration <= 0) {
         host.setViewport(target);
         settled(target);

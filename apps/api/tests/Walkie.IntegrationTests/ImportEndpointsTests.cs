@@ -317,6 +317,13 @@ public sealed class ImportEndpointsTests(WalkieApiFactory factory)
             inner.CreateMapAsync(appId, positions, userId, cancellationToken);
 
         public Task DeleteMapAsync(Guid appId, CancellationToken cancellationToken) => inner.DeleteMapAsync(appId, cancellationToken);
+
+        public Task<(InitialCanvas Outcome, IReadOnlyDictionary<string, string[]> Errors)> CreateInitialAsync(
+            Guid featureId, JsonElement graph, string userId, CancellationToken cancellationToken) =>
+            inner.CreateInitialAsync(featureId, graph, userId, cancellationToken);
+
+        public Task<CanvasRemoval> DeleteUntouchedAsync(Guid featureId, CancellationToken cancellationToken, bool checkOnly = false) =>
+            inner.DeleteUntouchedAsync(featureId, cancellationToken, checkOnly);
     }
 
     private async Task<int> AssetCountAsync(Guid appId)

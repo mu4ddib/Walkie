@@ -1,0 +1,577 @@
+/* Walkie Live (spec walkie-live, tarea 5): importar un proyecto local y revisar lo descubierto. Arena, piedra y especia;
+   grilla de 8 px; el estado de cada hallazgo lleva siempre glifo y texto, el color solo acompaña. */
+
+.discovery-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 16px;
+  border: 2px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+}
+
+.discovery-summary p {
+  margin: 0;
+}
+
+.discovery-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.discovery-badge {
+  display: inline-block;
+  padding: 0 8px;
+  border: 2px solid currentcolor;
+  border-radius: var(--radius-s);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.discovery-badge.is-complete {
+  /* Texto oscuro y el color en el borde (tarea 11): --ok y --warn como texto no llegaban a 4,5:1 sobre arena. */
+  color: var(--ink);
+  border-color: var(--ok);
+}
+
+.discovery-badge.is-partial {
+  color: var(--ink);
+  border-color: var(--warn);
+}
+
+.discovery-meta {
+  color: var(--stone-700);
+  font-size: 13px;
+}
+
+.discovery-meta code,
+.discovery-summary code,
+.discovery-item-key,
+.discovery-evidence code,
+.discovery-facts code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.discovery-note {
+  margin: 0;
+  padding: 8px;
+  border-left: 4px solid var(--dune-300);
+  background: var(--dune-100);
+  color: var(--stone-700);
+  font-size: 13px;
+}
+
+.discovery-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.discovery-details ul {
+  margin: 4px 0;
+  padding-left: 16px;
+}
+
+.discovery-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding-left: 24px;
+}
+
+.discovery-steps > li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.discovery-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 8px;
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--sand);
+}
+
+.discovery-command code {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.discovery-command .pixel-button {
+  color: var(--sand);
+}
+
+.discovery-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  padding: 16px;
+  border: 2px dashed var(--stone-500);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  text-align: center;
+  cursor: pointer;
+}
+
+.discovery-drop:focus-within {
+  outline: 2px solid var(--ibad);
+  outline-offset: 2px;
+}
+
+.discovery-drop.is-dragging {
+  border-color: var(--spice);
+  background: var(--spice-tint);
+}
+
+.discovery-drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+/* Proyectos locales en la página de la app */
+
+.discovery-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.discovery-sources-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.discovery-sources-head h3 {
+  margin: 0;
+}
+
+.discovery-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.discovery-source .pixel-button {
+  margin-left: auto;
+}
+
+/* Revisión */
+
+.discovery-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.discovery-page h2 {
+  margin: 0;
+}
+
+.discovery-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.discovery-count {
+  padding: 4px 8px;
+  border: 2px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.discovery-count[aria-pressed='true'] {
+  border-color: var(--ibad);
+  background: var(--ibad-tint);
+}
+
+.discovery-count:focus-visible,
+.discovery-item:focus-visible {
+  outline: 2px solid var(--ibad);
+  outline-offset: 2px;
+}
+
+.discovery-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+}
+
+.discovery-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.discovery-filters .discovery-meta {
+  margin-left: auto;
+}
+
+.discovery-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .discovery-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.discovery-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.discovery-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 2px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.discovery-item > :not(.discovery-status) {
+  grid-column: 2;
+}
+
+.discovery-item[aria-current='true'] {
+  border-color: var(--ibad);
+  box-shadow: var(--shadow-pixel);
+}
+
+.discovery-item-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.discovery-item-meta {
+  color: var(--stone-700);
+  font-size: 12px;
+}
+
+.discovery-item-key {
+  color: var(--stone-700);
+}
+
+.discovery-status {
+  grid-row: 1 / span 4;
+  align-self: start;
+  margin: 0;
+  padding: 0 4px;
+  border-left: 4px solid var(--stone-500);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.discovery-status.status-new {
+  border-color: var(--spice);
+}
+
+.discovery-status.status-matched,
+.discovery-status.status-ambiguous {
+  border-color: var(--ibad);
+}
+
+.discovery-status.status-linked {
+  border-color: var(--ok);
+}
+
+.discovery-status.status-changed {
+  border-color: var(--warn);
+}
+
+.discovery-status.status-missing {
+  border-color: var(--danger);
+}
+
+.discovery-status.status-rejected {
+  border-color: var(--stone-500);
+  color: var(--stone-700);
+}
+
+.discovery-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.discovery-inspector {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 16px;
+  border: 2px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-float);
+}
+
+.discovery-inspector h3,
+.discovery-inspector h4 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.discovery-inspector h4 {
+  font-size: 14px;
+}
+
+.discovery-inspector p {
+  margin: 0;
+}
+
+.discovery-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.discovery-facts dt {
+  color: var(--stone-700);
+}
+
+.discovery-facts dd {
+  margin: 0;
+}
+
+.discovery-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 2px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand);
+}
+
+.discovery-evidence ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+  padding-left: 16px;
+}
+
+.discovery-decisions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 2px solid var(--dune-200);
+}
+
+.discovery-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.discovery-link label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.discovery-link select,
+.discovery-link input {
+  width: 100%;
+}
+
+.discovery-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 8px;
+  border: 2px solid var(--ibad);
+  border-radius: var(--radius-s);
+}
+
+.discovery-candidates legend {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Tarea 6: crear en el catálogo y procedencia */
+
+.discovery-create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.discovery-create p {
+  margin: 0;
+}
+
+.discovery-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.discovery-warnings li,
+.discovery-warning {
+  margin: 0;
+  padding: 4px 8px;
+  border-left: 4px solid var(--warn);
+  background: var(--dune-100);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.discovery-provenance {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 2px solid var(--dune-200);
+}
+
+.discovery-provenance h3,
+.discovery-provenance h4,
+.discovery-provenance p {
+  margin: 0;
+}
+
+.discovery-provenance ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.discovery-provenance code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* Tarea 9: origen de una feature o un módulo, lo que no entra al lienzo inicial. */
+.discovery-origin-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--dune-200);
+  background: var(--sand);
+  font-size: 13px;
+}
+
+.discovery-origin .discovery-provenance {
+  max-width: 420px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.discovery-omitted {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+}
+
+.discovery-omitted li + li {
+  margin-top: 4px;
+}
+
+.discovery-check {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+/* Tarea 10: comparación con el análisis anterior. Glifo y texto en cada estado, nunca solo color. */
+.discovery-comparison {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.discovery-comparison p {
+  margin: 0;
+}
+
+.discovery-change,
+.discovery-needs-review {
+  font-weight: 600;
+}
+
+.discovery-needs-review {
+  color: var(--spice-strong);
+}
+
+.new-app-name {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* Diálogos de Walkie Live con la guía de la CLI (largos): las acciones quedan siempre a la vista. */
+.local-import-dialog .import-actions {
+  position: sticky;
+  bottom: -16px;
+  margin: 0 -16px -16px;
+  padding: 8px 16px 16px;
+  border-top: 2px solid var(--dune-200);
+  background: var(--paper);
+}
+
+/* El error se lleva a la vista justo encima de la barra fija, no debajo de ella. */
+.local-import-dialog .save-error {
+  scroll-margin-bottom: 88px;
+}

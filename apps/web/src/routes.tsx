@@ -8,6 +8,7 @@ import { MapPage } from './map/MapPage';
 import { SharedFeaturePage } from './share/SharedFeaturePage';
 import { SHARED_MODULE_PATH, SHARED_PATH } from './share/sharedPath';
 import { SharedModulePage } from './share/SharedModulePage';
+import { DiscoveryReviewPage } from './discovery/DiscoveryReviewPage';
 import { HomePage } from './workspace/HomePage';
 import { APPS_PATH } from './workspace/paths';
 
@@ -23,6 +24,8 @@ export const routes: RouteObject[] = [
   { path: '/apps/:appId/features/:featureId', element: <FeatureRoute /> },
   // Lienzo de un módulo compartido (spec modulos-compartidos): el mismo editor, con su franja.
   { path: '/apps/:appId/modules/:moduleId', element: <ModuleRoute /> },
+  // Revisión de un análisis de Walkie Live (spec walkie-live, tarea 5).
+  { path: '/apps/:appId/sources/:snapshotId', element: <DiscoveryReviewPage /> },
   // Pública (ADR-0005): `App` la monta sin `AuthGate`.
   { path: SHARED_PATH, element: <SharedFeaturePage /> },
   { path: SHARED_MODULE_PATH, element: <SharedModulePage /> },

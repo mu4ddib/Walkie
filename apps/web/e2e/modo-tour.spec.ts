@@ -10,7 +10,7 @@ test('armar un tour de tres pasos, recargar idéntico, recorrerlo y terminar', a
   await login(page);
   const app = `E2E tour ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   for (const feature of ['Iniciar sesión', 'Transferir']) {
     await page.getByLabel('Nueva feature').fill(feature);
@@ -53,7 +53,17 @@ test('armar un tour de tres pasos, recargar idéntico, recorrerlo y terminar', a
   expect(await tourEditor(page)).toEqual(before);
 
   // Ver tour: solo lectura, sin paleta ni panel, barra con el paso (criterios 5 y 6).
-  const viewport = await viewportTransform(page);
+  // El encuadre inicial (fitView y la corrección por etiquetas, dos cuadros después de medir) puede seguir en curso
+  // al recargar: la vista de referencia es la que queda quieta, no la del primer instante.
+  let viewport = '';
+  await expect
+    .poll(async () => {
+      const now = await viewportTransform(page);
+      const still = now === viewport;
+      viewport = now;
+      return still;
+    }, { intervals: [150, 150, 250, 250, 500] })
+    .toBe(true);
   await page.getByRole('button', { name: 'Ver tour' }).click();
   const bar = page.getByRole('toolbar', { name: 'Tour' });
   const bubble = page.getByRole('region', { name: 'Paso del tour' });
@@ -93,7 +103,8 @@ test('armar un tour de tres pasos, recargar idéntico, recorrerlo y terminar', a
   await expect(bar).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(bar).toBeHidden();
-  expect(await viewportTransform(page)).toBe(viewport);
+  // Salir con Esc también vuelve con la transición de la cámara (como arriba): se espera a que llegue.
+  await expect.poll(() => viewportTransform(page)).toBe(viewport);
   await expect(saveStatus(page)).toHaveText('Al día');
 
   // "Ir a Transferir" desde el paso del portal abre esa feature (criterio 9).

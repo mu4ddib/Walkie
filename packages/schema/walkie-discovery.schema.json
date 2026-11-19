@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery.schema.json",
+  "title": "Walkie discovery v1",
+  "description": "discovery.json de un .walkiepack (spec walkie-live, ADR-0013 y ADR-0014): lo que el análisis estático observó o infirió (entidades y relaciones) y la evidencia que lo respalda. Toda entidad y relación cita al menos una evidencia. No hay confirmaciones: las decide una persona en Walkie (walkie-discovery-binding). Orden estable por clave (entidades, relaciones) e id (evidencia) y sin fechas: el mismo árbol da el mismo archivo. Lo que el schema no expresa (claves e ids únicos, referencias que existen, fingerprints, orden, claves normalizadas) lo valida DiscoveryPackValidator (Walkie.Shared).",
+  "type": "object",
+  "required": ["entities", "relations", "evidence"],
+  "additionalProperties": false,
+  "properties": {
+    "entities": { "type": "array", "items": { "$ref": "#/$defs/entity" } },
+    "relations": { "type": "array", "items": { "$ref": "#/$defs/relation" } },
+    "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+  },
+  "$defs": {
+    "entityKind": {
+      "enum": ["api", "service", "database", "resource", "screen", "module", "feature"],
+      "description": "api, service, database y resource se proponen como elementos del catálogo; screen como pantalla de una feature; module como módulo compartido (ADR-0010) y feature como feature con su lienzo inicial"
+    },
+    "relationKind": {
+      "enum": ["calls", "reads", "writes", "publishes", "consumes", "exposes", "depends-on", "navigates", "contains"],
+      "description": "calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base; publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra; contains: un servicio contiene un módulo"
+    },
+    "entityKey": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 500,
+      "pattern": "^(api|service|database|resource|screen|module|feature):\\S.*$",
+      "description": "Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ámbito de la app>:<ruta normalizada>, module:<nombre>, feature:<ámbito de la app>:<nombre> (formatVersion 1; en la 0, screen:<ruta> y feature:<nombre>, que siguen siendo válidas en los registros de la API: un vínculo decidido antes conserva su clave). DiscoveryKeys (Walkie.Shared) las arma"
+    },
+    "appScope": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9._~@+%-]+(/[A-Za-z0-9._~@+%-]+)*$",
+      "description": "Ámbito de una app dentro de la fuente (ADR-0014): por defecto su carpeta relativa a la raíz analizada (apps/web; . en la raíz; un carácter fuera de [A-Za-z0-9._~@+-] como %XX), o el nombre que le da .walkie/source.json (apps). Nunca tiene ':'. AppScope (Walkie.Shared) lo calcula"
+    },
+    "relationKey": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 1100,
+      "description": "<kind>:<from>-><to>"
+    },
+    "evidenceId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$", "description": "Id de una evidencia en este archivo (el analizador lo deriva de detector, ruta y ancla)" },
+    "detectorId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "maxLength": 60, "description": "Detector que produjo el hallazgo (ej. openapi, compose, csproj, package-json, aspnetcore-endpoints, efcore, react-router, angular-router)" },
+    "technologyId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]*$", "maxLength": 60, "description": "Ej. dotnet, aspnetcore, efcore, react, angular, postgresql" },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "SHA-256 del contenido de la entidad en JSON canónico (claves ordenadas, sin espacios), sin key, fingerprint, basis, confidence, derivedFrom ni evidence: cambia si cambia lo que describe, no si se mueve de línea (ADR-0014, DiscoveryFingerprint)"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!(.*/)?\\.\\.(/|$))[^\\\\\\u0000]+$",
+      "description": "Ruta relativa a la raíz del proyecto, con /: nunca absoluta, sin .. ni \\"
+    },
+    "basis": {
+      "enum": ["observed", "inferred"],
+      "description": "observed: declarado tal cual en el código o la configuración (un archivo OpenAPI, un MapGet con ruta literal, un servicio de compose); inferred: deducido por convención o heurística (un módulo por proyecto, una feature por pantalla). Ninguno es una confirmación"
+    },
+    "confidence": {
+      "enum": ["high", "medium", "low"],
+      "description": "high: sin ambigüedad (solo en lo observado); medium: convención clara; low: heurística. La revisión nunca aplica sola lo que no es high"
+    },
+    "entity": {
+      "type": "object",
+      "required": ["key", "kind", "title", "basis", "confidence", "fingerprint", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/entityKey" },
+        "kind": { "$ref": "#/$defs/entityKind" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Título propuesto (los mismos límites que el catálogo)" },
+        "description": { "type": "string", "maxLength": 2000 },
+        "technology": { "$ref": "#/$defs/technologyId", "description": "Id de una tecnología del manifest" },
+        "basis": { "$ref": "#/$defs/basis" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "derivedFrom": {
+          "type": "array",
+          "description": "Solo en lo inferido: claves de las entidades de las que se dedujo",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/entityKey" }
+        },
+        "http": { "$ref": "walkie-graph.schema.json#/$defs/http", "description": "Contrato descubierto (solo api; el mismo $defs que el catálogo y el lienzo)" },
+        "database": { "$ref": "walkie-graph.schema.json#/$defs/database", "description": "Motor y estructura descubiertos (solo database)" },
+        "resource": { "$ref": "walkie-graph.schema.json#/$defs/resource", "description": "Subtipo y detalles (solo resource; obligatorio en él)" },
+        "runtime": { "$ref": "walkie-graph.schema.json#/$defs/runtime", "description": "Dónde corre (solo service)" },
+        "route": { "type": "string", "minLength": 1, "maxLength": 500, "description": "Ruta de la pantalla en el front, ej. /apps/:appId (solo screen)" },
+        "app": { "$ref": "#/$defs/appScope", "description": "App del front a la que pertenece (solo screen y feature; obligatorio en ellas): es parte de su clave" },
+        "members": {
+          "type": "array",
+          "description": "Claves de las entidades que agrupa (solo module y feature)",
+          "items": { "$ref": "#/$defs/entityKey" }
+        },
+        "interfaces": {
+          "type": "array",
+          "description": "Interfaces propuestas del módulo (solo module; ADR-0010): cada una la implementa una entidad de members",
+          "items": {
+            "type": "object",
+            "required": ["name", "kind", "entity"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+              "kind": { "enum": ["provides", "event", "requires"] },
+              "entity": { "$ref": "#/$defs/entityKey" }
+            }
+          }
+        },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceId" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "api" } } }, "then": { "required": ["http"] } },
+        { "if": { "properties": { "kind": { "const": "resource" } } }, "then": { "required": ["resource"] } },
+        { "if": { "properties": { "kind": { "const": "screen" } } }, "then": { "required": ["route"] } },
+        { "if": { "properties": { "kind": { "enum": ["screen", "feature"] } } }, "then": { "required": ["app"] } },
+        { "if": { "properties": { "kind": { "not": { "enum": ["screen", "feature"] } } } }, "then": { "not": { "required": ["app"] } } },
+        { "if": { "properties": { "kind": { "enum": ["module", "feature"] } } }, "then": { "required": ["members"] } },
+        { "if": { "properties": { "kind": { "not": { "const": "api" } } } }, "then": { "not": { "required": ["http"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "database" } } } }, "then": { "not": { "required": ["database"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "resource" } } } }, "then": { "not": { "required": ["resource"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "service" } } } }, "then": { "not": { "required": ["runtime"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "screen" } } } }, "then": { "not": { "required": ["route"] } } },
+        { "if": { "properties": { "kind": { "not": { "enum": ["module", "feature"] } } } }, "then": { "not": { "required": ["members"] } } },
+        { "if": { "properties": { "kind": { "not": { "const": "module" } } } }, "then": { "not": { "required": ["interfaces"] } } },
+        { "if": { "properties": { "basis": { "const": "inferred" } } }, "then": { "properties": { "confidence": { "enum": ["medium", "low"] } } } },
+        { "if": { "properties": { "basis": { "const": "observed" } } }, "then": { "not": { "required": ["derivedFrom"] } } }
+      ]
+    },
+    "relation": {
+      "type": "object",
+      "required": ["key", "kind", "from", "to", "basis", "confidence", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/relationKey" },
+        "kind": { "$ref": "#/$defs/relationKind" },
+        "from": { "$ref": "#/$defs/entityKey" },
+        "to": { "$ref": "#/$defs/entityKey" },
+        "basis": { "$ref": "#/$defs/basis" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceId" } }
+      },
+      "if": { "properties": { "basis": { "const": "inferred" } } },
+      "then": { "properties": { "confidence": { "enum": ["medium", "low"] } } }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["id", "detector", "path", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/evidenceId" },
+        "detector": { "$ref": "#/$defs/detectorId" },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "symbol": { "type": "string", "minLength": 1, "maxLength": 300, "description": "Ancla estable dentro del archivo (ej. PedidosEndpoints.MapPedidos, services.db, paths./api/pedidos/{pedidoId}.get): sobrevive a que cambien las líneas" },
+        "lines": {
+          "type": "object",
+          "description": "Informativas: cambian con cualquier edición y no forman parte de ninguna identidad",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "integer", "minimum": 1 },
+            "end": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "note": { "type": "string", "maxLength": 500, "description": "Por qué el detector concluye esto (ej. «MapGet con ruta literal»)" },
+        "snippet": { "type": "string", "maxLength": 2000, "description": "Fragmento del código, solo si el manifest dice includeSnippets; nunca un archivo completo" }
+      }
+    }
+  }
+}

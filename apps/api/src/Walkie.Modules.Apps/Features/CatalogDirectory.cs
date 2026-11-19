@@ -25,6 +25,20 @@ internal sealed class CatalogDirectory(AppsDbContext db) : ICatalogDirectory
         return items.ConvertAll(CatalogHandlers.ToResponse);
     }
 
+    public async Task<IReadOnlyList<CatalogItemResponse>> ItemsByIdAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken)
+    {
+        if (itemIds.Count == 0)
+        {
+            return [];
+        }
+
+        var items = await db.CatalogItems.AsNoTracking()
+            .Where(i => itemIds.Contains(i.Id))
+            .OrderBy(i => i.Id)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return items.ConvertAll(CatalogHandlers.ToResponse);
+    }
+
     public async Task<IReadOnlyList<CatalogItemResponse>> AllItemsOfAppAsync(Guid appId, CancellationToken cancellationToken)
     {
         var items = await db.CatalogItems.AsNoTracking()

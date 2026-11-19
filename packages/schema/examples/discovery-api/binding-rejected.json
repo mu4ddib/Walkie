@@ -1,0 +1,11 @@
+{
+  "sourceId": "0198f0c0-aaaa-7000-8000-000000000001",
+  "entityKey": "feature:web:Ver pedido",
+  "decision": "rejected",
+  "entityFingerprint": "sha256:e4d330764c04d6e4d36239402241cee0055badf96235ffc355d74e4976f66c6f",
+  "snapshotId": "0198f0c0-2222-7000-8000-000000000201",
+  "note": "La pantalla ya está documentada en la feature «Seguimiento de pedidos».",
+  "decidedBy": "usuario-demo",
+  "decidedAt": "2026-11-14T12:11:00Z",
+  "version": 1
+}

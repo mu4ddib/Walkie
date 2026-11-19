@@ -1,6 +1,7 @@
 import { Link, useParams, useSearchParams } from 'react-router';
 import { useEffect } from 'react';
 import { useApp, useCanvas } from '../api/hooks';
+import { FeatureOrigin } from '../discovery/OriginPopover';
 import { FeatureEditor } from '../canvas/FeatureEditor';
 import { QueryState } from '../ui/QueryState';
 import { APPS_PATH, appPath } from '../workspace/paths';
@@ -65,6 +66,7 @@ export function FeaturePage() {
         focusId={focusId}
         focusCenter={!keepView}
         initialPlay={play ? { tourId: play, step: Number.isInteger(step) ? step : 0 } : undefined}
+        banner={<FeatureOrigin appId={appId} featureId={featureId} />}
       />
     </section>
   );

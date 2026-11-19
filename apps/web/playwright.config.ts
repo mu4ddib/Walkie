@@ -20,7 +20,11 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'off',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } }],
+  // WALKIE_BROWSER=webkit corre en el motor de Safari (local; el CI usa Chromium): `pnpm exec playwright install webkit` e `install-deps webkit`.
+  projects:
+    process.env.WALKIE_BROWSER === 'webkit'
+      ? [{ name: 'webkit', use: { ...devices['Desktop Safari'], viewport: { width: 1280, height: 800 } } }]
+      : [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } }],
   webServer: [
     {
       command: 'dotnet run --project ../api/src/Walkie.Api',

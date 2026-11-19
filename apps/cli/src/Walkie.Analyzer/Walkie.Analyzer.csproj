@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Analizador estático de Walkie Live (ADR-0013): lee un proyecto local sin ejecutar nada y arma un .walkiepack.</Description>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Roslyn solo sintáctico (MIT): ASP.NET Core y EF sin compilar ni restaurar paquetes. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+    <!-- Lector de YAML (MIT) para docker-compose y OpenAPI en YAML; solo el modelo de nodos, sin deserializar a tipos. -->
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- El contrato (schemas, claves, fingerprints, validador) vive en Walkie.Shared: no se duplica. -->
+    <ProjectReference Include="..\..\..\api\src\Walkie.Shared\Walkie.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Walkie.Analyzer.Tests" />
+  </ItemGroup>
+
+</Project>

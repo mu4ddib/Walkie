@@ -4,6 +4,7 @@ using Walkie.Modules.Apps;
 using Walkie.Modules.Canvas;
 using Walkie.Modules.Export;
 using Walkie.Modules.Files;
+using Walkie.Modules.Discovery;
 using Walkie.Modules.Sharing;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,7 @@ builder.Services.AddAppsModule(connectionString);
 builder.Services.AddCanvasModule(connectionString);
 builder.Services.AddFilesModule(connectionString, builder.Configuration);
 builder.Services.AddSharingModule(connectionString);
+builder.Services.AddDiscoveryModule(connectionString, builder.Configuration);
 builder.Services.AddExportModule();
 
 const string WebCorsPolicy = "web";
@@ -50,6 +52,7 @@ app.MapAppsModule();
 app.MapCanvasModule();
 app.MapFilesModule();
 app.MapSharingModule();
+app.MapDiscoveryModule();
 app.MapExportModule();
 
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
@@ -58,6 +61,7 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
     await app.Services.MigrateCanvasDatabaseAsync();
     await app.Services.MigrateFilesAsync();
     await app.Services.MigrateSharingDatabaseAsync();
+    await app.Services.MigrateDiscoveryDatabaseAsync();
 }
 
 await app.RunAsync();

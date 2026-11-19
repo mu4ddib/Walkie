@@ -5,6 +5,7 @@ import {
   ConnectionMode,
   ReactFlow,
   ReactFlowProvider,
+  useNodesInitialized,
   useReactFlow,
   type Connection,
   type EdgeChange,
@@ -28,6 +29,7 @@ import {
   type CanvasCatalog,
 } from '../catalog/catalogContext';
 import { InterfacePicker, type InterfaceChoice } from '../modules/InterfacePicker';
+import type { CameraOptions } from './camera';
 import { CameraContext, useCameraController } from './useCamera';
 import { KeyedValue, StableElements } from './stableElements';
 import { RectGrid, around } from '../edges/spatial';
@@ -333,6 +335,51 @@ function CanvasInner({
     },
     [inspectorOpen, catalog.share, pane.width, pane.height],
   );
+
+  // «Ver todo» encuadra las cajas y también las etiquetas de las conexiones que sobresalen de ellas: si no, una
+  // etiqueta al costado de la última caja quedaba debajo del inspector. Solo mide lo que ya está dibujado; no mueve nada.
+  const fitAll = useCallback((options?: CameraOptions, onlyIfLabelsOutside = false) => {
+    const visible = getNodes().filter((n) => !n.hidden);
+    if (visible.length === 0) return;
+    let { x, y, width, height } = getNodesBounds(visible);
+    let right = x + width;
+    let bottom = y + height;
+    for (const label of flowRef.current?.querySelectorAll<HTMLElement>('.kind-edge-label') ?? []) {
+      const r = label.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) continue;
+      const a = screenToFlowPosition({ x: r.left, y: r.top });
+      const b = screenToFlowPosition({ x: r.right, y: r.bottom });
+      x = Math.min(x, a.x);
+      y = Math.min(y, a.y);
+      right = Math.max(right, b.x);
+      bottom = Math.max(bottom, b.y);
+    }
+    const boxes = getNodesBounds(visible);
+    const wider = x < boxes.x || y < boxes.y || right > boxes.x + boxes.width || bottom > boxes.y + boxes.height;
+    if (onlyIfLabelsOutside && !wider) return; // el fitView inicial ya basta: no mover la vista ni una fracción
+    width = right - x;
+    height = bottom - y;
+    void camera.fitBounds({ x, y, width, height }, fitPadding, options);
+  }, [getNodes, getNodesBounds, screenToFlowPosition, camera, fitPadding]);
+
+  // Al abrir sin vista guardada, `fitView` encuadra solo las cajas; cuando ya están medidas y las etiquetas
+  // dibujadas (dos cuadros después), se corrige una vez con las etiquetas, sin animación.
+  const nodesInitialized = useNodesInitialized();
+  const fittedWithLabels = useRef(!fitOnMount);
+  useEffect(() => {
+    if (fittedWithLabels.current || !nodesInitialized) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        fittedWithLabels.current = true;
+        fitAll({ duration: 0 }, true);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [nodesInitialized, fitAll]);
 
   const startPreview = useCallback(
     (edgeId: string, scenario?: string, chain = true) => {
@@ -1508,7 +1555,7 @@ function CanvasInner({
       } else if (!readOnly && event.key === RESOURCE_KEY) setResourcesOpen((open) => !open);
       else if (event.key === '+' || event.key === '=') void zoomIn();
       else if (event.key === '-') void zoomOut();
-      else if (event.key === '0') void camera.fit(fitPadding);
+      else if (event.key === '0') fitAll();
       else if (!readOnly && event.key.toLowerCase() === 'i') toggleInspector();
       else if (!readOnly && event.key.toLowerCase() === 'g') createGroup();
       else if (!readOnly && event.key.toLowerCase() === 'n') addNote();
@@ -1801,7 +1848,7 @@ function CanvasInner({
           })()}
         {!playing && (
           <ZoomControls
-            onFit={() => void camera.fit(fitPadding)}
+            onFit={() => fitAll()}
             motion={{ on: edgeMotion, onToggle: toggleEdgeMotion }}
             history={
               readOnly

@@ -5,6 +5,7 @@ import { useApp, useCanvas } from '../api/hooks';
 import { ModuleDetailsForm, ModuleUsesList } from '../modules/ModuleParts';
 import { FeatureEditor } from '../canvas/FeatureEditor';
 import { useEditorNavigate } from '../canvas/editorNavigation';
+import { OriginPopover } from '../discovery/OriginPopover';
 import { Popover } from '../workspace/Popover';
 import { QueryState } from '../ui/QueryState';
 import { APPS_PATH, readModuleEntry, returnPath, type ModuleEntry } from '../workspace/paths';
@@ -129,6 +130,7 @@ function ModuleBanner({
       <Popover label="Editar el módulo" buttonLabel={<span>Editar</span>} className="module-banner-edit">
         {(close) => <ModuleDetailsForm appId={appId} module={module} onDone={close} />}
       </Popover>
+      <OriginPopover appId={appId} target={`module:${module.id}`} />
       {entry.play && entry.step === undefined && <span className="module-banner-note">Reproduciendo el recorrido interno de la interfaz.</span>}
     </div>
   );

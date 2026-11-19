@@ -21,6 +21,19 @@
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-catalog-item.schema.json" LogicalName="walkie-catalog-item.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-operations.schema.json" LogicalName="walkie-operations.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-operations.json" LogicalName="walkie-operations.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery.schema.json" LogicalName="walkie-discovery.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-pack.schema.json" LogicalName="walkie-discovery-pack.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-binding.schema.json" LogicalName="walkie-discovery-binding.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-snapshot.schema.json" LogicalName="walkie-discovery-snapshot.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-review.schema.json" LogicalName="walkie-discovery-review.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-apply.schema.json" LogicalName="walkie-discovery-apply.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-apply-result.schema.json" LogicalName="walkie-discovery-apply-result.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-upload.schema.json" LogicalName="walkie-discovery-upload.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-sources.schema.json" LogicalName="walkie-discovery-sources.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-evidence.schema.json" LogicalName="walkie-discovery-evidence.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-provenance.schema.json" LogicalName="walkie-discovery-provenance.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-source-import.schema.json" LogicalName="walkie-discovery-source-import.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-status.schema.json" LogicalName="walkie-discovery-status.schema.json" />
   </ItemGroup>
 
 </Project>

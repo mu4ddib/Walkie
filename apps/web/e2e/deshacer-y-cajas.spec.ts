@@ -71,6 +71,9 @@ test('deshacer y rehacer: crear, conectar, renombrar, mover, borrar y volver a l
 
   // Borrar una caja con su conexión y recuperarla con el botón.
   await box(page, 'API usuarios v2').click();
+  // La selección vive en el estado de Canvas y llega a React Flow en el render siguiente: Supr antes de eso no borra
+  // nada (fallo intermitente en CI, tarea 11). Una persona ve la caja seleccionada antes de borrarla.
+  await expect(box(page, 'API usuarios v2')).toHaveClass(/\bselected\b/);
   await page.keyboard.press('Delete');
   await expect(box(page, 'API usuarios v2')).toHaveCount(0);
   await expect(page.locator('.react-flow__edge')).toHaveCount(0);

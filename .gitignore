@@ -18,6 +18,9 @@ coverage/
 playwright-report/
 test-results/
 
+# Walkie Live: paquetes generados por walkie scan (.walkie/source.json sí se versiona)
+*.walkiepack
+
 # Editores / SO
 .vs/
 .idea/

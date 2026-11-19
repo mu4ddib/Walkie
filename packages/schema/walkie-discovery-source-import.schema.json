@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-source-import.schema.json",
+  "title": "Walkie discovery source import v0",
+  "description": "Respuesta de POST /api/sources/import (spec walkie-live, tarea 10): crear una app nueva desde un proyecto local con su primer análisis. Con dryRun (status preview) no escribe nada y propone un nombre; sin él crea la app vacía (sin features, catálogo ni lienzos) y guarda el análisis (created), o devuelve lo ya creado por el mismo importId (existing). El paquete se valida igual que en walkie-discovery-upload.",
+  "type": "object",
+  "required": [
+    "dryRun",
+    "status",
+    "app",
+    "summary",
+    "warnings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "importId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identidad de la operación (UUID v7 del cliente): un reintento manda la misma"
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "preview",
+        "created",
+        "existing"
+      ]
+    },
+    "app": {
+      "type": "object",
+      "required": [
+        "name",
+        "nameTaken"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Solo cuando se creó (lo genera la API)"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "En la vista previa, el propuesto (el de la fuente, con un número si ya existe) o el pedido"
+        },
+        "nameTaken": {
+          "type": "boolean",
+          "description": "Ya hay una app con ese nombre: hay que elegir otro antes de crear"
+        }
+      }
+    },
+    "snapshot": {
+      "$ref": "walkie-discovery-snapshot.schema.json",
+      "description": "El primer análisis de la app (sin dryRun)"
+    },
+    "summary": {
+      "$ref": "walkie-discovery-upload.schema.json#/properties/summary"
+    },
+    "warnings": {
+      "type": "array",
+      "description": "source-in-other-apps (el proyecto ya está en otras apps) y pending-import (hay una creación sin terminar desde este proyecto)",
+      "items": {
+        "$ref": "walkie-discovery-apply-result.schema.json#/properties/warnings/items"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "created",
+              "existing"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "importId",
+          "snapshot"
+        ],
+        "properties": {
+          "app": {
+            "type": "object",
+            "required": [
+              "id"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

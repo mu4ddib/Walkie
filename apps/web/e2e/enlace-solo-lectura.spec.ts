@@ -10,7 +10,7 @@ test('compartir una feature con un enlace de solo lectura y revocarlo', async ({
   await login(page);
   const app = `E2E enlace ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   for (const feature of ['Iniciar sesión', 'Transferir']) {
     await page.getByLabel('Nueva feature').fill(feature);

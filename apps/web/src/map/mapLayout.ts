@@ -13,6 +13,29 @@ const COLUMN_GAP = 168;
 const ROW_GAP = 72;
 const CATALOG_GAP = 168;
 
+/**
+ * Medidas de la distribución: la caja de cada elemento principal (features en el mapa), la de los de la fila de abajo
+ * (componentes) y los espacios. El mapa usa `MAP_METRICS`; el lienzo inicial de Walkie Live usa las suyas con la misma
+ * regla (`discovery/initialCanvas.ts`).
+ */
+export type LayoutMetrics = {
+  main: { w: number; h: number };
+  below: { w: number; h: number };
+  columnGap: number;
+  rowGap: number;
+  belowGap: number;
+  belowSpacing: number;
+};
+
+export const MAP_METRICS: LayoutMetrics = {
+  main: FEATURE_BOX,
+  below: CATALOG_BOX,
+  columnGap: COLUMN_GAP,
+  rowGap: ROW_GAP,
+  belowGap: CATALOG_GAP,
+  belowSpacing: 32,
+};
+
 /** Clave de un elemento del catálogo en la distribución (las features usan su id). */
 export const catalogKey = (itemId: string) => `catalog:${itemId}`;
 
@@ -24,7 +47,9 @@ export function autoLayout(
   features: readonly string[],
   links: readonly { from: string; to: string }[],
   catalog: Readonly<Record<string, readonly string[]>> = {},
+  metrics: LayoutMetrics = MAP_METRICS,
 ): Record<string, Point> {
+  const { main, below } = metrics;
   const known = new Set(features);
   const edges = links.filter((l) => l.from !== l.to && known.has(l.from) && known.has(l.to));
   const incoming = new Map(features.map((f) => [f, edges.filter((e) => e.to === f).map((e) => e.from)]));
@@ -61,12 +86,12 @@ export function autoLayout(
       .map((x) => x.f);
     ordered.forEach((f, i) => {
       row.set(f, i);
-      positions[f] = { x: r * (FEATURE_BOX.w + COLUMN_GAP), y: i * (FEATURE_BOX.h + ROW_GAP) };
+      positions[f] = { x: r * (main.w + metrics.columnGap), y: i * (main.h + metrics.rowGap) };
     });
   }
 
   // Componentes compartidos: una fila debajo, cada uno bajo el promedio de sus features, sin encimarse.
-  const bottom = Math.max(0, ...Object.values(positions).map((p) => p.y + FEATURE_BOX.h));
+  const bottom = Math.max(0, ...Object.values(positions).map((p) => p.y + main.h));
   const items = Object.entries(catalog)
     .map(([id, users]) => {
       const xs = users.map((u) => positions[u]?.x).filter((x): x is number => x !== undefined);
@@ -75,9 +100,9 @@ export function autoLayout(
     .sort((a, b) => a.x - b.x || a.id.localeCompare(b.id));
   let nextX = Number.NEGATIVE_INFINITY;
   for (const item of items) {
-    const x = Math.max(item.x + (FEATURE_BOX.w - CATALOG_BOX.w) / 2, nextX);
-    positions[catalogKey(item.id)] = { x, y: bottom + CATALOG_GAP };
-    nextX = x + CATALOG_BOX.w + 32;
+    const x = Math.max(item.x + (main.w - below.w) / 2, nextX);
+    positions[catalogKey(item.id)] = { x, y: bottom + metrics.belowGap };
+    nextX = x + below.w + metrics.belowSpacing;
   }
   return positions;
 }

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-binding.schema.json",
+  "title": "Walkie discovery binding v0",
+  "description": "Vínculo de un hallazgo con Walkie (spec walkie-live, ADR-0012 y ADR-0014): la única confirmación que existe. Lo decide una persona y se guarda en Walkie, nunca en el .walkiepack. Une la clave estable de una entidad de una fuente con un elemento del catálogo, un módulo o una feature (linked: ya existía; created: lo creó una aplicación) o la descarta (rejected). Persiste entre análisis de la misma fuente y no cambia el elemento al que apunta.",
+  "type": "object",
+  "required": ["sourceId", "entityKey", "decision", "entityFingerprint", "snapshotId", "decidedBy", "decidedAt", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "sourceId": { "type": "string", "format": "uuid" },
+    "entityKey": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" },
+    "decision": { "enum": ["linked", "created", "rejected"] },
+    "target": { "$ref": "#/$defs/target" },
+    "entityFingerprint": { "$ref": "walkie-discovery.schema.json#/$defs/fingerprint", "description": "Fingerprint de la entidad cuando se decidió: si cambia en un análisis posterior, la revisión la marca changed" },
+    "snapshotId": { "type": "string", "format": "uuid", "description": "Análisis en el que se decidió" },
+    "decidedKey": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey", "description": "Clave con la que se decidió en snapshotId, si no es entityKey: una decisión sobre una pantalla o un candidato a feature de la versión 0 del formato que pasó a su clave con la app (ADR-0014)" },
+    "applyId": { "type": "string", "format": "uuid", "description": "Aplicación que lo escribió (bitácora, ADR-0012)" },
+    "note": { "type": "string", "maxLength": 500, "description": "Por qué se descartó o vinculó así" },
+    "decidedBy": { "type": "string", "minLength": 1, "description": "Claim sub de quien decidió (ADR-0003)" },
+    "decidedAt": { "type": "string", "format": "date-time" },
+    "version": { "type": "integer", "minimum": 1, "description": "Concurrencia optimista: una operación con versión vieja responde 409" }
+  },
+  "allOf": [
+    { "if": { "properties": { "decision": { "enum": ["linked", "created"] } } }, "then": { "required": ["target"] } },
+    { "if": { "properties": { "decision": { "const": "rejected" } } }, "then": { "not": { "required": ["target"] } } }
+  ],
+  "$defs": {
+    "target": {
+      "type": "object",
+      "description": "Elemento de Walkie al que apunta un vínculo (referencia por id, como un catalogId o un moduleId en el grafo; sin copia de su contenido)",
+      "required": ["kind", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["catalogItem", "module", "feature"], "description": "catalogItem: walkie-catalog-item; module y feature: filas de apps.features (ADR-0010)" },
+        "id": { "type": "string", "format": "uuid" },
+        "title": { "type": "string", "maxLength": 120, "description": "Último nombre conocido (informativo, como el title de un ref)" }
+      }
+    }
+  }
+}

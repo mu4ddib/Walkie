@@ -10,7 +10,7 @@ test('el lienzo es la pantalla de inicio y recuerda dónde quedé', async ({ pag
   await login(page);
   const app = `E2E espacio ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   for (const feature of ['Iniciar sesión', 'Transferir']) {
     await page.getByLabel('Nueva feature').fill(feature);

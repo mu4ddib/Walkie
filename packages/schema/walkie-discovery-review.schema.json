@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-review.schema.json",
+  "title": "Walkie discovery review v0",
+  "description": "Revisión de un análisis (spec walkie-live, ADR-0012 y ADR-0014): una página de hallazgos con su estado y su propuesta de cambio. No se guarda: se calcula del análisis, los vínculos de la fuente, el análisis anterior y el catálogo y los módulos actuales. Proponer no escribe nada; los cambios se piden con walkie-discovery-apply.",
+  "type": "object",
+  "required": [
+    "snapshotId",
+    "sourceId",
+    "counts",
+    "page",
+    "items"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "snapshotId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "sourceId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "previousSnapshotId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "counts": {
+      "type": "object",
+      "description": "Totales del análisis completo (no de la página), por estado",
+      "required": [
+        "new",
+        "matched",
+        "linked",
+        "created",
+        "rejected",
+        "changed",
+        "missing",
+        "unverified"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "new": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matched": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "linked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "created": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rejected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "changed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unverified": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "description": "Orden estable: por kind y key",
+      "required": [
+        "index",
+        "size",
+        "total"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Hallazgos que cumplen los filtros"
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "previous": {
+      "$ref": "walkie-discovery-upload.schema.json#/$defs/brief",
+      "description": "El análisis anterior de la fuente, con el que se compara (tarea 10)"
+    },
+    "comparison": {
+      "type": "object",
+      "description": "Comparación con el análisis anterior (solo si hay uno; tarea 10). Lo que ya no aparece va en counts.missing (con cobertura) y counts.unverified (sin ella)",
+      "required": [
+        "added",
+        "modified",
+        "unchanged",
+        "needsReview"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Hallazgos que no estaban en el anterior"
+        },
+        "modified": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Estaban y cambió su contenido (fingerprint)"
+        },
+        "unchanged": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Estaban y siguen iguales"
+        },
+        "needsReview": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Piden una decisión de una persona (needsReview en el ítem)"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "status": {
+      "enum": [
+        "new",
+        "matched",
+        "linked",
+        "created",
+        "rejected",
+        "changed",
+        "missing",
+        "unverified"
+      ],
+      "description": "new: sin vínculo ni coincidencia; matched: coincide con un elemento existente (sin vínculo todavía); linked/created/rejected: tiene vínculo con esa decisión y su fingerprint no cambió; changed: tiene vínculo y su fingerprint cambió desde que se decidió; missing: estaba en el análisis anterior, tiene vínculo y ya no aparece aunque un detector que lo puede producir corrió (nunca se borra nada) unverified (tarea 10): tenía una decisión y no está en este análisis, pero el análisis no lo cubría (un detector no corrió, quedó fuera del alcance o lo alcanza una limitación): no se concluye que desapareció; coverage dice por qué."
+    },
+    "item": {
+      "type": "object",
+      "required": [
+        "key",
+        "kind",
+        "title",
+        "basis",
+        "confidence",
+        "status",
+        "fingerprint",
+        "evidenceCount",
+        "proposal",
+        "needsReview"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+        },
+        "kind": {
+          "$ref": "walkie-discovery.schema.json#/$defs/entityKind"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "basis": {
+          "$ref": "walkie-discovery.schema.json#/$defs/basis"
+        },
+        "confidence": {
+          "$ref": "walkie-discovery.schema.json#/$defs/confidence"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "fingerprint": {
+          "$ref": "walkie-discovery.schema.json#/$defs/fingerprint",
+          "description": "En missing, el del análisis anterior"
+        },
+        "binding": {
+          "$ref": "walkie-discovery-binding.schema.json"
+        },
+        "legacyBinding": {
+          "$ref": "walkie-discovery-binding.schema.json",
+          "description": "Una decisión tomada con la clave de la versión 0 del formato (screen:<ruta>, feature:<nombre>, sin la app) que le corresponde a este hallazgo y a otro de otra app (ADR-0014). Walkie no elige: la decisión sigue activa con su clave vieja y no cuenta como missing. Decide sobre la clave nueva y restablece la vieja (reset con su entityKey y version)"
+        },
+        "targetMissing": {
+          "const": true,
+          "description": "Solo con un vínculo linked o created cuyo elemento ya no existe en Walkie (se borró a mano): la decisión sigue guardada pero no apunta a nada. Restablécela o vincúlalo a otro elemento"
+        },
+        "match": {
+          "type": "object",
+          "description": "Solo en matched: con qué elemento existente coincide y por qué",
+          "required": [
+            "target",
+            "reason"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "target": {
+              "$ref": "walkie-discovery-binding.schema.json#/$defs/target"
+            },
+            "reason": {
+              "enum": [
+                "signature",
+                "title"
+              ],
+              "description": "signature: misma firma (api: método y ruta normalizada; database: motor y nombre; service: nombre); title: título parecido (solo sugerencia, nunca se vincula sola)"
+            }
+          }
+        },
+        "candidates": {
+          "type": "array",
+          "minItems": 2,
+          "description": "Solo en new: varios elementos existentes coinciden por el mismo motivo y no se elige ninguno (la persona decide). Agregado en la tarea 4",
+          "items": {
+            "type": "object",
+            "required": [
+              "target",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "target": {
+                "$ref": "walkie-discovery-binding.schema.json#/$defs/target"
+              },
+              "reason": {
+                "enum": [
+                  "signature",
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "evidenceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "proposal": {
+          "type": "object",
+          "description": "Lo que Walkie sugiere; la persona decide con una operación de walkie-discovery-apply",
+          "required": [
+            "op"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "create",
+                "link",
+                "none"
+              ],
+              "description": "create: crear el elemento; link: vincular al de match; none: nada que hacer (ya decidido, missing o una screen que solo entra con su feature)"
+            },
+            "target": {
+              "$ref": "walkie-discovery-binding.schema.json#/$defs/target"
+            }
+          }
+        },
+        "change": {
+          "enum": [
+            "added",
+            "modified",
+            "unchanged"
+          ],
+          "description": "Respecto del análisis anterior (solo si hay uno, y no en lo que ya no aparece)"
+        },
+        "coverage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Solo en unverified: qué no cubrió este análisis"
+        },
+        "needsReview": {
+          "type": "boolean",
+          "description": "Pide una decisión: sin decidir, sugerido, cambiado, desaparecido, una decisión vieja ambigua o un destino borrado"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "matched"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "match"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "match"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "linked",
+                  "created",
+                  "rejected",
+                  "changed",
+                  "missing"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "binding"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "not": {
+                  "const": "new"
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "candidates"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "candidates"
+            ]
+          },
+          "then": {
+            "properties": {
+              "proposal": {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "const": "none"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Walkie.Shared\Walkie.Shared.csproj" />
+    <!-- Apps: la app, el catálogo, crear elementos, features y módulos (IAppWriter). Canvas: el primer lienzo de lo que
+         se crea (ICanvasWriter) y las interfaces de los módulos que ya existen (ICanvasReader). Ninguno depende de Discovery. -->
+    <ProjectReference Include="..\Walkie.Modules.Apps\Walkie.Modules.Apps.csproj" />
+    <ProjectReference Include="..\Walkie.Modules.Canvas\Walkie.Modules.Canvas.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Walkie.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

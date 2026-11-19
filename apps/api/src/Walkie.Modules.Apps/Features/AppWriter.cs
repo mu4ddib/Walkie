@@ -1,4 +1,6 @@
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Walkie.Modules.Apps.Contracts;
 using Walkie.Modules.Apps.Domain;
 using Walkie.Modules.Apps.Persistence;
@@ -6,7 +8,8 @@ using Walkie.Shared.Time;
 
 namespace Walkie.Modules.Apps.Features;
 
-internal sealed class AppWriter(AppsDbContext db, TimeProvider clock) : IAppWriter
+internal sealed class AppWriter(
+    AppsDbContext db, TimeProvider clock, IValidator<CreateCatalogItemRequest> itemValidator, ICatalogUsage usage) : IAppWriter
 {
     public async Task<Guid> CreateAppAsync(string name, string userId, CancellationToken cancellationToken)
     {
@@ -14,6 +17,55 @@ internal sealed class AppWriter(AppsDbContext db, TimeProvider clock) : IAppWrit
         db.Apps.Add(app);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return app.Id;
+    }
+
+    public async Task<AppCreation> CreateAppAsync(Guid appId, string name, string userId, DateTimeOffset notBefore, CancellationToken cancellationToken)
+    {
+        if (await ExistingAppAsync(appId, userId, notBefore, cancellationToken).ConfigureAwait(false) is { } existing)
+        {
+            return existing;
+        }
+
+        db.Apps.Add(new App { Id = appId, Name = name.Trim(), CreatedBy = userId, CreatedAt = clock.GetUtcNowForDb() });
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return AppCreation.Created;
+        }
+        catch (DbUpdateException)
+        {
+            db.ChangeTracker.Clear();
+            return await ExistingAppAsync(appId, userId, notBefore, cancellationToken).ConfigureAwait(false) ?? AppCreation.IdTaken;
+        }
+    }
+
+    private async Task<AppCreation?> ExistingAppAsync(Guid appId, string userId, DateTimeOffset notBefore, CancellationToken cancellationToken)
+    {
+        var existing = await db.Apps.AsNoTracking().Where(a => a.Id == appId).Select(a => new { a.CreatedBy, a.CreatedAt })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        return existing.CreatedBy == userId && existing.CreatedAt >= notBefore ? AppCreation.AlreadyCreated : AppCreation.IdTaken;
+    }
+
+    public async Task<AppRemoval> DeleteUntouchedAppAsync(Guid appId, string name, CancellationToken cancellationToken)
+    {
+        if (!await db.Apps.AsNoTracking().AnyAsync(a => a.Id == appId, cancellationToken).ConfigureAwait(false))
+        {
+            return AppRemoval.NotFound;
+        }
+
+        var expected = name.Trim();
+        // Todo en la condición del DELETE: si alguien la renombra o le suma algo entre la lectura y el borrado, no se borra.
+        var deleted = await db.Apps
+            .Where(a => a.Id == appId && a.Name == expected
+                && !db.Features.Any(f => f.AppId == appId)
+                && !db.CatalogItems.Any(i => i.AppId == appId))
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        return deleted == 1 ? AppRemoval.Deleted : AppRemoval.Edited;
     }
 
     public async Task<IReadOnlyList<string>> AppNamesAsync(CancellationToken cancellationToken) =>
@@ -42,6 +94,86 @@ internal sealed class AppWriter(AppsDbContext db, TimeProvider clock) : IAppWrit
         db.Features.Add(feature);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return feature.Id;
+    }
+
+    public async Task<FeatureCreation> CreateFeatureAsync(
+        Guid appId, Guid featureId, string kind, string name, string? description, string userId, DateTimeOffset notBefore, CancellationToken cancellationToken)
+    {
+        if (kind is not (FeatureKind.Feature or FeatureKind.Module))
+        {
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "Tiene que ser feature o module.");
+        }
+
+        if (await ExistingFeatureAsync(appId, featureId, kind, userId, notBefore, cancellationToken).ConfigureAwait(false) is { } existing)
+        {
+            return existing;
+        }
+
+        var now = clock.GetUtcNowForDb();
+        db.Features.Add(new Feature
+        {
+            Id = featureId,
+            AppId = appId,
+            Kind = kind,
+            Name = name.Trim(),
+            Description = description?.Trim() ?? "",
+            CreatedBy = userId,
+            CreatedAt = now,
+            UpdatedAt = now,
+        });
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return FeatureCreation.Created;
+        }
+        catch (DbUpdateException)
+        {
+            // Dos pedidos con el mismo id a la vez: el segundo mira de nuevo qué quedó.
+            db.ChangeTracker.Clear();
+            return await ExistingFeatureAsync(appId, featureId, kind, userId, notBefore, cancellationToken).ConfigureAwait(false) ?? FeatureCreation.IdTaken;
+        }
+    }
+
+    /// <summary>Si el id ya existe: un reintento de la misma operación (misma app, tipo y autor, creada desde que empezó) o un id tomado.</summary>
+    private async Task<FeatureCreation?> ExistingFeatureAsync(
+        Guid appId, Guid featureId, string kind, string userId, DateTimeOffset notBefore, CancellationToken cancellationToken)
+    {
+        var existing = await db.Features.AsNoTracking().Where(f => f.Id == featureId)
+            .Select(f => new { f.AppId, f.Kind, f.CreatedBy, f.CreatedAt })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        return existing.AppId == appId && existing.Kind == kind && existing.CreatedBy == userId && existing.CreatedAt >= notBefore
+            ? FeatureCreation.AlreadyCreated
+            : FeatureCreation.IdTaken;
+    }
+
+    public async Task<FeatureRemoval> DeleteUntouchedFeatureAsync(
+        Guid appId, Guid featureId, string name, string? description, CancellationToken cancellationToken)
+    {
+        var feature = await db.Features.AsNoTracking().Where(f => f.Id == featureId && f.AppId == appId)
+            .Select(f => new { f.Name, f.Description })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (feature is null)
+        {
+            return FeatureRemoval.NotFound;
+        }
+
+        var expectedName = name.Trim();
+        var expectedDescription = description?.Trim() ?? "";
+        if (feature.Name != expectedName || feature.Description != expectedDescription)
+        {
+            return FeatureRemoval.Edited;
+        }
+
+        // El nombre y la descripción van en la condición: si alguien los cambió entre la lectura y el borrado, no se borra.
+        var deleted = await db.Features
+            .Where(f => f.Id == featureId && f.AppId == appId && f.Name == expectedName && f.Description == expectedDescription)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        return deleted == 1 ? FeatureRemoval.Deleted : FeatureRemoval.Edited;
     }
 
     public async Task<bool> CreateModuleAsync(
@@ -100,6 +232,111 @@ internal sealed class AppWriter(AppsDbContext db, TimeProvider clock) : IAppWrit
         db.CatalogItems.Add(item);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return item.Id;
+    }
+
+    public IReadOnlyDictionary<string, string[]> ValidateCatalogItem(CreateCatalogItemRequest item) =>
+        itemValidator.Validate(item).Errors
+            .GroupBy(e => e.PropertyName, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray(), StringComparer.Ordinal);
+
+    public CatalogItemResponse PreviewCatalogItem(Guid appId, Guid itemId, CreateCatalogItemRequest item) =>
+        CatalogHandlers.ToResponse(NewItem(appId, itemId, item, "", default));
+
+    public async Task<CatalogItemCreation> CreateCatalogItemAsync(
+        Guid appId, Guid itemId, CreateCatalogItemRequest item, string userId, DateTimeOffset notBefore, CancellationToken cancellationToken)
+    {
+        if (await ExistingAsync(appId, itemId, item.Type, userId, notBefore, cancellationToken).ConfigureAwait(false) is { } existing)
+        {
+            return existing;
+        }
+
+        db.CatalogItems.Add(NewItem(appId, itemId, item, userId, clock.GetUtcNowForDb()));
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Dos pedidos con el mismo id a la vez: el segundo ve lo que guardó el primero.
+            db.ChangeTracker.Clear();
+            return await ExistingAsync(appId, itemId, item.Type, userId, notBefore, cancellationToken).ConfigureAwait(false) ?? CatalogItemCreation.IdTaken;
+        }
+
+        return CatalogItemCreation.Created;
+    }
+
+    public async Task<CatalogItemRemoval> DeleteUntouchedCatalogItemAsync(Guid appId, Guid itemId, CancellationToken cancellationToken)
+    {
+        var item = await db.CatalogItems.AsNoTracking()
+            .Where(i => i.Id == itemId && i.AppId == appId)
+            .Select(i => new { i.Version })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (item is null)
+        {
+            return CatalogItemRemoval.NotFound;
+        }
+
+        if (item.Version > 1)
+        {
+            return CatalogItemRemoval.Edited;
+        }
+
+        if ((await usage.FeaturesUsingAsync(itemId, cancellationToken).ConfigureAwait(false)).Count > 0)
+        {
+            return CatalogItemRemoval.InUse;
+        }
+
+        // La versión va en la condición: si alguien lo editó entre la lectura y el borrado, no se borra.
+        var deleted = await db.CatalogItems
+            .Where(i => i.Id == itemId && i.AppId == appId && i.Version == 1)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        if (deleted == 1)
+        {
+            return CatalogItemRemoval.Deleted;
+        }
+
+        return await db.CatalogItems.AnyAsync(i => i.Id == itemId, cancellationToken).ConfigureAwait(false)
+            ? CatalogItemRemoval.Edited
+            : CatalogItemRemoval.NotFound;
+    }
+
+    /// <summary>El elemento con la misma limpieza que el endpoint (textos recortados, vacío = sin valor), sin guardar.</summary>
+    private static CatalogItem NewItem(Guid appId, Guid itemId, CreateCatalogItemRequest item, string userId, DateTimeOffset now)
+    {
+        var created = new CatalogItem
+        {
+            Id = itemId,
+            AppId = appId,
+            Type = item.Type,
+            Title = item.Title.Trim(),
+            CreatedBy = userId,
+            CreatedAt = now,
+            UpdatedBy = userId,
+            UpdatedAt = now,
+        };
+        CatalogHandlers.Apply(created, item.Description, item.Http, item.Database, item.Resource, item.Runtime);
+        return created;
+    }
+
+    /// <summary>
+    /// Si el id ya existe: un reintento (misma app y tipo, del mismo autor y creado desde que la operación reservó el id)
+    /// o un id tomado. Null si está libre.
+    /// </summary>
+    private async Task<CatalogItemCreation?> ExistingAsync(
+        Guid appId, Guid itemId, string type, string userId, DateTimeOffset notBefore, CancellationToken cancellationToken)
+    {
+        var existing = await db.CatalogItems.AsNoTracking()
+            .Where(i => i.Id == itemId)
+            .Select(i => new { i.AppId, i.Type, i.CreatedBy, i.CreatedAt })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        return existing.AppId == appId && existing.Type == type && existing.CreatedBy == userId && existing.CreatedAt >= notBefore
+            ? CatalogItemCreation.AlreadyCreated
+            : CatalogItemCreation.IdTaken;
     }
 
     public async Task DeleteFeaturesAsync(IReadOnlyCollection<Guid> featureIds, CancellationToken cancellationToken) =>

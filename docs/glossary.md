@@ -5,7 +5,7 @@
 | **App** | Aplicación documentada. Contiene un catálogo y varias features. |
 | **Feature** | Funcionalidad con un único objetivo de usuario (iniciar sesión, transferir). Tiene un lienzo y sus tours. |
 | **Lienzo (canvas)** | Grafo de nodos y conexiones de una feature, más su `layout`. |
-| **Catálogo** | Nodos reutilizables de la app (`api`, `service`, `database`) definidos una sola vez. |
+| **Catálogo** | Nodos reutilizables de la app (`api`, `service`, `database`, `resource`) definidos una sola vez. |
 | **Nodo** | Caja del lienzo. Tipos: `actor`, `screen`, `rule`, `api`, `service`, `database`, `resource`, `ref`, `portal`, `module`. |
 | **ref** | Nodo que apunta a un elemento del catálogo (`catalogId`). Si el elemento cambia, cambia en todos los lienzos. |
 | **Módulo** | Conjunto reutilizable de componentes conectados de una app, con su propio lienzo e **interfaces** (ADR-0010). Una feature lo usa con una caja (nodo `module`, `moduleId`) que comparte su definición; su posición, tamaño y presentación son de cada lienzo. |
@@ -22,6 +22,14 @@
 | **Mapa de la app** | Vista de una app entera: cada feature es una caja, los portales son flechas entre ellas y, si se elige, se ven los componentes del catálogo que comparten. Se suma a la galería de features. |
 | **Recorrido** | Tour cuyos pasos recorren conexiones (origen → destino, en su sentido real): ej. Pantalla → API → Servicio → BD → Servicio → API → Pantalla. Cada escenario de una decisión es un recorrido distinto. Un paso `parallel` ocurre a la vez que el anterior (fan-out). |
 | **Grupo anidado** | Grupo dentro de otro (`parentId`). Plegar un grupo oculta todo lo de dentro; sus conexiones llegan al grupo plegado visible más externo. |
+| **Fuente (Walkie Live)** | Proyecto local analizado, con un id estable que el analizador guarda en `.walkie/source.json`. Una app puede tener sus fuentes (ADR-0012). |
+| **`.walkiepack`** | Paquete que genera el analizador local: `manifest.json` y `discovery.json` con lo que encontró en el código y su evidencia. No es un lienzo (ADR-0013 y ADR-0014). |
+| **Hallazgo** | Entidad o relación de un `.walkiepack`, **observada** (declarada tal cual en el código) o **inferida** (deducida), con clave estable, fingerprint de contenido y evidencia (archivo relativo, ancla, detector, confianza). |
+| **Ámbito de app** | Parte de la clave de una pantalla o de un candidato a feature que distingue las apps de un monorepo (`screen:<ámbito>:<ruta>`; ADR-0014): la carpeta de la app (`.` en la raíz) o el que fija el equipo en `.walkie/source.json`. Renombrar el paquete no lo cambia; mover la carpeta sí, salvo que se fije. |
+| **Análisis (snapshot)** | Un `.walkiepack` cargado en Walkie: inmutable, con su procedencia. |
+| **Vínculo** | Decisión de una persona sobre un hallazgo: vinculado a un elemento existente, creado al aplicar o descartado. Es la única confirmación; persiste entre análisis y no cambia el elemento. |
+| **Pantalla descubierta** (`screen`) | Ruta técnica de un front (React Router, Next.js, Angular) con el componente que muestra, encontrada en el código. No es una feature ni un nodo `screen` de un lienzo: entra a un lienzo con su feature (tarea 9). Un componente que ninguna ruta muestra no es pantalla. |
+| **Candidato a feature** | Propuesta del analizador de agrupar pantallas (las de una misma carga diferida, o una lista y su detalle) con las APIs que llaman. Siempre inferida y explicada; no crea nada. Una **feature** de Walkie existe solo cuando una persona la decide. |
 | **Layout** | Posición `x, y` de cada nodo, guardada aparte del contenido. |
 
 ## Regla de corte

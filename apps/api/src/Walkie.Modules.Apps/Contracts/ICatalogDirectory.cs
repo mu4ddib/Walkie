@@ -10,6 +10,12 @@ public interface ICatalogDirectory
     Task<IReadOnlyList<CatalogItemResponse>> ItemsOfAppAsync(
         Guid appId, IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// De <paramref name="itemIds"/>, los que existen, en cualquier app (Discovery: que un id del cliente no esté tomado y
+    /// de qué app es cada destino).
+    /// </summary>
+    Task<IReadOnlyList<CatalogItemResponse>> ItemsByIdAsync(IReadOnlyCollection<Guid> itemIds, CancellationToken cancellationToken);
+
     /// <summary>Todo el catálogo de la app, por id (Export: contexto para IA de la app).</summary>
     Task<IReadOnlyList<CatalogItemResponse>> AllItemsOfAppAsync(Guid appId, CancellationToken cancellationToken);
 }

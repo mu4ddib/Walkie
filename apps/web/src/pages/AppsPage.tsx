@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import '../gallery/gallery.css';
 import { Link } from 'react-router';
-import { useApps, useCreateApp } from '../api/hooks';
+import { useApps, useCreateApp, useDiscoveryStatus } from '../api/hooks';
+import { NewAppFromProjectDialog } from '../discovery/NewAppFromProjectDialog';
 import { GalleryTools } from '../gallery/GalleryTools';
 import { matches } from '../gallery/search';
 import { NameForm } from '../ui/NameForm';
@@ -18,6 +19,9 @@ export function AppsPage() {
   const [query, setQuery] = useState('');
   // «Importar app» desde el .walkie de una app (spec exportar-e-importar, tarea 7).
   const [importing, setImporting] = useState(false);
+  // «Crear app desde proyecto local» (spec walkie-live, tarea 10): solo si Walkie Live está encendido en la API.
+  const discovery = useDiscoveryStatus();
+  const [fromProject, setFromProject] = useState(false);
   const shown = (apps.data ?? []).filter((a) => matches(a.name, query));
 
   return (
@@ -36,9 +40,20 @@ export function AppsPage() {
           >
             Importar app
           </button>
+          {discovery.data?.enabled && (
+            <button
+              type="button"
+              className="pixel-button is-ghost gallery-map-link"
+              title="Crear una app nueva desde el análisis (.walkiepack) de un proyecto en tu computador, para revisar qué sumar"
+              onClick={() => setFromProject(true)}
+            >
+              Crear app desde proyecto local
+            </button>
+          )}
         </div>
       </header>
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
+      {fromProject && <NewAppFromProjectDialog onClose={() => setFromProject(false)} />}
       <div className="gallery-create">
         <NameForm
           label="Nueva app"

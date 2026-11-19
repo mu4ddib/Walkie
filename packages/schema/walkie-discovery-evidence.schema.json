@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-evidence.schema.json",
+  "title": "Walkie discovery entity evidence v0",
+  "description": "Respuesta de GET /api/snapshots/{snapshotId}/evidence?entityKey=… (spec walkie-live, tarea 5): la evidencia que cita un hallazgo y sus relaciones, para el inspector de la revisión, sin descargar la evidencia del análisis entero. Si el hallazgo ya no aparece (missing), viene del análisis anterior (foundIn). Los textos vienen de un paquete subido por una persona: se muestran como texto. Se agrega porque la revisión solo trae evidenceCount.",
+  "type": "object",
+  "required": [
+    "snapshotId",
+    "foundIn",
+    "entityKey",
+    "evidence",
+    "relations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "snapshotId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "El análisis que se está revisando"
+    },
+    "foundIn": {
+      "type": "string",
+      "format": "uuid",
+      "description": "El análisis donde está el hallazgo: el mismo, o el anterior si ya no aparece"
+    },
+    "entityKey": {
+      "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "walkie-discovery.schema.json#/$defs/evidence"
+      }
+    },
+    "relations": {
+      "type": "array",
+      "description": "Relaciones en las que participa (hasta 100, por clave)",
+      "maxItems": 100,
+      "items": {
+        "$ref": "walkie-discovery.schema.json#/$defs/relation"
+      }
+    }
+  }
+}

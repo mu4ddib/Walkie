@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <Description>CLI de Walkie Live: walkie scan analiza un proyecto local y genera un .walkiepack.</Description>
+    <Version>0.1.0</Version>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>walkie</ToolCommandName>
+    <PackageId>Walkie.Cli</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Walkie.Analyzer\Walkie.Analyzer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Walkie.Analyzer.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -27,6 +27,41 @@ jobs:
       - name: Validar el catálogo de operaciones
         # Datos compartidos por la web y la API (spec interacciones, ADR-0011).
         run: npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s packages/schema/walkie-operations.schema.json -d packages/schema/walkie-operations.json
+      - name: Validar los ejemplos de Walkie Live
+        # Spec walkie-live (ADR-0013 y ADR-0014): cada ejemplo cumple su schema; la integridad la prueban las pruebas de la API.
+        run: |
+          check() {
+            local schema="packages/schema/$1" data="$2" refs=()
+            for other in packages/schema/*.schema.json; do
+              if [ "$other" != "$schema" ]; then refs+=(-r "$other"); fi
+            done
+            npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s "$schema" "${refs[@]}" -d "$data"
+          }
+          for pack in packages/schema/examples/walkiepack/*/; do
+            check walkie-discovery-pack.schema.json "${pack}manifest.json"
+            check walkie-discovery.schema.json "${pack}discovery.json"
+          done
+          # La versión 0 congelada (ADR-0014): sus ejemplos siguen cumpliendo su schema.
+          for pack in packages/schema/walkiepack/v0/examples/*/; do
+            v0=packages/schema/walkiepack/v0
+            npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s "$v0/walkie-discovery-pack.schema.json" -r "$v0/walkie-discovery.schema.json" -r packages/schema/walkie-graph.schema.json -d "${pack}manifest.json"
+            npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 -c ajv-formats -s "$v0/walkie-discovery.schema.json" -r packages/schema/walkie-graph.schema.json -d "${pack}discovery.json"
+          done
+          api=packages/schema/examples/discovery-api
+          check walkie-discovery-snapshot.schema.json "$api/snapshot.json"
+          check walkie-discovery-binding.schema.json "$api/binding-linked.json"
+          check walkie-discovery-binding.schema.json "$api/binding-rejected.json"
+          check walkie-discovery-review.schema.json "$api/review.json"
+          check walkie-discovery-apply.schema.json "$api/apply.json"
+          check walkie-discovery-apply-result.schema.json "$api/apply-result.json"
+          check walkie-discovery-upload.schema.json "$api/upload-created.json"
+          check walkie-discovery-upload.schema.json "$api/upload-preview.json"
+          check walkie-discovery-review.schema.json "$api/review-ambiguous.json"
+          check walkie-discovery-sources.schema.json "$api/sources.json"
+          check walkie-discovery-evidence.schema.json "$api/evidence.json"
+          check walkie-discovery-provenance.schema.json "$api/provenance.json"
+          check walkie-discovery-source-import.schema.json "$api/source-import-created.json"
+          check walkie-discovery-status.schema.json "$api/status.json"
 
   api:
     runs-on: ubuntu-latest
@@ -45,6 +80,20 @@ jobs:
         run: dotnet build apps/api --no-restore -c Release
       - if: ${{ hashFiles('apps/api/**/*.csproj') != '' }}
         run: dotnet test apps/api --no-build -c Release
+
+  cli:
+    # Walkie Live (spec walkie-live): analizador y CLI. Sin Docker: las pruebas usan proyectos ficticios y el propio repo.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore apps/cli/Walkie.Cli.slnx
+      - run: dotnet build apps/cli/Walkie.Cli.slnx --no-restore -c Release
+      - run: dotnet test apps/cli/Walkie.Cli.slnx --no-build -c Release
+      - name: walkie scan sobre el propio repo
+        run: dotnet run --project apps/cli/src/Walkie.Cli -c Release --no-build -- scan . -o walkie.walkiepack --source-id 0198f0c0-0000-7000-8000-0000000000a1
 
   web:
     runs-on: ubuntu-latest

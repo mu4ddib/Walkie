@@ -21,6 +21,7 @@ import { RuntimeField } from '../panel/contract/RuntimeField';
 import '../panel/panel.css';
 import { QueryState } from '../ui/QueryState';
 import { CATALOG_TYPES, catalogPath } from './catalogPaths';
+import { ItemProvenance } from '../discovery/ItemProvenance';
 import { ModulesSection } from '../modules/ModulesSection';
 
 /**
@@ -187,6 +188,8 @@ function ItemDetail({ appId, itemId }: { appId: string; itemId: string }) {
             }}
           />
           <Usages appId={appId} itemId={itemId} />
+          {/* Walkie Live (tarea 6): de qué hallazgos viene; no aparece sin Discovery ni sin vínculos. */}
+          <ItemProvenance appId={appId} target={`catalogItem:${itemId}`} />
           <DeleteItem appId={appId} itemId={itemId} />
         </>
       )}

@@ -441,3 +441,112 @@ export function fileNameOf(disposition: string | null): string | undefined {
   if (encoded) return decodeURIComponent(encoded.trim());
   return /filename="?([^";]+)"?/i.exec(disposition)?.[1]?.trim();
 }
+
+// ---------- Walkie Live: Discovery (spec walkie-live, tareas 3 a 5) ----------
+// Todo lo que llega de un .walkiepack (títulos, rutas, notas) es texto de un archivo subido por una persona: se muestra
+// siempre como texto, nunca como HTML.
+
+export type DiscoveryUpload = import('../schema/walkie-discovery-upload').WalkieDiscoveryUploadResultV0;
+export type DiscoverySourceImport = import('../schema/walkie-discovery-source-import').WalkieDiscoverySourceImportV0;
+export type DiscoveryStatusInfo = import('../schema/walkie-discovery-status').WalkieDiscoveryStatusV0;
+export type DiscoverySnapshot = import('../schema/walkie-discovery-upload').WalkieDiscoverySnapshotV0;
+export type DiscoveryReview = import('../schema/walkie-discovery-review').WalkieDiscoveryReviewV0;
+export type DiscoveryReviewItem = import('../schema/walkie-discovery-review').Item;
+export type DiscoveryStatus = import('../schema/walkie-discovery-review').Status;
+export type DiscoveryTarget = import('../schema/walkie-discovery-review').Target;
+export type DiscoveryOperation = import('../schema/walkie-discovery-apply').Operation;
+export type DiscoveryApplyResult = import('../schema/walkie-discovery-apply-result').WalkieDiscoveryApplyResultV0;
+export type DiscoverySources = import('../schema/walkie-discovery-sources').WalkieDiscoverySourcesV0;
+export type DiscoveryEvidence = import('../schema/walkie-discovery-evidence').WalkieDiscoveryEntityEvidenceV0;
+export type DiscoveryProvenance = import('../schema/walkie-discovery-provenance').WalkieDiscoveryProvenanceV0;
+export type DiscoveryOrigin = import('../schema/walkie-discovery-provenance').Origin;
+
+/** Tamaño máximo de un .walkiepack (el de `DiscoveryLimits.MaxPackBytes` en la API). */
+export const WALKIEPACK_MAX_BYTES = 50 * 1024 * 1024;
+
+/** Filtros y página de la revisión (los conteos de la respuesta son siempre del análisis completo). */
+export interface ReviewQuery {
+  kind?: string;
+  status?: string;
+  /** Respecto del análisis anterior: `added`, `modified` o `unchanged` (tarea 10). */
+  change?: string;
+  /** Solo lo que pide una decisión de una persona (tarea 10). */
+  needsReview?: boolean;
+  page: number;
+  pageSize: number;
+}
+
+/** `POST /api/apps/{appId}/sources/snapshots`: con `dryRun` solo valida y resume; sin él, guarda el análisis. */
+export function uploadSnapshot(token: string, appId: string, file: Blob, dryRun: boolean): Promise<DiscoveryUpload> {
+  const form = new FormData();
+  form.append('file', file, 'architecture.walkiepack');
+  return request(`/api/apps/${encodeURIComponent(appId)}/sources/snapshots${dryRun ? '?dryRun=true' : ''}`, {
+    token,
+    method: 'POST',
+    body: form,
+  });
+}
+
+/**
+ * `POST /api/sources/import` (tarea 10): crear una app nueva desde un proyecto local. Con `dryRun` valida el paquete y
+ * propone un nombre; sin él, crea la app y su primer análisis con `name` confirmado e `importId` (UUID v7: un reintento
+ * manda el mismo y no crea otra app).
+ */
+export function importSourceAsApp(
+  token: string,
+  file: Blob,
+  options: { name?: string; importId?: string },
+  dryRun: boolean,
+): Promise<DiscoverySourceImport> {
+  const form = new FormData();
+  form.append('file', file, 'architecture.walkiepack');
+  if (options.name !== undefined) form.append('name', options.name);
+  if (options.importId) form.append('importId', options.importId);
+  return request(`/api/sources/import${dryRun ? '?dryRun=true' : ''}`, { token, method: 'POST', body: form });
+}
+
+/** `GET /api/discovery`: si Walkie Live está encendido en la API (404 si no). */
+export function getDiscoveryStatus(token: string, signal?: AbortSignal): Promise<DiscoveryStatusInfo> {
+  return request('/api/discovery', { token, signal });
+}
+
+/** Fuentes de la app con su último análisis. 404 si Discovery está apagado en la API. */
+export function listDiscoverySources(token: string, appId: string, signal?: AbortSignal): Promise<DiscoverySources> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/sources`, { token, signal });
+}
+
+export function getDiscoveryReview(token: string, snapshotId: string, query: ReviewQuery, signal?: AbortSignal): Promise<DiscoveryReview> {
+  const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) });
+  if (query.kind) params.set('kind', query.kind);
+  if (query.status) params.set('status', query.status);
+  if (query.change) params.set('change', query.change);
+  if (query.needsReview) params.set('needsReview', 'true');
+  return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/review?${params}`, { token, signal });
+}
+
+/** Decisiones sobre hallazgos (reject, link, reset); con `dryRun` es la vista previa. */
+export function applyDiscovery(
+  token: string,
+  snapshotId: string,
+  body: { applyId: string; operations: DiscoveryOperation[] },
+  dryRun: boolean,
+): Promise<DiscoveryApplyResult> {
+  return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/apply${dryRun ? '?dryRun=true' : ''}`, {
+    token,
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * De qué hallazgos de Walkie Live viene un elemento (`target` = `catalogItem:{id}`, `module:{id}` o `feature:{id}`).
+ * 404 si Discovery está apagado o la app no existe.
+ */
+export function getDiscoveryProvenance(token: string, appId: string, target: string, signal?: AbortSignal): Promise<DiscoveryProvenance> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/bindings?target=${encodeURIComponent(target)}`, { token, signal });
+}
+
+/** Evidencia y relaciones de un hallazgo (solo de ese, no del análisis entero). */
+export function getDiscoveryEvidence(token: string, snapshotId: string, entityKey: string, signal?: AbortSignal): Promise<DiscoveryEvidence> {
+  return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/evidence?entityKey=${encodeURIComponent(entityKey)}`, { token, signal });
+}

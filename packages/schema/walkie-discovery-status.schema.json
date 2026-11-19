@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-status.schema.json",
+  "title": "Walkie discovery status v0",
+  "description": "Respuesta de GET /api/discovery (spec walkie-live, tarea 10): Walkie Live está encendido en esta API. Si Discovery:Enabled está apagado, el endpoint responde 404 (como todo Discovery): la web no ofrece sus opciones.",
+  "type": "object",
+  "required": [
+    "enabled",
+    "formatVersion",
+    "maxPackBytes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "const": true
+    },
+    "formatVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "La versión del .walkiepack que entiende (las anteriores las migra)"
+    },
+    "maxPackBytes": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

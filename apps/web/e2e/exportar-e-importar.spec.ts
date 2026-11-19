@@ -311,7 +311,7 @@ test('importar: el .walkie exportado reconstruye la feature en otra app, con res
   await page.goto('/apps');
   const target = `E2E destino ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(target);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: target }).click();
 
   await page.getByRole('button', { name: 'Importar feature' }).click();

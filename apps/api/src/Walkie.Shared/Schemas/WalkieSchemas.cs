@@ -61,6 +61,48 @@ public static class WalkieSchemas
     /// </summary>
     public static string OperationsCatalog { get; } = Load("walkie-operations.json");
 
+    /// <summary>
+    /// <c>walkie-discovery.schema.json</c>: el <c>discovery.json</c> de un <c>.walkiepack</c> (spec walkie-live,
+    /// ADR-0013): entidades, relaciones y evidencia de un análisis local. Usa <c>$defs</c> del grafo.
+    /// </summary>
+    public static JsonSchema Discovery { get; } = LoadAfterGraph("walkie-discovery.schema.json");
+
+    /// <summary><c>walkie-discovery-pack.schema.json</c>: <c>manifest.json</c> de un <c>.walkiepack</c> (usa <c>$defs</c> de <see cref="Discovery"/>).</summary>
+    public static JsonSchema DiscoveryPack { get; } = LoadAfter(Discovery, "walkie-discovery-pack.schema.json");
+
+    /// <summary><c>walkie-discovery-binding.schema.json</c>: vínculo de un hallazgo (la confirmación, ADR-0014).</summary>
+    public static JsonSchema DiscoveryBinding { get; } = LoadAfter(Discovery, "walkie-discovery-binding.schema.json");
+
+    /// <summary><c>walkie-discovery-snapshot.schema.json</c>: un análisis cargado (usa el manifest y el discovery).</summary>
+    public static JsonSchema DiscoverySnapshot { get; } = LoadAfter(DiscoveryPack, "walkie-discovery-snapshot.schema.json");
+
+    /// <summary><c>walkie-discovery-review.schema.json</c>: una página de la revisión calculada (usa el vínculo).</summary>
+    public static JsonSchema DiscoveryReview { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-review.schema.json");
+
+    /// <summary><c>walkie-discovery-apply.schema.json</c>: operaciones de revisión sobre un análisis.</summary>
+    public static JsonSchema DiscoveryApply { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-apply.schema.json");
+
+    /// <summary><c>walkie-discovery-apply-result.schema.json</c>: resultado (o vista previa) de aplicar.</summary>
+    public static JsonSchema DiscoveryApplyResult { get; } = LoadAfter(DiscoveryBinding, CatalogItem, "walkie-discovery-apply-result.schema.json");
+
+    /// <summary><c>walkie-discovery-upload.schema.json</c>: respuesta de subir un <c>.walkiepack</c> (usa el snapshot).</summary>
+    public static JsonSchema DiscoveryUpload { get; } = LoadAfter(DiscoverySnapshot, "walkie-discovery-upload.schema.json");
+
+    /// <summary><c>walkie-discovery-sources.schema.json</c>: fuentes de una app con su último análisis (usa el snapshot).</summary>
+    public static JsonSchema DiscoverySources { get; } = LoadAfter(DiscoverySnapshot, "walkie-discovery-sources.schema.json");
+
+    /// <summary><c>walkie-discovery-evidence.schema.json</c>: evidencia y relaciones de un hallazgo (usa el discovery).</summary>
+    public static JsonSchema DiscoveryEvidence { get; } = LoadAfter(Discovery, "walkie-discovery-evidence.schema.json");
+
+    /// <summary><c>walkie-discovery-provenance.schema.json</c>: de dónde viene un elemento (<c>GET /api/apps/{appId}/bindings</c>, tarea 6).</summary>
+    public static JsonSchema DiscoveryProvenance { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-provenance.schema.json");
+
+    /// <summary><c>walkie-discovery-source-import.schema.json</c>: respuesta de crear una app desde un proyecto local (tarea 10).</summary>
+    public static JsonSchema DiscoverySourceImport { get; } = LoadAfter(DiscoveryUpload, DiscoveryApplyResult, "walkie-discovery-source-import.schema.json");
+
+    /// <summary><c>walkie-discovery-status.schema.json</c>: si Discovery está encendido (tarea 10).</summary>
+    public static JsonSchema DiscoveryStatus { get; } = LoadAfter(Graph, "walkie-discovery-status.schema.json");
+
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
         $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",
@@ -71,6 +113,13 @@ public static class WalkieSchemas
     /// </summary>
     public static Dictionary<string, string[]> Errors(JsonSchema schema, JsonElement value, string prefix = "")
     {
+        // Primero solo sí o no (Flag): con List, la evaluación arma el detalle de cada nodo aunque el documento sea
+        // válido, y en un .walkiepack de 20.000 entidades eso multiplica el tiempo. El detalle se pide solo si falla.
+        if (schema.Evaluate(value, new EvaluationOptions { OutputFormat = OutputFormat.Flag }).IsValid)
+        {
+            return [];
+        }
+
         var results = schema.Evaluate(value, new EvaluationOptions { OutputFormat = OutputFormat.List });
         if (results.IsValid)
         {
@@ -102,6 +151,12 @@ public static class WalkieSchemas
     {
         _ = dependency; // el schema del que usa $refs tiene que estar registrado antes
         return JsonSchema.FromText(Load(name), Options);
+    }
+
+    private static JsonSchema LoadAfter(JsonSchema dependency, JsonSchema other, string name)
+    {
+        _ = other; // también usa $refs de este (ej. el resultado de aplicar trae elementos del catálogo)
+        return LoadAfter(dependency, name);
     }
 
     private static JsonSchema LoadAfterGraph(string name)

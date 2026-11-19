@@ -10,7 +10,7 @@ test('catálogo compartido entre dos lienzos con ref, Mover al catálogo y borra
   await login(page);
   const app = `E2E catálogo ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   for (const feature of ['Transferir', 'Pagar']) {
     await page.getByLabel('Nueva feature').fill(feature);
