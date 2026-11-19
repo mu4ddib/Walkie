@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { v7 as uuidv7 } from 'uuid';
 import { ApiError, type ModuleSummary } from '../api/client';
 import { useCreateModule, useDeleteModule, useModules } from '../api/hooks';
-import { QueryState } from '../ui/QueryState';
+import { APP_NO_ACCESS, QueryState } from '../ui/QueryState';
 import { modulePath } from '../workspace/paths';
 import { interfaceKindLabel, interfaceSignature } from './moduleMeta';
 import './modules.css';
@@ -11,8 +11,17 @@ import './modules.css';
 /**
  * «Módulos» en la página del catálogo (spec modulos-compartidos, criterio 2): cada módulo con su descripción,
  * interfaces y usos, «Abrir», «Nuevo módulo» (uno vacío, que se abre) y «Eliminar», que antes dice dónde se usa.
+ * Según el rol (ADR-0015): crear es de editor (`canEdit`) y eliminar, del owner (`canDelete`).
  */
-export function ModulesSection({ appId }: { appId: string }) {
+export function ModulesSection({
+  appId,
+  canEdit = true,
+  canDelete = true,
+}: {
+  appId: string;
+  canEdit?: boolean;
+  canDelete?: boolean;
+}) {
   const modules = useModules(appId);
   return (
     <section className="catalog-group catalog-modules" aria-label="Módulos">
@@ -21,25 +30,26 @@ export function ModulesSection({ appId }: { appId: string }) {
         Conjuntos de componentes conectados con lienzo propio. Las features los usan con una caja que se conecta por sus
         interfaces; si cambias el módulo, cambia en todas.
       </p>
-      <NewModuleForm appId={appId} />
-      <QueryState isPending={modules.isPending} error={modules.error} notFound="Esta app no existe." />
+      {canEdit && <NewModuleForm appId={appId} />}
+      <QueryState isPending={modules.isPending} error={modules.error} notFound={APP_NO_ACCESS} />
       {modules.data?.length === 0 && (
         <p className="panel-help">
-          Aún no hay módulos. Crea uno vacío o, en un lienzo, selecciona cajas (o un grupo) y elige «Convertir en módulo».
+          Aún no hay módulos.
+          {canEdit && ' Crea uno vacío o, en un lienzo, selecciona cajas (o un grupo) y elige «Convertir en módulo».'}
         </p>
       )}
       <ul className="catalog-module-list">
         {[...(modules.data ?? [])]
           .sort((a, b) => a.name.localeCompare(b.name, 'es'))
           .map((m) => (
-            <ModuleRow key={m.id} appId={appId} module={m} />
+            <ModuleRow key={m.id} appId={appId} module={m} canDelete={canDelete} />
           ))}
       </ul>
     </section>
   );
 }
 
-function ModuleRow({ appId, module }: { appId: string; module: ModuleSummary }) {
+function ModuleRow({ appId, module, canDelete }: { appId: string; module: ModuleSummary; canDelete: boolean }) {
   const remove = useDeleteModule(appId);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,9 +97,11 @@ function ModuleRow({ appId, module }: { appId: string; module: ModuleSummary }) 
         <Link className="pixel-button" to={modulePath(appId, module.id)}>
           Abrir
         </Link>
-        <button type="button" className="pixel-button is-ghost" disabled={remove.isPending} onClick={() => void onDelete()}>
-          Eliminar
-        </button>
+        {canDelete && (
+          <button type="button" className="pixel-button is-ghost" disabled={remove.isPending} onClick={() => void onDelete()}>
+            Eliminar
+          </button>
+        )}
       </div>
       {error && (
         <p role="alert" className="save-error">

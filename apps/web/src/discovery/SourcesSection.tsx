@@ -10,14 +10,17 @@ import './discovery.css';
  * estado vacío con cómo empezar. Solo se monta si Discovery está
  * disponible (la API responde las fuentes): con Discovery apagado no hay nada que parezca funcionar.
  */
-export function SourcesSection({ sources, onImport }: { sources: DiscoverySources; onImport: () => void }) {
+/** Sin `onImport` (un viewer, ADR-0015) no se ofrece cargar análisis. */
+export function SourcesSection({ sources, onImport }: { sources: DiscoverySources; onImport?: () => void }) {
   return (
     <section className="discovery-sources" aria-labelledby="discovery-sources-title">
       <div className="discovery-sources-head">
         <h3 id="discovery-sources-title">Proyectos locales</h3>
-        <button type="button" className="pixel-button is-ghost" onClick={onImport}>
-          Importar proyecto local
-        </button>
+        {onImport && (
+          <button type="button" className="pixel-button is-ghost" onClick={onImport}>
+            Importar proyecto local
+          </button>
+        )}
       </div>
       {sources.sources.length === 0 ? (
         <p className="gallery-note">
@@ -48,15 +51,17 @@ export function SourcesSection({ sources, onImport }: { sources: DiscoverySource
                 <Link className="pixel-button" to={reviewPath(latestSnapshot.appId, latestSnapshot.id)}>
                   Revisar
                 </Link>
-                <button
-                  type="button"
-                  className="pixel-button is-ghost"
-                  title="Carga un .walkiepack nuevo de este proyecto: se compara con el último y lo decidido se conserva"
-                  aria-label={`Cargar análisis nuevo de ${source.name}`}
-                  onClick={onImport}
-                >
-                  Cargar análisis nuevo
-                </button>
+                {onImport && (
+                  <button
+                    type="button"
+                    className="pixel-button is-ghost"
+                    title="Carga un .walkiepack nuevo de este proyecto: se compara con el último y lo decidido se conserva"
+                    aria-label={`Cargar análisis nuevo de ${source.name}`}
+                    onClick={onImport}
+                  >
+                    Cargar análisis nuevo
+                  </button>
+                )}
               </div>
             </li>
           ))}

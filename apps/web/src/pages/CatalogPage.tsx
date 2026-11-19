@@ -9,6 +9,7 @@ import {
   useCreateCatalogItem,
   useDeleteCatalogItem,
   useUpdateCatalogItem,
+  useAppRole,
 } from '../api/hooks';
 import { NODE_LABELS, nodeLabel } from '../nodes/nodeMeta';
 import { RESOURCE_KINDS, normalizeResource, type ResourceKind } from '../nodes/resourceMeta';
@@ -19,7 +20,7 @@ import { DatabaseEditor } from '../panel/contract/DatabaseEditor';
 import { ResourceEditor } from '../panel/contract/ResourceEditor';
 import { RuntimeField } from '../panel/contract/RuntimeField';
 import '../panel/panel.css';
-import { QueryState } from '../ui/QueryState';
+import { APP_NO_ACCESS, QueryState } from '../ui/QueryState';
 import { CATALOG_TYPES, catalogPath } from './catalogPaths';
 import { ItemProvenance } from '../discovery/ItemProvenance';
 import { ModulesSection } from '../modules/ModulesSection';
@@ -32,12 +33,14 @@ export function CatalogPage() {
   const { appId = '', itemId } = useParams();
   const app = useApp(appId);
   const catalog = useCatalog(appId);
+  // ADR-0015: un viewer lee; crear y editar es de editor; borrar, del owner.
+  const { canEdit, isOwner } = useAppRole(appId);
 
   if (!app.data) {
     return (
       <section className="page">
         <Breadcrumb appId={appId} />
-        <QueryState isPending={app.isPending} error={app.error} notFound="Esta app no existe." />
+        <QueryState isPending={app.isPending} error={app.error} notFound={APP_NO_ACCESS} />
       </section>
     );
   }
@@ -48,9 +51,9 @@ export function CatalogPage() {
       <h2>Catálogo de {app.data.name}</h2>
       <div className="catalog-layout">
         <div>
-          <CreateItemForm appId={appId} />
-          <QueryState isPending={catalog.isPending} error={catalog.error} notFound="Esta app no existe." />
-          {catalog.data && catalog.data.length === 0 && <p>El catálogo está vacío. Crea el primer elemento.</p>}
+          {canEdit && <CreateItemForm appId={appId} />}
+          <QueryState isPending={catalog.isPending} error={catalog.error} notFound={APP_NO_ACCESS} />
+          {catalog.data && catalog.data.length === 0 && <p>El catálogo está vacío.{canEdit && ' Crea el primer elemento.'}</p>}
           {catalog.data &&
             CATALOG_TYPES.map((type) => (
               <ItemGroup
@@ -61,9 +64,9 @@ export function CatalogPage() {
                 selectedId={itemId}
               />
             ))}
-          <ModulesSection appId={appId} />
+          <ModulesSection appId={appId} canEdit={canEdit} canDelete={isOwner} />
         </div>
-        {itemId && <ItemDetail key={itemId} appId={appId} itemId={itemId} />}
+        {itemId && <ItemDetail key={itemId} appId={appId} itemId={itemId} canEdit={canEdit} canDelete={isOwner} />}
       </div>
     </section>
   );
@@ -168,7 +171,17 @@ function CreateItemForm({ appId }: { appId: string }) {
   );
 }
 
-function ItemDetail({ appId, itemId }: { appId: string; itemId: string }) {
+function ItemDetail({
+  appId,
+  itemId,
+  canEdit,
+  canDelete,
+}: {
+  appId: string;
+  itemId: string;
+  canEdit: boolean;
+  canDelete: boolean;
+}) {
   const item = useCatalogItem(itemId);
   // La mutación vive aquí y no en el formulario: el formulario se monta de nuevo con cada versión.
   const update = useUpdateCatalogItem(appId, itemId);
@@ -182,6 +195,7 @@ function ItemDetail({ appId, itemId }: { appId: string; itemId: string }) {
             key={item.data.version}
             item={item.data}
             update={update}
+            readOnly={!canEdit}
             onReload={() => {
               update.reset();
               void item.refetch();
@@ -190,7 +204,7 @@ function ItemDetail({ appId, itemId }: { appId: string; itemId: string }) {
           <Usages appId={appId} itemId={itemId} />
           {/* Walkie Live (tarea 6): de qué hallazgos viene; no aparece sin Discovery ni sin vínculos. */}
           <ItemProvenance appId={appId} target={`catalogItem:${itemId}`} />
-          <DeleteItem appId={appId} itemId={itemId} />
+          {canDelete && <DeleteItem appId={appId} itemId={itemId} />}
         </>
       )}
     </aside>
@@ -201,10 +215,13 @@ function ItemDetail({ appId, itemId }: { appId: string; itemId: string }) {
 function ItemEditor({
   item,
   update,
+  readOnly,
   onReload,
 }: {
   item: CatalogItem;
   update: ReturnType<typeof useUpdateCatalogItem>;
+  /** Un viewer (ADR-0015) ve los campos sin poder cambiarlos. */
+  readOnly: boolean;
   onReload: () => void;
 }) {
   const [title, setTitle] = useState(item.title);
@@ -236,55 +253,59 @@ function ItemEditor({
       <h3>
         <span aria-hidden="true">{meta.glyph}</span> {meta.label}
       </h3>
-      <label>
-        Título
-        <input value={title} maxLength={TITLE_MAX_LENGTH} onChange={(e) => setTitle(e.target.value)} />
-      </label>
-      <label>
-        Descripción
-        <textarea
-          rows={4}
-          value={description}
-          maxLength={TEXT_MAX_LENGTH}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </label>
-      {item.type === 'api' && (
-        <>
-          <label>
-            Método
-            <select value={method} onChange={(e) => setMethod(e.target.value as HttpMethod | '')}>
-              <option value="">—</option>
-              {HTTP_METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Ruta HTTP
-            <input
-              value={path}
-              maxLength={TEXT_MAX_LENGTH}
-              placeholder="/clientes/{id}"
-              onChange={(e) => setPath(e.target.value)}
-            />
-          </label>
-        </>
+      <fieldset className="catalog-fields" disabled={readOnly}>
+        <label>
+          Título
+          <input value={title} maxLength={TITLE_MAX_LENGTH} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label>
+          Descripción
+          <textarea
+            rows={4}
+            value={description}
+            maxLength={TEXT_MAX_LENGTH}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </label>
+        {item.type === 'api' && (
+          <>
+            <label>
+              Método
+              <select value={method} onChange={(e) => setMethod(e.target.value as HttpMethod | '')}>
+                <option value="">—</option>
+                {HTTP_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Ruta HTTP
+              <input
+                value={path}
+                maxLength={TEXT_MAX_LENGTH}
+                placeholder="/clientes/{id}"
+                onChange={(e) => setPath(e.target.value)}
+              />
+            </label>
+          </>
+        )}
+        {item.type === 'api' && <ApiContractEditor value={contract} onChange={setContract} />}
+        {item.type === 'database' && <DatabaseEditor value={database} onChange={setDatabase} />}
+        {item.type === 'resource' && <ResourceEditor value={resource} onChange={setResource} />}
+        {item.type === 'service' && <RuntimeField value={runtime} onChange={setRuntime} />}
+      </fieldset>
+      {!readOnly && (
+        <div className="catalog-actions">
+          <button type="submit" className="pixel-button" disabled={update.isPending}>
+            Guardar
+          </button>
+          <span role="status" className="save-status">
+            {update.isSuccess ? 'Guardado' : ''}
+          </span>
+        </div>
       )}
-      {item.type === 'api' && <ApiContractEditor value={contract} onChange={setContract} />}
-      {item.type === 'database' && <DatabaseEditor value={database} onChange={setDatabase} />}
-      {item.type === 'resource' && <ResourceEditor value={resource} onChange={setResource} />}
-      {item.type === 'service' && <RuntimeField value={runtime} onChange={setRuntime} />}
-      <div className="catalog-actions">
-        <button type="submit" className="pixel-button" disabled={update.isPending}>
-          Guardar
-        </button>
-        <span role="status" className="save-status">
-          {update.isSuccess ? 'Guardado' : ''}
-        </span>
-      </div>
       {conflict ? (
         <div role="alertdialog" aria-labelledby="catalog-conflict" className="conflict-dialog">
           <p id="catalog-conflict">Otra persona guardó este elemento antes. Recarga para ver su versión.</p>

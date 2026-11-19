@@ -8,6 +8,7 @@ import {
   useDiscoverySources,
   useExportAppPackage,
   useFeatures,
+  useAppRole,
   useUpdateFeature,
 } from '../api/hooks';
 import { saveFile } from '../ui/download';
@@ -18,11 +19,12 @@ import { latest } from '../gallery/dates';
 import { NameForm } from '../ui/NameForm';
 import { catalogPath } from './catalogPaths';
 import { mapPath } from '../workspace/paths';
-import { QueryState } from '../ui/QueryState';
+import { APP_NO_ACCESS, QueryState } from '../ui/QueryState';
 import { AiContextDialog } from '../canvas/AiContextDialog';
 import { ImportDialog } from '../gallery/ImportDialog';
 import { LocalImportDialog } from '../discovery/LocalImportDialog';
 import { SourcesSection } from '../discovery/SourcesSection';
+import { MembersDialog } from '../apps/MembersDialog';
 
 /**
  * Galería de features de una app (spec espacio-de-trabajo, criterios 7 a 9): tarjetas con miniatura,
@@ -47,6 +49,9 @@ export function AppPage() {
   // muestra nada que parezca funcionar.
   const sources = useDiscoverySources(appId);
   const [importingLocal, setImportingLocal] = useState(false);
+  // Mi rol (ADR-0015): un viewer no crea, edita ni importa; «Miembros» lo ven todos y lo administra el owner.
+  const { canEdit, isOwner } = useAppRole(appId);
+  const [members, setMembers] = useState(false);
 
   const byFeature = useMemo(() => new Map((previews.data ?? []).map((p) => [p.featureId, p])), [previews.data]);
   const shown = useMemo(() => {
@@ -61,7 +66,7 @@ export function AppPage() {
     return (
       <section className="page">
         <Breadcrumb />
-        <QueryState isPending={app.isPending} error={app.error} notFound="Esta app no existe." />
+        <QueryState isPending={app.isPending} error={app.error} notFound={APP_NO_ACCESS} />
       </section>
     );
   }
@@ -88,15 +93,17 @@ export function AppPage() {
           >
             Contexto para IA
           </button>
-          <button
-            type="button"
-            className="pixel-button is-ghost gallery-map-link"
-            title="Reconstruir una feature desde un archivo .walkie exportado"
-            onClick={() => setImporting(true)}
-          >
-            Importar feature
-          </button>
-          {sources.data && (
+          {canEdit && (
+            <button
+              type="button"
+              className="pixel-button is-ghost gallery-map-link"
+              title="Reconstruir una feature desde un archivo .walkie exportado"
+              onClick={() => setImporting(true)}
+            >
+              Importar feature
+            </button>
+          )}
+          {sources.data && canEdit && (
             <button
               type="button"
               className="pixel-button is-ghost gallery-map-link"
@@ -115,6 +122,14 @@ export function AppPage() {
           >
             {exportApp.isPending ? 'Exportando…' : 'Exportar app (.walkie)'}
           </button>
+          <button
+            type="button"
+            className="pixel-button is-ghost gallery-map-link"
+            title={isOwner ? 'Quién ve y edita esta app' : 'Quién ve esta app'}
+            onClick={() => setMembers(true)}
+          >
+            Miembros
+          </button>
         </div>
         {exportApp.isError && (
           <p role="alert" className="save-error">
@@ -125,22 +140,31 @@ export function AppPage() {
       {aiContext && <AiContextDialog target={{ kind: 'app', id: appId }} onClose={() => setAiContext(false)} />}
       {importing && <ImportDialog appId={appId} onClose={() => setImporting(false)} />}
       {importingLocal && <LocalImportDialog appId={appId} onClose={() => setImportingLocal(false)} />}
-      <div className="gallery-create">
-        <NameForm
-          label="Nueva feature"
-          submitLabel="Crear feature"
-          pending={create.isPending}
-          error={create.error}
-          onSubmit={(name) => create.mutateAsync(name)}
-        />
-      </div>
-      <QueryState isPending={features.isPending} error={features.error} notFound="Esta app no existe." />
+      {members && <MembersDialog appId={appId} onClose={() => setMembers(false)} />}
+      {canEdit ? (
+        <div className="gallery-create">
+          <NameForm
+            label="Nueva feature"
+            submitLabel="Crear feature"
+            pending={create.isPending}
+            error={create.error}
+            onSubmit={(name) => create.mutateAsync(name)}
+          />
+        </div>
+      ) : (
+        app.data.role && (
+          <p className="gallery-note" role="note">
+            Tu rol en esta app es «viewer»: puedes ver y exportar, no cambiar.
+          </p>
+        )
+      )}
+      <QueryState isPending={features.isPending} error={features.error} notFound={APP_NO_ACCESS} />
       {features.data && features.data.length === 0 && (
         <div className="gallery-empty">
           <h3>Aún no hay features</h3>
           <p>
             Una feature documenta un flujo con un solo objetivo, por ejemplo “Iniciar sesión” o “Transferir”: sus
-            pantallas, reglas y las APIs que usa. Crea la primera arriba.
+            pantallas, reglas y las APIs que usa.{canEdit && ' Crea la primera arriba.'}
           </p>
         </div>
       )}
@@ -153,14 +177,14 @@ export function AppPage() {
                 key={feature.id}
                 feature={feature}
                 preview={byFeature.get(feature.id)}
-                onSave={(changes) => update.mutateAsync({ featureId: feature.id, changes })}
+                onSave={canEdit ? (changes) => update.mutateAsync({ featureId: feature.id, changes }) : undefined}
               />
             ))}
           </ul>
           {shown.length === 0 && <p className="gallery-note">Ninguna feature coincide con “{query}”.</p>}
         </>
       )}
-      {sources.data && <SourcesSection sources={sources.data} onImport={() => setImportingLocal(true)} />}
+      {sources.data && <SourcesSection sources={sources.data} onImport={canEdit ? () => setImportingLocal(true) : undefined} />}
     </section>
   );
 }

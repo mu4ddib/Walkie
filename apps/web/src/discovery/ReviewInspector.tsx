@@ -38,11 +38,14 @@ export function ReviewInspector({
   snapshotId,
   item,
   canDecide,
+  readOnly = false,
 }: {
   appId: string;
   snapshotId: string;
   item: DiscoveryReviewItem;
   canDecide: boolean;
+  /** Un viewer de la app (ADR-0015): ve todo y no decide. */
+  readOnly?: boolean;
 }) {
   const status = STATUS[item.status as DiscoveryStatus];
   return (
@@ -73,7 +76,9 @@ export function ReviewInspector({
       {item.binding && <BindingInfo appId={appId} binding={item.binding} targetMissing={item.targetMissing === true} />}
       {item.legacyBinding && <LegacyBindingInfo binding={item.legacyBinding} />}
       <Evidence snapshotId={snapshotId} entityKey={item.key} count={item.evidenceCount} missing={item.status === 'missing'} />
-      {canDecide ? (
+      {readOnly ? (
+        <p className="discovery-note">Tu rol en esta app es «viewer»: puedes revisar, no decidir.</p>
+      ) : canDecide ? (
         <Decisions key={item.key} appId={appId} snapshotId={snapshotId} item={item} />
       ) : (
         <p className="discovery-note">Las decisiones se toman sobre el último análisis de la fuente.</p>

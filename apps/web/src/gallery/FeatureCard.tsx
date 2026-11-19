@@ -8,7 +8,8 @@ import { latest, shortDate } from './dates';
 interface FeatureCardProps {
   feature: Feature;
   preview?: CanvasPreview;
-  onSave: (changes: FeatureChanges) => Promise<unknown>;
+  /** Sin él (un viewer, ADR-0015) la tarjeta no ofrece «Editar». */
+  onSave?: (changes: FeatureChanges) => Promise<unknown>;
 }
 
 /**
@@ -22,7 +23,7 @@ export function FeatureCard({ feature, preview, onSave }: FeatureCardProps) {
   return (
     <li className="feature-card">
       <CanvasThumbnail preview={preview} />
-      {editing ? (
+      {editing && onSave ? (
         <FeatureForm feature={feature} onSave={onSave} onDone={() => setEditing(false)} />
       ) : (
         <div className="feature-card-body">
@@ -38,14 +39,16 @@ export function FeatureCard({ feature, preview, onSave }: FeatureCardProps) {
             <span>
               Actualizada el <time dateTime={updated}>{shortDate(updated)}</time>
             </span>
-            <button
-              type="button"
-              className="pixel-button is-ghost feature-card-edit"
-              aria-label={`Editar ${feature.name}`}
-              onClick={() => setEditing(true)}
-            >
-              Editar
-            </button>
+            {onSave && (
+              <button
+                type="button"
+                className="pixel-button is-ghost feature-card-edit"
+                aria-label={`Editar ${feature.name}`}
+                onClick={() => setEditing(true)}
+              >
+                Editar
+              </button>
+            )}
           </footer>
         </div>
       )}
@@ -59,7 +62,7 @@ function FeatureForm({
   onDone,
 }: {
   feature: Feature;
-  onSave: FeatureCardProps['onSave'];
+  onSave: NonNullable<FeatureCardProps['onSave']>;
   onDone: () => void;
 }) {
   const [name, setName] = useState(feature.name);

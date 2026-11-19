@@ -7,6 +7,12 @@ import type { WalkieSharedModuleV0 } from '../schema/walkie-shared-module';
 import type { Layout, WalkieAppMapV0 } from '../schema/walkie-app-map';
 import type { WalkieImportSummaryV0 } from '../schema/walkie-import-summary';
 import type { Interface, WalkieModuleSummaryV0 } from '../schema/walkie-module-summary';
+import type { Role, WalkieAppMemberV0 } from '../schema/walkie-app-member';
+
+/** Rol en una app (spec autorizacion-por-app, ADR-0015): `viewer` lee, `editor` crea y edita, `owner` además administra. */
+export type AppRole = Role;
+/** Un miembro de una app (`walkie-app-member.schema.json`). */
+export type AppMember = WalkieAppMemberV0;
 
 /** Mapa de una app (`GET /api/apps/{appId}/map`, spec mapa-de-la-app). */
 export type AppMap = WalkieAppMapV0;
@@ -32,6 +38,8 @@ export interface App {
   createdAt: string;
   /** Cantidad de features (tarjetas de la galería). */
   featureCount: number;
+  /** Mi rol en la app (ADR-0015). */
+  role?: AppRole;
 }
 
 export interface Feature {
@@ -329,6 +337,37 @@ export function createShare(token: string, featureId: string, expiresInDays: Sha
 /** Enlaces activos de la feature (sin token), del más nuevo al más viejo. */
 export function listShares(token: string, featureId: string, signal?: AbortSignal): Promise<Share[]> {
   return request(`/api/features/${encodeURIComponent(featureId)}/shares`, { token, signal });
+}
+
+/** Miembros de la app con su rol (cualquier miembro los ve). */
+export function listMembers(token: string, appId: string, signal?: AbortSignal): Promise<AppMember[]> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/members`, { token, signal });
+}
+
+/** Suma a alguien que ya entró a Walkie, por su correo (owner). 400 si nunca entró; 409 si ya es miembro. */
+export function addMember(token: string, appId: string, email: string, role: AppRole): Promise<AppMember> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/members`, {
+    token,
+    method: 'POST',
+    body: JSON.stringify({ email, role }),
+  });
+}
+
+/** Cambia el rol de un miembro (owner). 409 si la app quedaría sin owner. */
+export function updateMember(token: string, appId: string, userId: string, role: AppRole): Promise<AppMember> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/members/${encodeURIComponent(userId)}`, {
+    token,
+    method: 'PUT',
+    body: JSON.stringify({ role }),
+  });
+}
+
+/** Quita a un miembro (owner) o a uno mismo (cualquiera). 409 si es el último owner. */
+export function removeMember(token: string, appId: string, userId: string): Promise<void> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/members/${encodeURIComponent(userId)}`, {
+    token,
+    method: 'DELETE',
+  });
 }
 
 /** 204: el enlace deja de funcionar en el acto. */

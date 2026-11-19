@@ -7,7 +7,7 @@ import { FeatureEditor } from '../canvas/FeatureEditor';
 import { useEditorNavigate } from '../canvas/editorNavigation';
 import { OriginPopover } from '../discovery/OriginPopover';
 import { Popover } from '../workspace/Popover';
-import { QueryState } from '../ui/QueryState';
+import { APP_NO_ACCESS, QueryState } from '../ui/QueryState';
 import { APPS_PATH, readModuleEntry, returnPath, type ModuleEntry } from '../workspace/paths';
 import { useEditorCatalog } from './editorCatalog';
 import { catalogPath } from './catalogPaths';
@@ -23,7 +23,7 @@ export function ModulePage() {
   const [search] = useSearchParams();
   const entry = readModuleEntry(search);
   const app = useApp(appId);
-  const { catalog, features, modules, error } = useEditorCatalog(appId, moduleId, moduleId);
+  const { catalog, features, modules, error, isOwner } = useEditorCatalog(appId, moduleId, moduleId);
   const module = modules.data?.find((m) => m.id === moduleId);
   const canvas = useCanvas(moduleId);
   const missing = modules.data !== undefined && !module;
@@ -34,7 +34,7 @@ export function ModulePage() {
         {missing ? (
           <p role="alert">Este módulo no existe en la app.</p>
         ) : (
-          <QueryState isPending={false} error={error ?? canvas.error} notFound="Esta app no existe." />
+          <QueryState isPending={false} error={error ?? canvas.error} notFound={APP_NO_ACCESS} />
         )}
         <p>
           <Link to={catalogPath(appId)}>Ver el catálogo de la app</Link> · <Link to={APPS_PATH}>Todas las apps</Link>
@@ -59,6 +59,7 @@ export function ModulePage() {
   return (
     <section className="feature-page module-page">
       <FeatureEditor
+        canShare={isOwner}
         featureId={moduleId}
         initialGraph={canvas.data}
         catalog={catalog}
@@ -66,7 +67,7 @@ export function ModulePage() {
         focusId={entry.select}
         focusCenter={!entry.keep}
         initialPlay={entry.play ? { tourId: entry.play, step: entry.step ?? 0 } : undefined}
-        banner={<ModuleBanner appId={appId} module={module} entry={entry} back={backTo} />}
+        banner={<ModuleBanner appId={appId} module={module} entry={entry} back={backTo} canEdit={!catalog.readOnly} />}
       />
     </section>
   );
@@ -78,11 +79,14 @@ function ModuleBanner({
   module,
   entry,
   back,
+  canEdit,
 }: {
   appId: string;
   module: ModuleSummary;
   entry: ModuleEntry;
   back: { path: string; name: string } | null;
+  /** Un viewer (ADR-0015) no edita el nombre ni la descripción. */
+  canEdit: boolean;
 }) {
   const onNavigate = useEditorNavigate();
   const uses = module.usedBy.length;
@@ -127,9 +131,11 @@ function ModuleBanner({
           />
         )}
       </Popover>
-      <Popover label="Editar el módulo" buttonLabel={<span>Editar</span>} className="module-banner-edit">
-        {(close) => <ModuleDetailsForm appId={appId} module={module} onDone={close} />}
-      </Popover>
+      {canEdit && (
+        <Popover label="Editar el módulo" buttonLabel={<span>Editar</span>} className="module-banner-edit">
+          {(close) => <ModuleDetailsForm appId={appId} module={module} onDone={close} />}
+        </Popover>
+      )}
       <OriginPopover appId={appId} target={`module:${module.id}`} />
       {entry.play && entry.step === undefined && <span className="module-banner-note">Reproduciendo el recorrido interno de la interfaz.</span>}
     </div>

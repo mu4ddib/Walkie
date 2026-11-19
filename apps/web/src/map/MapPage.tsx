@@ -13,7 +13,7 @@ import { useCameraController } from '../canvas/useCamera';
 import '@xyflow/react/dist/style.css';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError, type Feature } from '../api/client';
-import { useApp, useAppMap, useFeatures, useSaveMapLayout } from '../api/hooks';
+import { useApp, useAppMap, useAppRole, useFeatures, useSaveMapLayout } from '../api/hooks';
 import { ZoomControls } from '../canvas/ZoomControls';
 import { isTyping } from '../canvas/canvasShortcuts';
 import { EdgeMarkers } from '../edges/EdgeMarkers';
@@ -21,7 +21,7 @@ import { computePorts, staggerBends, type Rect } from '../edges/ports';
 import { routeAround } from '../edges/route';
 import type { NodeType } from '../store/graphStore';
 import { GRID, palette } from '../theme/palette';
-import { QueryState } from '../ui/QueryState';
+import { APP_NO_ACCESS, QueryState } from '../ui/QueryState';
 import { APPS_PATH, appPath, featurePath } from '../workspace/paths';
 import { getMapShowShared, setMapShowShared } from '../workspace/session';
 import type { CatalogMapFlowNode } from './CatalogMapNode';
@@ -75,7 +75,7 @@ export function MapPage() {
           <QueryState
             isPending={app.isPending || features.isPending || map.isPending}
             error={app.error ?? features.error ?? map.error}
-            notFound="Esta app no existe."
+            notFound={APP_NO_ACCESS}
           />
         </div>
       )}
@@ -86,6 +86,8 @@ export function MapPage() {
 function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<ReturnType<typeof useAppMap>['data']>; features: Feature[] }) {
   const navigate = useNavigate();
   const save = useSaveMapLayout(appId);
+  // Un viewer (ADR-0015) mira el mapa: no mueve cajas ni reordena (guardar la distribución es de editor).
+  const { canEdit } = useAppRole(appId);
   const { zoomIn, zoomOut } = useReactFlow();
   const camera = useCameraController();
   // Al mostrar u ocultar compartidos aparecen o se van cajas: se encuadra cuando React Flow ya las midió (no tras un
@@ -332,17 +334,19 @@ function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<R
           />
           Mostrar componentes compartidos{shared.length > 0 ? ` (${shared.length})` : ''}
         </label>
-        <button
-          type="button"
-          className="pixel-button is-ghost"
-          data-tip="Vuelve a la distribución automática"
-          onClick={() => {
-            setMoving({});
-            persist({});
-          }}
-        >
-          Reordenar
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            className="pixel-button is-ghost"
+            data-tip="Vuelve a la distribución automática"
+            onClick={() => {
+              setMoving({});
+              persist({});
+            }}
+          >
+            Reordenar
+          </button>
+        )}
         <Link className="pixel-button is-ghost" to={appPath(appId)}>
           Ver galería
         </Link>
@@ -360,6 +364,7 @@ function MapCanvas({ appId, map, features }: { appId: string; map: NonNullable<R
           if (node.type === 'feature') openFeature(node.id);
         }}
         nodesConnectable={false}
+        nodesDraggable={canEdit}
         deleteKeyCode={null}
         zoomOnDoubleClick={false}
         snapToGrid

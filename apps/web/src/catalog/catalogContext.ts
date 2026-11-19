@@ -20,6 +20,11 @@ export interface CanvasCatalog {
    * portales no se abren (la otra feature no está compartida) y las imágenes se piden con el token del enlace.
    */
   share?: { token: string };
+  /**
+   * Un `viewer` de la app (ADR-0015): el lienzo no se edita (como en un enlace), pero los portales y los módulos se abren
+   * y las imágenes se piden con la sesión.
+   */
+  readOnly?: boolean;
   /** Crea un componente en el catálogo de la app (panel "Componentes"); sin él, el panel no ofrece crear. */
   createItem?: (item: NewCatalogItem) => Promise<CatalogItem>;
   /**

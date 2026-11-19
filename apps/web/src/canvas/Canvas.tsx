@@ -305,7 +305,7 @@ function CanvasInner({
     return () => clearTimeout(timer);
   }, [notice]);
   // Un enlace de solo lectura (spec enlace-solo-lectura, criterio 6) o el modo tour bloquean la edición.
-  const readOnly = Boolean(catalog.share);
+  const readOnly = Boolean(catalog.share || catalog.readOnly);
   const locked = readOnly || playing !== null;
   const empty = Object.keys(graphNodes).length === 0;
   const flowRef = useRef<HTMLDivElement>(null);
@@ -323,7 +323,7 @@ function CanvasInner({
   // "Ver todo" deja libres la barra de herramientas y el inspector, que flotan sobre el lienzo.
   const fitPadding = useMemo(
     (): FitViewOptions['padding'] => {
-      const docked = inspectorOpen && !catalog.share;
+      const docked = inspectorOpen && !readOnly;
       // Debajo de 900 px el inspector es un panel inferior (canvas.css): ocupa alto, no ancho.
       const narrow = pane.width > 0 && pane.width < 900;
       return {
@@ -333,7 +333,7 @@ function CanvasInner({
         right: docked && !narrow ? '376px' : '56px',
       };
     },
-    [inspectorOpen, catalog.share, pane.width, pane.height],
+    [inspectorOpen, readOnly, pane.width, pane.height],
   );
 
   // «Ver todo» encuadra las cajas y también las etiquetas de las conexiones que sobresalen de ellas: si no, una
