@@ -32,11 +32,14 @@
 }
 
 .discovery-badge.is-complete {
-  color: var(--ok);
+  /* Texto oscuro y el color en el borde (tarea 11): --ok y --warn como texto no llegaban a 4,5:1 sobre arena. */
+  color: var(--ink);
+  border-color: var(--ok);
 }
 
 .discovery-badge.is-partial {
-  color: var(--warn);
+  color: var(--ink);
+  border-color: var(--warn);
 }
 
 .discovery-meta {
@@ -284,7 +287,7 @@
 }
 
 .discovery-item-key {
-  color: var(--stone-500);
+  color: var(--stone-700);
 }
 
 .discovery-status {
@@ -549,7 +552,7 @@
 }
 
 .discovery-needs-review {
-  color: var(--spice);
+  color: var(--spice-strong);
 }
 
 .new-app-name {

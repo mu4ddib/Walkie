@@ -1,5 +1,7 @@
 # Walkie analizado por Walkie Live
 
+> **Medición vigente (tarea 11, 2026-11-19, commit `f608457`):** 910 archivos en el alcance, 400 leídos, 1,5 s (3,4 s en frío), ~155 MB de memoria pico; 46 APIs (las 46 llamadas `Map*` de `apps/api/src`), 2 servicios, 6 bases (5 `DbContext` lógicos y la del compose), 2 recursos, 6 módulos, 11 pantallas (las 11 rutas sin comodín), 3 candidatos a feature (confianza baja), 77 relaciones (46 `exposes`, 22 `depends-on`, 9 `navigates`) y **ninguna** `calls`. Análisis parcial. Lo que no detecta y por qué (las 43 APIs que la web llama por `request()` y la navegación por funciones como `appPath()`), con su impacto en los lienzos, está en [`validacion.md`](validacion.md#2-walkie-analiza-walkie). Las secciones de abajo son las mediciones de las tareas 2, 7 y 8, como quedaron entonces.
+
 Resultado real de `walkie scan` sobre este repositorio (tareas 2 y 7 de `plan.md`), para validar el analizador con un proyecto de verdad. No es una expectativa: sale de ejecutarlo. Las pruebas `WalkieRepositoryTests` (`apps/cli/tests`) lo repiten sin fijar números a mano.
 
 ```bash

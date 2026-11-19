@@ -81,7 +81,7 @@ Cada tarea cabe en una sesión y en un PR.
    - navegación → `navigates`.
 9. [x] (#171) Aplicar módulos y features: módulo con su lienzo e interfaces `provides` y feature con lienzo inicial (pantallas y `ref`, ubicadas con `autoLayout`).
 10. [x] (#172) Reanalizar: diferencias con el análisis anterior (cambiado, ya no aparece; sin borrar nada) y «Crear app desde proyecto local» (`POST /api/sources/import`).
-11. [ ] (#173) Rendimiento y E2E de punta a punta con Walkie analizándose a sí mismo; límites del paquete medidos.
+11. [x] (#173) Rendimiento y E2E de punta a punta con Walkie analizándose a sí mismo; límites del paquete medidos.
 
 Dependencias:
 - 2 y 3 dependen de 1;
@@ -159,4 +159,16 @@ Tarea 10 hecha (reanalizar y crear app desde proyecto local; ADR-0012 y ADR-0014
 - **Auditorías:** A, «Ver todo» y el encuadre al abrir incluyen las etiquetas de las conexiones; B, `AlreadyCreated` solo se atribuye una fila del mismo usuario creada desde la bitácora; C, la compensación revisa el lienzo antes de borrar la feature.
 - **Pruebas:** 15 de integración de la importación (`DiscoverySourceImportTests`), 9 de reanálisis (`DiscoveryReanalysisTests`), 1 de atribución (`DiscoveryCanvasTests`), 9 de Vitest (`newAppFromProject.test.tsx`), el E2E `walkie-live-reanalisis.spec.ts` (CLI real, corte de red tras crear, reanálisis con diferencias) y la comprobación de etiquetas en `walkie-live-lienzos.spec.ts`. Revisión comparada con 20.000 hallazgos: 224 ms la primera página; filtros 105 ms.
 
-Sigue: revisión técnica, funcional y visual antes de la tarea 11.
+Tarea 11 hecha (validación integral, rendimiento y preparación para integrar; detalle en [`validacion.md`](validacion.md)):
+
+- **Walkie analizándose a sí mismo** con métricas (910/400 archivos, 1,5 s, 46/46 APIs, 11/11 pantallas, 0 de 43 llamadas por `request()`) y el E2E completo `walkie-live-walkie.spec.ts`.
+- **Defectos corregidos:**
+  - una importación pendiente con la app tocada bloqueaba la fuente (`abandoned`, migración `SourceImportAbandoned`);
+  - `ApplyJournal.Down` no se podía ejecutar;
+  - la vista previa de un módulo sin APIs en el catálogo no tenía salida;
+  - análisis simultáneos de la misma fuente daban 500 o bifurcaban la cadena;
+  - tres colores de texto bajo 4,5:1.
+- **Pruebas nuevas:** `DiscoveryNonDestructiveTests`, `DiscoveryLimitsTests`, `DiscoveryLoadTests` (concurrencia siempre; matriz con `WALKIE_BENCH=1`) y `DiscoveryMigrationTests`; un caso de integridad en `DiscoveryCanvasTests` y otro de vista previa en `DiscoveryCatalogTests`. `deshacer-y-cajas` espera la selección antes de `Supr`. E2E en WebKit con `WALKIE_BROWSER=webkit`.
+- **ADR-0015** (propuesto): autorización por app, bloqueante para el piloto.
+
+Sigue: revisión final de Walkie Live. Ver la recomendación en `validacion.md` §17.

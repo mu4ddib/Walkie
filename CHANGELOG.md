@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Walkie Live, **validación integral** (spec `walkie-live`, tarea 11, #173): Walkie analizándose a sí mismo de punta a punta, verificación no destructiva sobre una app documentada a mano, límites, concurrencia, matriz de rendimiento, migraciones de ida y vuelta, E2E en WebKit y ADR-0015 (autorización por app, propuesto y bloqueante para el piloto). Resultados en `docs/features/walkie-live/validacion.md`.
 - Walkie Live, **reanalizar y crear una app desde un proyecto local** (spec `walkie-live`, tarea 10, #172; ADR-0012 y ADR-0014):
   - **Comparar con el análisis anterior:** la revisión dice con qué análisis se compara (fecha, commit, completo o parcial) y marca qué es nuevo, qué cambió, qué sigue igual y qué requiere revisión; cada cifra filtra la lista. Lo decidido que el análisis nuevo no podía ver (un detector que no corrió, fuera del alcance) queda «Sin cobertura» con el porqué, nunca como «Ya no aparece». Nada se borra, ningún lienzo, catálogo, módulo, interfaz ni tour cambia, y las decisiones se conservan.
   - **«Cargar análisis nuevo»** en cada fuente de la página de la app.
@@ -40,6 +41,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Documentación alineada con el código: sin módulo «Tours» en la API, `resource` en el catálogo del glosario, spec `exportar-e-importar` marcada como implementada, qué ids genera el cliente y cuáles la API, y regla nueva: si la documentación contradice el código, se señala y se propone cómo resolverlo antes de cambiar el comportamiento.
 
 ### Fixed
+- Walkie Live (tarea 11): una creación de app pendiente cuya app alguien tocó ya no bloquea para siempre ese proyecto (queda abandonada sin borrar nada); dos análisis del mismo proyecto subidos a la vez ya no dan error ni se encadenan mal; la vista previa de un módulo cuyas APIs no están en el catálogo deja sumarlas; la reversión de la migración `ApplyJournal` funciona; mejor contraste de «Análisis parcial», «Requiere revisión» y las claves de la revisión.
 - **«Ver todo» sin saltos en Safari** (spec `fluidez`, criterio 13): con todo el lienzo a la vista, Safari tarda en pintar cada cuadro y la transición de 320 ms se dibujaba en 3 o 4 cuadros (uno cubría más de la mitad del camino). Ahora el reloj de la cámara empieza en el segundo cuadro y ningún cuadro avanza más de un décimo del tiempo: si el equipo va lento, el movimiento dura algo más pero llega en al menos 10 pasos. A 60 fps no cambia nada. El banco mide también en WebKit (`WALKIE_BROWSER=webkit`, escenario `camara`).
 
 ### Changed

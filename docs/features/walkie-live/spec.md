@@ -64,7 +64,7 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 ### Seguridad
 
 - [x] Los endpoints de Discovery responden solo con `Discovery:Enabled` encendido (apagado por defecto fuera de Development); apagado, responden 404.
-- [ ] **Bloqueo:** no se habilita la importación de proyectos privados para usuarios reales (piloto ni producción) hasta que exista autorización por app (ADR-0012). Encender `Discovery:Enabled` en un entorno con usuarios reales exige el ADR de esa autorización.
+- [ ] **Bloqueo:** no se habilita la importación de proyectos privados para usuarios reales (piloto ni producción) hasta que exista autorización por app (ADR-0012). Encender `Discovery:Enabled` en un entorno con usuarios reales exige implementar y probar ADR-0015 (propuesto en la tarea 11, con pruebas IDOR); mantener el flag apagado no lo resuelve.
 - [x] El paquete se lee con límites (tamaño, entradas, descomprimido) y sin seguir rutas fuera del zip; nada del paquete se ejecuta ni se interpreta como HTML en la web.
 
 ## Fuera de alcance
