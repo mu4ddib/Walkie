@@ -86,6 +86,7 @@ Analizar el propio repo sin escribir en él: `--source-id <uuid>`. Así no se cr
 
 ## Trampas conocidas
 
+- **No versiones `.walkie/source.json` del propio repo**: `walkie scan .` en la raíz lo crea, pero `WalkieRepositoryTests` exige que no exista (analizar Walkie no escribe en él). Usa `--source-id <uuid>` (o bórralo después).
 - **Un detector sin nada que mirar queda `ran`, no `skipped`.**
   - El validador exige que todos los detectores hayan corrido para un análisis `complete`, y `skipped` lo deja parcial.
   - `IDetector.NotApplicable` da el motivo («No hay apps Angular en el alcance»), que va en `reason` con estado `ran`.
