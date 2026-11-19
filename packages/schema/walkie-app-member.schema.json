@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-app-member.schema.json",
+  "title": "Walkie app member v0",
+  "description": "Un miembro de una app con su rol (spec autorizacion-por-app, ADR-0015). GET /api/apps/{appId}/members devuelve un arreglo de estos; POST y PUT de un miembro devuelven uno.",
+  "type": "object",
+  "required": ["userId", "name", "role", "grantedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "userId": { "type": "string", "minLength": 1, "maxLength": 200, "description": "El claim sub de la persona" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Nombre que dio el token al entrar; si no dio uno, el correo o el id" },
+    "email": { "type": "string", "maxLength": 320, "description": "Correo en minúsculas, si el token lo trajo" },
+    "role": { "$ref": "#/$defs/role" },
+    "grantedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "role": {
+      "type": "string",
+      "enum": ["owner", "editor", "viewer"],
+      "description": "viewer lee; editor además crea y edita; owner además borra del catálogo y módulos, maneja enlaces y miembros"
+    }
+  }
+}
