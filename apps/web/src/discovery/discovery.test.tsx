@@ -426,7 +426,7 @@ describe('revisión de un análisis', () => {
       seed({ reviews: { [OLD_SNAPSHOT_ID]: { sourceId: SOURCE.id, items: ITEMS } } }),
       `/apps/${APP_ID}/sources/${OLD_SNAPSHOT_ID}`,
     );
-    expect(screen.getByRole('note')).toHaveTextContent('Este no es el último análisis');
+    expect(screen.getAllByRole('note').find((n) => n.textContent?.includes('Este no es el'))).toHaveTextContent('Este no es el último análisis');
     expect(screen.getByRole('link', { name: 'el último' })).toHaveAttribute('href', `/apps/${APP_ID}/sources/${SNAPSHOT_ID}`);
     await userEvent.click(row(/onerror/));
     expect(screen.queryByRole('button', { name: 'Descartar…' })).not.toBeInTheDocument();

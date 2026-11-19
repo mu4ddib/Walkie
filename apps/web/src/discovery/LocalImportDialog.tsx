@@ -1,19 +1,15 @@
-import { useEffect, useId, useState, type DragEvent } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { WALKIEPACK_MAX_BYTES, type DiscoveryUpload } from '../api/client';
+import type { DiscoveryUpload } from '../api/client';
 import { useUploadSnapshot } from '../api/hooks';
 import { ImportErrors } from '../gallery/ImportDialog';
 import { AnalysisSummary } from './AnalysisSummary';
+import { PackSteps } from './PackSteps';
+import { walkiepackError } from './walkiepack';
 import { reviewPath } from './discoveryText';
+import { formatDayAndTime } from '../share/shareFormat';
 import '../share/share.css';
 import './discovery.css';
-
-const SCAN = 'walkie scan .';
-/** La CLI se distribuye hoy como herramienta .NET desde el repositorio de Walkie (apps/cli/CLAUDE.md). */
-const INSTALL = [
-  'dotnet pack apps/cli/src/Walkie.Cli -c Release -o ./walkie-cli',
-  'dotnet tool install --global Walkie.Cli --add-source ./walkie-cli',
-];
 
 /**
  * «Importar proyecto local» (spec walkie-live, tarea 5): explica cómo generar el paquete con la CLI, valida el
@@ -28,9 +24,7 @@ export function LocalImportDialog({ appId, onClose }: { appId: string; onClose: 
   const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   const titleId = useId();
-  const inputId = useId();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -44,21 +38,12 @@ export function LocalImportDialog({ appId, onClose }: { appId: string; onClose: 
     setFileError(null);
     setFile(chosen);
     if (!chosen) return;
-    if (!chosen.name.toLowerCase().endsWith('.walkiepack')) {
-      setFileError('Elige un archivo .walkiepack (lo genera «walkie scan»).');
-      return;
-    }
-    if (chosen.size > WALKIEPACK_MAX_BYTES) {
-      setFileError('El paquete pasa de 50 MB. Analiza una parte del proyecto («walkie scan <carpeta>» o --detectors).');
+    const problem = walkiepackError(chosen);
+    if (problem) {
+      setFileError(problem);
       return;
     }
     check.mutate({ file: chosen, dryRun: true });
-  }
-
-  function onDrop(e: DragEvent) {
-    e.preventDefault();
-    setDragging(false);
-    choose(e.dataTransfer.files[0] ?? null);
   }
 
   function open(result: DiscoveryUpload) {
@@ -87,57 +72,7 @@ export function LocalImportDialog({ appId, onClose }: { appId: string; onClose: 
           descubierto se revisa antes de sumar nada a la app.
         </p>
 
-        <ol className="discovery-steps">
-          <li>
-            En la raíz del proyecto, ejecuta:
-            <Copyable text={SCAN} />
-            <span>
-              Genera <code>architecture.walkiepack</code> en esa carpeta.
-            </span>
-            <details className="discovery-details">
-              <summary>Cómo instalar walkie</summary>
-              <p>
-                Es una herramienta de .NET (necesita el SDK de .NET 10). Hoy se instala desde el repositorio de Walkie; desde su raíz:
-              </p>
-              {INSTALL.map((command) => (
-                <Copyable key={command} text={command} />
-              ))}
-              <p>
-                Sin instalarla: <code>dotnet run --project apps/cli/src/Walkie.Cli -- scan &lt;carpeta&gt;</code>. Opciones:{' '}
-                <code>walkie --help</code>.
-              </p>
-            </details>
-            <p className="discovery-note">
-              Solo lee archivos: no compila, no instala dependencias ni ejecuta nada del proyecto. No lee <code>.env</code>, claves ni
-              certificados, y la evidencia lleva rutas relativas y líneas, sin código. La primera vez crea{' '}
-              <code>.walkie/source.json</code> con el id de la fuente: versiónalo para que Walkie reconozca los análisis siguientes.
-            </p>
-          </li>
-          <li>
-            Elige el archivo generado:
-            {!save.data && (
-              <label
-                htmlFor={inputId}
-                className={`discovery-drop ${dragging ? 'is-dragging' : ''}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={onDrop}
-              >
-                <span>{file ? file.name : 'Arrastra aquí el .walkiepack o haz clic para elegirlo'}</span>
-                <input
-                  id={inputId}
-                  type="file"
-                  accept=".walkiepack,application/zip"
-                  aria-label="Archivo .walkiepack"
-                  onChange={(e) => choose(e.target.files?.[0] ?? null)}
-                />
-              </label>
-            )}
-          </li>
-        </ol>
+        <PackSteps file={file} onChoose={choose} hidePicker={!!save.data} />
 
         {fileError && (
           <p role="alert" className="save-error">
@@ -155,6 +90,12 @@ export function LocalImportDialog({ appId, onClose }: { appId: string; onClose: 
         {preview && !error && (
           <>
             <AnalysisSummary analysis={{ ...preview.summary, source: preview.summary.source }} entities={preview.summary.entities} />
+            {preview.summary.previous && !existing && (
+              <p className="discovery-note" role="note">
+                Esta fuente ya tiene análisis en la app: el nuevo se comparará con el del {formatDayAndTime(preview.summary.previous.generatedAt)}. Lo
+                decidido se conserva y nada se borra.
+              </p>
+            )}
             {existing ? (
               <p role="status" className="discovery-note">
                 {preview.duplicate === 'pack'
@@ -191,28 +132,5 @@ export function LocalImportDialog({ appId, onClose }: { appId: string; onClose: 
         </div>
       </div>
     </div>
-  );
-}
-
-/** Un comando con su botón de copiar. */
-function Copyable({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <span className="discovery-command">
-      <code>{text}</code>
-      <button
-        type="button"
-        className="pixel-button is-ghost"
-        aria-label={`Copiar ${text}`}
-        onClick={() =>
-          void navigator.clipboard?.writeText(text).then(
-            () => setCopied(true),
-            () => setCopied(false),
-          )
-        }
-      >
-        {copied ? 'Copiado' : 'Copiar'}
-      </button>
-    </span>
   );
 }

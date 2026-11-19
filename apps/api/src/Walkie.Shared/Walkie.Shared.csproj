@@ -32,6 +32,8 @@
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-sources.schema.json" LogicalName="walkie-discovery-sources.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-evidence.schema.json" LogicalName="walkie-discovery-evidence.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-provenance.schema.json" LogicalName="walkie-discovery-provenance.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-source-import.schema.json" LogicalName="walkie-discovery-source-import.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-status.schema.json" LogicalName="walkie-discovery-status.schema.json" />
   </ItemGroup>
 
 </Project>

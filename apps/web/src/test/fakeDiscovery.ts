@@ -3,6 +3,7 @@ import type {
   DiscoveryApplyResult,
   DiscoveryEvidence,
   DiscoveryOperation,
+  DiscoveryReview,
   DiscoveryReviewItem,
   DiscoverySnapshot,
   DiscoverySources,
@@ -16,7 +17,10 @@ export interface DiscoverySeed {
   /** Fuentes por app (`GET /api/apps/{appId}/sources`). */
   sources?: Record<string, DiscoverySources['sources']>;
   /** Hallazgos por análisis (`GET /api/snapshots/{id}/review`): la fake filtra, pagina y cuenta como la API. */
-  reviews?: Record<string, { sourceId: string; items: DiscoveryReviewItem[] }>;
+  reviews?: Record<
+    string,
+    { sourceId: string; items: DiscoveryReviewItem[]; previous?: DiscoveryReview['previous']; comparison?: DiscoveryReview['comparison'] }
+  >;
   /** Evidencia por `${snapshotId}|${entityKey}`; la que falte responde 404. */
   evidence?: Record<string, DiscoveryEvidence>;
   /**
@@ -42,19 +46,81 @@ type Json = (status: number, body: unknown) => Response;
  * hace que la próxima aplicación real termine `compensated` sin crear nada. `GET /api/apps/{appId}/bindings` responde
  * la procedencia a partir de los vínculos.
  */
-export function fakeDiscovery(seed: DiscoverySeed | undefined, json: Json, catalog: CatalogItem[] = []) {
+export function fakeDiscovery(
+  seed: DiscoverySeed | undefined,
+  json: Json,
+  catalog: CatalogItem[] = [],
+  createApp: (name: string) => string = () => 'app-nueva',
+) {
   const sources = Object.fromEntries(Object.entries(seed?.sources ?? {}).map(([k, v]) => [k, [...v]]));
   const reviews = Object.fromEntries(
     Object.entries(seed?.reviews ?? {}).map(([k, v]) => [k, { ...v, items: v.items.map((i) => structuredClone(i)) }]),
   );
   const applies: { snapshotId: string; dryRun: boolean; body: { applyId: string; operations: DiscoveryOperation[] } }[] = [];
   const done = new Map<string, DiscoveryApplyResult>();
-  const next: { uploadErrors?: { status: number; errors?: Record<string, string[]> }; applyStatus?: number; compensate?: boolean } = {};
+  const next: {
+    uploadErrors?: { status: number; errors?: Record<string, string[]> };
+    applyStatus?: number;
+    compensate?: boolean;
+    /** El próximo `POST /api/sources/import` sin dryRun responde este estado (ej. 409 por nombre, 500 sin terminar). */
+    importStatus?: number;
+    /** El próximo `POST /api/sources/import` sin dryRun falla por red después de crear (la respuesta no llega). */
+    importNetworkError?: boolean;
+  } = {};
+  /** Creaciones de apps desde un proyecto local por importId (tarea 10): un reintento devuelve la misma. */
+  const imports = new Map<string, { appId: string; name: string }>();
+  const importRequests: { dryRun: boolean; name: string | null; importId: string | null }[] = [];
   const appOf = (sourceId: string) =>
     Object.entries(sources).find(([, list]) => list.some((s) => s.source.id === sourceId))?.[0] ?? 'app-1';
   const notFound = () => json(404, { title: 'Not Found', status: 404 });
 
   function handle(parts: string[], url: URL, method: string, init?: RequestInit): Response | null {
+    // /api/discovery — si Walkie Live está encendido (tarea 10).
+    if (parts[1] === 'discovery' && parts.length === 2 && method === 'GET') {
+      return seed ? json(200, { enabled: true, formatVersion: 1, maxPackBytes: 50 * 1024 * 1024 }) : notFound();
+    }
+    // /api/sources/import — crear una app desde un proyecto local (tarea 10).
+    if (parts[1] === 'sources' && parts[2] === 'import' && method === 'POST') {
+      if (!seed) return notFound();
+      const dryRun = url.searchParams.get('dryRun') === 'true';
+      const form = init?.body as FormData;
+      const name = (form.get('name') as string | null) ?? null;
+      const importId = (form.get('importId') as string | null) ?? null;
+      importRequests.push({ dryRun, name, importId });
+      if (next.uploadErrors && dryRun) {
+        const { status, errors } = next.uploadErrors;
+        delete next.uploadErrors;
+        return json(status, { title: 'Paquete inválido', status, errors });
+      }
+      if (!seed.upload) return json(400, { title: 'Paquete inválido', status: 400, errors: { 'manifest.json': ['Falta.'] } });
+      const { summary, snapshot } = seed.upload;
+      const proposed = summary.source.name;
+      if (dryRun) {
+        return json(200, { dryRun, status: 'preview', app: { name: name ?? proposed, nameTaken: false }, summary: { ...summary, appId: undefined }, warnings: [] });
+      }
+      if (next.importStatus) {
+        const status = next.importStatus;
+        delete next.importStatus;
+        return json(status, { title: status === 409 ? 'Ya hay una app con ese nombre: elige otro.' : 'No se pudo crear la app: quedó pendiente.', status });
+      }
+      const known = importId ? imports.get(importId) : undefined;
+      const created = known ?? { appId: createApp(name!), name: name! };
+      if (importId) imports.set(importId, created);
+      const body = {
+        importId,
+        dryRun,
+        status: known ? 'existing' : 'created',
+        app: { id: created.appId, name: created.name, nameTaken: false },
+        snapshot: { ...snapshot, appId: created.appId },
+        summary: { ...summary, appId: created.appId },
+        warnings: [],
+      };
+      if (next.importNetworkError) {
+        delete next.importNetworkError;
+        return Promise.reject(new TypeError('Failed to fetch')) as unknown as Response;
+      }
+      return json(known ? 200 : 201, body);
+    }
     // /api/apps/{appId}/bindings?target=catalogItem:{id} — procedencia (tarea 6).
     if (parts[1] === 'apps' && parts[3] === 'bindings' && method === 'GET') {
       if (!seed) return notFound();
@@ -95,19 +161,29 @@ export function fakeDiscovery(seed: DiscoverySeed | undefined, json: Json, catal
       const status = url.searchParams.get('status');
       const index = Number(url.searchParams.get('page') ?? 0);
       const size = Number(url.searchParams.get('pageSize') ?? 50);
+      const change = url.searchParams.get('change');
+      const needsReview = url.searchParams.get('needsReview') === 'true';
       const counts = Object.fromEntries(
-        (['new', 'matched', 'linked', 'created', 'rejected', 'changed', 'missing'] as DiscoveryStatus[]).map((s) => [
+        (['new', 'matched', 'linked', 'created', 'rejected', 'changed', 'missing', 'unverified'] as DiscoveryStatus[]).map((s) => [
           s,
           review.items.filter((i) => i.status === s && (!kind || i.kind === kind)).length,
         ]),
       );
-      const filtered = review.items.filter((i) => (!kind || i.kind === kind) && (!status || i.status === status));
+      const filtered = review.items.filter(
+        (i) =>
+          (!kind || i.kind === kind) &&
+          (!status || i.status === status) &&
+          (!change || i.change === change) &&
+          (!needsReview || i.needsReview),
+      );
       return json(200, {
         snapshotId,
         sourceId: review.sourceId,
         counts,
         page: { index, size, total: filtered.length },
         items: filtered.slice(index * size, (index + 1) * size),
+        ...(review.previous ? { previous: review.previous, previousSnapshotId: review.previous.id } : {}),
+        ...(review.comparison ? { comparison: review.comparison } : {}),
       });
     }
 

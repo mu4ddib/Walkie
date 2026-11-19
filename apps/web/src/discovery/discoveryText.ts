@@ -41,9 +41,28 @@ export const STATUS: Record<DiscoveryStatus, { label: string; glyph: string; hel
     glyph: '?',
     help: 'Estaba vinculado y este análisis, que sí miró donde estaba, ya no lo encontró. No se borra nada: decide tú si sigue vigente.',
   },
+  unverified: {
+    label: 'Sin cobertura',
+    glyph: '◌',
+    help: 'Estaba vinculado y no aparece, pero este análisis no miró donde estaba (un detector no corrió, quedó fuera del alcance o lo alcanza una limitación). No se concluye que desapareció.',
+  },
 };
 
-export const STATUS_ORDER: DiscoveryStatus[] = ['new', 'matched', 'changed', 'missing', 'linked', 'created', 'rejected'];
+export const STATUS_ORDER: DiscoveryStatus[] = ['new', 'matched', 'changed', 'missing', 'unverified', 'linked', 'created', 'rejected'];
+
+/**
+ * Cómo cambió cada hallazgo respecto del análisis anterior de la misma fuente (tarea 10). Lo calcula la API; aquí solo
+ * hay textos. Distinto del estado: «Nuevo en este análisis» puede estar ya vinculado (por ejemplo, tras renombrar).
+ */
+export type Change = 'added' | 'modified' | 'unchanged';
+
+export const CHANGE: Record<Change, { label: string; glyph: string; help: string }> = {
+  added: { label: 'Nuevo en este análisis', glyph: '+', help: 'No estaba en el análisis anterior.' },
+  modified: { label: 'Cambió desde el anterior', glyph: 'Δ', help: 'Estaba en el análisis anterior y cambió su contenido (por ejemplo, su contrato).' },
+  unchanged: { label: 'Sin cambios', glyph: '=', help: 'Estaba en el análisis anterior y sigue igual.' },
+};
+
+export const CHANGE_ORDER: Change[] = ['added', 'modified', 'unchanged'];
 
 /** Lo que se puede crear en el catálogo desde un hallazgo (tarea 6). Módulos y features llegan en la tarea 9. */
 export const CREATABLE_KINDS: readonly string[] = ['api', 'service', 'database', 'resource'];

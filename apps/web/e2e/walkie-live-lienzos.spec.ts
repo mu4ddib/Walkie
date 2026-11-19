@@ -108,6 +108,7 @@ async function openCanvas(page: Page, link: string, boxes: number) {
   await expect(page.locator('.react-flow__node')).toHaveCount(boxes, { timeout: 15_000 });
   const openMs = Date.now() - started;
   await expect(saveStatus(page)).toHaveAttribute('data-state', 'idle'); // «Al día»: abrirlo no lo ensucia
+  await expectLabelsInView(page); // el encuadre al abrir incluye las etiquetas (tarea 10, auditoría A)
   // «Ver todo» (tecla 0) con teclado real, midiendo cada cuadro y las tareas largas mientras la cámara se mueve.
   await page.evaluate(() => {
     const w = window as unknown as { __frames: number[]; __long: number[]; __stop: boolean };
@@ -139,7 +140,20 @@ async function openCanvas(page: Page, link: string, boxes: number) {
   );
   expect(worst).toBeLessThan(200);
   expect(openMs).toBeLessThan(5_000);
+  await expectLabelsInView(page);
   return openMs;
+}
+
+/** Ninguna etiqueta de conexión queda debajo del inspector ni fuera del lienzo (espera a que la cámara se asiente). */
+async function expectLabelsInView(page: Page) {
+  await expect
+    .poll(async () => {
+      const inspector = await page.locator('.inspector.floating').boundingBox();
+      const pane = await page.locator('.react-flow').boundingBox();
+      const labels = await page.locator('.kind-edge-label').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
+      return labels.filter((r) => (inspector && r.right > inspector.x) || r.left < pane!.x || r.bottom > pane!.y + pane!.height).length;
+    })
+    .toBe(0);
 }
 
 /** Las cajas del lienzo no se tocan entre sí (lo que ve la persona, ya medido). */
@@ -164,7 +178,7 @@ test('crear un módulo y dos features «Pedidos» de un monorepo, editarlas y re
   await login(page);
   const app = `E2E Walkie Live lienzos ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   const appUrl = page.url();
   const appId = /apps\/([^/?#]+)/.exec(appUrl)![1]!;

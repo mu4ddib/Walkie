@@ -8,7 +8,8 @@
     "created": 0,
     "rejected": 1,
     "changed": 0,
-    "missing": 0
+    "missing": 0,
+    "unverified": 0
   },
   "page": {
     "index": 0,
@@ -43,7 +44,8 @@
       "evidenceCount": 2,
       "proposal": {
         "op": "none"
-      }
+      },
+      "needsReview": false
     },
     {
       "key": "api:POST /api/pedidos",
@@ -69,7 +71,8 @@
           "id": "0198f0c0-3333-7000-8000-000000000302",
           "title": "POST /api/pedidos"
         }
-      }
+      },
+      "needsReview": true
     },
     {
       "key": "database:postgresql/tienda",
@@ -82,7 +85,8 @@
       "evidenceCount": 2,
       "proposal": {
         "op": "create"
-      }
+      },
+      "needsReview": true
     },
     {
       "key": "feature:web:Ver pedido",
@@ -106,7 +110,8 @@
       "evidenceCount": 1,
       "proposal": {
         "op": "none"
-      }
+      },
+      "needsReview": false
     }
   ]
 }

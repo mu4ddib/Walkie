@@ -287,7 +287,11 @@ public sealed class DiscoveryReviewTests(WalkieApiFactory factory)
         var review = await ReviewAsync(client, second);
 
         Assert.Equal(0, review.GetProperty("counts").GetProperty("missing").GetInt32());
-        Assert.DoesNotContain(review.GetProperty("items").EnumerateArray(), i => i.GetProperty("key").GetString() == Db);
+        // Tarea 10: no es missing, pero tampoco se esconde: «Sin cobertura», con lo que este análisis no cubrió.
+        var shown = Assert.Single(review.GetProperty("items").EnumerateArray(), i => i.GetProperty("key").GetString() == Db);
+        Assert.Equal("unverified", shown.GetProperty("status").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(shown.GetProperty("coverage").GetString()));
+        Assert.Equal(1, review.GetProperty("counts").GetProperty("unverified").GetInt32());
     }
 
     [Fact]

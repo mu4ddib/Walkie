@@ -52,6 +52,11 @@ export function ReviewInspector({
         <span aria-hidden="true">{status.glyph}</span> {status.label}
       </p>
       <p className="panel-help">{status.help}</p>
+      {item.coverage && (
+        <p className="discovery-note" role="note">
+          <strong>Por qué no se concluye:</strong> {item.coverage}
+        </p>
+      )}
       <dl className="discovery-facts">
         <dt>Tipo</dt>
         <dd>{KIND[item.kind] ?? item.kind}</dd>

@@ -5,6 +5,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Walkie Live, **reanalizar y crear una app desde un proyecto local** (spec `walkie-live`, tarea 10, #172; ADR-0012 y ADR-0014):
+  - **Comparar con el análisis anterior:** la revisión dice con qué análisis se compara (fecha, commit, completo o parcial) y marca qué es nuevo, qué cambió, qué sigue igual y qué requiere revisión; cada cifra filtra la lista. Lo decidido que el análisis nuevo no podía ver (un detector que no corrió, fuera del alcance) queda «Sin cobertura» con el porqué, nunca como «Ya no aparece». Nada se borra, ningún lienzo, catálogo, módulo, interfaz ni tour cambia, y las decisiones se conservan.
+  - **«Cargar análisis nuevo»** en cada fuente de la página de la app.
+  - **«Crear app desde proyecto local»** en la galería: guía de la CLI, el `.walkiepack`, vista previa sin crear nada y nombre editable; crea la app vacía con su primer análisis y abre la revisión. Un reintento, un corte de red o dos solicitudes a la vez no crean apps duplicadas; si falla a mitad, se deshace solo si nadie tocó la app. Distinta de «Importar app» (`.walkie`). Solo aparece con Discovery encendido (`GET /api/discovery`).
+  - **«Ver todo» y el encuadre al abrir un lienzo** incluyen las etiquetas de las conexiones: ya no quedan bajo el inspector.
 - Walkie Live, **crear módulos y features con su lienzo inicial** (spec `walkie-live`, tarea 9, #171; ADR-0012):
   - **Feature:** en la revisión, «Crear feature…» convierte un candidato en una feature nueva, con sus pantallas, la navegación que el análisis vio entre ellas y sus llamadas a las APIs que ya están en el catálogo (o a la interfaz del módulo que las ofrece).
   - **Módulo:** «Crear módulo…» crea un módulo con sus APIs y las interfaces que su código justifica.

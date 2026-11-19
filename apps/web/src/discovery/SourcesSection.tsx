@@ -6,7 +6,8 @@ import './discovery.css';
 
 /**
  * «Proyectos locales» en la página de una app (spec walkie-live, tarea 5): cada fuente con su último análisis (fecha,
- * completitud, commit) y acceso a su revisión, o el estado vacío con cómo empezar. Solo se monta si Discovery está
+ * completitud, commit), acceso a su revisión y a cargar un análisis nuevo para compararlo (reanálisis, tarea 10), o el
+ * estado vacío con cómo empezar. Solo se monta si Discovery está
  * disponible (la API responde las fuentes): con Discovery apagado no hay nada que parezca funcionar.
  */
 export function SourcesSection({ sources, onImport }: { sources: DiscoverySources; onImport: () => void }) {
@@ -47,6 +48,15 @@ export function SourcesSection({ sources, onImport }: { sources: DiscoverySource
                 <Link className="pixel-button" to={reviewPath(latestSnapshot.appId, latestSnapshot.id)}>
                   Revisar
                 </Link>
+                <button
+                  type="button"
+                  className="pixel-button is-ghost"
+                  title="Carga un .walkiepack nuevo de este proyecto: se compara con el último y lo decidido se conserva"
+                  aria-label={`Cargar análisis nuevo de ${source.name}`}
+                  onClick={onImport}
+                >
+                  Cargar análisis nuevo
+                </button>
               </div>
             </li>
           ))}

@@ -492,6 +492,88 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                     b.ToTable("sources", "discovery");
                 });
 
+            modelBuilder.Entity("Walkie.Modules.Discovery.Domain.SourceImport", b =>
+                {
+                    b.Property<Guid>("ImportId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<string>("AppName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("app_name");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("error");
+
+                    b.Property<string>("PackSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("pack_sha256")
+                        .IsFixedLength();
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("request_hash")
+                        .IsFixedLength();
+
+                    b.Property<Guid?>("SnapshotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("snapshot_id");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("ImportId");
+
+                    b.HasIndex("AppId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_source_imports_app");
+
+                    b.HasIndex("SnapshotId");
+
+                    b.HasIndex("SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_source_imports_pending_source")
+                        .HasFilter("status = 'pending'");
+
+                    b.ToTable("source_imports", "discovery", t =>
+                        {
+                            t.HasCheckConstraint("ck_source_imports_status", "status IN ('pending', 'completed', 'compensated') AND (status <> 'completed' OR snapshot_id IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Walkie.Modules.Discovery.Domain.ApplyRecord", b =>
                 {
                     b.HasOne("Walkie.Modules.Discovery.Domain.Snapshot", null)
@@ -575,6 +657,14 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                         .HasForeignKey("AppId", "SourceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Walkie.Modules.Discovery.Domain.SourceImport", b =>
+                {
+                    b.HasOne("Walkie.Modules.Discovery.Domain.Snapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618
         }

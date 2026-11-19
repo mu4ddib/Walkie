@@ -61,7 +61,7 @@ test('importar un proyecto local analizado con la CLI y revisarlo', async ({ pag
   await login(page);
   const app = `E2E Walkie Live ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   const appUrl = page.url();
 
@@ -135,7 +135,7 @@ test('crear en el catálogo un hallazgo del análisis real y abrirlo con su proc
   await login(page);
   const app = `E2E Walkie Live catálogo ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   const appUrl = page.url();
 

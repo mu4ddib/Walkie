@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import { ApiError, type DiscoveryReviewItem, type DiscoveryStatus } from '../api/client';
+import { ApiError, type DiscoveryReview, type DiscoveryReviewItem, type DiscoveryStatus } from '../api/client';
 import { useApp, useDiscoveryReview, useDiscoverySources } from '../api/hooks';
 import { appPath } from '../workspace/paths';
 import { AnalysisSummary } from './AnalysisSummary';
-import { BASIS, CONFIDENCE, KIND, KIND_ORDER, REASON, STATUS, STATUS_ORDER, reviewPath } from './discoveryText';
+import { formatDayAndTime } from '../share/shareFormat';
+import { BASIS, CHANGE, CHANGE_ORDER, CONFIDENCE, KIND, KIND_ORDER, REASON, STATUS, STATUS_ORDER, reviewPath, type Change } from './discoveryText';
 import { ReviewInspector } from './ReviewInspector';
 import './discovery.css';
 
@@ -21,8 +22,13 @@ export function DiscoveryReviewPage() {
   const [search, setSearch] = useSearchParams();
   const kind = search.get('kind') ?? undefined;
   const status = search.get('status') ?? undefined;
+  const change = search.get('change') ?? undefined;
+  const needsReview = search.get('needsReview') === 'true';
   const page = Math.max(0, Number.parseInt(search.get('page') ?? '0', 10) || 0);
-  const query = useMemo(() => ({ kind, status, page, pageSize: REVIEW_PAGE_SIZE }), [kind, status, page]);
+  const query = useMemo(
+    () => ({ kind, status, change, needsReview, page, pageSize: REVIEW_PAGE_SIZE }),
+    [kind, status, change, needsReview, page],
+  );
 
   const app = useApp(appId);
   const sources = useDiscoverySources(appId);
@@ -101,6 +107,14 @@ export function DiscoveryReviewPage() {
 
       {data && (
         <>
+          <Comparison
+            data={data}
+            current={source?.latestSnapshot.id === snapshotId ? source.latestSnapshot : undefined}
+            appId={appId}
+            change={change}
+            needsReview={needsReview}
+            onFilter={filter}
+          />
           <div className="discovery-counts" role="group" aria-label="Hallazgos por estado">
             {STATUS_ORDER.map((s) => (
               <button
@@ -139,8 +153,12 @@ export function DiscoveryReviewPage() {
                 ))}
               </select>
             </label>
-            {(kind || status) && (
-              <button type="button" className="pixel-button is-ghost" onClick={() => filter({ kind: undefined, status: undefined })}>
+            {(kind || status || change || needsReview) && (
+              <button
+                type="button"
+                className="pixel-button is-ghost"
+                onClick={() => filter({ kind: undefined, status: undefined, change: undefined, needsReview: undefined })}
+              >
                 Quitar filtros
               </button>
             )}
@@ -186,6 +204,88 @@ export function DiscoveryReviewPage() {
   );
 }
 
+/**
+ * La comparación con el análisis anterior de la fuente (tarea 10): con cuál se compara (fecha, commit, completo o
+ * parcial), qué apareció, qué cambió, qué sigue igual y qué pide una decisión. Cada cifra filtra la lista en la API. La
+ * clasificación es de la API: aquí solo se muestra. Sin análisis anterior, lo dice.
+ */
+function Comparison({
+  data,
+  current,
+  appId,
+  change,
+  needsReview,
+  onFilter,
+}: {
+  data: DiscoveryReview;
+  current?: { completeness: string };
+  appId: string;
+  change?: string;
+  needsReview: boolean;
+  onFilter: (changes: Record<string, string | undefined>) => void;
+}) {
+  if (!data.previous || !data.comparison) {
+    return (
+      <p className="discovery-note" role="note">
+        Es el primer análisis de esta fuente en la app: todo lo que trae es nuevo. Los siguientes se compararán con este.
+      </p>
+    );
+  }
+  const previous = data.previous;
+  const commit = (previous.vcs as { commit?: string } | undefined)?.commit;
+  const coverage =
+    current && previous.completeness !== current.completeness
+      ? current.completeness === 'partial'
+        ? 'Diferencia de cobertura: el anterior fue completo y este es parcial. Lo que este no miró no se da por desaparecido (queda «Sin cobertura»).'
+        : 'Diferencia de cobertura: el anterior fue parcial y este es completo. Puede aparecer como nuevo lo que el anterior no miró.'
+      : current?.completeness === 'partial'
+        ? 'Análisis parcial: lo que no miró no se da por desaparecido.'
+        : null;
+  return (
+    <section className="discovery-comparison" aria-label="Comparación con el análisis anterior">
+      <p>
+        Comparado con el{' '}
+        <Link to={reviewPath(appId, previous.id)}>análisis anterior</Link> del {formatDayAndTime(previous.generatedAt)}
+        {commit ? (
+          <>
+            {' '}
+            (commit <code>{commit.slice(0, 7)}</code>)
+          </>
+        ) : null}
+        , {previous.completeness === 'complete' ? 'completo' : 'parcial'}.
+      </p>
+      {coverage && (
+        <p className="discovery-note" role="note">
+          {coverage}
+        </p>
+      )}
+      <div className="discovery-counts" role="group" aria-label="Respecto del análisis anterior">
+        {CHANGE_ORDER.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={`discovery-count change-${c}`}
+            aria-pressed={change === c}
+            title={CHANGE[c].help}
+            onClick={() => onFilter({ change: change === c ? undefined : c })}
+          >
+            <span aria-hidden="true">{CHANGE[c].glyph}</span> {CHANGE[c].label} <strong>{data.comparison![c]}</strong>
+          </button>
+        ))}
+        <button
+          type="button"
+          className="discovery-count needs-review"
+          aria-pressed={needsReview}
+          title="Sin decidir, sugeridos, cambiados, que ya no aparecen o con una decisión vieja que revisar."
+          onClick={() => onFilter({ needsReview: needsReview ? undefined : 'true' })}
+        >
+          <span aria-hidden="true">!</span> Requiere revisión <strong>{data.comparison.needsReview}</strong>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /** Una fila: nombre, tipo, estado (glifo y texto, nunca solo color), base y confianza, y la coincidencia si hay. */
 function ItemRow({ item, selected, onSelect }: { item: DiscoveryReviewItem; selected: boolean; onSelect: () => void }) {
   const status = STATUS[item.status as DiscoveryStatus];
@@ -195,6 +295,17 @@ function ItemRow({ item, selected, onSelect }: { item: DiscoveryReviewItem; sele
         <span aria-hidden="true">{status.glyph}</span> {status.label}
       </span>
       <span className="discovery-item-title">{item.title}</span>
+      {(item.change || item.needsReview) && (
+        <span className="discovery-item-meta">
+          {item.change && (
+            <span className={`discovery-change change-${item.change}`}>
+              <span aria-hidden="true">{CHANGE[item.change as Change].glyph}</span> {CHANGE[item.change as Change].label}
+            </span>
+          )}
+          {item.change && item.needsReview && ' · '}
+          {item.needsReview && <span className="discovery-needs-review">Requiere revisión</span>}
+        </span>
+      )}
       <span className="discovery-item-meta">
         {KIND[item.kind] ?? item.kind} · {(BASIS[item.basis] ?? item.basis).toLowerCase()} · confianza {CONFIDENCE[item.confidence] ?? item.confidence}
       </span>

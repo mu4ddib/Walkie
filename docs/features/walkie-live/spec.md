@@ -36,7 +36,7 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 - [x] Dada la página de una app, cuando uso «Importar proyecto local» y elijo un `.walkiepack`, entonces Walkie lo valida sin guardar nada y me muestra las tecnologías, cuántos hallazgos hay por tipo, el alcance y las limitaciones antes de confirmar.
 - [x] Un paquete inválido, de una versión no soportada o demasiado grande se rechaza con un mensaje que dice qué falla (ruta del error dentro del paquete); no se guarda nada.
 - [x] Cargar dos veces el mismo paquete no crea un segundo análisis: se abre el que ya existe.
-- [ ] Dada la galería de apps, cuando uso «Crear app desde proyecto local», entonces se crea una app nueva con el nombre de la fuente y se abre la revisión de su primer análisis.
+- [x] Dada la galería de apps, cuando uso «Crear app desde proyecto local», entonces se crea una app nueva con el nombre de la fuente y se abre la revisión de su primer análisis. *Hecho (tarea 10): el nombre es editable en la vista previa (si ya existe, se propone con « (2)»); la app empieza vacía; un reintento con el mismo `importId` no crea otra app.*
 - [x] Dada una app con una fuente, entonces la página de la app muestra la fuente (nombre, último análisis, commit) y permite abrir su revisión o cargar un análisis nuevo.
 
 ### Revisar (Discovery Review)
@@ -48,6 +48,7 @@ Todo lienzo se arma a mano. Lo único que entra desde fuera es un `.walkie` (spe
 - [x] Puedo elegir qué nuevos elementos del catálogo, módulos (con sus interfaces) y features propuestas crear.
 - [ ] Antes de aplicar veo una vista previa calculada por la API con las mismas validaciones que aplicar (`dryRun`): qué se crea, qué se vincula, qué se descarta y qué no cambia; si algo no se puede aplicar, lo dice con su motivo antes de confirmar.
 - [x] Con miles de hallazgos, la revisión pagina y filtra sin bloquear la interfaz.
+- [x] En un reanálisis veo con qué análisis se compara (fecha, commit, completo o parcial) y qué es **nuevo en este análisis**, qué **cambió desde el anterior**, qué **sigue sin cambios** y qué **requiere revisión**, y puedo filtrar por cada uno. Lo decidido que no aparece y que el análisis nuevo no podía ver (detector que no corrió, fuera del alcance, limitación) queda **sin cobertura**, con el porqué, en vez de «ya no aparece». *Hecho (tarea 10): lo calcula la misma revisión de la API (`change`, `coverage`, `needsReview`, `previous`, `comparison`).*
 
 ### Aplicar
 

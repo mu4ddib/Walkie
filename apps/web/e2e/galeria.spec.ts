@@ -9,7 +9,7 @@ test('la galería muestra la miniatura real y renombra la feature', async ({ pag
   await login(page);
   const app = `E2E galería ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   const appUrl = page.url();
   await page.getByLabel('Nueva feature').fill('Pagar servicios');

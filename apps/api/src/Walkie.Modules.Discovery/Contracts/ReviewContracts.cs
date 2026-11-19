@@ -48,9 +48,28 @@ public sealed record DiscoveryReviewItem(
     int EvidenceCount,
     DiscoveryProposal Proposal,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? TargetMissing = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiscoveryBindingResponse? LegacyBinding = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiscoveryBindingResponse? LegacyBinding = null)
+{
+    /// <summary>Respecto del análisis anterior: <c>added</c>, <c>modified</c> o <c>unchanged</c> (solo con anterior).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Change { get; init; }
 
-public sealed record DiscoveryReviewCounts(int New, int Matched, int Linked, int Created, int Rejected, int Changed, int Missing);
+    /// <summary>Solo en <c>unverified</c>: por qué no se puede concluir que desapareció (qué no cubrió este análisis).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Coverage { get; init; }
+
+    /// <summary>Pide una decisión de una persona (sin decidir, sugerido, cambiado, desaparecido o con una decisión vieja ambigua).</summary>
+    public bool NeedsReview { get; init; }
+}
+
+public sealed record DiscoveryReviewCounts(int New, int Matched, int Linked, int Created, int Rejected, int Changed, int Missing, int Unverified);
+
+/// <summary>
+/// Cómo cambió el análisis respecto del anterior de la misma fuente (tarea 10): hallazgos que aparecen (<c>added</c>),
+/// que cambiaron de contenido (<c>modified</c>) o que siguen iguales (<c>unchanged</c>), y cuántos piden una decisión.
+/// Los que ya no aparecen están en <c>counts.missing</c> (con cobertura suficiente) y <c>counts.unverified</c> (sin ella).
+/// </summary>
+public sealed record DiscoveryReviewComparison(int Added, int Modified, int Unchanged, int NeedsReview);
 
 public sealed record DiscoveryReviewPage(int Index, int Size, int Total);
 
@@ -61,7 +80,16 @@ public sealed record DiscoveryReviewResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? PreviousSnapshotId,
     DiscoveryReviewCounts Counts,
     DiscoveryReviewPage Page,
-    IReadOnlyList<DiscoveryReviewItem> Items);
+    IReadOnlyList<DiscoveryReviewItem> Items)
+{
+    /// <summary>El análisis anterior de la fuente (fechas, commit y completitud), con el que se compara.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DiscoverySnapshotBrief? Previous { get; init; }
+
+    /// <summary>La comparación con el anterior; sin análisis anterior, todo es nuevo y no viene.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DiscoveryReviewComparison? Comparison { get; init; }
+}
 
 /// <summary>
 /// Un elemento creado o vinculado en el resultado de aplicar. <c>Item</c>: solo al crear en el catálogo, el elemento tal

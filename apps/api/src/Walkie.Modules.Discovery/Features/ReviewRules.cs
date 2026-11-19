@@ -178,11 +178,18 @@ internal static class MissingRules
     /// <summary>Limitaciones que cortan el análisis entero: después de ellas, la ausencia no prueba nada.</summary>
     private static readonly HashSet<string> Truncating = new(["file-limit", "entity-limit", "more-limitations"], StringComparer.Ordinal);
 
-    public static bool CanConclude(JsonElement currentManifest, IReadOnlyList<(string Detector, string Path)> previousEvidence)
+    public static bool CanConclude(JsonElement currentManifest, IReadOnlyList<(string Detector, string Path)> previousEvidence) =>
+        WhyNot(currentManifest, previousEvidence) is null;
+
+    /// <summary>
+    /// Null si el análisis actual podía ver el hallazgo (se concluye <c>missing</c>); si no, por qué no alcanza su
+    /// cobertura, en palabras para la persona (tarea 10: lo muestra la revisión como <c>unverified</c>).
+    /// </summary>
+    public static string? WhyNot(JsonElement currentManifest, IReadOnlyList<(string Detector, string Path)> previousEvidence)
     {
         if (previousEvidence.Count == 0)
         {
-            return false;
+            return "No quedó evidencia del análisis anterior con que comparar.";
         }
 
         var ran = currentManifest.GetProperty("detectors").EnumerateArray()
@@ -199,23 +206,30 @@ internal static class MissingRules
                 Path: l.TryGetProperty("path", out var p) ? p.GetString() : null))
             .ToList();
 
-        if (limitations.Any(l => Truncating.Contains(l.Code)))
+        if (limitations.FirstOrDefault(l => Truncating.Contains(l.Code)) is { Code: { } cut })
         {
-            return false;
+            return $"Este análisis se cortó antes de terminar ({cut}): lo que no miró no se da por desaparecido.";
         }
 
         foreach (var (detector, path) in previousEvidence)
         {
-            if (!ran.Contains(detector)
-                || !include.Any(g => g.IsMatch(path))
-                || exclude.Any(g => g.IsMatch(path))
-                || limitations.Any(l => Affects(l, detector, path)))
+            if (!ran.Contains(detector))
             {
-                return false;
+                return $"El detector {detector}, que lo había encontrado, no corrió entero en este análisis.";
+            }
+
+            if (!include.Any(g => g.IsMatch(path)) || exclude.Any(g => g.IsMatch(path)))
+            {
+                return $"{path} quedó fuera del alcance de este análisis.";
+            }
+
+            if (limitations.FirstOrDefault(l => Affects(l, detector, path)) is { Code: { } code })
+            {
+                return $"Una limitación de este análisis ({code}) alcanza a {path}.";
             }
         }
 
-        return true;
+        return null;
     }
 
     /// <summary>Una limitación alcanza a una evidencia si es de su archivo (o de una carpeta que lo contiene) o de su detector sin archivo.</summary>

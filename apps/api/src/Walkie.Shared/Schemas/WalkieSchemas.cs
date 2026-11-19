@@ -97,6 +97,12 @@ public static class WalkieSchemas
     /// <summary><c>walkie-discovery-provenance.schema.json</c>: de dónde viene un elemento (<c>GET /api/apps/{appId}/bindings</c>, tarea 6).</summary>
     public static JsonSchema DiscoveryProvenance { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-provenance.schema.json");
 
+    /// <summary><c>walkie-discovery-source-import.schema.json</c>: respuesta de crear una app desde un proyecto local (tarea 10).</summary>
+    public static JsonSchema DiscoverySourceImport { get; } = LoadAfter(DiscoveryUpload, DiscoveryApplyResult, "walkie-discovery-source-import.schema.json");
+
+    /// <summary><c>walkie-discovery-status.schema.json</c>: si Discovery está encendido (tarea 10).</summary>
+    public static JsonSchema DiscoveryStatus { get; } = LoadAfter(Graph, "walkie-discovery-status.schema.json");
+
     /// <summary><c>$defs/layout</c> del mapa: distribución guardada (cuerpo de <c>PUT /api/apps/{appId}/map/layout</c>).</summary>
     public static JsonSchema MapLayout { get; } = JsonSchema.FromText(
         $$"""{ "$ref": "{{AppMapId}}#/$defs/layout" }""",

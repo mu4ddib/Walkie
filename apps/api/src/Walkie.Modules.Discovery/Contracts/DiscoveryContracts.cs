@@ -26,9 +26,36 @@ public sealed record DiscoverySnapshotResponse(
     string PackSha256,
     string ContentFingerprint);
 
+/// <summary>Lo esencial de un análisis para compararlo: fechas, completitud y commit.</summary>
+public sealed record DiscoverySnapshotBrief(
+    Guid Id,
+    DateTimeOffset GeneratedAt,
+    DateTimeOffset ImportedAt,
+    string Completeness,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Vcs);
+
+/// <summary>La app que se crea desde un proyecto local (o se crearía, en la vista previa).</summary>
+public sealed record DiscoveryNewApp(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? Id,
+    string Name,
+    bool NameTaken);
+
+/// <summary>Respuesta de <c>POST /api/sources/import</c> (<c>walkie-discovery-source-import.schema.json</c>).</summary>
+public sealed record DiscoverySourceImportResponse(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ImportId,
+    bool DryRun,
+    string Status,
+    DiscoveryNewApp App,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiscoverySnapshotResponse? Snapshot,
+    DiscoveryUploadSummary Summary,
+    IReadOnlyList<DiscoveryApplyWarning> Warnings);
+
+/// <summary>Respuesta de <c>GET /api/discovery</c> (<c>walkie-discovery-status.schema.json</c>): Discovery está encendido.</summary>
+public sealed record DiscoveryStatusResponse(bool Enabled, int FormatVersion, long MaxPackBytes);
+
 /// <summary>Lo que trae un paquete (<c>summary</c> de <c>walkie-discovery-upload</c>).</summary>
 public sealed record DiscoveryUploadSummary(
-    Guid AppId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? AppId,
     DiscoverySourceResponse Source,
     bool SourceExists,
     int FormatVersion,
@@ -42,7 +69,12 @@ public sealed record DiscoveryUploadSummary(
     JsonElement Stats,
     IReadOnlyDictionary<string, int> Entities,
     string PackSha256,
-    string ContentFingerprint);
+    string ContentFingerprint)
+{
+    /// <summary>El último análisis de esta fuente en la app (con el que se comparará), si ya había uno.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DiscoverySnapshotBrief? Previous { get; init; }
+}
 
 /// <summary>Respuesta de <c>POST /api/apps/{appId}/sources/snapshots</c> (<c>walkie-discovery-upload.schema.json</c>).</summary>
 public sealed record DiscoveryUploadResponse(

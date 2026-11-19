@@ -28,7 +28,7 @@ export async function login(page: Page, path = '/apps') {
 export async function openNewFeature(page: Page, feature = 'Iniciar sesión') {
   const app = `E2E ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   await page.getByLabel('Nueva feature').fill(feature);
   await page.getByRole('button', { name: 'Crear feature' }).click();

@@ -798,7 +798,7 @@ internal sealed partial class ApplyHandlers(
     private async Task CreateCatalogStepAsync(ApplyRecord record, StoredPlan plan, ApplyStep step)
     {
         var item = plan.Creates.Single(c => c.Index == step.Index).Item!;
-        var outcome = await apps.CreateCatalogItemAsync(record.AppId, step.TargetId, item, record.CreatedBy, CancellationToken.None)
+        var outcome = await apps.CreateCatalogItemAsync(record.AppId, step.TargetId, item, record.CreatedBy, record.CreatedAt, CancellationToken.None)
             .ConfigureAwait(false);
         if (outcome == CatalogItemCreation.IdTaken)
         {
@@ -824,7 +824,8 @@ internal sealed partial class ApplyHandlers(
         var create = plan.Creates.Single(c => c.Index == step.Index);
         if (step.Status == ApplyStep.Planned)
         {
-            var outcome = await apps.CreateFeatureAsync(record.AppId, step.TargetId, step.TargetKind, create.Name, create.Description, record.CreatedBy, CancellationToken.None)
+            var outcome = await apps.CreateFeatureAsync(
+                    record.AppId, step.TargetId, step.TargetKind, create.Name, create.Description, record.CreatedBy, record.CreatedAt, CancellationToken.None)
                 .ConfigureAwait(false);
             if (outcome == FeatureCreation.IdTaken)
             {
@@ -935,21 +936,37 @@ internal sealed partial class ApplyHandlers(
     }
 
     /// <summary>
-    /// Deshace un módulo o una feature de esta aplicación sin perder nada de una persona: primero su lienzo (solo si
-    /// sigue en la versión 1 y ningún otro lienzo lo usa) y después la fila (solo si conserva su nombre y descripción).
-    /// Null si se deshizo o nunca se creó; si no, por qué se dejó.
+    /// Deshace un módulo o una feature de esta aplicación sin perder nada de una persona. En este orden, porque no hay
+    /// una transacción entre Apps y Canvas:
+    /// <list type="number">
+    /// <item>se comprueba, sin borrar, que su lienzo sigue en la versión 1 y que ningún otro lienzo lo usa;</item>
+    /// <item>se borra la fila solo si conserva el nombre y la descripción con que se creó (condición en el mismo
+    /// <c>DELETE</c>): desde ahí la API ya no acepta guardar su lienzo (la feature no existe);</item>
+    /// <item>se borra el lienzo solo si sigue en la versión 1 (también en el mismo <c>DELETE</c>).</item>
+    /// </list>
+    /// Antes se borraba primero el lienzo: entre los dos pasos una persona podía guardar uno nuevo en la feature y
+    /// perderlo al borrarse la fila. Null si se deshizo o nunca se creó; si no, por qué se dejó.
     /// </summary>
     private async Task<string?> RemoveContainerAsync(Guid appId, Guid id, CreateStep create)
     {
-        var canvas = await canvases.DeleteUntouchedAsync(id, CancellationToken.None).ConfigureAwait(false);
+        var canvas = await canvases.DeleteUntouchedAsync(id, CancellationToken.None, checkOnly: true).ConfigureAwait(false);
         if (canvas != CanvasRemoval.Deleted)
         {
             return canvas == CanvasRemoval.Edited ? "alguien ya editó su lienzo" : "otro lienzo ya lo usa";
         }
 
-        return await apps.DeleteUntouchedFeatureAsync(appId, id, create.Name, create.Description, CancellationToken.None).ConfigureAwait(false) == FeatureRemoval.Edited
-            ? "alguien ya le cambió el nombre o la descripción"
-            : null;
+        if (await apps.DeleteUntouchedFeatureAsync(appId, id, create.Name, create.Description, CancellationToken.None).ConfigureAwait(false) == FeatureRemoval.Edited)
+        {
+            return "alguien ya le cambió el nombre o la descripción";
+        }
+
+        // Sin la fila nadie puede guardar su lienzo; si un guardado ya en curso alcanzó a escribir, no se borra.
+        return await canvases.DeleteUntouchedAsync(id, CancellationToken.None).ConfigureAwait(false) switch
+        {
+            CanvasRemoval.Deleted => null,
+            CanvasRemoval.Edited => "alguien guardó su lienzo mientras se deshacía: el lienzo quedó sin su feature",
+            _ => "otro lienzo empezó a usarlo mientras se deshacía: esa referencia quedó pendiente",
+        };
     }
 
     /// <summary>

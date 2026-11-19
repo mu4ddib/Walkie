@@ -69,11 +69,23 @@ export type Item = {
     op: 'create' | 'link' | 'none';
     target?: Target;
   };
+  /**
+   * Respecto del análisis anterior (solo si hay uno, y no en lo que ya no aparece)
+   */
+  change?: 'added' | 'modified' | 'unchanged';
+  /**
+   * Solo en unverified: qué no cubrió este análisis
+   */
+  coverage?: string;
+  /**
+   * Pide una decisión: sin decidir, sugerido, cambiado, desaparecido, una decisión vieja ambigua o un destino borrado
+   */
+  needsReview: boolean;
 };
 /**
- * new: sin vínculo ni coincidencia; matched: coincide con un elemento existente (sin vínculo todavía); linked/created/rejected: tiene vínculo con esa decisión y su fingerprint no cambió; changed: tiene vínculo y su fingerprint cambió desde que se decidió; missing: estaba en el análisis anterior, tiene vínculo y ya no aparece aunque un detector que lo puede producir corrió (nunca se borra nada)
+ * new: sin vínculo ni coincidencia; matched: coincide con un elemento existente (sin vínculo todavía); linked/created/rejected: tiene vínculo con esa decisión y su fingerprint no cambió; changed: tiene vínculo y su fingerprint cambió desde que se decidió; missing: estaba en el análisis anterior, tiene vínculo y ya no aparece aunque un detector que lo puede producir corrió (nunca se borra nada) unverified (tarea 10): tenía una decisión y no está en este análisis, pero el análisis no lo cubría (un detector no corrió, quedó fuera del alcance o lo alcanza una limitación): no se concluye que desapareció; coverage dice por qué.
  */
-export type Status = 'new' | 'matched' | 'linked' | 'created' | 'rejected' | 'changed' | 'missing';
+export type Status = 'new' | 'matched' | 'linked' | 'created' | 'rejected' | 'changed' | 'missing' | 'unverified';
 /**
  * Vínculo de un hallazgo con Walkie (spec walkie-live, ADR-0012 y ADR-0014): la única confirmación que existe. Lo decide una persona y se guarda en Walkie, nunca en el .walkiepack. Une la clave estable de una entidad de una fuente con un elemento del catálogo, un módulo o una feature (linked: ya existía; created: lo creó una aplicación) o la descarta (rejected). Persiste entre análisis de la misma fuente y no cambia el elemento al que apunta.
  */
@@ -175,6 +187,7 @@ export interface WalkieDiscoveryReviewV0 {
     rejected: number;
     changed: number;
     missing: number;
+    unverified: number;
   };
   /**
    * Orden estable: por kind y key
@@ -188,6 +201,28 @@ export interface WalkieDiscoveryReviewV0 {
     total: number;
   };
   items: Item[];
+  previous?: Brief;
+  /**
+   * Comparación con el análisis anterior (solo si hay uno; tarea 10). Lo que ya no aparece va en counts.missing (con cobertura) y counts.unverified (sin ella)
+   */
+  comparison?: {
+    /**
+     * Hallazgos que no estaban en el anterior
+     */
+    added: number;
+    /**
+     * Estaban y cambió su contenido (fingerprint)
+     */
+    modified: number;
+    /**
+     * Estaban y siguen iguales
+     */
+    unchanged: number;
+    /**
+     * Piden una decisión de una persona (needsReview en el ítem)
+     */
+    needsReview: number;
+  };
 }
 /**
  * Elemento de Walkie al que apunta un vínculo (referencia por id, como un catalogId o un moduleId en el grafo; sin copia de su contenido)
@@ -202,4 +237,29 @@ export interface Target {
    * Último nombre conocido (informativo, como el title de un ref)
    */
   title?: string;
+}
+/**
+ * El análisis anterior de la fuente, con el que se compara (tarea 10)
+ */
+export interface Brief {
+  id: string;
+  generatedAt: string;
+  importedAt: string;
+  /**
+   * complete: todos los detectores corrieron sobre todo el proyecto (include = ** /*); partial: no. Un análisis parcial es válido: la revisión no marca como «ya no aparece» lo que quedó fuera
+   */
+  completeness: 'complete' | 'partial';
+  vcs?: Vcs;
+}
+/**
+ * Estado del control de versiones al analizar, si lo hay (leído de los archivos de .git, sin ejecutar git)
+ */
+export interface Vcs {
+  kind: 'git';
+  commit: string;
+  branch?: string;
+  /**
+   * Hay cambios sin confirmar (si se pudo saber)
+   */
+  dirty?: boolean;
 }

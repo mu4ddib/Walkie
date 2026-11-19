@@ -10,6 +10,20 @@ public interface IAppWriter
     /// <summary>Crea una app vacía (nombre ya dentro de su límite) y devuelve su id: importar una app (tarea 7).</summary>
     Task<Guid> CreateAppAsync(string name, string userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Crea una app vacía con un id que generó la API antes de escribir y guardó en una bitácora (Discovery: crear una
+    /// app desde un proyecto local, spec walkie-live tarea 10). Idempotente: si ya existe con ese id, la creó
+    /// <paramref name="userId"/> y no antes de <paramref name="notBefore"/>, es un reintento de la misma operación.
+    /// </summary>
+    Task<AppCreation> CreateAppAsync(Guid appId, string name, string userId, DateTimeOffset notBefore, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Borra una app creada por una operación que se deshace, solo si nadie la tocó: conserva su nombre y no tiene
+    /// features, módulos ni elementos del catálogo (todo en la condición del mismo <c>DELETE</c>). Lo que vive en otros
+    /// módulos (análisis, lienzos) lo mira quien llama.
+    /// </summary>
+    Task<AppRemoval> DeleteUntouchedAppAsync(Guid appId, string name, CancellationToken cancellationToken);
+
     /// <summary>Nombres de todas las apps, para no repetir uno al importar.</summary>
     Task<IReadOnlyList<string>> AppNamesAsync(CancellationToken cancellationToken);
 
@@ -45,8 +59,13 @@ public interface IAppWriter
     /// reglas y la misma limpieza que el endpoint: <paramref name="item"/> ya pasó <see cref="ValidateCatalogItem"/>.
     /// Idempotente por id: si ya existe en esa app y con ese tipo (un reintento del mismo plan), no escribe nada.
     /// </summary>
+    /// <remarks>
+    /// Un elemento que ya existe con ese id solo cuenta como de esta operación (<see cref="CatalogItemCreation.AlreadyCreated"/>)
+    /// si es de esa app y ese tipo, lo creó <paramref name="userId"/> y no antes de <paramref name="notBefore"/> (cuando
+    /// la operación reservó el id): así nunca se atribuye un elemento ajeno que casualmente comparte id.
+    /// </remarks>
     Task<CatalogItemCreation> CreateCatalogItemAsync(
-        Guid appId, Guid itemId, CreateCatalogItemRequest item, string userId, CancellationToken cancellationToken);
+        Guid appId, Guid itemId, CreateCatalogItemRequest item, string userId, DateTimeOffset notBefore, CancellationToken cancellationToken);
 
     /// <summary>
     /// Borra un elemento creado por una operación que se deshace, solo si nadie lo tocó: sigue en su versión 1 y ningún
@@ -59,8 +78,9 @@ public interface IAppWriter
     /// cliente (Discovery, spec walkie-live tarea 9). Idempotente por id: si ya existe en esa app y con ese tipo (un
     /// reintento del mismo plan), no escribe nada. Nombre y descripción ya dentro de sus límites.
     /// </summary>
+    /// <remarks>Ya existente: solo es de esta operación con la misma app, tipo y autor, y creado no antes de <paramref name="notBefore"/>.</remarks>
     Task<FeatureCreation> CreateFeatureAsync(
-        Guid appId, Guid featureId, string kind, string name, string? description, string userId, CancellationToken cancellationToken);
+        Guid appId, Guid featureId, string kind, string name, string? description, string userId, DateTimeOffset notBefore, CancellationToken cancellationToken);
 
     /// <summary>
     /// Borra una feature o un módulo creado por una operación que se deshace, solo si nadie le cambió el nombre ni la

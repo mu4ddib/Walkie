@@ -10,7 +10,7 @@ test('componentes: crear en el lienzo, definición compartida y copia independie
   await login(page);
   const app = `E2E componentes ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   const appUrl = page.url();
   for (const feature of ['Pagar', 'Transferir']) {

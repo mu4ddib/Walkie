@@ -175,6 +175,43 @@ public sealed class DiscoveryCanvasTests(WalkieApiFactory factory)
     }
 
     [Fact]
+    public async Task Un_reintento_no_se_atribuye_un_modulo_ajeno_creado_con_el_mismo_id_mientras_estaba_pendiente()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client);
+        var snapshotId = await UploadAsync(client, appId, Monorepo());
+        var moduleKey = (await ReviewAsync(client, snapshotId)).GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("kind").GetString() == "module").GetProperty("key").GetString()!;
+        var (list, detail, moduleId) = (Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        var draft = await DraftAsync(client, snapshotId, Create(ListApi, list), Create(DetailApi, detail), Create(moduleKey, moduleId));
+        var applyId = Guid.CreateVersion7();
+        JsonObject[] operations = [Create(ListApi, list), Create(DetailApi, detail), Create(moduleKey, moduleId, Canvas(draft))];
+
+        // Se cae después de reservar los ids y antes de crear nada.
+        using (var crashing = WithCheckpoints((reached, _) => reached == "pending" ? throw new ApplyAbandonedException(reached) : Task.CompletedTask))
+        using (var dying = Authenticated(crashing))
+        {
+            await CrashAsync(() => ApplyWithIdAsync(dying, snapshotId, applyId, operations));
+        }
+
+        // Mientras tanto, otra persona crea un módulo con ese mismo id (la API de módulos acepta el id del cliente).
+        using var other = factory.CreateAuthenticatedClient(WalkieApiFactory.CreateToken(sub: "otra-persona"));
+        var foreign = await other.PostAsJsonAsync(new Uri($"/api/apps/{appId}/modules", UriKind.Relative), new { name = "Ajeno", id = moduleId });
+        Assert.Equal(HttpStatusCode.Created, foreign.StatusCode);
+
+        var result = await JsonAsync(await ApplyWithIdAsync(client, snapshotId, applyId, operations), HttpStatusCode.OK);
+
+        // No se lo atribuye: se deshace lo suyo y el módulo ajeno queda como estaba, sin lienzo ni vínculo.
+        Assert.Equal("compensated", result.GetProperty("status").GetString());
+        var modules = await JsonAsync(await client.GetAsync(new Uri($"/api/apps/{appId}/modules", UriKind.Relative)), HttpStatusCode.OK);
+        Assert.Equal("Ajeno", Assert.Single(modules.EnumerateArray()).GetProperty("name").GetString());
+        Assert.Equal(0, (await GraphAsync(client, moduleId)).GetProperty("version").GetInt32());
+        await AssertBindingsAsync(appId, 0);
+        var catalog = await JsonAsync(await client.GetAsync(new Uri($"/api/apps/{appId}/catalog", UriKind.Relative)), HttpStatusCode.OK);
+        Assert.Empty(catalog.EnumerateArray());
+    }
+
+    [Fact]
     public async Task Si_falla_despues_de_que_alguien_edito_el_lienzo_se_compensa_sin_borrar_lo_editado()
     {
         using var client = factory.CreateAuthenticatedClient();

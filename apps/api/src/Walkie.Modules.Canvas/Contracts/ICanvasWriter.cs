@@ -39,9 +39,10 @@ public interface ICanvasWriter
 
     /// <summary>
     /// Borra el lienzo de una feature o un módulo creado por una operación que se deshace, solo si nadie lo tocó: sigue
-    /// en su versión 1 y ningún otro lienzo apunta a esa feature (portal) ni a ese módulo (caja <c>module</c>).
+    /// en su versión 1 y ningún otro lienzo apunta a esa feature (portal) ni a ese módulo (caja <c>module</c>). Con
+    /// <paramref name="checkOnly"/> solo dice si se podría (<see cref="CanvasRemoval.Deleted"/>) sin borrar nada.
     /// </summary>
-    Task<CanvasRemoval> DeleteUntouchedAsync(Guid featureId, CancellationToken cancellationToken);
+    Task<CanvasRemoval> DeleteUntouchedAsync(Guid featureId, CancellationToken cancellationToken, bool checkOnly = false);
 
     /// <summary>Borra los lienzos de esas features (deshacer una importación).</summary>
     Task DeleteAsync(IReadOnlyCollection<Guid> featureIds, CancellationToken cancellationToken);

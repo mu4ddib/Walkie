@@ -253,3 +253,52 @@ internal sealed class ApplyStep
 
     public required string Status { get; set; }
 }
+
+/// <summary>
+/// Bitácora de «crear una app desde un proyecto local» (<c>POST /api/sources/import</c>, spec walkie-live tarea 10):
+/// la operación toca Apps (la app) y Discovery (su primer análisis), sin una transacción común. Ciclo de vida:
+/// <list type="number">
+/// <item><c>pending</c>: se registra antes de escribir en Apps, con el id de la app ya elegido por la API y el hash del
+/// paquete y del nombre. Una sola pendiente por fuente (índice único parcial).</item>
+/// <item>Se crea la app (<c>IAppWriter.CreateAppAsync</c> con ese id, idempotente).</item>
+/// <item><c>completed</c>: el análisis y este registro se guardan en una sola transacción de Discovery.</item>
+/// <item><c>compensated</c>: falló y se borró la app porque nadie la había tocado. Si no se puede borrar sin perder algo
+/// de una persona, queda <c>pending</c>: un reintento con el mismo <see cref="ImportId"/> la termina.</item>
+/// </list>
+/// </summary>
+internal sealed class SourceImport
+{
+    public const string Pending = "pending";
+    public const string Completed = "completed";
+    public const string Compensated = "compensated";
+
+    /// <summary>UUID v7 del cliente: identifica la operación (un reintento manda el mismo).</summary>
+    public Guid ImportId { get; init; }
+
+    public Guid SourceId { get; init; }
+
+    /// <summary>Id de la app, elegido por la API al registrar la operación (antes de crearla).</summary>
+    public Guid AppId { get; init; }
+
+    public required string AppName { get; init; }
+
+    /// <summary>SHA-256 del paquete (hexadecimal).</summary>
+    public required string PackSha256 { get; init; }
+
+    /// <summary>SHA-256 del paquete y el nombre: el mismo <see cref="ImportId"/> con otra solicitud es un error.</summary>
+    public required string RequestHash { get; init; }
+
+    public required string Status { get; set; }
+
+    /// <summary>El primer análisis, cuando quedó <c>completed</c>.</summary>
+    public Guid? SnapshotId { get; set; }
+
+    /// <summary>Por qué no terminó (último error), para verlo en la base y en el log.</summary>
+    public string? Error { get; set; }
+
+    public required string CreatedBy { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}

@@ -73,7 +73,9 @@ internal sealed class SnapshotHandlers(DiscoveryDbContext db, IAppDirectory apps
 
         var sourceExists = await db.Sources.AsNoTracking().AnyAsync(s => s.AppId == appId && s.Id == sourceId, ct).ConfigureAwait(false);
         var (existing, duplicate) = await DuplicateAsync(appId, sourceId, packSha256, contentFingerprint, ct).ConfigureAwait(false);
-        var summary = Summary(appId, sourceId, sourceName, sourceExists, formatVersion, manifest, discovery, packSha256, contentFingerprint);
+        var previous = await Latest(appId, sourceId).AsNoTracking().FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        var summary = Summary(appId, sourceId, sourceName, sourceExists, formatVersion, manifest, discovery, packSha256, contentFingerprint)
+            with { Previous = previous is null ? null : Brief(previous) };
 
         if (dryRun)
         {
@@ -106,7 +108,7 @@ internal sealed class SnapshotHandlers(DiscoveryDbContext db, IAppDirectory apps
     }
 
     /// <summary>Zip, documentos, versiones, contrato y límites. Null (con los errores por ruta) si algo no sirve.</summary>
-    private static (JsonElement Manifest, JsonElement Discovery, int FormatVersion)? Read(byte[] file, Dictionary<string, string[]> errors)
+    internal static (JsonElement Manifest, JsonElement Discovery, int FormatVersion)? Read(byte[] file, Dictionary<string, string[]> errors)
     {
         using var zip = SafeZip.Open(file, ZipOptions, errors);
         if (zip is null)
@@ -199,8 +201,12 @@ internal sealed class SnapshotHandlers(DiscoveryDbContext db, IAppDirectory apps
         return latest?.ContentFingerprint == contentFingerprint ? (latest, "content") : (null, null);
     }
 
-    private async Task<Snapshot> SaveAsync(Guid appId, Guid sourceId, string sourceName, int formatVersion, JsonElement manifest,
-        JsonElement discovery, string packSha256, string contentFingerprint, string userId, CancellationToken ct)
+    /// <summary>
+    /// Guarda el análisis en una sola transacción. <paramref name="alsoSave"/> agrega cambios propios de quien llama a esa
+    /// misma transacción (crear una app desde un proyecto local marca su bitácora <c>completed</c> junto con el análisis).
+    /// </summary>
+    internal async Task<Snapshot> SaveAsync(Guid appId, Guid sourceId, string sourceName, int formatVersion, JsonElement manifest,
+        JsonElement discovery, string packSha256, string contentFingerprint, string userId, CancellationToken ct, Action<Snapshot>? alsoSave = null)
     {
         var now = clock.GetUtcNowForDb();
         var source = await db.Sources.FirstOrDefaultAsync(s => s.AppId == appId && s.Id == sourceId, ct).ConfigureAwait(false);
@@ -266,6 +272,7 @@ internal sealed class SnapshotHandlers(DiscoveryDbContext db, IAppDirectory apps
         }));
 
         await CarryLegacyDecisionsAsync(appId, sourceId, discovery, ct).ConfigureAwait(false);
+        alsoSave?.Invoke(snapshot);
 
         // Un solo SaveChanges: una transacción de Postgres. Si algo falla, no queda nada del análisis a medias.
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -318,7 +325,16 @@ internal sealed class SnapshotHandlers(DiscoveryDbContext db, IAppDirectory apps
     private IQueryable<Snapshot> Latest(Guid appId, Guid sourceId) =>
         db.Snapshots.Where(s => s.AppId == appId && s.SourceId == sourceId).OrderByDescending(s => s.ImportedAt).ThenByDescending(s => s.Id);
 
-    private static DiscoveryUploadSummary Summary(Guid appId, Guid sourceId, string sourceName, bool sourceExists, int formatVersion,
+    /// <summary>Lo esencial de un análisis para compararlo con otro: cuándo, de qué commit y si fue completo.</summary>
+    internal static DiscoverySnapshotBrief Brief(Snapshot snapshot)
+    {
+        using var document = JsonDocument.Parse(snapshot.Manifest);
+        return new DiscoverySnapshotBrief(
+            snapshot.Id, snapshot.GeneratedAt, snapshot.ImportedAt, snapshot.Completeness,
+            document.RootElement.TryGetProperty("vcs", out var vcs) ? vcs.Clone() : null);
+    }
+
+    internal static DiscoveryUploadSummary Summary(Guid? appId, Guid sourceId, string sourceName, bool sourceExists, int formatVersion,
         JsonElement manifest, JsonElement discovery, string packSha256, string contentFingerprint) =>
         new(
             appId,

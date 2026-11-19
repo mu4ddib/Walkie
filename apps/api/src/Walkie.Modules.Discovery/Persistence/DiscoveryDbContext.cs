@@ -28,6 +28,8 @@ internal sealed class DiscoveryDbContext(DbContextOptions<DiscoveryDbContext> op
 
     public DbSet<ApplyStep> ApplySteps => Set<ApplyStep>();
 
+    public DbSet<SourceImport> SourceImports => Set<SourceImport>();
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         RejectChangesToSnapshots();
@@ -192,6 +194,31 @@ internal sealed class DiscoveryDbContext(DbContextOptions<DiscoveryDbContext> op
             apply.HasIndex(a => new { a.AppId, a.SourceId, a.Status }).HasDatabaseName("ix_applies_source_status");
             apply.ToTable(t => t.HasCheckConstraint("ck_applies_status",
                 "status IN ('pending', 'completed', 'compensated') AND (status = 'pending' OR result IS NOT NULL)"));
+        });
+
+        modelBuilder.Entity<SourceImport>(import =>
+        {
+            import.ToTable("source_imports");
+            import.HasKey(i => i.ImportId);
+            import.Property(i => i.ImportId).HasColumnName("import_id").ValueGeneratedNever();
+            import.Property(i => i.SourceId).HasColumnName("source_id");
+            import.Property(i => i.AppId).HasColumnName("app_id");
+            import.Property(i => i.AppName).HasColumnName("app_name").HasMaxLength(120);
+            import.Property(i => i.PackSha256).HasColumnName("pack_sha256").HasMaxLength(64).IsFixedLength();
+            import.Property(i => i.RequestHash).HasColumnName("request_hash").HasMaxLength(64).IsFixedLength();
+            import.Property(i => i.Status).HasColumnName("status").HasMaxLength(12);
+            import.Property(i => i.SnapshotId).HasColumnName("snapshot_id");
+            import.Property(i => i.Error).HasColumnName("error").HasMaxLength(1000);
+            import.Property(i => i.CreatedBy).HasColumnName("created_by").HasMaxLength(255);
+            import.Property(i => i.CreatedAt).HasColumnName("created_at");
+            import.Property(i => i.UpdatedAt).HasColumnName("updated_at");
+            import.HasOne<Snapshot>().WithMany().HasForeignKey(i => i.SnapshotId).OnDelete(DeleteBehavior.Restrict);
+            // Una app nueva por id: dos operaciones nunca comparten la app que crean.
+            import.HasIndex(i => i.AppId).IsUnique().HasDatabaseName("ux_source_imports_app");
+            // Una sola creación sin terminar por fuente: dos a la vez desde la misma fuente no dan dos apps en silencio.
+            import.HasIndex(i => i.SourceId).IsUnique().HasFilter("status = 'pending'").HasDatabaseName("ux_source_imports_pending_source");
+            import.ToTable(t => t.HasCheckConstraint("ck_source_imports_status",
+                "status IN ('pending', 'completed', 'compensated') AND (status <> 'completed' OR snapshot_id IS NOT NULL)"));
         });
 
         modelBuilder.Entity<ApplyStep>(step =>

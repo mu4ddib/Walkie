@@ -60,6 +60,8 @@ jobs:
           check walkie-discovery-sources.schema.json "$api/sources.json"
           check walkie-discovery-evidence.schema.json "$api/evidence.json"
           check walkie-discovery-provenance.schema.json "$api/provenance.json"
+          check walkie-discovery-source-import.schema.json "$api/source-import-created.json"
+          check walkie-discovery-status.schema.json "$api/status.json"
 
   api:
     runs-on: ubuntu-latest

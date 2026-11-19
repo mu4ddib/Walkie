@@ -105,6 +105,14 @@ La transacción compartida (A) queda como forma de revertir la decisión, detrá
 - La evidencia va sin fragmentos de código por defecto (ADR-0013).
 - Encender `Discovery:Enabled` en un entorno con usuarios reales exige un ADR que registre la autorización por app.
 
+**Crear una app desde un proyecto local** (agregado en la tarea 10): `POST /api/sources/import` escribe en Apps (la app) y en Discovery (el análisis), sin transacción compartida. Usa la misma idea que la bitácora de aplicación:
+- **Identidad de la operación:** `importId` (UUID v7 del cliente, uno por archivo y nombre; la web lo reutiliza en cada reintento). La fila `discovery.source_imports` guarda el hash de la solicitud (`sha256(paquete) + nombre`) y el id de la app, generado **antes** de crearla. Un `importId` con otro hash da 409.
+- **Orden:** validar todo → candado por `importId` → fila `pending` (un solo `pending` por fuente: índice único parcial) → `IAppWriter.CreateAppAsync` con el id dado → guardar el análisis y marcar `completed` en el mismo `SaveChanges`. Solo entonces se responde 201.
+- **Reintento y caída:** el mismo `importId` retoma desde donde quedó y responde la misma app (`existing`). Si el proceso murió, la siguiente importación de esa fuente intenta recuperar la pendiente (si su candado está libre) antes de crear otra.
+- **Compensación:** si falla antes del análisis, borra la app solo si sigue con el mismo nombre y sin features, catálogo ni datos de Discovery (`DeleteUntouchedAppAsync`); si alguien la tocó, queda `pending` con el error y la respuesta lo dice.
+- **Atribución (tareas 6, 9 y 10):** un «ya existe» con el mismo id solo cuenta como propio si es del mismo tipo, del mismo usuario y creado después de la fila de la bitácora; si no, el paso falla y se compensa. Así un reintento no se adueña de algo creado por otra persona.
+- **Orden de la compensación de una feature o módulo:** primero se comprueba que su lienzo sigue sin tocar, después se borra la fila (nombre y descripción en la condición del `DELETE`) y al final el lienzo (versión 1 y sin referencias). Queda una carrera: si alguien agrega una referencia al módulo entre la comprobación y el borrado, esa referencia queda pendiente, un estado que el editor ya muestra (ADR-0010).
+
 ## Consecuencias
 
 - Positivas:

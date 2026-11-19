@@ -18,7 +18,10 @@ export type WalkieDiscoveryUploadResultV0 = {
    * Lo que trae el paquete, para mostrar antes de confirmar
    */
   summary: {
-    appId: string;
+    /**
+     * La app donde se carga (o se creó). Falta solo en la vista previa de crear una app nueva desde el proyecto (walkie-discovery-source-import)
+     */
+    appId?: string;
     source: Source;
     /**
      * La app ya tenía análisis de esta fuente
@@ -47,6 +50,7 @@ export type WalkieDiscoveryUploadResultV0 = {
      * SHA-256 del contenido de la entidad en JSON canónico (claves ordenadas, sin espacios), sin key, fingerprint, basis, confidence, derivedFrom ni evidence: cambia si cambia lo que describe, no si se mueve de línea (ADR-0014, DiscoveryFingerprint)
      */
     contentFingerprint: string;
+    previous?: Brief;
   };
 };
 /**
@@ -232,4 +236,17 @@ export interface Stats {
   entities: number;
   relations: number;
   evidence: number;
+}
+/**
+ * El último análisis de esta fuente en la app: con él se comparará (fechas, commit y si fue completo)
+ */
+export interface Brief {
+  id: string;
+  generatedAt: string;
+  importedAt: string;
+  /**
+   * complete: todos los detectores corrieron sobre todo el proyecto (include = ** /*); partial: no. Un análisis parcial es válido: la revisión no marca como «ya no aparece» lo que quedó fuera
+   */
+  completeness: 'complete' | 'partial';
+  vcs?: Vcs;
 }

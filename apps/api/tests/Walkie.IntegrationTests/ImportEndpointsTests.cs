@@ -322,8 +322,8 @@ public sealed class ImportEndpointsTests(WalkieApiFactory factory)
             Guid featureId, JsonElement graph, string userId, CancellationToken cancellationToken) =>
             inner.CreateInitialAsync(featureId, graph, userId, cancellationToken);
 
-        public Task<CanvasRemoval> DeleteUntouchedAsync(Guid featureId, CancellationToken cancellationToken) =>
-            inner.DeleteUntouchedAsync(featureId, cancellationToken);
+        public Task<CanvasRemoval> DeleteUntouchedAsync(Guid featureId, CancellationToken cancellationToken, bool checkOnly = false) =>
+            inner.DeleteUntouchedAsync(featureId, cancellationToken, checkOnly);
     }
 
     private async Task<int> AssetCountAsync(Guid appId)

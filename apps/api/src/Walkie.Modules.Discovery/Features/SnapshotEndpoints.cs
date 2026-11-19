@@ -40,6 +40,31 @@ internal static class SnapshotEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
 
+        discovery.MapPost("/api/sources/import", ImportAsNewApp)
+            .WithName("ImportDiscoverySourceAsApp")
+            .WithSummary(
+                "Crea una app nueva desde un proyecto local (spec walkie-live, tarea 10): multipart con file (el .walkiepack, hasta 50 MB), "
+                + "name (el nombre confirmado) e importId (UUID v7 del cliente; un reintento manda el mismo). Con dryRun=true solo valida "
+                + "el paquete y propone un nombre. Sin dryRun crea la app vacía y guarda su primer análisis; no crea features, catálogo ni "
+                + "lienzos. Recuperable: el mismo importId sigue donde quedó o devuelve lo ya creado.")
+            .Accepts<IFormFile>("multipart/form-data")
+            .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(DiscoveryLimits.MaxPackBytes + (1024 * 1024)))
+            .Produces<DiscoverySourceImportResponse>(StatusCodes.Status200OK)
+            .Produces<DiscoverySourceImportResponse>(StatusCodes.Status201Created)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        // Si Discovery está encendido (el filtro del grupo responde 404 si no): así la web sabe si ofrecerlo sin adivinar.
+        discovery.MapGet("/api/discovery", () => TypedResults.Ok(new DiscoveryStatusResponse(true, Walkie.Shared.Discovery.DiscoveryFormat.CurrentVersion, DiscoveryLimits.MaxPackBytes)))
+            .WithName("GetDiscoveryStatus")
+            .WithSummary("Si Walkie Live está disponible en esta API (404 si Discovery:Enabled está apagado), la versión del formato que entiende y el tamaño máximo del paquete.")
+            .Produces<DiscoveryStatusResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         discovery.MapReviewEndpoints();
         return routes;
     }
@@ -65,6 +90,48 @@ internal static class SnapshotEndpoints
             UploadResult.Done { Response: var response } => TypedResults.Ok(response),
             UploadResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
             _ => TypedResults.NotFound(),
+        };
+    }
+
+    private static async Task<Results<Created<DiscoverySourceImportResponse>, Ok<DiscoverySourceImportResponse>, ValidationProblem, ProblemHttpResult>> ImportAsNewApp(
+        bool? dryRun, HttpRequest request, ClaimsPrincipal user, SourceImportHandlers handlers, CancellationToken ct)
+    {
+        var (file, missing, tooLarge) = await ReadPackageAsync(request, ct).ConfigureAwait(false);
+        if (missing is not null)
+        {
+            return missing;
+        }
+
+        if (file is null)
+        {
+            return tooLarge!;
+        }
+
+        var form = await request.ReadFormAsync(ct).ConfigureAwait(false);
+        var name = form.TryGetValue("name", out var n) && n.Count > 0 ? n[0] : null;
+        Guid? importId = null;
+        if (form.TryGetValue("importId", out var raw) && raw.Count > 0)
+        {
+            if (!Guid.TryParse(raw[0], out var parsed))
+            {
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["importId"] = ["No es un UUID."] });
+            }
+
+            importId = parsed;
+        }
+
+        var userId = user.FindFirstValue("sub") ?? throw new InvalidOperationException("El token no trae el claim sub.");
+        return await handlers.ImportAsync(file, name, importId, dryRun ?? false, userId, ct).ConfigureAwait(false) switch
+        {
+            SourceImportResult.Done { Response: { Status: "preview" or "existing" } response } => TypedResults.Ok(response),
+            SourceImportResult.Done done => TypedResults.Created((string?)null, done.Response),
+            SourceImportResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
+            SourceImportResult.Conflict conflict => TypedResults.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: conflict.Errors.First().Value[0],
+                extensions: new Dictionary<string, object?> { ["errors"] = conflict.Errors }),
+            SourceImportResult.Unfinished unfinished => TypedResults.Problem(statusCode: StatusCodes.Status500InternalServerError, title: unfinished.Message),
+            _ => throw new InvalidOperationException(),
         };
     }
 

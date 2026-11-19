@@ -531,3 +531,39 @@
   gap: 8px;
   align-items: baseline;
 }
+
+/* Tarea 10: comparación con el análisis anterior. Glifo y texto en cada estado, nunca solo color. */
+.discovery-comparison {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.discovery-comparison p {
+  margin: 0;
+}
+
+.discovery-change,
+.discovery-needs-review {
+  font-weight: 600;
+}
+
+.discovery-needs-review {
+  color: var(--spice);
+}
+
+.new-app-name {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* Diálogos de Walkie Live con la guía de la CLI (largos): las acciones quedan siempre a la vista. */
+.local-import-dialog .import-actions {
+  position: sticky;
+  bottom: -16px;
+  margin: 0 -16px -16px;
+  padding: 8px 16px 16px;
+  border-top: 2px solid var(--dune-200);
+  background: var(--paper);
+}

@@ -9,7 +9,7 @@ test('grupos de infraestructura: incluir, mover, plegar y recargar', async ({ pa
   await login(page);
   const app = `E2E grupos ${Date.now()}`;
   await page.getByLabel('Nueva app').fill(app);
-  await page.getByRole('button', { name: 'Crear app' }).click();
+  await page.getByRole('button', { name: 'Crear app', exact: true }).click();
   await page.getByRole('link', { name: app }).click();
   await page.getByLabel('Nueva feature').fill('Transferir');
   await page.getByRole('button', { name: 'Crear feature' }).click();

@@ -179,6 +179,12 @@ Las reglas de completitud y de `missing` no cambian: un análisis `complete` exi
 - Las pantallas de una feature creada quedan con un vínculo `created` hacia la feature; un vínculo puede apuntar a una feature o a un módulo como ya admitía el schema. La API ya no rechaza `create` de módulos y features; una pantalla sigue sin crearse sola.
 - Ninguna versión de formato cambia: son registros de la API, no el `.walkiepack`.
 
+**Reanálisis y crear app** (agregado en la tarea 10):
+- `walkie-discovery-review`: estado `unverified` (decidido, ausente, sin cobertura para concluir), `counts.unverified`, `previous` (el análisis anterior de la fuente: id, `generatedAt`, `importedAt`, `completeness`, `vcs`) y `comparison` (`added`, `modified`, `unchanged`, `needsReview`). Cada ítem lleva `needsReview` y, si corresponde, `change` (`added`/`modified`/`unchanged` contra el anterior, por clave y fingerprint) y `coverage` (por qué no se concluye que desapareció). Filtros `change` y `needsReview`.
+- `walkie-discovery-upload`: `appId` deja de ser obligatorio (una vista previa sin app) y suma `previous`.
+- Nuevos: `walkie-discovery-source-import` (respuesta de `POST /api/sources/import`: `importId`, `status` `preview`/`created`/`existing`, `app` con `nameTaken`, `snapshot`, `summary`, `warnings`) y `walkie-discovery-status` (`GET /api/discovery`: `enabled`, `formatVersion`, `maxPackBytes`).
+- Ninguna versión del formato cambia.
+
 **Evidencia de un hallazgo** (agregado en la tarea 5): `walkie-discovery-evidence.schema.json` es la respuesta de `GET /api/snapshots/{snapshotId}/evidence?entityKey=`: la evidencia (los `$defs` de `walkie-discovery`) y las relaciones (hasta 100) de un solo hallazgo, con `foundIn` (el análisis pedido o, para un `missing`, el anterior). Se agregó porque la revisión trae solo `evidenceCount` (sumar la evidencia a cada ítem multiplicaría el tamaño de cada página) y la web no debe pedir el análisis entero para mostrar un hallazgo.
 
 **Compatibilidad:**

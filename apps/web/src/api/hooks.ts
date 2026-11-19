@@ -52,6 +52,8 @@ import {
   getDiscoveryReview,
   listDiscoverySources,
   uploadSnapshot,
+  importSourceAsApp,
+  getDiscoveryStatus,
   type DiscoveryOperation,
   type ReviewQuery,
 } from './client';
@@ -64,6 +66,7 @@ export function useToken(): string {
 export const queryKeys = {
   /** Walkie Live (spec walkie-live): fuentes de una app, revisión de un análisis (por filtros) y evidencia de un hallazgo. */
   discoverySources: (appId: string) => ['discovery', 'sources', appId] as const,
+  discoveryStatus: ['discovery', 'status'] as const,
   discoveryReviewAll: (snapshotId: string) => ['discovery', 'review', snapshotId] as const,
   discoveryReview: (snapshotId: string, query: ReviewQuery) => ['discovery', 'review', snapshotId, query] as const,
   discoveryEvidence: (snapshotId: string, entityKey: string) => ['discovery', 'evidence', snapshotId, entityKey] as const,
@@ -487,6 +490,33 @@ export function useDiscoverySources(appId: string) {
     queryKey: queryKeys.discoverySources(appId),
     queryFn: ({ signal }) => listDiscoverySources(token, appId, signal),
     retry: notFoundIsFinal,
+  });
+}
+
+/**
+ * Si Walkie Live está encendido en la API (tarea 10). Con 404 está apagado: la galería no ofrece «Crear app desde
+ * proyecto local». No cambia durante la sesión: se pide una vez.
+ */
+export function useDiscoveryStatus() {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.discoveryStatus,
+    queryFn: ({ signal }) => getDiscoveryStatus(token, signal),
+    retry: notFoundIsFinal,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+/** Crear una app desde un proyecto local: `dryRun` (vista previa) y después de verdad; al crear, la lista de apps se refresca. */
+export function useImportSourceAsApp() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, name, importId, dryRun }: { file: Blob; name?: string; importId?: string; dryRun: boolean }) =>
+      importSourceAsApp(token, file, { name, importId }, dryRun),
+    onSuccess: (result) => {
+      if (!result.dryRun) void queryClient.invalidateQueries({ queryKey: queryKeys.apps });
+    },
   });
 }
 

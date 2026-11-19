@@ -39,7 +39,8 @@ public sealed class DiscoveryReviewPerformanceTests(WalkieApiFactory factory, IT
                 new CreateCatalogItemRequest("api", $"Elemento {i}", null, TestJson.Http("GET", path)))).StatusCode);
         }
 
-        var pack = SyntheticPack(entities);
+        var sourceId = Guid.CreateVersion7();
+        var pack = SyntheticPack(entities, sourceId);
         var (packManifest, packDiscovery) = Open(pack);
         var validation = Stopwatch.StartNew();
         Assert.Empty(DiscoveryPackValidator.Validate(JsonSerializer.SerializeToElement(packManifest), JsonSerializer.SerializeToElement(packDiscovery)));
@@ -77,6 +78,22 @@ public sealed class DiscoveryReviewPerformanceTests(WalkieApiFactory factory, IT
         output.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  revisión, última página (500): mediana {last.Median} ms, máximo {last.Max} ms"));
         Assert.True(first.Median < 5_000, $"La revisión tardó {first.Median} ms");
         Assert.True(last.Median < 5_000, $"La última página tardó {last.Median} ms");
+
+        // Reanálisis (tarea 10): la misma fuente con 5 % que ya no está, 10 % que cambió y 5 % nuevo.
+        var second = await JsonAsync(await UploadAsync(client, appId, SyntheticPack(entities, sourceId, reanalysis: true)), HttpStatusCode.Created);
+        var secondId = second.GetProperty("snapshot").GetProperty("id").GetGuid();
+        var compared = await TimeAsync(client, $"/api/snapshots/{secondId}/review");
+        var modifiedOnly = await TimeAsync(client, $"/api/snapshots/{secondId}/review?change=modified&pageSize=100");
+        var attention = await TimeAsync(client, $"/api/snapshots/{secondId}/review?needsReview=true&pageSize=100");
+        var comparison = (await client.GetFromJsonAsync<JsonElement>(new Uri($"/api/snapshots/{secondId}/review", UriKind.Relative)))
+            .GetProperty("comparison");
+        Assert.Equal(entities / 20, comparison.GetProperty("added").GetInt32());
+        Assert.Equal(entities / 10, comparison.GetProperty("modified").GetInt32());
+        output.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"  reanálisis comparado con el anterior, primera página: mediana {compared.Median} ms, máximo {compared.Max} ms"));
+        output.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"  reanálisis, solo lo que cambió (100): mediana {modifiedOnly.Median} ms; solo lo que pide revisión (100): mediana {attention.Median} ms"));
+        Assert.True(compared.Median < 5_000, $"La revisión comparada tardó {compared.Median} ms");
     }
 
     private static async Task<(long Median, long Max)> TimeAsync(HttpClient client, string uri)
@@ -101,18 +118,25 @@ public sealed class DiscoveryReviewPerformanceTests(WalkieApiFactory factory, IT
     private static string Key(int i) => DiscoveryKeys.Api("GET", Path(i));
 
     /// <summary>Un paquete válido con <paramref name="count"/> APIs, cada una con su evidencia.</summary>
-    private static byte[] SyntheticPack(int count)
+    private static byte[] SyntheticPack(int count, Guid sourceId, bool reanalysis = false)
     {
         var entities = new JsonArray();
         var evidence = new JsonArray();
-        for (var i = 0; i < count; i++)
+        // Reanálisis: sin el 5 % (i % 20 == 0), con el título cambiado en el 10 % (i % 10 == 1) y un 5 % nuevo al final.
+        var total = reanalysis ? count + (count / 20) : count;
+        for (var i = 0; i < total; i++)
         {
+            if (reanalysis && i < count && i % 20 == 0)
+            {
+                continue;
+            }
+
             var id = string.Create(CultureInfo.InvariantCulture, $"ev-{i:D5}");
             var entity = new JsonObject
             {
                 ["key"] = Key(i),
                 ["kind"] = "api",
-                ["title"] = $"GET {Path(i)}",
+                ["title"] = reanalysis && i % 10 == 1 ? $"GET {Path(i)} (v2)" : $"GET {Path(i)}",
                 ["basis"] = "observed",
                 ["confidence"] = "high",
                 ["http"] = new JsonObject { ["method"] = "GET", ["path"] = Path(i) },
@@ -137,7 +161,7 @@ public sealed class DiscoveryReviewPerformanceTests(WalkieApiFactory factory, IT
             ["schemaVersion"] = 0,
             ["generatedAt"] = "2026-11-14T12:00:00Z",
             ["analyzer"] = new JsonObject { ["name"] = "walkie-cli", ["version"] = "0.1.0" },
-            ["source"] = new JsonObject { ["id"] = Guid.CreateVersion7().ToString(), ["name"] = "escala" },
+            ["source"] = new JsonObject { ["id"] = sourceId.ToString(), ["name"] = "escala" },
             ["detectors"] = new JsonArray(new JsonObject
             {
                 ["id"] = "aspnetcore-endpoints", ["version"] = "0.1.0", ["status"] = "ran",
@@ -147,7 +171,7 @@ public sealed class DiscoveryReviewPerformanceTests(WalkieApiFactory factory, IT
             ["completeness"] = "complete",
             ["technologies"] = new JsonArray(),
             ["limitations"] = new JsonArray(),
-            ["stats"] = new JsonObject { ["files"] = count / 100, ["entities"] = count, ["relations"] = 0, ["evidence"] = count },
+            ["stats"] = new JsonObject { ["files"] = (total + 99) / 100, ["entities"] = entities.Count, ["relations"] = 0, ["evidence"] = evidence.Count },
             ["includeSnippets"] = false,
         };
         var discovery = new JsonObject { ["entities"] = entities, ["relations"] = new JsonArray(), ["evidence"] = evidence };

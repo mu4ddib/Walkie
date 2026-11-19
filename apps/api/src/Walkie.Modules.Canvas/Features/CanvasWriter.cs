@@ -49,7 +49,7 @@ internal sealed class CanvasWriter(CanvasHandlers handlers, GraphValidator valid
         }
     }
 
-    public async Task<CanvasRemoval> DeleteUntouchedAsync(Guid featureId, CancellationToken cancellationToken)
+    public async Task<CanvasRemoval> DeleteUntouchedAsync(Guid featureId, CancellationToken cancellationToken, bool checkOnly = false)
     {
         var version = await db.Canvases.AsNoTracking().Where(c => c.FeatureId == featureId).Select(c => (int?)c.Version)
             .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
@@ -73,7 +73,7 @@ internal sealed class CanvasWriter(CanvasHandlers handlers, GraphValidator valid
             return CanvasRemoval.InUse;
         }
 
-        if (version is null)
+        if (version is null || checkOnly)
         {
             return CanvasRemoval.Deleted;
         }

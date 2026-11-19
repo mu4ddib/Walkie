@@ -35,7 +35,8 @@
         "created",
         "rejected",
         "changed",
-        "missing"
+        "missing",
+        "unverified"
       ],
       "additionalProperties": false,
       "properties": {
@@ -64,6 +65,10 @@
           "minimum": 0
         },
         "missing": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unverified": {
           "type": "integer",
           "minimum": 0
         }
@@ -100,6 +105,43 @@
       "items": {
         "$ref": "#/$defs/item"
       }
+    },
+    "previous": {
+      "$ref": "walkie-discovery-upload.schema.json#/$defs/brief",
+      "description": "El análisis anterior de la fuente, con el que se compara (tarea 10)"
+    },
+    "comparison": {
+      "type": "object",
+      "description": "Comparación con el análisis anterior (solo si hay uno; tarea 10). Lo que ya no aparece va en counts.missing (con cobertura) y counts.unverified (sin ella)",
+      "required": [
+        "added",
+        "modified",
+        "unchanged",
+        "needsReview"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Hallazgos que no estaban en el anterior"
+        },
+        "modified": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Estaban y cambió su contenido (fingerprint)"
+        },
+        "unchanged": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Estaban y siguen iguales"
+        },
+        "needsReview": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Piden una decisión de una persona (needsReview en el ítem)"
+        }
+      }
     }
   },
   "$defs": {
@@ -111,9 +153,10 @@
         "created",
         "rejected",
         "changed",
-        "missing"
+        "missing",
+        "unverified"
       ],
-      "description": "new: sin vínculo ni coincidencia; matched: coincide con un elemento existente (sin vínculo todavía); linked/created/rejected: tiene vínculo con esa decisión y su fingerprint no cambió; changed: tiene vínculo y su fingerprint cambió desde que se decidió; missing: estaba en el análisis anterior, tiene vínculo y ya no aparece aunque un detector que lo puede producir corrió (nunca se borra nada)"
+      "description": "new: sin vínculo ni coincidencia; matched: coincide con un elemento existente (sin vínculo todavía); linked/created/rejected: tiene vínculo con esa decisión y su fingerprint no cambió; changed: tiene vínculo y su fingerprint cambió desde que se decidió; missing: estaba en el análisis anterior, tiene vínculo y ya no aparece aunque un detector que lo puede producir corrió (nunca se borra nada) unverified (tarea 10): tenía una decisión y no está en este análisis, pero el análisis no lo cubría (un detector no corrió, quedó fuera del alcance o lo alcanza una limitación): no se concluye que desapareció; coverage dice por qué."
     },
     "item": {
       "type": "object",
@@ -126,7 +169,8 @@
         "status",
         "fingerprint",
         "evidenceCount",
-        "proposal"
+        "proposal",
+        "needsReview"
       ],
       "additionalProperties": false,
       "properties": {
@@ -234,6 +278,24 @@
               "$ref": "walkie-discovery-binding.schema.json#/$defs/target"
             }
           }
+        },
+        "change": {
+          "enum": [
+            "added",
+            "modified",
+            "unchanged"
+          ],
+          "description": "Respecto del análisis anterior (solo si hay uno, y no en lo que ya no aparece)"
+        },
+        "coverage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Solo en unverified: qué no cubrió este análisis"
+        },
+        "needsReview": {
+          "type": "boolean",
+          "description": "Pide una decisión: sin decidir, sugerido, cambiado, desaparecido, una decisión vieja ambigua o un destino borrado"
         }
       },
       "allOf": [

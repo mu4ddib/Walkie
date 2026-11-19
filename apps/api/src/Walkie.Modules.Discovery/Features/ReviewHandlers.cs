@@ -42,9 +42,14 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
     public const int MaxPageSize = 500;
 
     private static readonly string[] Kinds = ["api", "service", "database", "resource", "screen", "module", "feature"];
-    private static readonly string[] Statuses = ["new", "matched", "linked", "created", "rejected", "changed", "missing"];
+    private static readonly string[] Statuses = ["new", "matched", "linked", "created", "rejected", "changed", "missing", "unverified"];
+    private static readonly string[] Changes = ["added", "modified", "unchanged"];
 
-    public async Task<ReviewResult> ReviewAsync(Guid snapshotId, string? kind, string? status, int? page, int? pageSize, CancellationToken ct)
+    /// <summary>Estados que piden una decisión de una persona (además de una decisión vieja ambigua o un destino borrado).</summary>
+    private static readonly HashSet<string> NeedsDecision = new(["new", "matched", "changed", "missing"], StringComparer.Ordinal);
+
+    public async Task<ReviewResult> ReviewAsync(
+        Guid snapshotId, string? kind, string? status, int? page, int? pageSize, CancellationToken ct, string? change = null, bool? needsReview = null)
     {
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
         if (kind is not null && !Kinds.Contains(kind))
@@ -55,6 +60,11 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         if (status is not null && !Statuses.Contains(status))
         {
             errors["status"] = [$"Estado desconocido. Usa uno de: {string.Join(", ", Statuses)}."];
+        }
+
+        if (change is not null && !Changes.Contains(change))
+        {
+            errors["change"] = [$"Cambio desconocido. Usa uno de: {string.Join(", ", Changes)}."];
         }
 
         if (page is < 0)
@@ -99,6 +109,14 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         }
 
         var current = new HashSet<string>(entities.Select(e => e.Key), StringComparer.Ordinal);
+        // El análisis anterior: solo clave y fingerprint (sin jsonb), para decir qué apareció, cambió o sigue igual.
+        var previous = snapshot.PreviousSnapshotId is { } previousId
+            ? await db.Snapshots.AsNoTracking().FirstOrDefaultAsync(x => x.Id == previousId, ct).ConfigureAwait(false)
+            : null;
+        var before = previous is null
+            ? null
+            : await db.Entities.AsNoTracking().Where(e => e.SnapshotId == previous.Id).Select(e => new { e.Key, e.Fingerprint })
+                .ToDictionaryAsync(e => e.Key, e => e.Fingerprint, StringComparer.Ordinal, ct).ConfigureAwait(false);
         // Decisiones de la versión 0 con varias contrapartes (la misma ruta en dos apps): no son missing; se muestran
         // en cada contraparte para que decida una persona (ADR-0014).
         var counterparts = LegacyBindings.Counterparts(current);
@@ -112,15 +130,25 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
             }
         }
 
-        var classified = entities.Select(e => Classify(e, bindings.GetValueOrDefault(e.Key), index, bound)).ToList();
+        var classified = entities.Select(e => Classify(e, bindings.GetValueOrDefault(e.Key), index, bound) with
+        {
+            Change = before is null ? null : !before.TryGetValue(e.Key, out var was) ? "added" : was == e.Fingerprint ? "unchanged" : "modified",
+        }).ToList();
         classified.AddRange(await MissingAsync(snapshot, bindings, current, legacy.Keys.ToHashSet(StringComparer.Ordinal), ct).ConfigureAwait(false));
 
+        bool Needs(Classified c) =>
+            NeedsDecision.Contains(c.Status) || (!c.FromPrevious && legacyOf.ContainsKey(c.Row.Key))
+            || (c.Binding is { TargetKind: { } k, TargetId: { } t } && !alive.Contains((k, t)));
         var counts = new DiscoveryReviewCounts(
             Count(classified, "new"), Count(classified, "matched"), Count(classified, "linked"), Count(classified, "created"),
-            Count(classified, "rejected"), Count(classified, "changed"), Count(classified, "missing"));
+            Count(classified, "rejected"), Count(classified, "changed"), Count(classified, "missing"), Count(classified, "unverified"));
+        var comparison = before is null ? null : new DiscoveryReviewComparison(
+            classified.Count(c => c.Change == "added"), classified.Count(c => c.Change == "modified"),
+            classified.Count(c => c.Change == "unchanged"), classified.Count(Needs));
 
         var filtered = classified
-            .Where(c => (kind is null || c.Row.Kind == kind) && (status is null || c.Status == status))
+            .Where(c => (kind is null || c.Row.Kind == kind) && (status is null || c.Status == status)
+                && (change is null || c.Change == change) && (needsReview is not true || Needs(c)))
             .OrderBy(c => Array.IndexOf(Kinds, c.Row.Kind)).ThenBy(c => c.Row.Key, StringComparer.Ordinal)
             .ToList();
         var size = pageSize ?? DefaultPageSize;
@@ -134,12 +162,21 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
                 c.Binding is null ? null : BindingResponse(c.Binding),
                 c.Match, c.Candidates, evidenceCounts.GetValueOrDefault(c.Row.Key), c.Proposal,
                 c.Binding is { TargetKind: { } targetKind, TargetId: { } targetId } && !alive.Contains((targetKind, targetId)) ? true : null,
-                !c.FromPrevious && legacyOf.TryGetValue(c.Row.Key, out var old) ? BindingResponse(old) : null))
+                !c.FromPrevious && legacyOf.TryGetValue(c.Row.Key, out var old) ? BindingResponse(old) : null)
+            {
+                Change = c.Change,
+                Coverage = c.Coverage,
+                NeedsReview = Needs(c),
+            })
             .ToList();
 
         await transaction.CommitAsync(ct).ConfigureAwait(false);
         return new ReviewResult.Done(new DiscoveryReviewResponse(
-            snapshot.Id, snapshot.SourceId, snapshot.PreviousSnapshotId, counts, new DiscoveryReviewPage(index0, size, filtered.Count), items));
+            snapshot.Id, snapshot.SourceId, snapshot.PreviousSnapshotId, counts, new DiscoveryReviewPage(index0, size, filtered.Count), items)
+        {
+            Previous = previous is null ? null : SnapshotHandlers.Brief(previous),
+            Comparison = comparison,
+        });
     }
 
     /// <summary>Catálogo, módulos y features de la app como candidatos (solo de esta app: la consulta va por <c>appId</c>).</summary>
@@ -216,13 +253,13 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         foreach (var item in previous)
         {
             var cited = evidenceIds[item.Row.Key].Where(evidence.ContainsKey).Select(id => (evidence[id].Detector, evidence[id].Path)).ToList();
-            if (MissingRules.CanConclude(manifest.RootElement, cited))
+            // Con cobertura suficiente, ya no aparece (missing); sin ella, no se concluye nada y se dice por qué (unverified).
+            var why = MissingRules.WhyNot(manifest.RootElement, cited);
+            found.Add(new Classified(item.Row, why is null ? "missing" : "unverified", bindings[item.Row.Key], null, null, new DiscoveryProposal("none"))
             {
-                found.Add(new Classified(item.Row, "missing", bindings[item.Row.Key], null, null, new DiscoveryProposal("none"))
-                {
-                    FromPrevious = true,
-                });
-            }
+                FromPrevious = true,
+                Coverage = why,
+            });
         }
 
         return found;
@@ -284,5 +321,9 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         Row Row, string Status, Binding? Binding, DiscoveryMatch? Match, IReadOnlyList<DiscoveryMatch>? Candidates, DiscoveryProposal Proposal)
     {
         public bool FromPrevious { get; init; }
+
+        public string? Change { get; init; }
+
+        public string? Coverage { get; init; }
     }
 }

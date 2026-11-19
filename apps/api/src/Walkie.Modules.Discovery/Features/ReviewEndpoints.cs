@@ -71,8 +71,8 @@ internal static class ReviewEndpoints
     }
 
     private static async Task<Results<Ok<DiscoveryReviewResponse>, NotFound, ValidationProblem>> Review(
-        Guid snapshotId, string? kind, string? status, int? page, int? pageSize, ReviewHandlers handlers, CancellationToken ct) =>
-        await handlers.ReviewAsync(snapshotId, kind, status, page, pageSize, ct).ConfigureAwait(false) switch
+        Guid snapshotId, string? kind, string? status, int? page, int? pageSize, string? change, bool? needsReview, ReviewHandlers handlers, CancellationToken ct) =>
+        await handlers.ReviewAsync(snapshotId, kind, status, page, pageSize, ct, change, needsReview).ConfigureAwait(false) switch
         {
             ReviewResult.Done done => TypedResults.Ok(done.Review),
             ReviewResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),

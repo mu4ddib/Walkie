@@ -8,7 +8,8 @@
     "created": 0,
     "rejected": 1,
     "changed": 0,
-    "missing": 0
+    "missing": 0,
+    "unverified": 0
   },
   "page": {
     "index": 0,
@@ -45,7 +46,8 @@
           },
           "reason": "signature"
         }
-      ]
+      ],
+      "needsReview": true
     }
   ]
 }

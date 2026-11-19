@@ -447,6 +447,8 @@ export function fileNameOf(disposition: string | null): string | undefined {
 // siempre como texto, nunca como HTML.
 
 export type DiscoveryUpload = import('../schema/walkie-discovery-upload').WalkieDiscoveryUploadResultV0;
+export type DiscoverySourceImport = import('../schema/walkie-discovery-source-import').WalkieDiscoverySourceImportV0;
+export type DiscoveryStatusInfo = import('../schema/walkie-discovery-status').WalkieDiscoveryStatusV0;
 export type DiscoverySnapshot = import('../schema/walkie-discovery-upload').WalkieDiscoverySnapshotV0;
 export type DiscoveryReview = import('../schema/walkie-discovery-review').WalkieDiscoveryReviewV0;
 export type DiscoveryReviewItem = import('../schema/walkie-discovery-review').Item;
@@ -466,6 +468,10 @@ export const WALKIEPACK_MAX_BYTES = 50 * 1024 * 1024;
 export interface ReviewQuery {
   kind?: string;
   status?: string;
+  /** Respecto del análisis anterior: `added`, `modified` o `unchanged` (tarea 10). */
+  change?: string;
+  /** Solo lo que pide una decisión de una persona (tarea 10). */
+  needsReview?: boolean;
   page: number;
   pageSize: number;
 }
@@ -481,6 +487,29 @@ export function uploadSnapshot(token: string, appId: string, file: Blob, dryRun:
   });
 }
 
+/**
+ * `POST /api/sources/import` (tarea 10): crear una app nueva desde un proyecto local. Con `dryRun` valida el paquete y
+ * propone un nombre; sin él, crea la app y su primer análisis con `name` confirmado e `importId` (UUID v7: un reintento
+ * manda el mismo y no crea otra app).
+ */
+export function importSourceAsApp(
+  token: string,
+  file: Blob,
+  options: { name?: string; importId?: string },
+  dryRun: boolean,
+): Promise<DiscoverySourceImport> {
+  const form = new FormData();
+  form.append('file', file, 'architecture.walkiepack');
+  if (options.name !== undefined) form.append('name', options.name);
+  if (options.importId) form.append('importId', options.importId);
+  return request(`/api/sources/import${dryRun ? '?dryRun=true' : ''}`, { token, method: 'POST', body: form });
+}
+
+/** `GET /api/discovery`: si Walkie Live está encendido en la API (404 si no). */
+export function getDiscoveryStatus(token: string, signal?: AbortSignal): Promise<DiscoveryStatusInfo> {
+  return request('/api/discovery', { token, signal });
+}
+
 /** Fuentes de la app con su último análisis. 404 si Discovery está apagado en la API. */
 export function listDiscoverySources(token: string, appId: string, signal?: AbortSignal): Promise<DiscoverySources> {
   return request(`/api/apps/${encodeURIComponent(appId)}/sources`, { token, signal });
@@ -490,6 +519,8 @@ export function getDiscoveryReview(token: string, snapshotId: string, query: Rev
   const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) });
   if (query.kind) params.set('kind', query.kind);
   if (query.status) params.set('status', query.status);
+  if (query.change) params.set('change', query.change);
+  if (query.needsReview) params.set('needsReview', 'true');
   return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/review?${params}`, { token, signal });
 }
 
