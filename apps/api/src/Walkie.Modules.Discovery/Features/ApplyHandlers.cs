@@ -470,7 +470,11 @@ internal sealed partial class ApplyHandlers(
             using var document = JsonDocument.Parse(createData[op.EntityKey]);
             var finding = document.RootElement;
             var draft = kind == "feature" ? CanvasDraft.Feature(finding, drafting!) : CanvasDraft.Module(finding, drafting!);
-            if (draft.Errors.Count > 0)
+            // Un módulo sin ninguna API en el catálogo todavía: la vista previa igual muestra su borrador (vacío) y las APIs
+            // sin decidir, para que la persona pueda sumarlas en la misma solicitud (tarea 11: si no, no había cómo hacerlo
+            // desde la vista previa). Al confirmar sin ellas se rechaza como siempre.
+            var onlyMissingApis = kind == "module" && draft.Nodes.Count == 0 && draft.Omitted.Any(o => o.Code == "api-undecided");
+            if (draft.Errors.Count > 0 && (track || !onlyMissingApis))
             {
                 errors[$"{path}/entityKey"] = [.. draft.Errors];
                 return null;
@@ -495,6 +499,12 @@ internal sealed partial class ApplyHandlers(
                     ? "Walkie dedujo esta feature de las rutas: un grupo de pantallas no es por sí solo un objetivo funcional. Revisa el nombre y lo que agrupa."
                     : "Walkie dedujo este módulo de un proyecto con endpoints: no todo proyecto es un módulo reutilizable. Revisa qué ofrece.", op.EntityKey),
             };
+            if (onlyMissingApis)
+            {
+                warnings.Add(new DiscoveryApplyWarning("module-without-apis",
+                    "Ninguna de sus APIs está en el catálogo todavía: márcalas para crearlas en esta misma solicitud o vincúlalas antes; sin ellas no se puede crear.", op.EntityKey));
+            }
+
             warnings.AddRange(draft.Omitted.Where(o => o.Code == "ambiguous-api").Select(o => new DiscoveryApplyWarning("ambiguous-api", o.Message, op.EntityKey)));
             if (draft.Omitted.Any(o => o.Code != "ambiguous-api"))
             {

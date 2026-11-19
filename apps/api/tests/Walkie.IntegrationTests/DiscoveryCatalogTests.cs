@@ -203,6 +203,25 @@ public sealed class DiscoveryCatalogTests(WalkieApiFactory factory)
     }
 
     [Fact]
+    public async Task La_vista_previa_de_un_modulo_sin_apis_en_el_catalogo_muestra_cuales_faltan_para_sumarlas()
+    {
+        // Tarea 11: antes respondía 400 y la vista previa no ofrecía «Crear también en el catálogo las APIs que faltan».
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client);
+        var snapshotId = await UploadSnapshotAsync(client, appId, Pack());
+        var moduleId = Guid.CreateVersion7();
+
+        var preview = await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), true, Create(Module, moduleId)), HttpStatusCode.OK);
+
+        Assert.Contains(preview.GetProperty("warnings").EnumerateArray(), w => w.GetProperty("code").GetString() == "module-without-apis");
+        var draft = preview.GetProperty("created").EnumerateArray().Single().GetProperty("canvas");
+        Assert.Equal(0, draft.GetProperty("nodes").GetArrayLength());
+        Assert.Contains(draft.GetProperty("omitted").EnumerateArray(), o => o.GetProperty("code").GetString() == "api-undecided");
+        Assert.Empty(await CatalogOfAsync(client, appId)); // una vista previa no escribe
+        await AssertNoJournalAsync(appId);
+    }
+
+    [Fact]
     public async Task Una_firma_que_ya_esta_en_el_catalogo_no_se_duplica_y_un_titulo_igual_solo_avisa()
     {
         using var client = factory.CreateAuthenticatedClient();
