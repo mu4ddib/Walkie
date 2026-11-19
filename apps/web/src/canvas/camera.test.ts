@@ -107,10 +107,15 @@ describe('cámara del lienzo (revisión de fluidez)', () => {
     expect(settled).toEqual([]);
   });
 
-  it('si ya está encuadrada no se mueve; con movimiento reducido va directo', async () => {
+  it('si ya está encuadrada no anima: queda exacta en un solo paso (o no hace nada si ya lo está); con movimiento reducido va directo', async () => {
     const still = setup({ start: target });
-    await expect(still.camera.to({ ...target, x: target.x + 0.2 })).resolves.toBe(true);
+    await expect(still.camera.to(target)).resolves.toBe(true);
     expect(still.calls).toEqual([]);
+    // Casi igual (un movimiento cortado en su primer cuadro): sin transición, pero en el destino exacto.
+    const nudged = { ...target, x: target.x + 0.2 };
+    await expect(still.camera.to(nudged)).resolves.toBe(true);
+    expect(still.calls).toEqual([nudged]);
+    expect(still.settled).toEqual([nudged]);
 
     const reduced = setup({ reduced: true });
     await expect(reduced.camera.to(target)).resolves.toBe(true);

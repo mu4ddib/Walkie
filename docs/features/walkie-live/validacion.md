@@ -234,12 +234,14 @@ El fallo en el CI (`8a970a5`, primer intento) fue: después de seleccionar con u
 
 No se encontraron otros patrones de clic seguido de `Supr` en los E2E. Si vuelve a fallar con la espera puesta, la causa es otra: revisar el reporte del CI.
 
-**`modo-tour` (también intermitente, encontrado en las repeticiones de esta tarea):**
+**`modo-tour` (también intermitente, encontrado y corregido en esta tarea):**
 
-- Al cerrar con Esc el **segundo** tour, la vista vuelve a `translate(0.035px, 0.027px) scale(1.00001)` en vez de la vista exacta que se guardó al abrirlo (`0,0,1`).
-- Se repite 2 de 8 veces con el encuadre inicial que considera las etiquetas y 1 de 5 sin él. Es anterior a esta tarea, y la corrección del encuadre puede hacerlo más frecuente.
-- Ya se corrigieron dos carreras reales de la prueba: guardar la vista de referencia antes de que el encuadre inicial termine, y comparar sin esperar la transición de la cámara.
-- Lo que queda es una deriva real de la vista (un `fitView` o un `fitAll` que corre entre los dos tours). Queda abierta como tarea aparte, sin agrandar timeouts. Si el CI la muestra, no es de Walkie Live.
+- **Síntoma:** al cerrar con Esc el **segundo** tour, la vista quedaba en `translate(0.035px, 0.027px) scale(1.00001)` en vez de la vista exacta que se guardó al abrirlo.
+- **Causa (en la app):** al abrir el tour, la cámara empieza a centrar el primer paso, y Esc cierra el tour justo después del primer cuadro (la vista ya se movió un poco al comienzo de la curva de aceleración). Al cerrar, `camera.to(vista guardada)` encontraba la vista «igual» dentro de su tolerancia (`sameView`, 0,5 px) y salía sin fijar el destino, así que el corrimiento quedaba para siempre.
+- **Corrección:** cuando la vista está dentro de la tolerancia pero no es exacta, la cámara la fija exacta en un solo paso, sin animar (`camera.ts`; prueba en `camera.test.ts`).
+- **Evidencia:** sin la corrección falló 6 de 10; con ella pasó 20 de 20.
+- **En la prueba:** también se corrigieron dos carreras propias: la vista de referencia se toma ya quieta, y la vuelta con Esc espera la transición como la de «Terminar».
+- No tenía que ver con Walkie Live: el encuadre inicial con etiquetas solo hacía más probable que el tour empezara con la vista recién acomodada.
 
 ## 12. Experiencia visual y accesibilidad
 
@@ -327,7 +329,6 @@ Los binarios autocontenidos y un envoltorio npm son opcionales y se deciden desp
 | Baja | Referencia agregada durante una compensación: queda pendiente, o el lienzo no se puede guardar hasta quitar la caja | Residual, ventana de milisegundos (§10) |
 | Baja | Páginas de Walkie Live sin probar en anchos chicos | §12 |
 | Baja | Un E2E intermitente sin reproducir (`deshacer-y-cajas`) | Prueba sincronizada; vigilar el CI (§11) |
-| Baja | `modo-tour`: la vista no vuelve exacta al cerrar el segundo tour (anterior a Walkie Live; ~1 de 5 a 2 de 8 en local) | Tarea aparte (§11) |
 
 **Recomendación:**
 
