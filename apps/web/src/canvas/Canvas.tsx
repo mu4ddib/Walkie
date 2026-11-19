@@ -338,7 +338,7 @@ function CanvasInner({
 
   // «Ver todo» encuadra las cajas y también las etiquetas de las conexiones que sobresalen de ellas: si no, una
   // etiqueta al costado de la última caja quedaba debajo del inspector. Solo mide lo que ya está dibujado; no mueve nada.
-  const fitAll = useCallback((options?: CameraOptions) => {
+  const fitAll = useCallback((options?: CameraOptions, onlyIfLabelsOutside = false) => {
     const visible = getNodes().filter((n) => !n.hidden);
     if (visible.length === 0) return;
     let { x, y, width, height } = getNodesBounds(visible);
@@ -354,6 +354,9 @@ function CanvasInner({
       right = Math.max(right, b.x);
       bottom = Math.max(bottom, b.y);
     }
+    const boxes = getNodesBounds(visible);
+    const wider = x < boxes.x || y < boxes.y || right > boxes.x + boxes.width || bottom > boxes.y + boxes.height;
+    if (onlyIfLabelsOutside && !wider) return; // el fitView inicial ya basta: no mover la vista ni una fracción
     width = right - x;
     height = bottom - y;
     void camera.fitBounds({ x, y, width, height }, fitPadding, options);
@@ -369,7 +372,7 @@ function CanvasInner({
     const first = requestAnimationFrame(() => {
       second = requestAnimationFrame(() => {
         fittedWithLabels.current = true;
-        fitAll({ duration: 0 });
+        fitAll({ duration: 0 }, true);
       });
     });
     return () => {

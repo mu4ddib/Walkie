@@ -567,3 +567,8 @@
   border-top: 2px solid var(--dune-200);
   background: var(--paper);
 }
+
+/* El error se lleva a la vista justo encima de la barra fija, no debajo de ella. */
+.local-import-dialog .save-error {
+  scroll-margin-bottom: 88px;
+}
