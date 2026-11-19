@@ -145,7 +145,8 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
                 table: "applies",
                 type: "jsonb",
                 nullable: false,
-                defaultValue: "",
+                // Tarea 11: "" no es JSON y Postgres rechazaba la reversión aun sin filas; {} sí lo es.
+                defaultValue: "{}",
                 oldClrType: typeof(string),
                 oldType: "jsonb",
                 oldNullable: true);
