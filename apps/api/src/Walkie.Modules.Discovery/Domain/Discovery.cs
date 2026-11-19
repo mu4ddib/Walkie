@@ -264,6 +264,9 @@ internal sealed class ApplyStep
 /// <item><c>completed</c>: el análisis y este registro se guardan en una sola transacción de Discovery.</item>
 /// <item><c>compensated</c>: falló y se borró la app porque nadie la había tocado. Si no se puede borrar sin perder algo
 /// de una persona, queda <c>pending</c>: un reintento con el mismo <see cref="ImportId"/> la termina.</item>
+/// <item><c>abandoned</c> (tarea 11): una pendiente cuya ejecución ya no existe (candado libre) y cuya app alguien ya
+/// tocó, encontrada al empezar otra creación desde la misma fuente. No se borra nada: la app queda como está, sin el
+/// análisis, y la fuente deja de estar bloqueada. Terminal.</item>
 /// </list>
 /// </summary>
 internal sealed class SourceImport
@@ -271,6 +274,7 @@ internal sealed class SourceImport
     public const string Pending = "pending";
     public const string Completed = "completed";
     public const string Compensated = "compensated";
+    public const string Abandoned = "abandoned";
 
     /// <summary>UUID v7 del cliente: identifica la operación (un reintento manda el mismo).</summary>
     public Guid ImportId { get; init; }

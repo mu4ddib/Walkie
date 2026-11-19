@@ -126,6 +126,8 @@ internal sealed partial class SourceImportHandlers(
                 // Ya terminada (un reintento tras un timeout): la misma respuesta, sin crear nada.
                 SourceImport.Completed => await DoneAsync(record, summary, warnings, ct, "existing").ConfigureAwait(false),
                 SourceImport.Compensated => Conflict("importId", "Esta creación no se pudo terminar y se deshizo: vuelve a intentarlo (es otra creación)."),
+                SourceImport.Abandoned => Conflict("importId",
+                    $"Esta creación quedó abandonada: la app «{record.AppName}» ya tenía cambios y se conservó tal cual, sin el análisis. Para sumarlo, ábrela y usa «Importar proyecto local»."),
                 _ => await RunAsync(record, manifest, discovery, formatVersion, contentFingerprint, summary, warnings).ConfigureAwait(false),
             };
         }
@@ -139,7 +141,7 @@ internal sealed partial class SourceImportHandlers(
         var stale = await db.SourceImports.FirstOrDefaultAsync(i => i.SourceId == sourceId && i.Status == SourceImport.Pending, ct).ConfigureAwait(false);
         if (stale is not null && !await TryRecoverAsync(stale.ImportId).ConfigureAwait(false))
         {
-            return Conflict("source", "Otra creación de una app desde esta misma fuente está en curso: espera a que termine.");
+            return Conflict("source", "Otra creación de una app desde esta misma fuente está en curso (o no se pudo resolver todavía): espera un momento y vuelve a intentarlo.");
         }
 
         var now = clock.GetUtcNowForDb();
@@ -221,7 +223,7 @@ internal sealed partial class SourceImportHandlers(
     /// Deshace una creación que falló: borra la app solo si nadie la tocó (mismo nombre, sin features, módulos, catálogo,
     /// análisis ni decisiones). Si no se puede sin riesgo, la deja <c>pending</c> con el error: un reintento la termina.
     /// </summary>
-    private async Task<SourceImportResult> CompensateAsync(Guid importId, string error)
+    private async Task<SourceImportResult> CompensateAsync(Guid importId, string error, bool abandonIfEdited = false)
     {
         try
         {
@@ -233,6 +235,16 @@ internal sealed partial class SourceImportHandlers(
             var removal = discoveryData
                 ? AppRemoval.Edited
                 : await apps.DeleteUntouchedAppAsync(record.AppId, record.AppName, CancellationToken.None).ConfigureAwait(false);
+            if (removal == AppRemoval.Edited && abandonIfEdited)
+            {
+                // Nadie la va a terminar (su ejecución murió y otra creación de la fuente espera): se suelta sin borrar nada.
+                record.Status = SourceImport.Abandoned;
+                record.Error = Truncate("La app ya tenía cambios: se conservó sin el análisis. " + error, 1000);
+                await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+                LogAbandoned(logger, importId, record.AppId);
+                return new SourceImportResult.Unfinished("La creación anterior quedó abandonada sin borrar su app.");
+            }
+
             if (removal == AppRemoval.Edited)
             {
                 await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
@@ -272,7 +284,7 @@ internal sealed partial class SourceImportHandlers(
 
         db.ChangeTracker.Clear();
         LogRecovering(logger, otherImportId);
-        await CompensateAsync(otherImportId, "Se deshizo al empezar otra creación desde la misma fuente.").ConfigureAwait(false);
+        await CompensateAsync(otherImportId, "Se resolvió al empezar otra creación desde la misma fuente.", abandonIfEdited: true).ConfigureAwait(false);
         db.ChangeTracker.Clear();
         return !await db.SourceImports.AnyAsync(i => i.ImportId == otherImportId && i.Status == SourceImport.Pending).ConfigureAwait(false);
     }
@@ -337,6 +349,9 @@ internal sealed partial class SourceImportHandlers(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "No se pudo deshacer la creación de app {ImportId}: queda pending.")]
     private static partial void LogCompensationFailed(ILogger logger, Exception exception, Guid importId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "La creación de app interrumpida {ImportId} quedó abandonada: la app {AppId} tenía cambios y se conservó.")]
+    private static partial void LogAbandoned(ILogger logger, Guid importId, Guid appId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Se deshace la creación de app interrumpida {ImportId}.")]
     private static partial void LogRecovering(ILogger logger, Guid importId);

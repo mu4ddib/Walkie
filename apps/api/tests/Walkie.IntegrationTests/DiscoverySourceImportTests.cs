@@ -211,6 +211,37 @@ public sealed class DiscoverySourceImportTests(WalkieApiFactory factory)
     }
 
     [Fact]
+    public async Task Una_pendiente_con_la_app_tocada_que_nadie_reintenta_no_bloquea_la_fuente_ni_borra_la_app()
+    {
+        // Tarea 11, punto 9: la creación se cayó después de crear la app, alguien la usó y el navegador que la empezó se
+        // cerró (nadie reintenta ese importId). Antes, toda creación nueva desde la fuente respondía 409 para siempre.
+        using var client = factory.CreateAuthenticatedClient();
+        var importId = Guid.CreateVersion7();
+        var pack = Pack();
+        using (var crashing = WithCheckpoints(reached => reached == "app" ? throw new ImportAbandonedException(reached) : Task.CompletedTask))
+        using (var dying = Authenticated(crashing))
+        {
+            await CrashAsync(() => ImportAsync(dying, pack, name, importId));
+        }
+
+        var stuck = (await client.GetFromJsonAsync<JsonElement[]>(new Uri("/api/apps", UriKind.Relative)))!.Single(a => a.GetProperty("name").GetString() == name);
+        var stuckId = stuck.GetProperty("id").GetGuid();
+        await JsonAsync(await client.PostAsJsonAsync(new Uri($"/api/apps/{stuckId}/features", UriKind.Relative), new { name = "Hecha a mano" }), HttpStatusCode.Created);
+
+        // Otra creación desde la misma fuente: la anterior queda abandonada (no se borra nada) y esta se crea.
+        var other = await JsonAsync(await ImportAsync(client, pack, name + " (2)", Guid.CreateVersion7()), HttpStatusCode.Created);
+        Assert.NotEqual(stuckId, other.GetProperty("app").GetProperty("id").GetGuid());
+        Assert.Equal("abandoned", await StatusAsync(importId));
+        Assert.Single((await client.GetFromJsonAsync<JsonElement[]>(new Uri($"/api/apps/{stuckId}/features", UriKind.Relative)))!);
+
+        // El importId original ya no la termina: lo dice, con qué hacer.
+        var late = await ImportAsync(client, pack, name, importId);
+        Assert.Equal(HttpStatusCode.Conflict, late.StatusCode);
+        Assert.Contains("Importar proyecto local", await late.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(1, await AppsNamedAsync(client, name));
+    }
+
+    [Fact]
     public async Task Dos_creaciones_a_la_vez_desde_la_misma_fuente_no_dan_dos_apps()
     {
         using var client = factory.CreateAuthenticatedClient();

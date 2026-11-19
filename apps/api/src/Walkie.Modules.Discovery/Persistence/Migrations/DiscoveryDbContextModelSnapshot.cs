@@ -570,7 +570,7 @@ namespace Walkie.Modules.Discovery.Persistence.Migrations
 
                     b.ToTable("source_imports", "discovery", t =>
                         {
-                            t.HasCheckConstraint("ck_source_imports_status", "status IN ('pending', 'completed', 'compensated') AND (status <> 'completed' OR snapshot_id IS NOT NULL)");
+                            t.HasCheckConstraint("ck_source_imports_status", "status IN ('pending', 'completed', 'compensated', 'abandoned') AND (status <> 'completed' OR snapshot_id IS NOT NULL)");
                         });
                 });
 

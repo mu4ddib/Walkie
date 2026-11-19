@@ -218,7 +218,7 @@ internal sealed class DiscoveryDbContext(DbContextOptions<DiscoveryDbContext> op
             // Una sola creación sin terminar por fuente: dos a la vez desde la misma fuente no dan dos apps en silencio.
             import.HasIndex(i => i.SourceId).IsUnique().HasFilter("status = 'pending'").HasDatabaseName("ux_source_imports_pending_source");
             import.ToTable(t => t.HasCheckConstraint("ck_source_imports_status",
-                "status IN ('pending', 'completed', 'compensated') AND (status <> 'completed' OR snapshot_id IS NOT NULL)"));
+                "status IN ('pending', 'completed', 'compensated', 'abandoned') AND (status <> 'completed' OR snapshot_id IS NOT NULL)"));
         });
 
         modelBuilder.Entity<ApplyStep>(step =>
