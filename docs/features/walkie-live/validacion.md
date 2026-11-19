@@ -332,7 +332,30 @@ Los binarios autocontenidos y un envoltorio npm son opcionales y se deciden desp
 
 **Recomendación:**
 
-- **Integración técnica a `main`: mergeable con condiciones.** Las condiciones son el CI verde sobre el último commit, `Discovery:Enabled` apagado por defecto (ya lo está) y el bloqueo de ADR-0015 visible en la spec. El código está detrás del flag, no cambia lienzos ni el contrato del grafo, y las regresiones de Apps, Canvas, Import/Export y Tours pasan.
+- **Integración técnica a `main`: mergeable con condiciones.** Las condiciones son el CI verde sobre el último commit (confirmado: los cinco jobs en verde sobre `ce7af97`), `Discovery:Enabled` apagado por defecto (ya lo está) y el bloqueo de ADR-0015 visible en la spec. El código está detrás del flag, no cambia lienzos ni el contrato del grafo, y las regresiones de Apps, Canvas, Import/Export y Tours pasan.
 - **Habilitación para desarrollo:** sí, con datos ficticios o del propio equipo (`appsettings.Development.json`).
 - **Piloto con usuarios reales: bloqueado** hasta implementar y probar ADR-0015 (incluidas las pruebas IDOR). Conviene además seguir los envoltorios HTTP, porque si no las features no muestran sus APIs, y publicar la CLI.
 - **Producción: bloqueado** por lo anterior, más retención de datos, backups probados antes de migrar y la CLI firmada.
+
+## 18. Deuda registrada y próximos incrementos
+
+Estado de la autorización: **ADR-0015 sigue propuesto y la autorización por app no está implementada.** Ningún endpoint compara al usuario con la app.
+
+| Id | Prioridad | Deuda | Evidencia | Criterio de cierre |
+|---|---|---|---|---|
+| D1 | **Bloqueante** | Autorización por app (ADR-0015) | §13; `GET /api/apps` lista todas | Política implementada en todos los endpoints, migración de las apps existentes y pruebas IDOR en verde; ADR-0015 aceptado |
+| D2 | **Alta** | Seguir clientes HTTP envoltorio de un nivel (`request(path)`/`send(path)` → `fetch(base + path)`) cuando la ruta es literal en quien llama | §2: 0 de 43 llamadas detectadas en Walkie | En el análisis de Walkie, las llamadas de `apps/web/src/api/client.ts` aparecen como `calls` a las 43 APIs, sin falsos positivos en el corpus de la CLI; lo dinámico sigue como limitación |
+| D3 | **Alta** | Declarar la navegación que no se resuelve (por ejemplo `navigate(appPath(id))`, `<Link to={featurePath(…)}>`) con una limitación propia | §2: 9 de 56 navegaciones, ninguna limitación | Toda navegación no literal deja una limitación con archivo y línea; el análisis queda parcial cuando corresponde |
+| D4 | Media | Inicio de sesión en WebKit vuelve a `/` (o a «Iniciar sesión») en vez de la ruta pedida | §12: 2 E2E de Walkie Live fallan en WebKit de forma reproducible; Chromium pasa | La causa se identifica en `signinRedirect`/`onSigninCallback` y los E2E de Walkie Live pasan con `WALKIE_BROWSER=webkit` |
+| D5 | Media | Retención de análisis y limpieza de huérfanos | §14 | Política escrita y probada antes de producción |
+| D6 | Media | Distribución de la CLI (NuGet, firma, Windows y macOS) | §15 | Paquete publicado y firmado, probado en el CI en tres sistemas |
+| D7 | Baja | `deshacer-y-cajas` intermitente en el CI (no reproducido en local) | §11: 1 fallo en el CI; 20 de 20 en local con carga | La prueba espera la selección; si vuelve a fallar, investigar con el reporte del CI |
+| D8 | Baja | La vista previa de una feature no avisa cuando la app tiene llamadas sin resolver; el aviso «Sin evidencia para…» no dice de qué API es | §3, §8 | Avisos con el nombre de la API y uno de «llamadas que el análisis no pudo ver» |
+| D9 | Baja | Páginas de Walkie Live sin probar en anchos chicos | §12 | E2E o capturas a 390 y 768 px |
+
+**Próximos incrementos propuestos, en orden:**
+
+1. **Autorización por app (D1):** implementar ADR-0015 (membresías, política, migración, pruebas IDOR). Sin esto no hay piloto.
+2. **Analizador: envoltorios HTTP y navegación declarada (D2, D3):** es lo que más cambia el valor de los lienzos generados, sin heurísticas abiertas. Medirlo con Walkie y con el corpus de la CLI.
+3. **Preparación del piloto (D4, D6, D8):** login en WebKit, CLI publicada y firmada, avisos de la vista previa.
+4. **Antes de producción (D5, D9):** retención y limpieza, backups probados antes de migrar, anchos chicos.

@@ -171,4 +171,10 @@ Tarea 11 hecha (validación integral, rendimiento y preparación para integrar; 
 - **Pruebas nuevas:** `DiscoveryNonDestructiveTests`, `DiscoveryLimitsTests`, `DiscoveryLoadTests` (concurrencia siempre; matriz con `WALKIE_BENCH=1`) y `DiscoveryMigrationTests`; un caso de integridad en `DiscoveryCanvasTests` y otro de vista previa en `DiscoveryCatalogTests`. `deshacer-y-cajas` espera la selección antes de `Supr`. E2E en WebKit con `WALKIE_BROWSER=webkit`.
 - **ADR-0015** (propuesto): autorización por app, bloqueante para el piloto.
 
-Sigue: revisión final de Walkie Live. Ver la recomendación en `validacion.md` §17.
+Deuda registrada (detalle y criterios de cierre en `validacion.md` §18):
+
+- **D1, bloqueante:** autorización por app. ADR-0015 sigue **propuesto**; no está implementada.
+- **D2 y D3, alta:** seguir clientes HTTP envoltorio (`request`/`send`) y declarar la navegación dinámica que no se resuelve.
+- **Seguimiento:** D4, inicio de sesión en WebKit; D7, E2E `deshacer-y-cajas`.
+
+Sigue: revisión final de Walkie Live. Ver la recomendación en `validacion.md` §17 y los próximos incrementos en §18.
