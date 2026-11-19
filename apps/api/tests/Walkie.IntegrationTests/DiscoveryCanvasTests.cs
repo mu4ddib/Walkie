@@ -175,6 +175,41 @@ public sealed class DiscoveryCanvasTests(WalkieApiFactory factory)
     }
 
     [Fact]
+    public async Task Si_alguien_guarda_el_lienzo_de_la_feature_durante_la_caida_el_reintento_no_lo_pisa()
+    {
+        // Tarea 11 (integridad): la feature quedó creada y su lienzo todavía no; una persona la abre y guarda el suyo.
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client);
+        var snapshotId = await UploadAsync(client, appId, Monorepo());
+        var detail = Guid.CreateVersion7();
+        var featureId = Guid.CreateVersion7();
+        var draft = await DraftAsync(client, snapshotId, Create(DetailApi, detail), Create(TiendaFeature, featureId));
+        var applyId = Guid.CreateVersion7();
+        JsonObject[] operations = [Create(DetailApi, detail), Create(TiendaFeature, featureId, Canvas(draft))];
+
+        using (var crashing = WithCheckpoints((reached, _) => reached == "created:1" ? throw new ApplyAbandonedException(reached) : Task.CompletedTask))
+        using (var dying = Authenticated(crashing))
+        {
+            await CrashAsync(() => ApplyWithIdAsync(dying, snapshotId, applyId, operations));
+        }
+
+        var human = new JsonObject
+        {
+            ["schemaVersion"] = 0, ["version"] = 0,
+            ["nodes"] = new JsonObject { ["h1"] = new JsonObject { ["id"] = "h1", ["type"] = "screen", ["title"] = "Lo que dibujó una persona" } },
+            ["edges"] = new JsonObject(),
+            ["layout"] = new JsonObject { ["h1"] = new JsonObject { ["x"] = 40, ["y"] = 40 } },
+        };
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(new Uri($"/api/features/{featureId}/canvas", UriKind.Relative), human)).StatusCode);
+        var saved = await GraphAsync(client, featureId);
+
+        var done = await JsonAsync(await ApplyWithIdAsync(client, snapshotId, applyId, operations), HttpStatusCode.OK);
+
+        Assert.Equal("completed", done.GetProperty("status").GetString());
+        Assert.True(JsonElement.DeepEquals(saved, await GraphAsync(client, featureId))); // su lienzo, no el borrador
+    }
+
+    [Fact]
     public async Task Un_reintento_no_se_atribuye_un_modulo_ajeno_creado_con_el_mismo_id_mientras_estaba_pendiente()
     {
         using var client = factory.CreateAuthenticatedClient();
