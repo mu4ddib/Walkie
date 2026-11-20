@@ -344,8 +344,8 @@ Estado de la autorización (2026-11-19): **D1 resuelto en la rama `feat/autoriza
 | Id | Prioridad | Deuda | Evidencia | Criterio de cierre |
 |---|---|---|---|---|
 | D1 | ~~Bloqueante~~ **Resuelto** | Autorización por app (ADR-0015) | §13; `GET /api/apps` lista todas | Cumplido: filtro único en todos los endpoints (`AppAuthorizationTests`: guardia de cobertura y matriz IDOR), migración `Memberships` probada y ADR-0015 aceptado |
-| D2 | **Alta** | Seguir clientes HTTP envoltorio de un nivel (`request(path)`/`send(path)` → `fetch(base + path)`) cuando la ruta es literal en quien llama | §2: 0 de 43 llamadas detectadas en Walkie | En el análisis de Walkie, las llamadas de `apps/web/src/api/client.ts` aparecen como `calls` a las 43 APIs, sin falsos positivos en el corpus de la CLI; lo dinámico sigue como limitación |
-| D3 | **Alta** | Declarar la navegación que no se resuelve (por ejemplo `navigate(appPath(id))`, `<Link to={featurePath(…)}>`) con una limitación propia | §2: 9 de 56 navegaciones, ninguna limitación | Toda navegación no literal deja una limitación con archivo y línea; el análisis queda parcial cuando corresponde |
+| D2 | ~~Alta~~ **Resuelto** (spec walkie-live-arquitectura, PR A) | Seguir clientes HTTP envoltorio de un nivel (`request(path)`/`send(path)` → `fetch(base + path)`) cuando la ruta es literal en quien llama | §2: 0 de 43 llamadas detectadas en Walkie | Cumplido (§19): los 45 endpoints que llama el cliente, sin APIs inventadas, desde las 11 pantallas |
+| D3 | ~~Alta~~ **Resuelto** (spec walkie-live-arquitectura, PR A) | Declarar la navegación que no se resuelve (por ejemplo `navigate(appPath(id))`, `<Link to={featurePath(…)}>`) con una limitación propia | §2: 9 de 56 navegaciones, ninguna limitación | Cumplido (§19): 34 navegaciones por funciones de rutas; lo que no se resuelve queda como `dynamic-navigation` o `navigation-unattributed` con archivo y línea |
 | D4 | Media | Inicio de sesión en WebKit vuelve a `/` (o a «Iniciar sesión») en vez de la ruta pedida | §12: 2 E2E de Walkie Live fallan en WebKit de forma reproducible; Chromium pasa | La causa se identifica en `signinRedirect`/`onSigninCallback` y los E2E de Walkie Live pasan con `WALKIE_BROWSER=webkit` |
 | D5 | Media | Retención de análisis y limpieza de huérfanos | §14 | Política escrita y probada antes de producción |
 | D6 | Media | Distribución de la CLI (NuGet, firma, Windows y macOS) | §15 | Paquete publicado y firmado, probado en el CI en tres sistemas |
@@ -359,3 +359,108 @@ Estado de la autorización (2026-11-19): **D1 resuelto en la rama `feat/autoriza
 2. **Analizador: envoltorios HTTP y navegación declarada (D2, D3):** es lo que más cambia el valor de los lienzos generados, sin heurísticas abiertas. Medirlo con Walkie y con el corpus de la CLI.
 3. **Preparación del piloto (D4, D6, D8):** login en WebKit, CLI publicada y firmada, avisos de la vista previa.
 4. **Antes de producción (D5, D9):** retención y limpieza, backups probados antes de migrar, anchos chicos.
+
+## 19. Relaciones y propuestas (spec walkie-live-arquitectura, PR A, 2026-11-20)
+
+Walkie analizándose a sí mismo (`main` en `d8159c5` contra la rama `feat/walkie-live-relaciones`, con la misma fuente). Cada medida va aparte: no se mezclan entidades, relaciones y propuestas en una cifra global.
+
+**Detección y atribución de llamadas (D2).** La verdad sale de `apps/web/src/api/client.ts` leído con una expresión regular independiente del analizador (`WalkieRepositoryTests`).
+
+| Medida | Antes | Después |
+|---|---|---|
+| Endpoints que llama el cliente, detectados | 0 de 45 | **45 de 45** (también los dos de `importPackage`, armados con un condicional en una constante) |
+| APIs inventadas (llamadas a algo que el cliente no llama) | — | **0** |
+| Relaciones `calls` | 0 | 92 |
+| … desde una pantalla | 0 | 82 (48 inferidas medias: por hook o servicio; 44 inferidas bajas: por un componente dibujado) |
+| … desde la app (código que ninguna pantalla alcanza: salud, sesión, enlaces, imágenes) | 0 | 10 |
+| Pantallas con llamadas | 0 de 11 | 11 de 11 |
+| APIs del backend que la web no llama | — | 1 (`GET /api/modules/{}`: es cierto, la web no la usa) |
+| Limitaciones `dynamic-http-url` | 4 (1 por `baseUrl`, 3 por `canvasImage.ts`) | 0; las 3 de `canvasImage.ts` son `non-api-fetch` (no dejan el análisis parcial) |
+
+**Navegación (D3).**
+
+| Medida | Antes | Después |
+|---|---|---|
+| Relaciones `navigates` | 9 | 34 (21 observadas, 1 inferida media, 12 inferidas bajas por componentes) |
+| Navegaciones no resueltas, declaradas | 0 | 13: 2 `dynamic-navigation` (`navigate(path)` con una variable) y 11 `navigation-unattributed` (en `LocationBar`, `Palette`, `RefPanel`, `ReviewInspector` y `App.tsx`: componentes compartidos o que ninguna pantalla alcanza) |
+| Navegaciones entre la vista pública (`/s/…`) y la autenticada | — | 0 (prueba) |
+
+**Contención.** `contains` de la app de front a cada pantalla: 0 → 11 (observadas, altas: la ruta está en sus archivos).
+
+**Backend.** `reads`: 0 → 76; `writes`: 0 → 27. 43 de 46 endpoints llegan a una base; los 3 que no (`/api/health`, `/api/me`, `/api/discovery`) no tocan ninguna. Ninguna escritura de más en lo revisado a mano (por ejemplo, `GET /api/public/shares/{}` escribe porque actualiza el último acceso).
+
+**Propuestas de feature.**
+
+| Medida | Antes | Después |
+|---|---|---|
+| Propuestas | 3, todas bajas («Apps», «Catalog», «Modules») | 2, medias («Apps», «Catalog») |
+| Con evidencia suficiente (navegación o carga diferida, y APIs en común o del mismo módulo) | 0 | 2 |
+| Solo por heurística de rutas | 3 | 0 |
+| Mezclas indebidas | 1 («Modules» juntaba `/apps/:appId/modules/:moduleId` con la vista pública `/s/:token/modules/:moduleId`) | 0 |
+| Conexiones que su lienzo inicial puede dibujar | 1 (Apps) y 0 (Catalog, Modules) | Apps: 5 de navegación y 23 solicitudes; Catalog: 2 y 22 |
+
+**Falsos negativos que quedan.** Navegaciones desde componentes compartidos (la barra de ubicación, la paleta) y hacia rutas en variables; llamadas de módulos de la app que solo alcanzan componentes compartidos (quedan desde la app); escrituras en otra base que pasan por más de 3 saltos (por ejemplo, `apply` con creación escribe en Apps por `IAppWriter`, a 4 saltos); `GET /api/modules/{}` no tiene consumidor en la web.
+
+**Casos B a E** (`ArchitectureCasesTests`): React + .NET (login, listado, detalle, crear, editar, servicio con axios, servicio del backend y EF Core), Angular (standalone, carga diferida, servicios inyectados por `inject` y por constructor, `HttpClient`, `router.navigate` y `routerLink`), monorepo (dos apps con las mismas rutas y un cliente común: nunca se mezclan) e incompleto (navegación a una variable, cliente con método calculado: limitaciones con archivo y línea, nada inventado). Lo esperado se escribe a mano, incluidas las relaciones que no deben existir.
+
+**Rendimiento del análisis** (mediana de 3 a 5 corridas, CLI en Release):
+
+| Proyecto | Antes | Después |
+|---|---|---|
+| Walkie (76 entidades) | 1,3 s · 157 MB · 77 relaciones | 2,0 s · 212 MB · 297 relaciones |
+| Sintético de 400 recursos (3.201 entidades) | 2,1 s · 252 MB · parcial, 400 relaciones | 4,0 s · 327 MB · completo, 2.800 relaciones |
+| Sintético de 2.400 recursos (19.201 entidades) | 6,1 s · 514 MB · parcial, 2.400 relaciones | 12,5 s · 905 MB · completo, 16.800 relaciones |
+
+El crecimiento es lineal: cada archivo se escanea una vez, las funciones se agrupan por archivo una sola vez (`ScriptFacts.In`) y cada resumen se calcula una vez (`FrontendSymbols.Summary`).
+
+
+## 20. Explorar arquitectura y revisión por conjuntos (spec walkie-live-arquitectura, PR B, 2026-11-20)
+
+**Proyección de la API** (`DiscoveryArchitectureTests`, Postgres real, mediana de 5 pedidos; `WALKIE_BENCH=1` para el caso grande):
+
+| Análisis | Vista general | Abrir un grupo (hasta 500 hallazgos) | Lo que dibuja la vista general |
+|---|---|---|---|
+| Sintético de 400 recursos (2.801 entidades) | 65 ms | 34 ms | 2 grupos, 1 vínculo, 400 propuestas |
+| Sintético de 2.900 recursos (20.000 entidades, el máximo de un paquete) | 193 ms | 239 ms | 2 grupos, 1 vínculo, 2.599 propuestas |
+
+Una consulta de proyección sin `jsonb` (solo `members` de módulos y features), relaciones sin `jsonb`, vínculos agregados en memoria (O(n)); la web muestra las propuestas de a 30 y abre un grupo por pedido. Abrir la vista no escribe nada (prueba: sin vínculos ni creaciones en la revisión y el catálogo sigue vacío; el E2E compara el catálogo antes y después).
+
+**Walkie analizándose, con la vista nueva.** La pantalla de arquitectura (`/apps/:appId/sources/:snapshotId/architecture`) y la de revisión navegan entre sí y comparten las APIs de `/api/snapshots/{}`: el análisis propone una tercera feature, «Discovery review» (media, con navegación y solicitudes). Las APIs de Walkie pasan de 50 a 53 (los tres endpoints de lectura nuevos).
+
+**Caso F** (`apps/web/e2e/walkie-live-arquitectura.spec.ts`, CLI + Postgres + API + web): una tienda ficticia React + .NET con un cliente envoltorio (`request(method, path)` con base en una constante), servicios y EF Core.
+
+| Paso | Resultado |
+|---|---|
+| Importar y «Explorar arquitectura» | 3 grupos (tienda-web, Tienda.Api, Datos), 13 hallazgos, 25 relaciones, cobertura completa; nada creado |
+| Filtros | quitar «Ejecución» saca las llamadas; volver a marcarla las devuelve |
+| Abrir el grupo del front | 4 pantallas, la propuesta y el servicio vecino; la llamada de «Pedidos» a `GET /api/pedidos` muestra su cadena (pantalla → servicio → envoltorio) con archivo y línea |
+| Revisar «Pedidos» | 3 pantallas y 3 APIs; `GET /api/pedidos` coincide por firma con la API hecha a mano y se propone **vincular**; «Clientes» (otra familia de rutas) no entra |
+| Vista previa y confirmación | una sola aplicación: 1 vínculo, 2 APIs nuevas y la feature; lienzo de 3 pantallas, 3 APIs, 3 navegaciones y 4 solicitudes |
+| Después | una sola API con `GET /api/pedidos` en el catálogo; el lienzo de la feature hecha a mano sigue en su versión; «Abrir el lienzo» abre la feature con 6 cajas y 7 conexiones |
+
+**Lo que no se midió.** El tiempo de dibujo de la vista en el navegador con 20.000 entidades (la vista general de ese caso tiene 2 cajas y un grupo trae a lo sumo 500, con `onlyRenderVisibleElements`); queda para el banco de rendimiento si un proyecto real lo pide.
+
+**Ajustes de la revisión técnica (2026-11-20).**
+
+| Punto | Resultado |
+|---|---|
+| Coincidencia solo por título | No se preselecciona: la vista previa espera una elección explícita. Caso F: una API hecha a mano «PUT /api/pedidos/{id}» con contrato `POST /api/notas` no se vincula; al elegir «Crear en el catálogo» quedan las dos, cada una con su contrato (E2E y Vitest) |
+| Filtros y conteos | `byBasis` disjunto; un vínculo de 3 observadas (alta, media, baja) y 5 inferidas (2 medias, 3 bajas) muestra 8, 3 con «Solo observadas», 4 sin «Confianza baja» y 2 con los dos filtros (Vitest). La API comprueba que las categorías suman los totales en Walkie |
+| Más de 500 miembros | Propuesta real de la CLI con 2 pantallas y 501 APIs: `memberCount` 503 y 500 en la lista; la API rechaza crearla (vista previa y confirmación, 400 con el total) y una API suelta se sigue creando; la web lo dice y lleva a la revisión individual |
+| Más de 500 hallazgos en un grupo | Recorrido por páginas de 500 sin repetir ni saltear, en el mismo orden al pedir otra vez (API, 2.801 entidades); la web pagina con «Anterior»/«Siguiente» en la URL (`?pagina=`), dibuja a lo sumo 500 cajas y conserva la selección |
+| Vista a 1280 y 1440 px | Paneles de grupos y detalle plegables (se recuerdan); la vista general elige columnas o filas según el tamaño del lienzo al abrirse, con zoom inicial de al menos 0,5; la vista no salta al plegar paneles (E2E compara la transformación), filtrar ni cambiar de página; controles de zoom y encuadre a pedido |
+| Orden de la evidencia | Pantalla → servicio → envoltorio (E2E del caso F y Vitest con la cadena real de Walkie: HomePage → useApps → listApps → request → send) |
+| Safari | Caso F completo en WebKit (Playwright `Desktop Safari`, 1280 × 800): pasa |
+
+**Cierre de la revisión agrupada (2026-11-20).** Con la propuesta en la misma consulta que sus miembros, una feature de exactamente 500 miembros pedía 501 claves y la última se perdía sin aviso: se revisaban 499 y la API creaba con 500. Ahora la propuesta y sus miembros van en consultas separadas y `memberCoverage` exige el conjunto entero antes de dejar crear.
+
+| Caso | Web (Vitest) | API (integración) |
+|---|---|---|
+| 499 miembros | revisa 497 APIs y crea | crea; las APIs sin decidir quedan omitidas |
+| 500 miembros | revisa 498 APIs (todas) y crea | la lista de 500 llega entera y crea |
+| 501 miembros | bloquea y lleva a la revisión individual | 400 en la vista previa |
+| 500 con una API descartada | la descartada queda fuera y el resumen lo dice | — |
+| 500 con una coincidencia solo por título | espera la elección | — |
+| Una decisión cambia entre vista previa y confirmación | 409: aviso, «Confirmar» deshabilitado, nada creado | 409; ni la feature ni las APIs se crean |
+| Un miembro no llegó en la respuesta | bloquea y lo nombra | — |
+| Error de red al cargar los miembros | bloquea y ofrece «Reintentar» | — |

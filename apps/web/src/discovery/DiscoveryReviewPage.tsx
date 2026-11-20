@@ -5,7 +5,7 @@ import { useApp, useAppRole, useDiscoveryReview, useDiscoverySources } from '../
 import { appPath } from '../workspace/paths';
 import { AnalysisSummary } from './AnalysisSummary';
 import { formatDayAndTime } from '../share/shareFormat';
-import { BASIS, CHANGE, CHANGE_ORDER, CONFIDENCE, KIND, KIND_ORDER, REASON, STATUS, STATUS_ORDER, reviewPath, type Change } from './discoveryText';
+import { BASIS, CHANGE, CHANGE_ORDER, CONFIDENCE, KIND, KIND_ORDER, REASON, STATUS, STATUS_ORDER, architecturePath, reviewPath, type Change } from './discoveryText';
 import { ReviewInspector } from './ReviewInspector';
 import './discovery.css';
 
@@ -80,7 +80,14 @@ export function DiscoveryReviewPage() {
         <Link to={appPath(appId)}>{app.data?.name ?? 'App'}</Link>
         <span> / Revisión{source ? ` de ${source.source.name}` : ''}</span>
       </nav>
-      <h2>Revisión del análisis</h2>
+      <div className="discovery-heading">
+        <h2>Revisión del análisis</h2>
+        {!unavailable && (
+          <Link className="pixel-button" to={architecturePath(appId, snapshotId)}>
+            Explorar arquitectura
+          </Link>
+        )}
+      </div>
 
       {unavailable && (
         <p role="alert" className="save-error">

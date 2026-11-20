@@ -47,6 +47,36 @@ internal static class ReviewEndpoints
             .ProducesProblem(StatusCodes.Status500InternalServerError)
             .RequireAppRole(AppRole.Editor);
 
+        discovery.MapGet("/api/snapshots/{snapshotId:guid}/architecture", Architecture)
+            .WithName("GetDiscoveryArchitecture")
+            .WithSummary(
+                "Arquitectura descubierta de un análisis (walkie-discovery-architecture, ADR-0016): grupos por app técnica y "
+                + "responsabilidad, relaciones entre grupos con su significado (ejecución, navegación, contención, dependencia) y "
+                + "cuántas son observadas o inferidas, cobertura por grupo y propuestas de feature con su evidencia. Calculada, no se guarda.")
+            .Produces<DiscoveryArchitecture>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .RequireAppRole(AppRole.Viewer);
+
+        discovery.MapGet("/api/snapshots/{snapshotId:guid}/architecture/group", ArchitectureGroup)
+            .WithName("GetDiscoveryArchitectureGroup")
+            .WithSummary(
+                "Un grupo de la arquitectura por dentro (walkie-discovery-architecture-group): key en la query (la de la vista "
+                + "general), page desde 0 y pageSize de 1 a 500 (200 por defecto). Hallazgos, relaciones y vecinos de otros grupos.")
+            .Produces<DiscoveryArchitectureGroup>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .RequireAppRole(AppRole.Viewer);
+
+        discovery.MapGet("/api/snapshots/{snapshotId:guid}/relation-evidence", RelationEvidenceOf)
+            .WithName("GetDiscoveryRelationEvidence")
+            .WithSummary(
+                "Una relación con su evidencia resuelta (walkie-discovery-relation-evidence): key en la query. Para una relación "
+                + "inferida es la cadena entera (pantalla → hook → cliente → API; endpoint → servicio → DbSet), cada salto con su archivo y línea.")
+            .Produces<RelationEvidence>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .RequireAppRole(AppRole.Viewer);
+
         discovery.MapGet("/api/snapshots/{snapshotId:guid}/evidence", Evidence)
             .WithName("GetDiscoveryEvidence")
             .WithSummary(
@@ -78,13 +108,51 @@ internal static class ReviewEndpoints
     }
 
     private static async Task<Results<Ok<DiscoveryReviewResponse>, NotFound, ValidationProblem>> Review(
-        Guid snapshotId, string? kind, string? status, int? page, int? pageSize, string? change, bool? needsReview, ReviewHandlers handlers, CancellationToken ct) =>
-        await handlers.ReviewAsync(snapshotId, kind, status, page, pageSize, ct, change, needsReview).ConfigureAwait(false) switch
+        Guid snapshotId, string? kind, string? status, int? page, int? pageSize, string? change, bool? needsReview, [FromQuery] string[]? key,
+        ReviewHandlers handlers, CancellationToken ct)
+    {
+        if (key is { Length: > ArchitectureHandlers.MaxPageSize })
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["key"] = [$"Como mucho {ArchitectureHandlers.MaxPageSize} claves."] });
+        }
+
+        var keys = key is { Length: > 0 } ? new HashSet<string>(key, StringComparer.Ordinal) : null;
+        return await handlers.ReviewAsync(snapshotId, kind, status, page, pageSize, ct, change, needsReview, keys).ConfigureAwait(false) switch
         {
             ReviewResult.Done done => TypedResults.Ok(done.Review),
             ReviewResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
             _ => TypedResults.NotFound(),
         };
+    }
+
+    private static async Task<Results<Ok<RelationEvidence>, NotFound, ValidationProblem>> RelationEvidenceOf(
+        Guid snapshotId, string? key, EvidenceHandlers handlers, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(key) || key.Length > 1100)
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["key"] = ["Falta la clave de la relación."] });
+        }
+
+        return await handlers.RelationAsync(snapshotId, key, ct).ConfigureAwait(false) is { } found ? TypedResults.Ok(found) : TypedResults.NotFound();
+    }
+
+    private static async Task<Results<Ok<DiscoveryArchitecture>, NotFound>> Architecture(Guid snapshotId, ArchitectureHandlers handlers, CancellationToken ct) =>
+        await handlers.OverviewAsync(snapshotId, ct).ConfigureAwait(false) is { } architecture ? TypedResults.Ok(architecture) : TypedResults.NotFound();
+
+    private static async Task<Results<Ok<DiscoveryArchitectureGroup>, NotFound, ValidationProblem>> ArchitectureGroup(
+        Guid snapshotId, string? key, int? page, int? pageSize, ArchitectureHandlers handlers, CancellationToken ct)
+    {
+        var size = pageSize ?? 200;
+        if (string.IsNullOrWhiteSpace(key) || key.Length > 600 || page is < 0 || size is < 1 or > ArchitectureHandlers.MaxPageSize)
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["key"] = ["Falta la clave del grupo (de la vista general), o las páginas están fuera de rango (pageSize de 1 a 500)."],
+            });
+        }
+
+        return await handlers.GroupAsync(snapshotId, key, page ?? 0, size, ct).ConfigureAwait(false) is { } group ? TypedResults.Ok(group) : TypedResults.NotFound();
+    }
 
     private static async Task<Results<Ok<DiscoveryApplyResult>, NotFound, ValidationProblem, ProblemHttpResult>> Apply(
         Guid snapshotId, bool? dryRun, [FromBody] JsonElement body, ClaimsPrincipal user, ApplyHandlers handlers, CancellationToken ct)

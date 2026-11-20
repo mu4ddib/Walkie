@@ -154,6 +154,7 @@ public sealed class EfCoreDetector : IDetector
 
         entity.Technology ??= "efcore";
         entity.Database ??= database;
+        context.DbContexts.TryAdd(name, key);
 
         switch (owner?.Role)
         {

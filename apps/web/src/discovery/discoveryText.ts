@@ -109,6 +109,8 @@ export function targetKindFor(kind: string): 'catalogItem' | 'module' | 'feature
 /** Ruta de la revisión de un análisis. */
 export const reviewPath = (appId: string, snapshotId: string) => `/apps/${appId}/sources/${snapshotId}`;
 
+export const architecturePath = (appId: string, snapshotId: string) => `${reviewPath(appId, snapshotId)}/architecture`;
+
 /** Commit corto. */
 export const shortCommit = (commit: string) => commit.slice(0, 8);
 

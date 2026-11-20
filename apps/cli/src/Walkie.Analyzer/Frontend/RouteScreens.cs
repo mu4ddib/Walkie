@@ -112,30 +112,117 @@ internal static partial class RouteScreens
             // El componente en su archivo: el nombre declarado, o null si la ruta trae el archivo entero (lazy sin miembro).
             var declared = decl.Component ?? decl.LoadComponent?.Member;
             model.AddScreen(new ScreenRecord(app, key, route.FullPath, route.LazyMount, file.Path, line), componentFile?.Path, declared);
+            Contain(context, app, key, evidence);
             added++;
         }
 
         return added;
     }
 
-    /// <summary>Relaciones <c>navigates</c>: de las pantallas de cada archivo a la pantalla de destino de la misma app.</summary>
+    /// <summary>
+    /// La app de front contiene la pantalla (<c>contains</c>, ADR-0016): la ruta está declarada en sus archivos. Es
+    /// contención, no ejecución, y es lo que une cada pantalla con su app técnica en la vista de arquitectura.
+    /// </summary>
+    public static void Contain(AnalysisContext context, FrontendApp app, string screenKey, string evidence)
+    {
+        if (context.Findings.Entities.ContainsKey(app.ServiceKey))
+        {
+            context.Findings.Relation("contains", app.ServiceKey, screenKey, Basis.Observed, Confidence.High, evidence);
+        }
+    }
+
+    /// <summary>
+    /// Relaciones <c>navigates</c> de una app (ADR-0016). Del código TypeScript, con <see cref="FrontendSymbols"/>: cada
+    /// navegación resuelta en una función (literal, constante importada, función de rutas, condicional) va desde cada
+    /// pantalla que alcanza esa función (la suya, por un hook o por un componente que dibuja) hacia la pantalla de
+    /// destino de la misma app. De las plantillas de Angular (<paramref name="templateLinks"/>), desde el componente.
+    /// Lo que no se resuelve se declara: <c>dynamic-navigation</c> (destino calculado), <c>navigation-target-unknown</c>
+    /// (ninguna pantalla con esa ruta) y <c>navigation-unattributed</c> (código que ninguna pantalla alcanza, o un
+    /// componente compartido).
+    /// </summary>
     public static void AddNavigation(
-        AnalysisContext context, FrontendModel model, FrontendApp app, string detector, IEnumerable<(string File, string Target, int Line, string? Component)> links)
+        AnalysisContext context, FrontendModel model, FrontendApp app, string detector, IEnumerable<(string File, string Target, int Line, string? Component)> templateLinks)
     {
         var screens = model.Screens.Where(s => s.App == app).Select(s => s.Key).Distinct().ToList();
-        foreach (var (file, target, line, component) in links)
+        var reach = model.ReachOf(app);
+        var problems = new List<SymbolProblem>();
+        var outside = reach.Outside(model).ToList();
+        foreach (var file in model.ScriptsOf(app).Concat(outside.Select(f => f.File).DistinctBy(f => f.Path)))
         {
-            var from = model.ScreensAt(file, component);
-            if (from.Count == 0)
+            if (model.Facts(file, detector) is not { } facts)
             {
                 continue;
             }
 
-            var key = app.ScreenKey(target);
-            var (to, confidence) = screens.Contains(key)
-                ? (key, Confidence.Medium)
-                : (screens.Where(s => Matches(s, key)).ToList() is [var only] ? only : null, Confidence.Low);
-            if (to is null)
+            var unattributed = new List<int>();
+            var isOutside = model.AppOf(file.Path) is null;
+            foreach (var function in facts.Functions)
+            {
+                var reference = new FunctionRef(file, facts, function);
+                if (isOutside && !outside.Any(o => o.Key == reference.Key))
+                {
+                    continue; // del código compartido, solo lo que alcanzan las pantallas de esta app
+                }
+
+                var summary = model.Symbols.Summary(reference);
+                problems.AddRange(summary.Problems.Where(p => p.Code == "dynamic-navigation" && p.Path == file.Path));
+                var consumers = reach.Reaching(reference).GroupBy(c => c.Screen).Select(g => g.OrderBy(c => c.Jsx).ThenBy(c => c.Calls).First())
+                    .OrderBy(c => c.Screen, StringComparer.Ordinal).ToList();
+                foreach (var navigation in summary.Navigations)
+                {
+                    var site = navigation.Chain[^1];
+                    var target = navigation.Path.Split('?', '#')[0];
+                    var (to, matchConfidence) = Target(app, screens, target);
+                    if (to is null)
+                    {
+                        problems.Add(new SymbolProblem("navigation-target-unknown", site.Path, site.Line,
+                            $"Una navegación en la línea {site.Line} va a {Text.Truncate(target, 120)} y ninguna pantalla de {app.Name} tiene esa ruta: no se relaciona."));
+                        continue;
+                    }
+
+                    if (consumers.Count == 0)
+                    {
+                        unattributed.Add(site.Line);
+                        continue;
+                    }
+
+                    var siteEvidence = context.Findings.Evidence(detector, site.Path, matchConfidence, "→ " + target, new Lines(site.Line, site.Line));
+                    foreach (var consumer in consumers)
+                    {
+                        var (basis, confidence) = consumer.Direct && navigation.Depth == 0 ? (Basis.Observed, matchConfidence)
+                            : consumer.Jsx > 0 ? (Basis.Inferred, Confidence.Low)
+                            : (Basis.Inferred, matchConfidence == Confidence.Low ? Confidence.Low : Confidence.Medium);
+                        context.Findings.Relation("navigates", consumer.Screen, to, basis, confidence, siteEvidence);
+                        foreach (var hop in navigation.Chain.Take(navigation.Chain.Count - 1).Concat(consumer.Path))
+                        {
+                            context.Findings.Relation("navigates", consumer.Screen, to, basis, confidence,
+                                context.Findings.Evidence(detector, hop.Path, Confidence.Medium, hop.Note, new Lines(hop.Line, hop.Line)));
+                        }
+                    }
+                }
+            }
+
+            if (unattributed.Count > 0)
+            {
+                context.Findings.Limitation("navigation-unattributed",
+                    Text.Truncate($"{unattributed.Count} navegación(es) (líneas {string.Join(", ", unattributed.Distinct().Order())}) están en código que ninguna pantalla alcanza de forma demostrable (o en un componente que muchas comparten): se conoce el destino, pero no desde qué pantalla.", 1000),
+                    detector, file.Path, incomplete: false);
+            }
+        }
+
+        foreach (var group in problems.Distinct().GroupBy(p => (p.Code, p.Path)).OrderBy(g => g.Key.Path, StringComparer.Ordinal).ThenBy(g => g.Key.Code, StringComparer.Ordinal))
+        {
+            var list = group.OrderBy(p => p.Line).ToList();
+            var message = list.Count == 1 ? list[0].Message : $"{list.Count} navegaciones (líneas {string.Join(", ", list.Select(p => p.Line).Distinct())}): {string.Join(" · ", list.Select(p => p.Message).Distinct())}";
+            context.Findings.Limitation(group.Key.Code, Text.Truncate(message, 1000), detector, group.Key.Path);
+        }
+
+        // Plantillas de Angular: desde el componente que las declara.
+        foreach (var (file, target, line, component) in templateLinks)
+        {
+            var from = model.ScreensAt(file, component);
+            var (to, confidence) = Target(app, screens, target.Split('?', '#')[0]);
+            if (from.Count == 0 || to is null)
             {
                 continue;
             }
@@ -146,6 +233,15 @@ internal static partial class RouteScreens
                 context.Findings.Relation("navigates", source, to, Basis.Observed, confidence, evidence);
             }
         }
+    }
+
+    /// <summary>La pantalla de destino: la de esa ruta (media), o la única que coincide con parámetros (baja).</summary>
+    private static (string? Key, Confidence Confidence) Target(FrontendApp app, List<string> screens, string path)
+    {
+        var key = app.ScreenKey(path.Length == 0 ? "/" : path);
+        return screens.Contains(key)
+            ? (key, Confidence.Medium)
+            : (screens.Where(s => Matches(s, key)).ToList() is [var only] ? only : null, Confidence.Low);
     }
 
     /// <summary><c>screen:web:/pedidos/{}</c> acepta <c>screen:web:/pedidos/nuevo</c>: mismo largo y cada parte igual o parámetro.</summary>

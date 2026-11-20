@@ -57,7 +57,7 @@ export type Detectors = [
        */
       entities: ('api' | 'service' | 'database' | 'resource' | 'screen' | 'module' | 'feature')[];
       /**
-       * Items: calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base; publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra; contains: un servicio contiene un módulo
+       * Items: calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base, o una api lee o escribe la base de su DbContext (ADR-0016); publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra; contains: un servicio contiene un módulo, o una app de front contiene sus pantallas (ADR-0016)
        */
       relations: (
         'calls' | 'reads' | 'writes' | 'publishes' | 'consumes' | 'exposes' | 'depends-on' | 'navigates' | 'contains'
@@ -84,7 +84,7 @@ export type Detectors = [
        */
       entities: ('api' | 'service' | 'database' | 'resource' | 'screen' | 'module' | 'feature')[];
       /**
-       * Items: calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base; publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra; contains: un servicio contiene un módulo
+       * Items: calls: una pantalla o servicio llama a una api; reads/writes: un servicio usa una base, o una api lee o escribe la base de su DbContext (ADR-0016); publishes/consumes: mensajería; exposes: un servicio publica una api; depends-on: dependencia declarada (compose, referencia de proyecto); navigates: de una pantalla a otra; contains: un servicio contiene un módulo, o una app de front contiene sus pantallas (ADR-0016)
        */
       relations: (
         'calls' | 'reads' | 'writes' | 'publishes' | 'consumes' | 'exposes' | 'depends-on' | 'navigates' | 'contains'

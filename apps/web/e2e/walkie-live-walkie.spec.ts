@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { login, rename, saveStatus } from './helpers';
+import { login, saveStatus } from './helpers';
 
 /**
  * Walkie Live, tarea 11: Walkie analizándose a sí mismo, de punta a punta con la CLI, la API, la web, Keycloak y
@@ -15,9 +15,9 @@ import { login, rename, saveStatus } from './helpers';
  * algo documentado a mano → crear en el catálogo → crear un módulo → crear una feature → abrir el lienzo → editar y
  * guardar → reanalizar → comparar → lo documentado sigue igual.
  *
- * También demuestra lo que Walkie deja fuera a propósito: la web llama a la API por `request()` con la URL armada en
- * tiempo de ejecución, así que el análisis no ve esas llamadas (limitación `dynamic-http-url`) y la feature nace solo
- * con sus pantallas y su navegación, sin inventar conexiones.
+ * Con la spec walkie-live-arquitectura (ADR-0016), el análisis sigue el cliente propio de la web (`request()` →
+ * `send()` → `fetch`) y sus hooks, así que la feature nace con sus pantallas, su navegación y sus solicitudes a las
+ * APIs del catálogo. Lo que sigue sin poder verse (una navegación a una variable) queda como limitación, sin inventar.
  */
 const REPO = resolve(process.cwd(), '../..'); // Playwright corre desde apps/web
 const API = process.env.VITE_API_URL ?? 'http://localhost:5080';
@@ -76,7 +76,7 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   const summary = dialog.getByLabel('Resumen del análisis');
   await expect(summary).toContainText('Walkie');
   // Las APIs de Walkie: crece con cada endpoint nuevo (46 en la tarea 11; 50 con los miembros de ADR-0015).
-  await expect(summary).toContainText('50 API');
+  await expect(summary).toContainText('53 API');
   await expect(summary).toContainText(/parcial/i);
   const app = `E2E Walkie se analiza ${Date.now()}`;
   await dialog.getByLabel('Nombre de la app').fill(app);
@@ -88,9 +88,10 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   const list = page.getByRole('list', { name: 'Hallazgos' });
   const inspector = page.getByRole('complementary', { name: 'Detalle del hallazgo' });
 
-  // Lo que no se ve, dicho como limitación: las llamadas de la web por request() no se relacionan con ninguna API.
+  // Lo que no se ve, dicho como limitación: una navegación a una variable (`navigate(path)`) no tiene destino seguro.
   await page.getByText(/^Limitaciones \(\d+\)$/).click();
-  await expect(page.getByText(/no se puede resolver sin ejecutar \(baseUrl\)/)).toBeVisible();
+  await expect(page.getByText(/va a una ruta que no se puede resolver sin ejecutar \(path\)/).first()).toBeVisible();
+  await expect(page.getByText(/no se puede resolver sin ejecutar \(baseUrl\)/)).toHaveCount(0);
 
   // ---------- Matching: algo documentado a mano coincide por firma ----------
   const health = await api<{ id: string; version: number }>(page, 'POST', `/api/apps/${appId}/catalog`, {
@@ -116,7 +117,7 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   await expect(inspector.getByRole('status')).toContainText('Creado en el catálogo');
 
   // ---------- Crear un módulo: el de imágenes, con sus APIs y su base ----------
-  await page.goto(`${reviewUrl}?kind=module`); // 50 APIs van antes: se filtra por tipo, como el selector «Tipo»
+  await page.goto(`${reviewUrl}?kind=module`); // 53 APIs van antes: se filtra por tipo, como el selector «Tipo»
   await list.getByRole('button', { name: /module:Walkie\.Modules\.Files/ }).click();
   await inspector.getByRole('button', { name: 'Crear módulo…' }).click();
   let preview = inspector.getByRole('region', { name: 'Lo que se creará' });
@@ -126,25 +127,33 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   await inspector.getByRole('button', { name: 'Confirmar y crear' }).click();
   await expect(inspector.getByRole('status')).toContainText('Módulo creado');
 
-  // ---------- Crear una feature: el catálogo de la web. Solo pantallas y navegación: no hay llamadas que el análisis viera ----------
+  // ---------- Crear una feature: el catálogo de la web, con su navegación y sus llamadas por el cliente propio ----------
   await page.goto(`${reviewUrl}?kind=feature`);
   await list.getByRole('button', { name: /feature:apps\/web:Catalog/ }).click();
   await inspector.getByRole('button', { name: 'Crear feature…' }).click();
   preview = inspector.getByRole('region', { name: 'Lo que se creará' });
   await expect(preview).toContainText('/apps/:appId/catalog');
-  // Lo que el análisis vio: dos pantallas, ninguna llamada (las de request() no se ven) y ninguna navegación entre ellas.
-  await expect(preview).toContainText('Llama aninguna');
-  await expect(preview).toContainText('0 de navegación y 0 solicitudes HTTP');
+  // Sus APIs todavía no están en el catálogo: se crean en la misma solicitud, así el lienzo las conecta.
+  await preview.getByRole('checkbox', { name: /Crear también en el catálogo las APIs que faltan/ }).check();
+  await expect(preview).toContainText(/2 de navegación y \d+ solicitudes HTTP/);
+  const requests = Number(/2 de navegación y (\d+) solicitudes HTTP/.exec((await preview.textContent()) ?? '')?.[1] ?? 0);
+  expect(requests).toBeGreaterThanOrEqual(10);
   await capture(page, 'feature-vista-previa');
   await inspector.getByRole('button', { name: 'Confirmar y crear' }).click();
   await expect(inspector.getByRole('status')).toContainText('Feature creada');
 
   // ---------- Abrir el lienzo, editar y guardar ----------
   await inspector.getByRole('link', { name: 'Abrir la feature' }).or(inspector.getByRole('button', { name: 'Abrir la feature' })).click();
-  await expect(page.locator('.react-flow__node')).toHaveCount(2); // dos pantallas; ninguna API inventada
-  await expect(page.locator('.react-flow__node .pixel-node-kind', { hasText: /API/ })).toHaveCount(0);
+  // Dos pantallas y las APIs que llaman; la navegación entre ellas y una solicitud por llamada vista.
+  await expect(page.locator('.react-flow__node .pixel-node-kind', { hasText: /API/ }).first()).toBeVisible();
+  const nodes = await page.locator('.react-flow__node').count();
+  expect(nodes).toBeGreaterThan(2);
+  expect(await page.locator('.react-flow__edge').count()).toBeGreaterThanOrEqual(requests);
   const featureUrl = page.url();
-  await rename(page, 0, 'Catálogo (revisado a mano)');
+  // Se renombra una pantalla (el título de una API es el del catálogo y no se edita en el lienzo).
+  await page.locator('.react-flow__node').filter({ has: page.locator('.pixel-node-kind', { hasText: /Pantalla/ }) }).first().dblclick();
+  await page.getByLabel('Título del nodo').fill('Catálogo (revisado a mano)');
+  await page.keyboard.press('Enter');
   await page.keyboard.press('Control+s');
   await expect(saveStatus(page)).toHaveText(/Guardado/);
   await capture(page, 'feature-lienzo');
@@ -177,7 +186,7 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   const after = await api<{ version: number; description?: string; title: string }>(page, 'GET', `/api/catalog/${health.id}`);
   expect(after).toMatchObject({ version: health.version, title: 'Salud de la API (a mano)', description: 'Lo escribió el equipo.' });
   await page.goto(featureUrl);
-  await expect(page.locator('.react-flow__node')).toHaveCount(2);
+  await expect(page.locator('.react-flow__node')).toHaveCount(nodes);
   await expect(page.locator('.react-flow__node', { hasText: 'Catálogo (revisado a mano)' })).toBeVisible();
   await expect(saveStatus(page)).toHaveText(/Al día/);
 });
