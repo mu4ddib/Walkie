@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import type { DiscoverySources } from '../api/client';
 import { formatDayAndTime } from '../share/shareFormat';
-import { reviewPath, shortCommit } from './discoveryText';
+import { architecturePath, reviewPath, shortCommit } from './discoveryText';
 import './discovery.css';
 
 /**
@@ -50,6 +50,9 @@ export function SourcesSection({ sources, onImport }: { sources: DiscoverySource
                 </span>
                 <Link className="pixel-button" to={reviewPath(latestSnapshot.appId, latestSnapshot.id)}>
                   Revisar
+                </Link>
+                <Link className="pixel-button is-ghost" to={architecturePath(latestSnapshot.appId, latestSnapshot.id)}>
+                  Arquitectura
                 </Link>
                 {onImport && (
                   <button

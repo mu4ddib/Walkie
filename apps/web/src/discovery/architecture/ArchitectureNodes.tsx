@@ -1,5 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type { ArchitectureEntity, ArchitectureGroup } from '../../api/client';
+import { stateText } from '../discoveryText';
 import { ENTITY_LABELS, GROUP_KIND_LABELS, count } from './architectureModel';
 
 export type GroupFlowNode = Node<{ group: ArchitectureGroup; selected: boolean; dim: boolean; vertical?: boolean }, 'archGroup'>;
@@ -45,10 +46,10 @@ export function EntityNode({ data }: NodeProps<EntityFlowNode>) {
       <span className="arch-node-kind">
         {ENTITY_LABELS[entity.kind].one}
         {entity.basis === 'inferred' ? ' · inferida' : ''}
-        {entity.decision ? ` · ${entity.decision === 'rejected' ? 'descartada' : 'en Walkie'}` : ''}
       </span>
       <strong className="arch-node-title">{entity.title}</strong>
       {entity.route && <code className="arch-node-route">{entity.route}</code>}
+      {entity.state && <span className={`arch-node-state is-${entity.state.targetMissing ? 'missing-target' : entity.state.status}`}>{stateText(entity.state)}</span>}
     </div>
   );
 }

@@ -90,8 +90,60 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
             return new ReviewResult.NotFound();
         }
 
+        var all = await ClassifyAllAsync(snapshot, ct).ConfigureAwait(false);
+        var (classified, alive, legacyOf, previous, before) = (all.Items, all.Alive, all.LegacyOf, all.Previous, all.Before);
+
+        bool Needs(Classified c) => NeedsReview(c, all);
+        var counts = new DiscoveryReviewCounts(
+            Count(classified, "new"), Count(classified, "matched"), Count(classified, "linked"), Count(classified, "created"),
+            Count(classified, "rejected"), Count(classified, "changed"), Count(classified, "missing"), Count(classified, "unverified"));
+        var comparison = before is null ? null : new DiscoveryReviewComparison(
+            classified.Count(c => c.Change == "added"), classified.Count(c => c.Change == "modified"),
+            classified.Count(c => c.Change == "unchanged"), classified.Count(Needs));
+
+        var filtered = classified
+            .Where(c => (kind is null || c.Row.Kind == kind) && (status is null || c.Status == status)
+                && (change is null || c.Change == change) && (needsReview is not true || Needs(c))
+                && (keys is not { Count: > 0 } || keys.Contains(c.Row.Key)))
+            .OrderBy(c => Array.IndexOf(Kinds, c.Row.Kind)).ThenBy(c => c.Row.Key, StringComparer.Ordinal)
+            .ToList();
+        var size = pageSize ?? DefaultPageSize;
+        var index0 = page ?? 0;
+        var pageItems = filtered.Skip(index0 * size).Take(size).ToList();
+
+        var evidenceCounts = await EvidenceCountsAsync(snapshot, pageItems, ct).ConfigureAwait(false);
+        var items = pageItems
+            .Select(c => new DiscoveryReviewItem(
+                c.Row.Key, c.Row.Kind, c.Row.Title, c.Row.Basis, c.Row.Confidence, c.Status, c.Row.Fingerprint,
+                c.Binding is null ? null : BindingResponse(c.Binding),
+                c.Match, c.Candidates, evidenceCounts.GetValueOrDefault(c.Row.Key), c.Proposal,
+                c.Binding is { TargetKind: { } targetKind, TargetId: { } targetId } && !alive.Contains((targetKind, targetId)) ? true : null,
+                !c.FromPrevious && legacyOf.TryGetValue(c.Row.Key, out var old) ? BindingResponse(old) : null)
+            {
+                Change = c.Change,
+                Coverage = c.Coverage,
+                NeedsReview = Needs(c),
+            })
+            .ToList();
+
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return new ReviewResult.Done(new DiscoveryReviewResponse(
+            snapshot.Id, snapshot.SourceId, snapshot.PreviousSnapshotId, counts, new DiscoveryReviewPage(index0, size, filtered.Count), items)
+        {
+            Previous = previous is null ? null : SnapshotHandlers.Brief(previous),
+            Comparison = comparison,
+        });
+    }
+
+    /// <summary>
+    /// La clasificación de todos los hallazgos de un análisis (sin paginar ni evidencia): estado, cambio respecto del
+    /// anterior, vínculo y si su destino sigue vivo. La usan la revisión y la arquitectura descubierta, así las dos dicen
+    /// lo mismo. No abre transacción: corre en la de quien llama.
+    /// </summary>
+    private async Task<Classification> ClassifyAllAsync(Snapshot snapshot, CancellationToken ct)
+    {
         var entities = await db.Entities.AsNoTracking()
-            .Where(e => e.SnapshotId == snapshotId)
+            .Where(e => e.SnapshotId == snapshot.Id)
             .Select(e => new Row(e.Key, e.Kind, e.Title, e.Basis, e.Confidence, e.Fingerprint))
             .ToListAsync(ct).ConfigureAwait(false);
         var bindings = await db.Bindings.AsNoTracking()
@@ -137,49 +189,43 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         }).ToList();
         classified.AddRange(await MissingAsync(snapshot, bindings, current, legacy.Keys.ToHashSet(StringComparer.Ordinal), ct).ConfigureAwait(false));
 
-        bool Needs(Classified c) =>
-            NeedsDecision.Contains(c.Status) || (!c.FromPrevious && legacyOf.ContainsKey(c.Row.Key))
-            || (c.Binding is { TargetKind: { } k, TargetId: { } t } && !alive.Contains((k, t)));
-        var counts = new DiscoveryReviewCounts(
-            Count(classified, "new"), Count(classified, "matched"), Count(classified, "linked"), Count(classified, "created"),
-            Count(classified, "rejected"), Count(classified, "changed"), Count(classified, "missing"), Count(classified, "unverified"));
-        var comparison = before is null ? null : new DiscoveryReviewComparison(
-            classified.Count(c => c.Change == "added"), classified.Count(c => c.Change == "modified"),
-            classified.Count(c => c.Change == "unchanged"), classified.Count(Needs));
-
-        var filtered = classified
-            .Where(c => (kind is null || c.Row.Kind == kind) && (status is null || c.Status == status)
-                && (change is null || c.Change == change) && (needsReview is not true || Needs(c))
-                && (keys is not { Count: > 0 } || keys.Contains(c.Row.Key)))
-            .OrderBy(c => Array.IndexOf(Kinds, c.Row.Kind)).ThenBy(c => c.Row.Key, StringComparer.Ordinal)
-            .ToList();
-        var size = pageSize ?? DefaultPageSize;
-        var index0 = page ?? 0;
-        var pageItems = filtered.Skip(index0 * size).Take(size).ToList();
-
-        var evidenceCounts = await EvidenceCountsAsync(snapshot, pageItems, ct).ConfigureAwait(false);
-        var items = pageItems
-            .Select(c => new DiscoveryReviewItem(
-                c.Row.Key, c.Row.Kind, c.Row.Title, c.Row.Basis, c.Row.Confidence, c.Status, c.Row.Fingerprint,
-                c.Binding is null ? null : BindingResponse(c.Binding),
-                c.Match, c.Candidates, evidenceCounts.GetValueOrDefault(c.Row.Key), c.Proposal,
-                c.Binding is { TargetKind: { } targetKind, TargetId: { } targetId } && !alive.Contains((targetKind, targetId)) ? true : null,
-                !c.FromPrevious && legacyOf.TryGetValue(c.Row.Key, out var old) ? BindingResponse(old) : null)
-            {
-                Change = c.Change,
-                Coverage = c.Coverage,
-                NeedsReview = Needs(c),
-            })
-            .ToList();
-
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
-        return new ReviewResult.Done(new DiscoveryReviewResponse(
-            snapshot.Id, snapshot.SourceId, snapshot.PreviousSnapshotId, counts, new DiscoveryReviewPage(index0, size, filtered.Count), items)
-        {
-            Previous = previous is null ? null : SnapshotHandlers.Brief(previous),
-            Comparison = comparison,
-        });
+        return new Classification(classified, alive, legacyOf, previous, before, existing);
     }
+
+    private sealed record Classification(
+        List<Classified> Items, HashSet<(string Kind, Guid Id)> Alive, Dictionary<string, Binding> LegacyOf, Snapshot? Previous,
+        Dictionary<string, string>? Before, IReadOnlyList<ExistingTarget> Existing);
+
+    /// <summary>
+    /// El estado de cada hallazgo del análisis, para la arquitectura descubierta (spec walkie-live-documentacion): el
+    /// mismo de la revisión, con el destino (título actual) y si se borró. Solo los del análisis (no los que ya no
+    /// aparecen). Corre en la transacción de quien llama.
+    /// </summary>
+    internal async Task<Dictionary<string, ArchitectureState>> StatesAsync(Snapshot snapshot, CancellationToken ct)
+    {
+        var all = await ClassifyAllAsync(snapshot, ct).ConfigureAwait(false);
+        var titles = all.Existing.GroupBy(t => (t.TargetKind, t.Id)).ToDictionary(g => g.Key, g => g.First().Title);
+        var states = new Dictionary<string, ArchitectureState>(StringComparer.Ordinal);
+        foreach (var c in all.Items.Where(c => !c.FromPrevious))
+        {
+            DiscoveryTarget? target = null;
+            bool? targetMissing = null;
+            if (c.Binding is { TargetKind: { } kind, TargetId: { } id })
+            {
+                var alive = all.Alive.Contains((kind, id));
+                target = new DiscoveryTarget(kind, id, alive ? titles.GetValueOrDefault((kind, id)) : c.Binding.TargetTitle);
+                targetMissing = alive ? null : true;
+            }
+
+            states[c.Row.Key] = new ArchitectureState(c.Status, c.Change, target, targetMissing, NeedsReview(c, all));
+        }
+
+        return states;
+    }
+
+    private static bool NeedsReview(Classified c, Classification all) =>
+        NeedsDecision.Contains(c.Status) || (!c.FromPrevious && all.LegacyOf.ContainsKey(c.Row.Key))
+        || (c.Binding is { TargetKind: { } k, TargetId: { } t } && !all.Alive.Contains((k, t)));
 
     /// <summary>Catálogo, módulos y features de la app como candidatos (solo de esta app: la consulta va por <c>appId</c>).</summary>
     internal async Task<IReadOnlyList<ExistingTarget>> ExistingTargetsAsync(Guid appId, CancellationToken ct)

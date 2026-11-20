@@ -150,7 +150,8 @@ internal static class ArchitectureProjection
 
     public static DiscoveryArchitecture Overview(
         Guid snapshotId, string completeness, IReadOnlyList<ArchitectureEntityRow> entities, IReadOnlyList<ArchitectureRelationRow> relations,
-        IReadOnlyList<ArchitectureLimitationRow> limitations, IReadOnlyDictionary<string, string> decisions)
+        IReadOnlyList<ArchitectureLimitationRow> limitations, IReadOnlyDictionary<string, string> decisions,
+        IReadOnlyDictionary<string, ArchitectureState>? states = null)
     {
         var (groupOf, groups) = Assign(entities, relations);
         var counts = groups.Keys.ToDictionary(k => k, _ => new SortedDictionary<string, int>(StringComparer.Ordinal), StringComparer.Ordinal);
@@ -216,7 +217,10 @@ internal static class ArchitectureProjection
                 group is not null && byGroup.TryGetValue(group, out var unresolved) ? unresolved.Incomplete : 0,
                 decisions.GetValueOrDefault(feature.Key),
                 [.. members.Order(StringComparer.Ordinal).Take(MaxMembers)],
-                members.Count));
+                members.Count)
+            {
+                State = states?.GetValueOrDefault(feature.Key),
+            });
         }
 
         var groupList = groups
@@ -224,7 +228,10 @@ internal static class ArchitectureProjection
             .Select(g => new ArchitectureGroup(
                 g.Key, g.Value.Kind, Truncate(g.Value.Title, 120), g.Value.Technology, g.Value.EntityKey,
                 counts[g.Key], internalCounts[g.Key],
-                byGroup.TryGetValue(g.Key, out var c) ? c.All : 0, byGroup.TryGetValue(g.Key, out var d) ? d.Incomplete : 0))
+                byGroup.TryGetValue(g.Key, out var c) ? c.All : 0, byGroup.TryGetValue(g.Key, out var d) ? d.Incomplete : 0)
+            {
+                States = states is null ? null : StatesOf(g.Key, entities, groupOf, states),
+            })
             .ToList();
 
         return new DiscoveryArchitecture(
@@ -239,7 +246,7 @@ internal static class ArchitectureProjection
     /// <summary>Un grupo por dentro: sus hallazgos (paginados), las relaciones de esa página y los vecinos de otros grupos.</summary>
     public static DiscoveryArchitectureGroup? Group(
         string groupKey, int page, int pageSize, IReadOnlyList<ArchitectureEntityRow> entities, IReadOnlyList<ArchitectureRelationRow> relations,
-        IReadOnlyDictionary<string, string> decisions)
+        IReadOnlyDictionary<string, string> decisions, IReadOnlyDictionary<string, ArchitectureState>? states = null)
     {
         var (groupOf, groups) = Assign(entities, relations);
         if (!groups.ContainsKey(groupKey))
@@ -257,12 +264,31 @@ internal static class ArchitectureProjection
         var neighbors = touching.SelectMany(r => new[] { r.From, r.To }).Where(k => !inPage.Contains(k) && byKey.ContainsKey(k) && groupOf[k] != groupKey)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Select(k => byKey[k]).ToList();
         ArchitectureEntity Map(ArchitectureEntityRow e) =>
-            new(e.Key, e.Kind, e.Title, e.Basis, e.Confidence, groupOf[e.Key], e.Route, decisions.GetValueOrDefault(e.Key));
+            new(e.Key, e.Kind, e.Title, e.Basis, e.Confidence, groupOf[e.Key], e.Route, decisions.GetValueOrDefault(e.Key))
+            {
+                State = states?.GetValueOrDefault(e.Key),
+            };
 
         return new DiscoveryArchitectureGroup(
             groupKey, page, pageSize, members.Count, [.. slice.Select(Map)],
             [.. touching.Select(r => new ArchitectureRelation(r.Key, r.Kind, r.From, r.To, r.Basis, r.Confidence, Semantic(r.Kind)))],
             [.. neighbors.Select(Map)]);
+    }
+
+    /// <summary>Cuántos hallazgos del grupo hay en cada estado (orden ordinal, solo los que hay).</summary>
+    private static SortedDictionary<string, int> StatesOf(
+        string group, IReadOnlyList<ArchitectureEntityRow> entities, Dictionary<string, string> groupOf, IReadOnlyDictionary<string, ArchitectureState> states)
+    {
+        var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (var e in entities)
+        {
+            if (groupOf[e.Key] == group && states.TryGetValue(e.Key, out var state))
+            {
+                counts[state.Status] = counts.GetValueOrDefault(state.Status) + 1;
+            }
+        }
+
+        return counts;
     }
 
     public static IEnumerable<string> Members(ArchitectureEntityRow entity)

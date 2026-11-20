@@ -19,7 +19,7 @@ namespace Walkie.IntegrationTests;
 /// sola solicitud) sin duplicar ni tocar lo existente.
 /// </summary>
 [Collection(ApiTestGroup.Name)]
-public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOutputHelper output)
+public sealed partial class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOutputHelper output)
 {
     private static readonly bool Bench = Environment.GetEnvironmentVariable("WALKIE_BENCH") == "1";
 
@@ -334,7 +334,8 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
     // ---------- Proyectos de prueba ----------
 
     /// <summary>Una tienda ficticia React + .NET: listado, detalle y edición de pedidos, con su servicio y EF Core.</summary>
-    private static byte[] Shop(Guid source) => Scan(new Dictionary<string, string>
+    /// <summary>La tienda ficticia; <paramref name="extra"/> suma código al backend (un reanálisis con un endpoint nuevo).</summary>
+    private static byte[] Shop(Guid source, string extra = "") => Scan(new Dictionary<string, string>
     {
         ["Directory.Build.props"] = "<Project><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>",
         ["api/Tienda.Api/Tienda.Api.csproj"] = "<Project Sdk=\"Microsoft.NET.Sdk.Web\"></Project>",
@@ -346,6 +347,7 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
             pedidos.MapGet("/", (PedidosService s) => s.Listar());
             pedidos.MapGet("/{id:guid}", (Guid id, PedidosService s) => s.Obtener(id));
             pedidos.MapPut("/{id:guid}", (Guid id, PedidosService s) => s.Editar(id));
+            EXTRA
             app.Run();
             public sealed class PedidosService(TiendaDbContext db)
             {
@@ -354,7 +356,7 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
                 public object Editar(Guid id) { var p = db.Pedidos.Single(x => x.Id == id); db.SaveChanges(); return p; }
             }
             public sealed class TiendaDbContext(DbContextOptions<TiendaDbContext> o) : DbContext(o) { public DbSet<Pedido> Pedidos { get; set; } = null!; }
-            """,
+            """.Replace("EXTRA", extra, StringComparison.Ordinal),
         ["web/package.json"] = """{ "name": "tienda-web", "dependencies": { "react": "19.0.0", "react-router-dom": "7.0.0" } }""",
         ["web/src/api.ts"] = """
             export const listar = () => fetch('/api/pedidos');

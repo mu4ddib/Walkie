@@ -23,6 +23,10 @@ export interface WalkieDiscoveryArchitectureV0 {
   links: Link[];
   proposals: Proposal[];
   limitations: Limitation[];
+  /**
+   * El análisis anterior de la misma fuente, para abrir su arquitectura
+   */
+  previousSnapshotId?: string;
 }
 export interface Group {
   key: string;
@@ -48,6 +52,12 @@ export interface Group {
    * De ellas, las que dejan algo sin ver
    */
   incomplete: number;
+  /**
+   * Hallazgos del grupo por estado (solo los que hay)
+   */
+  states?: {
+    [k: string]: number;
+  };
 }
 /**
  * Hallazgos por tipo
@@ -112,6 +122,7 @@ export interface Proposal {
    * Si ya se decidió (la feature existe o se descartó)
    */
   decision?: 'created' | 'linked' | 'rejected';
+  state?: State;
   /**
    * Sus pantallas y las APIs que llaman (las claves de los hallazgos), en orden
    *
@@ -122,6 +133,39 @@ export interface Proposal {
    * Cuántos miembros tiene la propuesta en el análisis. Si es mayor que members (que llega hasta 500), la lista está truncada y la revisión por conjuntos no la aplica de una vez.
    */
   memberCount: number;
+}
+/**
+ * Estado del hallazgo en Walkie, el mismo de la revisión (spec walkie-live-documentacion). Decidir no lo quita de la arquitectura descubierta
+ */
+export interface State {
+  /**
+   * new: sin vínculo ni coincidencia; matched: coincide con un elemento existente (sin vínculo todavía); linked/created/rejected: tiene vínculo con esa decisión y su fingerprint no cambió; changed: tiene vínculo y su fingerprint cambió desde que se decidió; missing: estaba en el análisis anterior, tiene vínculo y ya no aparece aunque un detector que lo puede producir corrió (nunca se borra nada) unverified (tarea 10): tenía una decisión y no está en este análisis, pero el análisis no lo cubría (un detector no corrió, quedó fuera del alcance o lo alcanza una limitación): no se concluye que desapareció; coverage dice por qué.
+   */
+  status: 'new' | 'matched' | 'linked' | 'created' | 'rejected' | 'changed' | 'missing' | 'unverified';
+  /**
+   * Respecto del análisis anterior de la fuente
+   */
+  change?: 'added' | 'modified' | 'unchanged';
+  target?: Target;
+  /**
+   * El elemento documentado al que apunta se borró
+   */
+  targetMissing?: true;
+  needsReview: boolean;
+}
+/**
+ * Elemento de Walkie al que apunta un vínculo (referencia por id, como un catalogId o un moduleId en el grafo; sin copia de su contenido)
+ */
+export interface Target {
+  /**
+   * catalogItem: walkie-catalog-item; module y feature: filas de apps.features (ADR-0010)
+   */
+  kind: 'catalogItem' | 'module' | 'feature';
+  id: string;
+  /**
+   * Último nombre conocido (informativo, como el title de un ref)
+   */
+  title?: string;
 }
 export interface Limitation {
   code: string;
