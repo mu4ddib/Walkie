@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Link } from 'react-router';
 import { v7 as uuidv7 } from 'uuid';
 import {
@@ -39,6 +39,7 @@ export function ReviewInspector({
   item,
   canDecide,
   readOnly = false,
+  onBackToList,
 }: {
   appId: string;
   snapshotId: string;
@@ -46,10 +47,24 @@ export function ReviewInspector({
   canDecide: boolean;
   /** Un viewer de la app (ADR-0015): ve todo y no decide. */
   readOnly?: boolean;
+  /** Pantallas angostas: vuelve a la fila del hallazgo en la lista. */
+  onBackToList?: () => void;
 }) {
   const status = STATUS[item.status as DiscoveryStatus];
+  // Otro hallazgo empieza arriba (su título a la vista); abrir evidencia o una vista previa del mismo no mueve nada.
+  const panel = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (panel.current) panel.current.scrollTop = 0;
+  }, [item.key]);
+  useVisibleHeight(panel);
   return (
-    <aside className="discovery-inspector" aria-label="Detalle del hallazgo">
+    // tabIndex: el panel se desplaza con el teclado (flechas, Re Pág, Av Pág, Inicio, Fin) también en Safari.
+    <aside ref={panel} className="discovery-inspector" aria-label="Detalle del hallazgo" tabIndex={0}>
+      {onBackToList && (
+        <button type="button" className="pixel-button is-ghost discovery-back-to-list" onClick={onBackToList}>
+          ← Volver a la lista
+        </button>
+      )}
       <h3>{item.title}</h3>
       <p className={`discovery-status status-${item.status}`}>
         <span aria-hidden="true">{status.glyph}</span> {status.label}
@@ -85,6 +100,52 @@ export function ReviewInspector({
       )}
     </aside>
   );
+}
+
+/** Alto mínimo del panel cuando casi no queda espacio bajo la cabecera de la página (ventanas muy bajas). */
+const MIN_PANEL = 200;
+
+/**
+ * El alto que de verdad tiene libre el inspector: desde donde empieza (su lugar en la página o, ya pegado, `top`) hasta
+ * el fondo del área que se desplaza (`.app-main`), menos el mismo margen. Sin esto, con la página arriba el panel
+ * empieza debajo de la cabecera y sus filtros, y su parte de abajo queda fuera de la ventana. Se recalcula al
+ * desplazar (un cuadro por vez), al cambiar el tamaño de la ventana o de la página. Apilado (`position: static`) no
+ * limita nada: el CSS lo deja sin scroll propio. El CSS (`100cqh`) sigue siendo el tope.
+ */
+function useVisibleHeight(panel: RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const element = panel.current;
+    const scroller = element?.closest<HTMLElement>('.app-main');
+    if (!element || !scroller) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const style = getComputedStyle(element);
+      if (style.position !== 'sticky') {
+        element.style.removeProperty('--inspector-available');
+        return;
+      }
+      const gap = parseFloat(style.top) || 0;
+      const area = scroller.getBoundingClientRect();
+      const top = Math.max(element.getBoundingClientRect().top, area.top + gap);
+      element.style.setProperty('--inspector-available', `${Math.max(MIN_PANEL, Math.floor(area.bottom - top - gap))}px`);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    scroller.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
+    resize?.observe(scroller);
+    if (scroller.firstElementChild) resize?.observe(scroller.firstElementChild);
+    return () => {
+      cancelAnimationFrame(frame);
+      scroller.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      resize?.disconnect();
+    };
+  }, [panel]);
 }
 
 function Match({ target, reason }: { target: DiscoveryTarget; reason: string }) {
