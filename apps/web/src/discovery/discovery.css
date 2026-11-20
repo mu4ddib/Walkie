@@ -180,6 +180,24 @@
   gap: 16px;
 }
 
+/*
+ * La revisión tiene dos columnas técnicas (lista e inspector): solo esta página se ensancha, hasta 1440 px; las demás
+ * siguen en los 880 px de `.page`.
+ */
+.page.discovery-review-page {
+  max-width: 1440px;
+}
+
+/*
+ * El inspector se mide contra el área que de verdad se desplaza (`.app-main`, sin la barra superior), no contra la
+ * ventana: `.app-main` es un contenedor de tamaño solo en esta página (`:has`), así `100cqh` es su alto visible con
+ * cualquier barra, zoom o tamaño de ventana. La contención no afecta a otras páginas (la revisión no tiene elementos
+ * `position: fixed`).
+ */
+.app-main:has(.discovery-review-page) {
+  container-type: size;
+}
+
 .discovery-page h2 {
   margin: 0;
 }
@@ -230,17 +248,13 @@
   margin-left: auto;
 }
 
+/* La lista se queda con el resto; el inspector crece con la página (42 %) entre 360 y 640 px. */
 .discovery-layout {
+  --inspector-gap: 16px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 42%, 640px);
   gap: 16px;
   align-items: start;
-}
-
-@media (max-width: 900px) {
-  .discovery-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .discovery-list {
@@ -335,14 +349,24 @@
   margin-top: 8px;
 }
 
+/*
+ * Panel lateral: se queda a la vista mientras la página se desplaza (sticky dentro de `.app-main`) y nunca pasa del
+ * área visible: `--inspector-available` (lo pone `ReviewInspector`) es el alto libre desde donde empieza el panel, y
+ * `100cqh` el tope cuando ya está pegado arriba. Su contenido se desplaza adentro y, al llegar a un extremo, el gesto no sigue en la página
+ * (`overscroll-behavior: contain`). `100dvh` es el respaldo para un navegador sin unidades de contenedor.
+ */
 .discovery-inspector {
   position: sticky;
-  top: 16px;
+  top: var(--inspector-gap);
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: calc(100vh - 32px);
+  min-width: 0;
+  max-height: calc(100dvh - 2 * var(--inspector-gap));
+  max-height: min(var(--inspector-available, 100cqh), 100cqh - 2 * var(--inspector-gap));
   overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 8px;
   padding: 16px;
   border: 2px solid var(--dune-300);
   border-radius: var(--radius-s);
@@ -350,10 +374,51 @@
   box-shadow: var(--shadow-float);
 }
 
+.discovery-inspector:focus-visible {
+  outline: 2px solid var(--ibad);
+  outline-offset: 2px;
+}
+
+/* Ningún texto técnico (rutas, claves, URLs, contratos) ensancha el inspector: se parte o se desplaza dentro de su caja. */
+.discovery-inspector > * {
+  min-width: 0;
+}
+
 .discovery-inspector h3,
-.discovery-inspector h4 {
-  margin: 0;
+.discovery-inspector h4,
+.discovery-inspector :where(p, li, dd, dt, a, code, label, summary) {
   overflow-wrap: anywhere;
+}
+
+.discovery-inspector pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/*
+ * Pantallas angostas (y zoom grande): todo apilado, el inspector debajo de la lista y sin scroll propio (la página
+ * se desplaza una sola vez, sin scroll anidado). «Volver a la lista» solo aparece aquí.
+ */
+/* Más específico que `.pixel-button` (que pone su propio `display` y se carga después). */
+.discovery-inspector .discovery-back-to-list {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .discovery-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .discovery-inspector {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .discovery-inspector .discovery-back-to-list {
+    display: inline-flex;
+    align-self: flex-start;
+  }
 }
 
 .discovery-inspector h4 {

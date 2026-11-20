@@ -262,6 +262,60 @@ describe('revisión de un análisis', () => {
     expect(first).toHaveFocus();
   });
 
+  it('el inspector se desplaza con el teclado y, al cambiar de hallazgo, empieza arriba; dentro del mismo no se mueve', async () => {
+    await openReview();
+    await userEvent.click(row(/GET \/api\/pedidos/));
+    const inspector = screen.getByRole('complementary', { name: 'Detalle del hallazgo' });
+    // Una región desplazable alcanzable con Tab (Safari no la enfoca sola): Re Pág, Av Pág, Inicio y Fin la mueven.
+    expect(inspector).toHaveAttribute('tabindex', '0');
+    // jsdom no tiene layout: el desplazamiento se simula en el propio panel.
+    Object.defineProperty(inspector, 'scrollTop', { value: 240, writable: true, configurable: true });
+
+    // Abrir una decisión del mismo hallazgo no mueve el panel.
+    await userEvent.click(within(inspector).getByRole('button', { name: 'Descartar…' }));
+    expect(inspector.scrollTop).toBe(240);
+
+    // Otro hallazgo: el mismo panel, arriba, con su título a la vista.
+    await userEvent.click(row(/tienda/));
+    expect(screen.getByRole('complementary', { name: 'Detalle del hallazgo' })).toBe(inspector);
+    expect(inspector.scrollTop).toBe(0);
+    expect(row(/tienda/)).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('apilado (pantalla angosta): elegir lleva al detalle y «Volver a la lista» a su fila; con movimiento reducido, sin animar', async () => {
+    const queries: string[] = [];
+    vi.stubGlobal('matchMedia', (query: string) => {
+      queries.push(query);
+      return { matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} };
+    });
+    const scrolls: ScrollIntoViewOptions[] = [];
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = function (options?: boolean | ScrollIntoViewOptions) {
+      scrolls.push(options as ScrollIntoViewOptions);
+    };
+    try {
+      await openReview();
+      await userEvent.click(row(/GET \/api\/pedidos/));
+      const inspector = screen.getByRole('complementary', { name: 'Detalle del hallazgo' });
+      await waitFor(() => expect(inspector).toHaveFocus());
+      expect(scrolls.at(-1)).toEqual({ block: 'start', behavior: 'auto' });
+      expect(queries).toContain('(prefers-reduced-motion: reduce)');
+
+      await userEvent.click(within(inspector).getByRole('button', { name: '← Volver a la lista' }));
+      expect(row(/GET \/api\/pedidos/)).toHaveFocus();
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('en escritorio elegir un hallazgo no mueve la página ni el foco', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+    await openReview();
+    const first = row(/GET \/api\/pedidos/);
+    await userEvent.click(first);
+    expect(first).toHaveFocus();
+  });
+
   it('el inspector explica la coincidencia y pide la evidencia de ese hallazgo solo', async () => {
     const api = await openReview();
     await userEvent.click(row(/GET \/api\/pedidos/));
