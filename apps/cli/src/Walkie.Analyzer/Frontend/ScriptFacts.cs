@@ -156,9 +156,82 @@ internal sealed partial class ScriptFacts
 
     public IReadOnlyList<Token> Tokens => tokens;
 
+    private int[]? innermost;
+    private Dictionary<FunctionInfo, Members>? members;
+
+    /// <summary>Lo que hay dentro de una función (sin las funciones con nombre anidadas): se arma una vez por archivo.</summary>
+    internal sealed record Members(List<CallSite> Calls, List<HttpCall> Http, List<JsxUse> Jsx, List<NavigationTarget> Navigations, List<NavigationSite> Sites);
+
     /// <summary>La función con nombre más interna que contiene la posición de token <paramref name="index"/>, o null.</summary>
-    public FunctionInfo? FunctionAt(int index) =>
-        Functions.Where(f => f.BodyStart <= index && index < f.BodyEnd).MaxBy(f => f.BodyStart);
+    public FunctionInfo? FunctionAt(int index)
+    {
+        if (innermost is null)
+        {
+            // Una sola pasada: cada token queda con la función más interna (las anidadas empiezan después y la pisan).
+            innermost = new int[tokens.Count];
+            Array.Fill(innermost, -1);
+            foreach (var (f, k) in Functions.Select((f, k) => (f, k)).OrderBy(x => x.f.BodyStart).ThenByDescending(x => x.f.BodyEnd))
+            {
+                for (var j = Math.Max(0, f.BodyStart); j < Math.Min(tokens.Count, f.BodyEnd); j++)
+                {
+                    innermost[j] = k;
+                }
+            }
+        }
+
+        return index >= 0 && index < innermost.Length && innermost[index] >= 0 ? Functions[innermost[index]] : null;
+    }
+
+    /// <summary>Las llamadas, HTTP, componentes y navegaciones de <paramref name="function"/>.</summary>
+    public Members In(FunctionInfo function)
+    {
+        if (members is null)
+        {
+            members = new Dictionary<FunctionInfo, Members>(ReferenceEqualityComparer.Instance as IEqualityComparer<FunctionInfo>);
+            // El código suelto del módulo (fuera de toda función) no es de ninguna: queda fuera.
+            Members? Of(int index)
+            {
+                if (FunctionAt(index) is not { } owner)
+                {
+                    return null;
+                }
+
+                if (!members.TryGetValue(owner, out var found))
+                {
+                    members[owner] = found = new Members([], [], [], [], []);
+                }
+
+                return found;
+            }
+
+            foreach (var c in Calls)
+            {
+                Of(c.Index)?.Calls.Add(c);
+            }
+
+            foreach (var h in Http)
+            {
+                Of(h.Index)?.Http.Add(h);
+            }
+
+            foreach (var u in JsxUses)
+            {
+                Of(u.Index)?.Jsx.Add(u);
+            }
+
+            foreach (var n in Navigations.Where(n => n.Index >= 0))
+            {
+                Of(n.Index)?.Navigations.Add(n);
+            }
+
+            foreach (var n in NavigationSites)
+            {
+                Of(n.Index)?.Sites.Add(n);
+            }
+        }
+
+        return members.TryGetValue(function, out var result) ? result : new Members([], [], [], [], []);
+    }
 
     /// <summary>
     /// Declaraciones de primer nivel (<c>function X</c>, <c>const X =</c>, <c>class X</c>) con dónde empiezan y hasta

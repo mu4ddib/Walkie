@@ -20,7 +20,7 @@ public sealed class ReactRouterDetector : IDetector
 
     public IReadOnlyList<string> Entities { get; } = ["screen"];
 
-    public IReadOnlyList<string> Relations { get; } = ["navigates"];
+    public IReadOnlyList<string> Relations { get; } = ["navigates", "contains"];
 
     public string? NotApplicable(AnalysisContext context) =>
         FrontendModel.Of(context).Apps.Any(a => a.React && !a.Next) ? null : "No hay apps React (sin Next.js) en el alcance.";
@@ -78,7 +78,7 @@ public sealed partial class AngularRouterDetector : IDetector
 
     public IReadOnlyList<string> Entities { get; } = ["screen"];
 
-    public IReadOnlyList<string> Relations { get; } = ["navigates"];
+    public IReadOnlyList<string> Relations { get; } = ["navigates", "contains"];
 
     public string? NotApplicable(AnalysisContext context) =>
         FrontendModel.Of(context).Apps.Any(a => a.Angular) ? null : "No hay apps Angular en el alcance.";
@@ -270,7 +270,7 @@ public sealed class NextJsDetector : IDetector
 
     public IReadOnlyList<string> Entities { get; } = ["screen", "api"];
 
-    public IReadOnlyList<string> Relations { get; } = ["exposes", "navigates"];
+    public IReadOnlyList<string> Relations { get; } = ["exposes", "navigates", "contains"];
 
     public string? NotApplicable(AnalysisContext context) =>
         FrontendModel.Of(context).Apps.Any(a => a.Next) ? null : "No hay apps Next.js en el alcance.";
@@ -306,6 +306,7 @@ public sealed class NextJsDetector : IDetector
                         screen.App ??= app.Scope;
                         screen.Technology ??= context.Findings.HasTechnology("nextjs") ? "nextjs" : null;
                         model.AddScreen(new ScreenRecord(app, screen.Key, route, null, file.Path, 1), file.Path, null);
+                        RouteScreens.Contain(context, app, screen.Key, evidence);
                     }
                 }
                 else if (model.Facts(file, Id) is { } handler)
@@ -450,6 +451,15 @@ public sealed class FrontendHttpDetector : IDetector
                         Id, file.Path, incomplete: false);
                 }
             }
+
+            // Código compartido fuera de toda app (monorepo): solo desde las pantallas de esta app que lo alcanzan.
+            foreach (var shared in reach.Outside(model))
+            {
+                foreach (var call in model.Symbols.Summary(shared).Calls)
+                {
+                    Relate(context, model, app, call, reach.Reaching(shared), relative: false);
+                }
+            }
         }
     }
 
@@ -519,7 +529,8 @@ public sealed class FrontendHttpDetector : IDetector
 /// dentro de una app técnica; una familia con dos o más pantallas es candidata. Dos familias no se juntan por compartir
 /// un segmento: <c>/s/:token/modules/:id</c> y <c>/apps/:appId/modules/:id</c> no son la misma.</item>
 /// <item><b>Una pantalla de detalle</b> (una familia de una sola pantalla que cuelga de otra) se une a la familia de la
-/// que cuelga solo si toda navegación que llega a ella sale de esa familia, vuelve a ella y comparten al menos una API.</item>
+/// que cuelga solo si toda navegación que llega a ella sale de esa familia, vuelve a ella y comparten una API o sus APIs
+/// las publica el mismo módulo o servicio.</item>
 /// </list>
 /// El puntaje (ADR-0016) suma evidencia fuerte (navegación observada entre sus pantallas, carga diferida común), media
 /// (APIs en común, APIs de un mismo módulo del backend) y débil (solo la forma de la ruta): confianza media con al menos
@@ -540,7 +551,8 @@ public sealed class FrontendFeaturesDetector : IDetector
     {
         var model = FrontendModel.Of(context);
         var navigation = context.Findings.RelationEnds.Where(r => r.Kind == "navigates").Select(r => (r.From, r.To)).ToHashSet();
-        var moduleOf = context.Findings.RelationEnds.Where(r => r.Kind == "exposes" && r.From.StartsWith("module:", StringComparison.Ordinal))
+        // Quién publica cada API (un módulo o un servicio del backend): la misma dueña es evidencia media.
+        var moduleOf = context.Findings.RelationEnds.Where(r => r.Kind == "exposes")
             .GroupBy(r => r.To).ToDictionary(g => g.Key, g => g.Select(r => r.From).Order(StringComparer.Ordinal).First(), StringComparer.Ordinal);
         foreach (var app in model.Apps)
         {
@@ -571,8 +583,10 @@ public sealed class FrontendFeaturesDetector : IDetector
                 var parentKeys = families[parent].Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
                 var inbound = navigation.Where(n => n.To == detail && n.From != detail).Select(n => n.From).ToList();
                 var calls = Calls(model, detail);
-                if (inbound.Count > 0 && inbound.All(parentKeys.Contains) && navigation.Any(n => n.From == detail && parentKeys.Contains(n.To))
-                    && families[parent].Any(p => Calls(model, p.Key).Overlaps(calls)))
+                var parentCalls = families[parent].SelectMany(p => Calls(model, p.Key)).ToHashSet(StringComparer.Ordinal);
+                var owners = parentCalls.Where(moduleOf.ContainsKey).Select(a => moduleOf[a]).ToHashSet(StringComparer.Ordinal);
+                var related = parentCalls.Overlaps(calls) || calls.Any(a => moduleOf.TryGetValue(a, out var owner) && owners.Contains(owner));
+                if (inbound.Count > 0 && inbound.All(parentKeys.Contains) && navigation.Any(n => n.From == detail && parentKeys.Contains(n.To)) && related)
                 {
                     families[parent].Add(screens[0]);
                     families.Remove(family);
@@ -654,7 +668,7 @@ public sealed class FrontendFeaturesDetector : IDetector
 
         if (modules.Count > 0)
         {
-            evidenceText.Add($"{modules[0].Count()} de sus APIs son de {modules[0].Key["module:".Length..]}");
+            evidenceText.Add($"{modules[0].Count()} de sus APIs las publica {modules[0].Key[(modules[0].Key.IndexOf(':', StringComparison.Ordinal) + 1)..]}");
         }
 
         feature.Description ??= Text.Truncate(

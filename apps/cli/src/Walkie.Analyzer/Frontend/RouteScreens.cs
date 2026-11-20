@@ -112,10 +112,23 @@ internal static partial class RouteScreens
             // El componente en su archivo: el nombre declarado, o null si la ruta trae el archivo entero (lazy sin miembro).
             var declared = decl.Component ?? decl.LoadComponent?.Member;
             model.AddScreen(new ScreenRecord(app, key, route.FullPath, route.LazyMount, file.Path, line), componentFile?.Path, declared);
+            Contain(context, app, key, evidence);
             added++;
         }
 
         return added;
+    }
+
+    /// <summary>
+    /// La app de front contiene la pantalla (<c>contains</c>, ADR-0016): la ruta está declarada en sus archivos. Es
+    /// contención, no ejecución, y es lo que une cada pantalla con su app técnica en la vista de arquitectura.
+    /// </summary>
+    public static void Contain(AnalysisContext context, FrontendApp app, string screenKey, string evidence)
+    {
+        if (context.Findings.Entities.ContainsKey(app.ServiceKey))
+        {
+            context.Findings.Relation("contains", app.ServiceKey, screenKey, Basis.Observed, Confidence.High, evidence);
+        }
     }
 
     /// <summary>
@@ -133,7 +146,8 @@ internal static partial class RouteScreens
         var screens = model.Screens.Where(s => s.App == app).Select(s => s.Key).Distinct().ToList();
         var reach = model.ReachOf(app);
         var problems = new List<SymbolProblem>();
-        foreach (var file in model.ScriptsOf(app))
+        var outside = reach.Outside(model).ToList();
+        foreach (var file in model.ScriptsOf(app).Concat(outside.Select(f => f.File).DistinctBy(f => f.Path)))
         {
             if (model.Facts(file, detector) is not { } facts)
             {
@@ -141,9 +155,15 @@ internal static partial class RouteScreens
             }
 
             var unattributed = new List<int>();
+            var isOutside = model.AppOf(file.Path) is null;
             foreach (var function in facts.Functions)
             {
                 var reference = new FunctionRef(file, facts, function);
+                if (isOutside && !outside.Any(o => o.Key == reference.Key))
+                {
+                    continue; // del código compartido, solo lo que alcanzan las pantallas de esta app
+                }
+
                 var summary = model.Symbols.Summary(reference);
                 problems.AddRange(summary.Problems.Where(p => p.Code == "dynamic-navigation" && p.Path == file.Path));
                 var consumers = reach.Reaching(reference).GroupBy(c => c.Screen).Select(g => g.OrderBy(c => c.Jsx).ThenBy(c => c.Calls).First())

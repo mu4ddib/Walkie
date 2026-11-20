@@ -25,6 +25,13 @@ internal sealed class FrontendReach
     /// <summary>Componentes compartidos: clave de la función → cuántas pantallas lo dibujan.</summary>
     public Dictionary<string, int> Shared { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Funciones fuera de toda app de front que alcanzan sus pantallas (código compartido de un monorepo: <c>../shared</c>),
+    /// en orden. Lo que hacen se atribuye a esas pantallas y nunca a la app.
+    /// </summary>
+    public IEnumerable<FunctionRef> Outside(FrontendModel model) =>
+        byFunction.Values.Select(list => list[0].Function).Where(f => model.AppOf(f.File.Path) is null).OrderBy(f => f.Key, StringComparer.Ordinal);
+
     /// <summary>Las pantallas que alcanzan la función, con su mejor camino (el más corto), en orden de pantalla.</summary>
     public IReadOnlyList<Reach> Reaching(FunctionRef function) => byFunction.TryGetValue(function.Key, out var list) ? list : [];
 
@@ -110,7 +117,7 @@ internal sealed class FrontendReach
         {
             var (function, step) = queue.Dequeue();
             var (file, facts, info) = function;
-            foreach (var use in facts.JsxUses.Where(u => facts.FunctionAt(u.Index) == info))
+            foreach (var use in facts.In(info).Jsx)
             {
                 if (step.Jsx >= FrontendSymbols.MaxJsxDepth || symbols.Component(file, facts, use.Name) is not { } component || shared?.ContainsKey(component.Key) == true)
                 {
@@ -129,7 +136,7 @@ internal sealed class FrontendReach
                 continue;
             }
 
-            foreach (var call in facts.Calls.Where(c => facts.FunctionAt(c.Index) == info))
+            foreach (var call in facts.In(info).Calls)
             {
                 if (step.Calls >= FrontendSymbols.MaxDepth || symbols.Resolve(file, facts, call.Callee, call.Receiver, info) is not { } target || shared?.ContainsKey(target.Key) == true)
                 {

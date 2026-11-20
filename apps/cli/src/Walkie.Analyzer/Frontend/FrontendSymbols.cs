@@ -288,7 +288,7 @@ internal sealed class FrontendSymbols
         var sinks = new HashSet<int>();
 
         // fetch, axios y HttpClient escritos en esta función.
-        foreach (var call in facts.Http.Where(h => facts.FunctionAt(h.Index) == info))
+        foreach (var call in facts.In(info).Http)
         {
             sinks.Add(call.Index);
             if (call.External || call.Url is null)
@@ -313,7 +313,7 @@ internal sealed class FrontendSymbols
             }
         }
 
-        foreach (var call in facts.Calls.Where(c => facts.FunctionAt(c.Index) == info))
+        foreach (var call in facts.In(info).Calls)
         {
             if (sinks.Contains(call.Index))
             {
@@ -387,13 +387,13 @@ internal sealed class FrontendSymbols
         }
 
         // Navegaciones de esta función: las literales, y las que dependen de una función de rutas o de un parámetro.
-        foreach (var navigation in facts.Navigations.Where(n => n.Index >= 0 && facts.FunctionAt(n.Index) == info))
+        foreach (var navigation in facts.In(info).Navigations)
         {
             var line = model.Line(file.Path, navigation.Offset);
             summary.Navigations.Add(new ResolvedNavigation(navigation.Path, [new Hop(file.Path, line, "→ " + navigation.Path)], 0));
         }
 
-        foreach (var site in facts.NavigationSites.Where(n => facts.FunctionAt(n.Index) == info))
+        foreach (var site in facts.In(info).Sites)
         {
             var line = model.Line(file.Path, site.Offset);
             foreach (var target in Eval(scope, site.Expression))

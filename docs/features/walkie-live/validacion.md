@@ -344,8 +344,8 @@ Estado de la autorización: **ADR-0015 sigue propuesto y la autorización por ap
 | Id | Prioridad | Deuda | Evidencia | Criterio de cierre |
 |---|---|---|---|---|
 | D1 | **Bloqueante** | Autorización por app (ADR-0015) | §13; `GET /api/apps` lista todas | Política implementada en todos los endpoints, migración de las apps existentes y pruebas IDOR en verde; ADR-0015 aceptado |
-| D2 | **Alta** | Seguir clientes HTTP envoltorio de un nivel (`request(path)`/`send(path)` → `fetch(base + path)`) cuando la ruta es literal en quien llama | §2: 0 de 43 llamadas detectadas en Walkie | En el análisis de Walkie, las llamadas de `apps/web/src/api/client.ts` aparecen como `calls` a las 43 APIs, sin falsos positivos en el corpus de la CLI; lo dinámico sigue como limitación |
-| D3 | **Alta** | Declarar la navegación que no se resuelve (por ejemplo `navigate(appPath(id))`, `<Link to={featurePath(…)}>`) con una limitación propia | §2: 9 de 56 navegaciones, ninguna limitación | Toda navegación no literal deja una limitación con archivo y línea; el análisis queda parcial cuando corresponde |
+| D2 | ~~Alta~~ **Resuelto** (spec walkie-live-arquitectura, PR A) | Seguir clientes HTTP envoltorio de un nivel (`request(path)`/`send(path)` → `fetch(base + path)`) cuando la ruta es literal en quien llama | §2: 0 de 43 llamadas detectadas en Walkie | Cumplido (§19): los 45 endpoints que llama el cliente, sin APIs inventadas, desde las 11 pantallas |
+| D3 | ~~Alta~~ **Resuelto** (spec walkie-live-arquitectura, PR A) | Declarar la navegación que no se resuelve (por ejemplo `navigate(appPath(id))`, `<Link to={featurePath(…)}>`) con una limitación propia | §2: 9 de 56 navegaciones, ninguna limitación | Cumplido (§19): 34 navegaciones por funciones de rutas; lo que no se resuelve queda como `dynamic-navigation` o `navigation-unattributed` con archivo y línea |
 | D4 | Media | Inicio de sesión en WebKit vuelve a `/` (o a «Iniciar sesión») en vez de la ruta pedida | §12: 2 E2E de Walkie Live fallan en WebKit de forma reproducible; Chromium pasa | La causa se identifica en `signinRedirect`/`onSigninCallback` y los E2E de Walkie Live pasan con `WALKIE_BROWSER=webkit` |
 | D5 | Media | Retención de análisis y limpieza de huérfanos | §14 | Política escrita y probada antes de producción |
 | D6 | Media | Distribución de la CLI (NuGet, firma, Windows y macOS) | §15 | Paquete publicado y firmado, probado en el CI en tres sistemas |
@@ -359,3 +359,57 @@ Estado de la autorización: **ADR-0015 sigue propuesto y la autorización por ap
 2. **Analizador: envoltorios HTTP y navegación declarada (D2, D3):** es lo que más cambia el valor de los lienzos generados, sin heurísticas abiertas. Medirlo con Walkie y con el corpus de la CLI.
 3. **Preparación del piloto (D4, D6, D8):** login en WebKit, CLI publicada y firmada, avisos de la vista previa.
 4. **Antes de producción (D5, D9):** retención y limpieza, backups probados antes de migrar, anchos chicos.
+
+## 19. Relaciones y propuestas (spec walkie-live-arquitectura, PR A, 2026-11-20)
+
+Walkie analizándose a sí mismo (`main` en `d8159c5` contra la rama `feat/walkie-live-relaciones`, con la misma fuente). Cada medida va aparte: no se mezclan entidades, relaciones y propuestas en una cifra global.
+
+**Detección y atribución de llamadas (D2).** La verdad sale de `apps/web/src/api/client.ts` leído con una expresión regular independiente del analizador (`WalkieRepositoryTests`).
+
+| Medida | Antes | Después |
+|---|---|---|
+| Endpoints que llama el cliente, detectados | 0 de 45 | **45 de 45** (también los dos de `importPackage`, armados con un condicional en una constante) |
+| APIs inventadas (llamadas a algo que el cliente no llama) | — | **0** |
+| Relaciones `calls` | 0 | 92 |
+| … desde una pantalla | 0 | 82 (48 inferidas medias: por hook o servicio; 44 inferidas bajas: por un componente dibujado) |
+| … desde la app (código que ninguna pantalla alcanza: salud, sesión, enlaces, imágenes) | 0 | 10 |
+| Pantallas con llamadas | 0 de 11 | 11 de 11 |
+| APIs del backend que la web no llama | — | 1 (`GET /api/modules/{}`: es cierto, la web no la usa) |
+| Limitaciones `dynamic-http-url` | 4 (1 por `baseUrl`, 3 por `canvasImage.ts`) | 0; las 3 de `canvasImage.ts` son `non-api-fetch` (no dejan el análisis parcial) |
+
+**Navegación (D3).**
+
+| Medida | Antes | Después |
+|---|---|---|
+| Relaciones `navigates` | 9 | 34 (21 observadas, 1 inferida media, 12 inferidas bajas por componentes) |
+| Navegaciones no resueltas, declaradas | 0 | 13: 2 `dynamic-navigation` (`navigate(path)` con una variable) y 11 `navigation-unattributed` (en `LocationBar`, `Palette`, `RefPanel`, `ReviewInspector` y `App.tsx`: componentes compartidos o que ninguna pantalla alcanza) |
+| Navegaciones entre la vista pública (`/s/…`) y la autenticada | — | 0 (prueba) |
+
+**Contención.** `contains` de la app de front a cada pantalla: 0 → 11 (observadas, altas: la ruta está en sus archivos).
+
+**Backend.** `reads`: 0 → 76; `writes`: 0 → 27. 43 de 46 endpoints llegan a una base; los 3 que no (`/api/health`, `/api/me`, `/api/discovery`) no tocan ninguna. Ninguna escritura de más en lo revisado a mano (por ejemplo, `GET /api/public/shares/{}` escribe porque actualiza el último acceso).
+
+**Propuestas de feature.**
+
+| Medida | Antes | Después |
+|---|---|---|
+| Propuestas | 3, todas bajas («Apps», «Catalog», «Modules») | 2, medias («Apps», «Catalog») |
+| Con evidencia suficiente (navegación o carga diferida, y APIs en común o del mismo módulo) | 0 | 2 |
+| Solo por heurística de rutas | 3 | 0 |
+| Mezclas indebidas | 1 («Modules» juntaba `/apps/:appId/modules/:moduleId` con la vista pública `/s/:token/modules/:moduleId`) | 0 |
+| Conexiones que su lienzo inicial puede dibujar | 1 (Apps) y 0 (Catalog, Modules) | Apps: 5 de navegación y 23 solicitudes; Catalog: 2 y 22 |
+
+**Falsos negativos que quedan.** Navegaciones desde componentes compartidos (la barra de ubicación, la paleta) y hacia rutas en variables; llamadas de módulos de la app que solo alcanzan componentes compartidos (quedan desde la app); escrituras en otra base que pasan por más de 3 saltos (por ejemplo, `apply` con creación escribe en Apps por `IAppWriter`, a 4 saltos); `GET /api/modules/{}` no tiene consumidor en la web.
+
+**Casos B a E** (`ArchitectureCasesTests`): React + .NET (login, listado, detalle, crear, editar, servicio con axios, servicio del backend y EF Core), Angular (standalone, carga diferida, servicios inyectados por `inject` y por constructor, `HttpClient`, `router.navigate` y `routerLink`), monorepo (dos apps con las mismas rutas y un cliente común: nunca se mezclan) e incompleto (navegación a una variable, cliente con método calculado: limitaciones con archivo y línea, nada inventado). Lo esperado se escribe a mano, incluidas las relaciones que no deben existir.
+
+**Rendimiento del análisis** (mediana de 3 a 5 corridas, CLI en Release):
+
+| Proyecto | Antes | Después |
+|---|---|---|
+| Walkie (76 entidades) | 1,3 s · 157 MB · 77 relaciones | 2,0 s · 212 MB · 297 relaciones |
+| Sintético de 400 recursos (3.201 entidades) | 2,1 s · 252 MB · parcial, 400 relaciones | 4,0 s · 327 MB · completo, 2.800 relaciones |
+| Sintético de 2.400 recursos (19.201 entidades) | 6,1 s · 514 MB · parcial, 2.400 relaciones | 12,5 s · 905 MB · completo, 16.800 relaciones |
+
+El crecimiento es lineal: cada archivo se escanea una vez, las funciones se agrupan por archivo una sola vez (`ScriptFacts.In`) y cada resumen se calcula una vez (`FrontendSymbols.Summary`).
+

@@ -5,6 +5,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Walkie Live, **relaciones verificables** (spec `walkie-live-arquitectura`, PR A, #177; ADR-0016):
+  - **Llamadas por envoltorios (D2):** el análisis sigue clientes propios (`request()` → `send()` → `fetch`), instancias de axios importadas, servicios de Angular inyectados y objetos de funciones, con el método literal, por argumento o por opciones, y una base configurable (`baseUrl`, `environment.apiUrl`). Hasta 3 niveles; lo que no se puede leer queda como limitación con archivo y línea.
+  - **Quién llama:** cada llamada sale de las pantallas que la alcanzan por sus hooks, servicios y componentes (no de la carpeta), con la cadena como evidencia; si ninguna, de la app. Un componente que muchas pantallas comparten no reparte sus llamadas.
+  - **Navegación (D3):** funciones de rutas (`appPath(id)`, `featurePath(a, f)`), constantes importadas, condicionales y navegación desde componentes dibujados; lo no resuelto se declara (`dynamic-navigation`, `navigation-target-unknown`, `navigation-unattributed`).
+  - **Backend:** qué base lee o escribe cada endpoint, siguiendo handler → servicio → `DbSet` (nuevo detector `aspnetcore-data`).
+  - **Propuestas de feature** por familias de rutas y evidencia (navegación, carga diferida, APIs en común y del mismo módulo), con el nombre de su pantalla principal y la evidencia en la descripción. Ya no se mezclan vistas distintas por compartir un segmento.
+  - **Contención:** cada app de front contiene sus pantallas (`contains`), así la arquitectura sabe de qué app es cada una.
+  - **Lienzo inicial:** con muchas APIs, van en una grilla de 4 debajo de las pantallas.
+  - Walkie analizándose: de 0 a 92 llamadas (los 45 endpoints que usa la web), de 9 a 34 navegaciones y de 0 a 103 lecturas y escrituras. Métricas en `docs/features/walkie-live/validacion.md` §19.
 - Walkie Live, **validación integral** (spec `walkie-live`, tarea 11, #173): Walkie analizándose a sí mismo de punta a punta, verificación no destructiva sobre una app documentada a mano, límites, concurrencia, matriz de rendimiento, migraciones de ida y vuelta, E2E en WebKit y ADR-0015 (autorización por app, propuesto y bloqueante para el piloto). Resultados en `docs/features/walkie-live/validacion.md`.
 - Walkie Live, **reanalizar y crear una app desde un proyecto local** (spec `walkie-live`, tarea 10, #172; ADR-0012 y ADR-0014):
   - **Comparar con el análisis anterior:** la revisión dice con qué análisis se compara (fecha, commit, completo o parcial) y marca qué es nuevo, qué cambió, qué sigue igual y qué requiere revisión; cada cifra filtra la lista. Lo decidido que el análisis nuevo no podía ver (un detector que no corrió, fuera del alcance) queda «Sin cobertura» con el porqué, nunca como «Ya no aparece». Nada se borra, ningún lienzo, catálogo, módulo, interfaz ni tour cambia, y las decisiones se conservan.

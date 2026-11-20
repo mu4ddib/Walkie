@@ -16,12 +16,12 @@ Basado en `spec.md` (aprobada el 2026-11-20) y ADR-0016. Dos PR: A (relaciones, 
 
 ## Tareas
 
-1. [ ] (#177) PR A · D2: envoltorios HTTP (un nivel y hasta 3, entre archivos, alias, constantes, plantillas, funciones de rutas, método como argumento u opción, Angular, axios) y `fetch` que no es de la API.
-2. [ ] (#177) PR A · Atribución: pantalla → hook o servicio → cliente → API, por componentes que la pantalla dibuja, con límites; si no, desde la app.
-3. [ ] (#177) PR A · D3: navegación con funciones de rutas, condicionales y desde componentes; limitaciones para lo no resuelto.
-4. [ ] (#177) PR A · Backend: endpoint → handler → servicio → `DbSet` (`reads`/`writes` desde la API).
-5. [ ] (#177) PR A · Agrupación funcional por familias de rutas y evidencia, con nombre de la pantalla principal.
-6. [ ] (#177) PR A · Casos A a E, métricas en `validacion.md` y rendimiento del análisis.
+1. [x] (#177) PR A · D2: envoltorios HTTP (un nivel y hasta 3, entre archivos, alias, constantes, plantillas, funciones de rutas, método como argumento u opción, Angular, axios) y `fetch` que no es de la API.
+2. [x] (#177) PR A · Atribución: pantalla → hook o servicio → cliente → API, por componentes que la pantalla dibuja, con límites; si no, desde la app.
+3. [x] (#177) PR A · D3: navegación con funciones de rutas, condicionales y desde componentes; limitaciones para lo no resuelto.
+4. [x] (#177) PR A · Backend: endpoint → handler → servicio → `DbSet` (`reads`/`writes` desde la API).
+5. [x] (#177) PR A · Agrupación funcional por familias de rutas y evidencia, con nombre de la pantalla principal.
+6. [x] (#177) PR A · Casos A a E, métricas en `validacion.md` y rendimiento del análisis.
 7. [ ] (#177) PR B · Proyección de arquitectura en la API (vista general y grupo), schema y pruebas con 2.000 y 20.000 entidades.
 8. [ ] (#177) PR B · «Explorar arquitectura» en la web (grupos, filtros, evidencia, limitaciones, propuestas).
 9. [ ] (#177) PR B · Revisión por conjuntos con vista previa y una sola aplicación; abrir el lienzo.
@@ -36,4 +36,4 @@ Basado en `spec.md` (aprobada el 2026-11-20) y ADR-0016. Dos PR: A (relaciones, 
 
 ## Estado
 
-Última actualización: 2026-11-20, nube — spec aprobada, diagnóstico C1–C9 hecho. Sigue la tarea 1.
+Última actualización: 2026-11-20, nube — PR A hecho (tareas 1 a 6): D2, D3, atribución por hooks y componentes, `reads`/`writes` desde el backend y propuestas por familias de rutas; Walkie de 0 a 92 `calls`, de 9 a 34 navegaciones y de 0 a 103 `reads`/`writes` (`validacion.md` §19). El lienzo inicial pone las APIs en una grilla de 4. Sigue el PR B (tareas 7 a 10), apilado sobre D1.

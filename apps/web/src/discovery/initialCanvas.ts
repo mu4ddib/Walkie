@@ -19,6 +19,7 @@ export const CANVAS_METRICS: LayoutMetrics = {
   rowGap: 56,
   belowGap: 112,
   belowSpacing: 32,
+  belowPerRow: 4,
 };
 
 const snap = (v: number) => Math.round(v / 8) * 8 || 0;

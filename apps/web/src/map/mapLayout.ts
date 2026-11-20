@@ -24,6 +24,11 @@ export type LayoutMetrics = {
   columnGap: number;
   rowGap: number;
   belowGap: number;
+  /**
+   * Componentes por fila debajo (el lienzo inicial de Walkie Live): sin él, una sola fila (el mapa). Con muchas APIs, una
+   * fila de 11 cajas no entra en la vista; en una grilla de 4, sí (spec walkie-live-arquitectura).
+   */
+  belowPerRow?: number;
   belowSpacing: number;
 };
 
@@ -98,11 +103,24 @@ export function autoLayout(
       return { id, x: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0 };
     })
     .sort((a, b) => a.x - b.x || a.id.localeCompare(b.id));
-  let nextX = Number.NEGATIVE_INFINITY;
-  for (const item of items) {
-    const x = Math.max(item.x + (main.w - below.w) / 2, nextX);
-    positions[catalogKey(item.id)] = { x, y: bottom + metrics.belowGap };
-    nextX = x + below.w + metrics.belowSpacing;
+  if (metrics.belowPerRow && items.length > metrics.belowPerRow) {
+    // Grilla debajo de las pantallas, en el mismo orden (de izquierda a derecha según quién las usa).
+    const left = Math.min(0, ...Object.values(positions).map((p) => p.x));
+    items.forEach((item, i) => {
+      const col = i % metrics.belowPerRow!;
+      const line = Math.floor(i / metrics.belowPerRow!);
+      positions[catalogKey(item.id)] = {
+        x: left + col * (below.w + metrics.belowSpacing),
+        y: bottom + metrics.belowGap + line * (below.h + metrics.rowGap),
+      };
+    });
+  } else {
+    let nextX = Number.NEGATIVE_INFINITY;
+    for (const item of items) {
+      const x = Math.max(item.x + (main.w - below.w) / 2, nextX);
+      positions[catalogKey(item.id)] = { x, y: bottom + metrics.belowGap };
+      nextX = x + below.w + metrics.belowSpacing;
+    }
   }
   return positions;
 }
