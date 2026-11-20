@@ -61,3 +61,13 @@
 .gallery-admin h3 {
   margin: 0 0 8px;
 }
+
+/* Eliminación pendiente (202): el aviso, su estado y «Consultar estado». */
+.deletion-pending p {
+  margin: 0 0 8px;
+}
+
+.deletion-pending code {
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  overflow-wrap: anywhere;
+}

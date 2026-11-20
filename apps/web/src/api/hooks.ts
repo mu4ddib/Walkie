@@ -113,6 +113,21 @@ export const queryKeys = {
   sharedAsset: (shareToken: string, assetId: string) => ['shared', shareToken, 'assets', assetId] as const,
 };
 
+/**
+ * Estado de una eliminación pendiente (ADR-0017), solo cuando la persona lo consulta («Consultar estado»): la consulta
+ * también la retoma si ya se puede. Sin caché ni reintentos automáticos.
+ */
+export function useDeletionStatus(deletionId: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['deletion', 'status', deletionId] as const,
+    queryFn: ({ signal }) => getDeletion(token, deletionId, signal),
+    enabled: false,
+    gcTime: 0,
+    retry: false,
+  });
+}
+
 /** Impacto de eliminar una feature (solo cuando se abre el diálogo; sin caché: siempre lo actual). */
 export function useFeatureDeletionImpact(featureId: string) {
   const token = useToken();

@@ -12,12 +12,15 @@ import './deletion.css';
 export interface DeletedAppNotice {
   deletedApp: string;
   pending: boolean;
+  /** Para consultar una eliminación pendiente (202). */
+  deletionId?: string;
 }
 
 /**
  * «Eliminar app» (spec eliminar-apps-y-features, ADR-0017): lo que contiene, que se elimina para siempre, la sugerencia
- * de exportarla antes y la confirmación escribiendo su nombre exacto. Al terminar vuelve a la galería de apps con un
- * aviso. Si la limpieza quedó a medias (202), la app ya no es accesible y Walkie la termina solo; el aviso lo dice.
+ * de exportarla antes (sin el historial de Walkie Live) y la confirmación escribiendo su nombre exacto. Al terminar
+ * vuelve a la galería de apps con un aviso. Si la limpieza quedó pendiente (202), la app ya no es accesible y Walkie la
+ * reintenta; el aviso lo dice y deja consultar su estado (`PendingDeletion`).
  */
 export function DeleteAppDialog({ appId, onClose }: { appId: string; onClose: () => void }) {
   const impact = useAppDeletionImpact(appId);
@@ -42,7 +45,11 @@ export function DeleteAppDialog({ appId, onClose }: { appId: string; onClose: ()
     if (!data || !matches) return;
     try {
       const result = await remove.mutateAsync({ deletionId, confirmName: typed.trim() });
-      const notice: DeletedAppNotice = { deletedApp: data.name, pending: result.status !== 'completed' };
+      const notice: DeletedAppNotice = {
+        deletedApp: data.name,
+        pending: result.status !== 'completed',
+        ...(result.status !== 'completed' && 'id' in result ? { deletionId: result.id } : {}),
+      };
       void navigate(APPS_PATH, { replace: true, state: notice });
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) void impact.refetch();
@@ -78,7 +85,11 @@ export function DeleteAppDialog({ appId, onClose }: { appId: string; onClose: ()
                 <li key={fact}>{fact}</li>
               ))}
             </ul>
-            <p className="panel-help">Si quieres conservar una copia, cancela y usa antes «Exportar app (.walkie)».</p>
+            <p className="panel-help">
+              Si quieres conservar una copia, cancela y usa antes «Exportar app (.walkie)»: guarda las features, los módulos, el
+              catálogo, los lienzos y las imágenes, pero no el historial de Walkie Live (análisis, evidencia y decisiones), los
+              miembros ni los enlaces públicos.
+            </p>
             {blockers.length > 0 && (
               <div className="deletion-blockers" role="alert">
                 {blockers.map((b) => (

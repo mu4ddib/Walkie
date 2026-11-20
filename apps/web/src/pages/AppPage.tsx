@@ -27,6 +27,7 @@ import { SourcesSection } from '../discovery/SourcesSection';
 import { MembersDialog } from '../apps/MembersDialog';
 import { DeleteAppDialog } from '../deletion/DeleteAppDialog';
 import { DeleteFeatureDialog } from '../deletion/DeleteFeatureDialog';
+import { PendingDeletion } from '../deletion/PendingDeletion';
 
 /**
  * Galería de features de una app (spec espacio-de-trabajo, criterios 7 a 9): tarjetas con miniatura,
@@ -56,7 +57,7 @@ export function AppPage() {
   const [members, setMembers] = useState(false);
   // Eliminar (ADR-0017, solo el owner): la feature elegida, el aviso de lo eliminado y el diálogo de la app.
   const [deletingFeature, setDeletingFeature] = useState<string | null>(null);
-  const [deletedNotice, setDeletedNotice] = useState<string | null>(null);
+  const [deletedNotice, setDeletedNotice] = useState<{ name: string; pendingId?: string } | null>(null);
   const [deletingApp, setDeletingApp] = useState(false);
 
   const byFeature = useMemo(() => new Map((previews.data ?? []).map((p) => [p.featureId, p])), [previews.data]);
@@ -154,20 +155,19 @@ export function AppPage() {
           onClose={() => setDeletingFeature(null)}
           onDeleted={(name, result) => {
             setDeletingFeature(null);
-            setDeletedNotice(
-              result.status === 'completed'
-                ? `Se eliminó «${name}».`
-                : `«${name}» ya no está disponible; Walkie termina de borrar sus datos en segundo plano.`,
-            );
+            setDeletedNotice(result.status !== 'completed' && 'id' in result ? { name, pendingId: result.id } : { name });
           }}
         />
       )}
       {deletingApp && <DeleteAppDialog appId={appId} onClose={() => setDeletingApp(false)} />}
-      {deletedNotice && (
-        <p className="gallery-note" role="status">
-          {deletedNotice}
-        </p>
-      )}
+      {deletedNotice &&
+        (deletedNotice.pendingId ? (
+          <PendingDeletion key={deletedNotice.pendingId} deletionId={deletedNotice.pendingId} name={deletedNotice.name} kind="feature" />
+        ) : (
+          <p className="gallery-note" role="status">
+            Se eliminó «{deletedNotice.name}».
+          </p>
+        ))}
       {canEdit ? (
         <div className="gallery-create">
           <NameForm

@@ -137,6 +137,8 @@ describe('eliminar una app', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Eliminar la app «Banca móvil»' });
     expect(await within(dialog).findByRole('list', { name: 'Qué se elimina' })).toHaveTextContent('1 feature y 0 módulos');
     expect(dialog).toHaveTextContent('Exportar app (.walkie)');
+    // El .walkie no es un respaldo de Walkie Live: el diálogo lo dice.
+    expect(dialog).toHaveTextContent('no el historial de Walkie Live');
 
     const confirm = within(dialog).getByRole('button', { name: 'Eliminar la app' });
     expect(confirm).toBeDisabled();
@@ -150,7 +152,7 @@ describe('eliminar una app', () => {
     expect(api.apps).toHaveLength(0);
   });
 
-  it('si la limpieza quedó a medias lo dice: ya no está disponible y Walkie termina solo', async () => {
+  it('si la limpieza quedó pendiente (202) lo dice y deja consultar su estado', async () => {
     const api = await openGallery({ apps: [app], features: [feature('f-1', 'Iniciar sesión')] });
     api.next.deletionPending = true;
     await userEvent.click(screen.getByRole('button', { name: 'Eliminar app…' }));
@@ -158,6 +160,26 @@ describe('eliminar una app', () => {
     await within(dialog).findByRole('list', { name: 'Qué se elimina' });
     await userEvent.type(within(dialog).getByLabelText('Escribe el nombre de la app para confirmar'), 'Banca móvil');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Eliminar la app' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('ya no está disponible para nadie; Walkie termina de borrar sus datos');
+    const notice = await screen.findByRole('status');
+    expect(notice).toHaveTextContent('La eliminación de la app «Banca móvil» todavía está pendiente');
+    expect(notice).toHaveTextContent('no terminó de borrar todos sus datos');
+    await userEvent.click(within(notice).getByRole('button', { name: 'Consultar estado' }));
+    expect(await within(notice).findByText(/Sigue pendiente \(último intento: files: S3 no responde\)/)).toBeInTheDocument();
+    expect(notice.querySelector('code')?.textContent).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('una feature pendiente también se puede consultar, y dice cuando terminó', async () => {
+    const api = await openGallery({ apps: [app], features: [feature('f-1', 'Iniciar sesión')] });
+    api.next.deletionPending = true;
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar Iniciar sesión' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Eliminar «Iniciar sesión»' });
+    await within(dialog).findByRole('list', { name: 'Qué se pierde' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Eliminar definitivamente' }));
+    const notice = await screen.findByRole('status');
+    expect(notice).toHaveTextContent('La eliminación de «Iniciar sesión» todavía está pendiente');
+    // Walkie la terminó en segundo plano: la consulta lo dice.
+    for (const d of api.deletions.values()) Object.assign(d, { status: 'completed', error: undefined });
+    await userEvent.click(within(notice).getByRole('button', { name: 'Consultar estado' }));
+    expect(await within(notice).findByText('La eliminación de «Iniciar sesión» terminó: no queda nada de sus datos.')).toBeInTheDocument();
   });
 });

@@ -13,7 +13,7 @@ export interface WalkieDeletionV0 {
   featureId?: string;
   name: string;
   /**
-   * pending: ya no es accesible, falta limpiar algún módulo (se reintenta sola); completed: no queda nada; cancelled: algo cambió en medio y no se eliminó
+   * pending: ya no es accesible, falta limpiar algún módulo (se reintenta sola); completed: no queda nada; cancelled: solo histórico (versiones anteriores revertían así una marca; hoy no se produce)
    */
   status: 'pending' | 'completed' | 'cancelled';
   requestedAt: string;

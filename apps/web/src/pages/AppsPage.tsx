@@ -2,6 +2,7 @@ import { useState } from 'react';
 import '../gallery/gallery.css';
 import { Link, useLocation } from 'react-router';
 import type { DeletedAppNotice } from '../deletion/DeleteAppDialog';
+import { PendingDeletion } from '../deletion/PendingDeletion';
 import { useApps, useCreateApp, useDiscoveryStatus } from '../api/hooks';
 import { NewAppFromProjectDialog } from '../discovery/NewAppFromProjectDialog';
 import { GalleryTools } from '../gallery/GalleryTools';
@@ -56,13 +57,16 @@ export function AppsPage() {
           )}
         </div>
       </header>
-      {deleted && (
-        <p className="gallery-note" role="status">
-          {deleted.pending
-            ? `«${deleted.deletedApp}» ya no está disponible para nadie; Walkie termina de borrar sus datos en segundo plano.`
-            : `Se eliminó la app «${deleted.deletedApp}» con toda su documentación.`}
-        </p>
-      )}
+      {deleted &&
+        (deleted.pending && deleted.deletionId ? (
+          <PendingDeletion deletionId={deleted.deletionId} name={deleted.deletedApp!} kind="app" />
+        ) : (
+          <p className="gallery-note" role="status">
+            {deleted.pending
+              ? `La eliminación de la app «${deleted.deletedApp}» todavía está pendiente: ya no está disponible para nadie y Walkie la termina solo.`
+              : `Se eliminó la app «${deleted.deletedApp}» con toda su documentación.`}
+          </p>
+        ))}
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
       {fromProject && <NewAppFromProjectDialog onClose={() => setFromProject(false)} />}
       <div className="gallery-create">
