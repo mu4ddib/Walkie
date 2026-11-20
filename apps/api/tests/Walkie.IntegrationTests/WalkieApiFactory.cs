@@ -55,6 +55,8 @@ public sealed class WalkieApiFactory : WebApplicationFactory<Program>, IAsyncLif
     {
         builder.UseSetting("ConnectionStrings:Walkie", _postgres.GetConnectionString());
         builder.UseSetting("Database:MigrateOnStartup", "true");
+        // La recuperación de eliminaciones la corren las pruebas a mano (DeletionTests), no un temporizador.
+        builder.UseSetting("Deletion:RecoverySeconds", "0");
         builder.UseSetting("Storage:Endpoint", $"http://{_storage.Hostname}:{_storage.GetMappedPublicPort(9000)}");
         builder.UseSetting("Storage:Bucket", "walkie-tests");
         builder.UseSetting("Storage:AccessKey", StorageKey);

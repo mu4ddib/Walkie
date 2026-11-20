@@ -5,6 +5,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Eliminar apps y features** (spec `eliminar-apps-y-features`; ADR-0017):
+  - **Feature:** el owner la elimina desde su tarjeta en la galería. Antes ve qué se pierde (cajas, conexiones, tours, recorridos, imágenes propias, enlaces públicos, procedencia de Walkie Live) y que es definitivo. No se elimina si otra feature tiene un portal hacia ella (dice cuáles), si es un módulo o si alguien guardó su lienzo después del resumen (409). El catálogo, las imágenes compartidas y los demás lienzos no cambian.
+  - **App:** «Eliminar app…» en la sección «Administración» de la página de la app, solo para el owner; pide escribir el nombre y vuelve a la galería con un aviso. Elimina features, módulos, catálogo, lienzos, mapa, imágenes (también en S3), enlaces, miembros y los análisis de Walkie Live, sin tocar otras apps. Una operación de Walkie Live en curso la bloquea.
+  - **Seguro ante fallos:** una bitácora (`apps.deletions`) deja la app o la feature inaccesible desde el primer paso; si algo falla a mitad, la API responde 202 y Walkie termina solo (o al reintentar con el mismo id). Un reintento nunca elimina dos veces.
+  - **API:** `GET /api/features/{featureId}/deletion`, `DELETE /api/features/{featureId}`, `GET /api/apps/{appId}/deletion`, `DELETE /api/apps/{appId}` y `GET /api/deletions/{deletionId}`; schemas `walkie-deletion-impact` y `walkie-deletion`.
 - **Autorización por app** (spec `autorizacion-por-app`, #175; ADR-0015):
   - **Miembros y roles:** cada app tiene miembros `owner`, `editor` o `viewer`. Quien crea una app (vacía, importada de un `.walkie` o desde un proyecto local) queda como owner en la misma operación, y la migración da owner a quien creó cada app existente.
   - **En toda la API:** un solo filtro protege apps, features, módulos, catálogo, lienzos, mapa, imágenes, enlaces, export e import, análisis, evidencia y procedencia. Quien no es miembro recibe 404, como si no existiera; un rol menor, 403 con el motivo. `GET /api/apps` lista solo mis apps, con mi rol. Una prueba falla si un endpoint nuevo queda sin protección. Los enlaces públicos siguen igual.

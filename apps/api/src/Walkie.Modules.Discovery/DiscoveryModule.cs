@@ -33,6 +33,7 @@ public static partial class DiscoveryModule
         services.AddScoped<SourceHandlers>();
         services.AddScoped<EvidenceHandlers>();
         services.AddScoped<ProvenanceHandlers>();
+        services.AddScoped<Walkie.Modules.Apps.Contracts.IDeletionParticipant, DiscoveryDeletion>();
         services.TryAddSingleton<IApplyCheckpoints, NoApplyCheckpoints>();
         services.AddScoped<IDiscoveryReader, DiscoveryReader>();
         services.TryAddSingleton(TimeProvider.System);

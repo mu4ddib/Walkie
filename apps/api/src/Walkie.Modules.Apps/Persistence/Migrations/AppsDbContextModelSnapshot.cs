@@ -39,6 +39,10 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("created_by");
 
+                    b.Property<DateTimeOffset?>("DeletingAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleting_at");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -199,6 +203,84 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                     b.ToTable("catalog_items", "apps");
                 });
 
+            modelBuilder.Entity("Walkie.Modules.Apps.Domain.Deletion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("error");
+
+                    b.Property<Guid?>("FeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("feature_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("requested_by");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Steps")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("steps");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppId")
+                        .HasDatabaseName("ix_deletions_app_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_deletions_status");
+
+                    b.ToTable("deletions", "apps", t =>
+                        {
+                            t.HasCheckConstraint("ck_deletions_status", "status IN ('pending', 'completed', 'cancelled')");
+                        });
+                });
+
             modelBuilder.Entity("Walkie.Modules.Apps.Domain.Feature", b =>
                 {
                     b.Property<Guid>("Id")
@@ -218,6 +300,10 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset?>("DeletingAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleting_at");
 
                     b.Property<string>("Description")
                         .IsRequired()

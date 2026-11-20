@@ -286,6 +286,11 @@ public sealed class AppAuthorizationTests(WalkieApiFactory factory)
         yield return new("POST", $"/api/features/{w.Feature}/shares", AppRole.Owner, () => Json(new CreateShareRequest(7)));
         yield return new("GET", $"/api/features/{w.Feature}/shares", AppRole.Owner);
         yield return new("DELETE", $"/api/shares/{w.Share}", AppRole.Owner, Destructive: true);
+        // Eliminar (ADR-0017): solo el owner. Lo destructivo con el owner lo prueba DeletionTests.
+        yield return new("GET", $"/api/features/{w.Feature}/deletion", AppRole.Owner);
+        yield return new("GET", $"/api/apps/{w.App}/deletion", AppRole.Owner);
+        yield return new("DELETE", $"/api/features/{w.Feature}?deletionId={Guid.CreateVersion7()}&canvasVersion=0", AppRole.Owner, Destructive: true);
+        yield return new("DELETE", $"/api/apps/{w.App}?deletionId={Guid.CreateVersion7()}&confirmName=x", AppRole.Owner, Destructive: true);
         yield return new("POST", $"/api/apps/{w.App}/members", AppRole.Owner, () => Json(new { email = "nadie@walkie.test", role = "viewer" }));
         yield return new("PUT", $"/api/apps/{w.App}/members/{memberSub}", AppRole.Owner, () => Json(new { role = "editor" }));
     }

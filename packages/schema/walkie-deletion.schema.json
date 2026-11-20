@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-deletion.schema.json",
+  "title": "Walkie deletion v0",
+  "description": "Estado de una eliminación (spec eliminar-apps-y-features, ADR-0017): cuerpo de un 202 de DELETE /api/apps/{appId} o /api/features/{featureId} y de GET /api/deletions/{deletionId}.",
+  "type": "object",
+  "required": ["id", "kind", "appId", "name", "status", "requestedAt", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid", "description": "El id que generó el cliente" },
+    "kind": { "enum": ["feature", "app"] },
+    "appId": { "type": "string", "format": "uuid" },
+    "featureId": { "type": "string", "format": "uuid" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "status": {
+      "enum": ["pending", "completed", "cancelled"],
+      "description": "pending: ya no es accesible, falta limpiar algún módulo (se reintenta sola); completed: no queda nada; cancelled: algo cambió en medio y no se eliminó"
+    },
+    "requestedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "step": { "type": "string", "minLength": 1, "maxLength": 40 },
+          "status": { "enum": ["done", "failed"] },
+          "error": { "type": "string", "maxLength": 500 }
+        }
+      }
+    },
+    "error": { "type": "string", "maxLength": 2000, "description": "El paso que falló y por qué, mientras siga pendiente" }
+  }
+}

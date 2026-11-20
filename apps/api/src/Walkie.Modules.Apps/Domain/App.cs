@@ -12,6 +12,10 @@ internal sealed class App
     public required string CreatedBy { get; init; }
 
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Cuándo empezó a eliminarse (ADR-0017): desde ahí no tiene miembros y nada suyo es accesible.</summary>
+    public DateTimeOffset? DeletingAt { get; set; }
+
     public List<Feature> Features { get; } = [];
     public List<AppMembership> Members { get; } = [];
 

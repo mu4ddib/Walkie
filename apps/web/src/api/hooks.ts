@@ -4,6 +4,11 @@ import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import {
   createApp,
   createShare,
+  deleteApp,
+  deleteFeature,
+  getAppDeletionImpact,
+  getDeletion,
+  getFeatureDeletionImpact,
   exportApp,
   exportPdf,
   exportFeature,
@@ -107,6 +112,79 @@ export const queryKeys = {
   sharedModule: (shareToken: string, moduleId: string) => ['shared', shareToken, 'modules', moduleId] as const,
   sharedAsset: (shareToken: string, assetId: string) => ['shared', shareToken, 'assets', assetId] as const,
 };
+
+/** Impacto de eliminar una feature (solo cuando se abre el diálogo; sin caché: siempre lo actual). */
+export function useFeatureDeletionImpact(featureId: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['deletion', 'feature', featureId] as const,
+    queryFn: ({ signal }) => getFeatureDeletionImpact(token, featureId, signal),
+    gcTime: 0,
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+export function useAppDeletionImpact(appId: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['deletion', 'app', appId] as const,
+    queryFn: ({ signal }) => getAppDeletionImpact(token, appId, signal),
+    gcTime: 0,
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+/**
+ * Eliminar una feature (ADR-0017). Si la respuesta se pierde (red) y la feature ya no es accesible, el estado sale de
+ * `GET /api/deletions/{id}` con el mismo id. Al terminar se refresca solo lo que la contenía: la galería, las miniaturas,
+ * el mapa, los módulos y los usos del catálogo de la app; su lienzo se olvida.
+ */
+export function useDeleteFeature(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ featureId, deletionId, canvasVersion }: { featureId: string; deletionId: string; canvasVersion: number }) => {
+      try {
+        return await deleteFeature(token, featureId, deletionId, canvasVersion);
+      } catch (error) {
+        if (error instanceof ApiError) throw error;
+        return await getDeletion(token, deletionId); // la red cortó la respuesta: ¿se hizo?
+      }
+    },
+    onSettled: (_result, _error, { featureId }) => {
+      queryClient.removeQueries({ queryKey: queryKeys.canvas(featureId), exact: true });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.previews(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.map(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.modules(appId) });
+      void queryClient.invalidateQueries({ queryKey: ['catalog'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.discoveryProvenanceAll(appId) });
+    },
+  });
+}
+
+/** Eliminar una app (ADR-0017): al terminar se olvida todo lo suyo y se refresca la lista de apps. */
+export function useDeleteApp(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ deletionId, confirmName }: { deletionId: string; confirmName: string }) => {
+      try {
+        return await deleteApp(token, appId, deletionId, confirmName);
+      } catch (error) {
+        if (error instanceof ApiError) throw error;
+        return await getDeletion(token, deletionId);
+      }
+    },
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: queryKeys.app(appId) });
+      queryClient.removeQueries({ queryKey: queryKeys.discoverySources(appId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.apps, exact: true });
+    },
+  });
+}
 
 export function useApps() {
   const token = useToken();

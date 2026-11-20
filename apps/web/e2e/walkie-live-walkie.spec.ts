@@ -75,8 +75,8 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   await dialog.getByLabel('Archivo .walkiepack').setInputFiles(first);
   const summary = dialog.getByLabel('Resumen del análisis');
   await expect(summary).toContainText('Walkie');
-  // Las APIs de Walkie: crece con cada endpoint nuevo (46 en la tarea 11; 50 con los miembros de ADR-0015).
-  await expect(summary).toContainText('50 API');
+  // Las APIs de Walkie: crece con cada endpoint nuevo (46 en la tarea 11; 50 con los miembros de ADR-0015; 55 con eliminar apps y features, ADR-0017).
+  await expect(summary).toContainText('55 API');
   await expect(summary).toContainText(/parcial/i);
   const app = `E2E Walkie se analiza ${Date.now()}`;
   await dialog.getByLabel('Nombre de la app').fill(app);

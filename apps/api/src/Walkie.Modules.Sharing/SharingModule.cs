@@ -19,6 +19,7 @@ public static class SharingModule
         services.AddScoped<ShareHandlers>();
         services.AddScoped<Walkie.Modules.Apps.Contracts.IAppScopeResolver, ShareScope>();
         services.AddScoped<PublicShareHandlers>();
+        services.AddScoped<Walkie.Modules.Apps.Contracts.IDeletionParticipant, SharingDeletion>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

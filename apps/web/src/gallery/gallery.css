@@ -227,12 +227,18 @@
   font-size: 12.5px;
 }
 
-.feature-card-edit {
+.feature-card-edit,
+.feature-card-delete {
   position: relative;
   z-index: 1;
   min-height: 28px;
   padding: 0 10px;
   font-size: 13px;
+}
+
+/* «Eliminar…» (solo el owner, ADR-0017): por encima del enlace de la tarjeta como «Editar», en el color de peligro. */
+.feature-card-delete {
+  color: var(--danger);
 }
 
 .feature-card-form {

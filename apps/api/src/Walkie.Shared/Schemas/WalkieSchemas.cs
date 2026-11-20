@@ -49,6 +49,12 @@ public static class WalkieSchemas
     /// <summary>Un miembro de una app (<c>walkie-app-member.schema.json</c>, spec autorizacion-por-app).</summary>
     public static JsonSchema AppMember { get; } = JsonSchema.FromText(Load("walkie-app-member.schema.json"), Options);
 
+    /// <summary>Impacto de eliminar una feature o una app (<c>walkie-deletion-impact.schema.json</c>, ADR-0017).</summary>
+    public static JsonSchema DeletionImpact { get; } = JsonSchema.FromText(Load("walkie-deletion-impact.schema.json"), Options);
+
+    /// <summary>Estado de una eliminación (<c>walkie-deletion.schema.json</c>, ADR-0017).</summary>
+    public static JsonSchema Deletion { get; } = JsonSchema.FromText(Load("walkie-deletion.schema.json"), Options);
+
     /// <summary><c>walkie-catalog-item.schema.json</c>: un elemento del catálogo (en el <c>catalog.json</c> de un <c>.walkie</c>).</summary>
     public static JsonSchema CatalogItem { get; } = LoadAfterGraph("walkie-catalog-item.schema.json");
 

@@ -13,6 +13,7 @@ internal sealed class AppsDbContext(DbContextOptions<AppsDbContext> options) : D
     public DbSet<CatalogItem> CatalogItems => Set<CatalogItem>();
     public DbSet<AppMembership> Memberships => Set<AppMembership>();
     public DbSet<AppUser> Users => Set<AppUser>();
+    public DbSet<Deletion> Deletions => Set<Deletion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +27,7 @@ internal sealed class AppsDbContext(DbContextOptions<AppsDbContext> options) : D
             app.Property(a => a.Name).HasColumnName("name").HasMaxLength(App.NameMaxLength);
             app.Property(a => a.CreatedBy).HasColumnName("created_by").HasMaxLength(255);
             app.Property(a => a.CreatedAt).HasColumnName("created_at");
+            app.Property(a => a.DeletingAt).HasColumnName("deleting_at");
             app.HasMany(a => a.Features).WithOne().HasForeignKey(f => f.AppId).OnDelete(DeleteBehavior.Cascade);
             app.HasMany(a => a.Members).WithOne().HasForeignKey(m => m.AppId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -66,7 +68,31 @@ internal sealed class AppsDbContext(DbContextOptions<AppsDbContext> options) : D
             feature.Property(f => f.Description).HasColumnName("description").HasMaxLength(Feature.DescriptionMaxLength).HasDefaultValue("");
             feature.Property(f => f.CreatedAt).HasColumnName("created_at");
             feature.Property(f => f.UpdatedAt).HasColumnName("updated_at");
+            feature.Property(f => f.DeletingAt).HasColumnName("deleting_at");
             feature.HasIndex(f => f.AppId).HasDatabaseName("ix_features_app_id");
+            // Una feature (o módulo) que se está eliminando no existe para nadie (ADR-0017).
+            feature.HasQueryFilter(f => f.DeletingAt == null);
+        });
+
+        modelBuilder.Entity<Deletion>(deletion =>
+        {
+            deletion.ToTable("deletions", t => t.HasCheckConstraint("ck_deletions_status", "status IN ('pending', 'completed', 'cancelled')"));
+            deletion.HasKey(d => d.Id);
+            deletion.Property(d => d.Id).HasColumnName("id").ValueGeneratedNever();
+            deletion.Property(d => d.Kind).HasColumnName("kind").HasMaxLength(16);
+            deletion.Property(d => d.AppId).HasColumnName("app_id");
+            deletion.Property(d => d.FeatureId).HasColumnName("feature_id");
+            deletion.Property(d => d.Name).HasColumnName("name").HasMaxLength(App.NameMaxLength);
+            deletion.Property(d => d.RequestedBy).HasColumnName("requested_by").HasMaxLength(255);
+            deletion.Property(d => d.RequestedAt).HasColumnName("requested_at");
+            deletion.Property(d => d.Status).HasColumnName("status").HasMaxLength(16);
+            deletion.Property(d => d.Steps).HasColumnName("steps").HasColumnType("jsonb");
+            deletion.Property(d => d.Error).HasColumnName("error").HasMaxLength(2000);
+            deletion.Property(d => d.Attempts).HasColumnName("attempts");
+            deletion.Property(d => d.LeaseUntil).HasColumnName("lease_until");
+            deletion.Property(d => d.CompletedAt).HasColumnName("completed_at");
+            deletion.HasIndex(d => d.Status).HasDatabaseName("ix_deletions_status");
+            deletion.HasIndex(d => d.AppId).HasDatabaseName("ix_deletions_app_id");
         });
 
         modelBuilder.Entity<CatalogItem>(item =>

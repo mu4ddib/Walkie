@@ -24,6 +24,7 @@ public static class CanvasModule
         services.AddScoped<Apps.Contracts.ICatalogUsage, CatalogUsage>();
         services.AddScoped<Contracts.ICanvasReader, CanvasReader>();
         services.AddScoped<Contracts.ICanvasWriter, CanvasWriter>();
+        services.AddScoped<Apps.Contracts.IDeletionParticipant, CanvasDeletion>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

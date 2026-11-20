@@ -25,6 +25,8 @@ import { ImportDialog } from '../gallery/ImportDialog';
 import { LocalImportDialog } from '../discovery/LocalImportDialog';
 import { SourcesSection } from '../discovery/SourcesSection';
 import { MembersDialog } from '../apps/MembersDialog';
+import { DeleteAppDialog } from '../deletion/DeleteAppDialog';
+import { DeleteFeatureDialog } from '../deletion/DeleteFeatureDialog';
 
 /**
  * Galería de features de una app (spec espacio-de-trabajo, criterios 7 a 9): tarjetas con miniatura,
@@ -52,6 +54,10 @@ export function AppPage() {
   // Mi rol (ADR-0015): un viewer no crea, edita ni importa; «Miembros» lo ven todos y lo administra el owner.
   const { canEdit, isOwner } = useAppRole(appId);
   const [members, setMembers] = useState(false);
+  // Eliminar (ADR-0017, solo el owner): la feature elegida, el aviso de lo eliminado y el diálogo de la app.
+  const [deletingFeature, setDeletingFeature] = useState<string | null>(null);
+  const [deletedNotice, setDeletedNotice] = useState<string | null>(null);
+  const [deletingApp, setDeletingApp] = useState(false);
 
   const byFeature = useMemo(() => new Map((previews.data ?? []).map((p) => [p.featureId, p])), [previews.data]);
   const shown = useMemo(() => {
@@ -141,6 +147,27 @@ export function AppPage() {
       {importing && <ImportDialog appId={appId} onClose={() => setImporting(false)} />}
       {importingLocal && <LocalImportDialog appId={appId} onClose={() => setImportingLocal(false)} />}
       {members && <MembersDialog appId={appId} onClose={() => setMembers(false)} />}
+      {deletingFeature && (
+        <DeleteFeatureDialog
+          appId={appId}
+          featureId={deletingFeature}
+          onClose={() => setDeletingFeature(null)}
+          onDeleted={(name, result) => {
+            setDeletingFeature(null);
+            setDeletedNotice(
+              result.status === 'completed'
+                ? `Se eliminó «${name}».`
+                : `«${name}» ya no está disponible; Walkie termina de borrar sus datos en segundo plano.`,
+            );
+          }}
+        />
+      )}
+      {deletingApp && <DeleteAppDialog appId={appId} onClose={() => setDeletingApp(false)} />}
+      {deletedNotice && (
+        <p className="gallery-note" role="status">
+          {deletedNotice}
+        </p>
+      )}
       {canEdit ? (
         <div className="gallery-create">
           <NameForm
@@ -178,6 +205,14 @@ export function AppPage() {
                 feature={feature}
                 preview={byFeature.get(feature.id)}
                 onSave={canEdit ? (changes) => update.mutateAsync({ featureId: feature.id, changes }) : undefined}
+                onDelete={
+                  isOwner
+                    ? () => {
+                        setDeletedNotice(null);
+                        setDeletingFeature(feature.id);
+                      }
+                    : undefined
+                }
               />
             ))}
           </ul>
@@ -185,6 +220,18 @@ export function AppPage() {
         </>
       )}
       {sources.data && <SourcesSection sources={sources.data} onImport={canEdit ? () => setImportingLocal(true) : undefined} />}
+      {isOwner && (
+        <section className="gallery-admin" aria-labelledby="app-admin-title">
+          <h3 id="app-admin-title">Administración</h3>
+          <p className="gallery-note">
+            Eliminar la app borra para siempre sus features, módulos, catálogo, imágenes, enlaces y análisis de Walkie Live, para todos
+            sus miembros.
+          </p>
+          <button type="button" className="pixel-button is-danger" onClick={() => setDeletingApp(true)}>
+            Eliminar app…
+          </button>
+        </section>
+      )}
     </section>
   );
 }

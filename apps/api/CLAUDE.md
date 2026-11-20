@@ -135,6 +135,13 @@ Ya costaron tiempo; no las repitas.
   - **Listados y avisos entre apps:** todo lo que mira «otras apps» (unicidad de nombres en `AppNamesAsync`, el aviso `source-in-other-apps`) se filtra por las apps del usuario; si no, revela que existen.
   - **Usuarios:** `UseKnownUsers` (después de `UseAuthorization`) guarda `sub`, correo y nombre del token en `apps.users`, con una caché de 10 minutos por `sub`. Sumar por correo solo encuentra a quien ya entró. En pruebas, `Members.PersonAsync(factory, sub)` registra a alguien llamando a `/api/me`.
   - **Último owner:** `MembersHandlers` toma `SELECT … FOR UPDATE` sobre la fila de la app antes de contar owners; sin eso, dos degradaciones a la vez dejaban la app sin owner.
+- **Eliminar apps y features (ADR-0017)**:
+  - **Dos fases:** `DeletionHandlers` (Apps) marca en una transacción (`apps.deletions` `pending` con lease, `features.deleting_at` y, para la app, `apps.deleting_at` y sin membresías) y después llama a cada `IDeletionParticipant` en orden (Sharing 10, Discovery 20, Canvas 30, Files 40) y borra las filas de Apps. Un fallo deja la bitácora `pending` con el paso y el error (202); `DeletionRecovery` la retoma (`Deletion:RecoverySeconds`, 0 la apaga; las pruebas la apagan en `WalkieApiFactory`) y también `GET /api/deletions/{id}` de quien la pidió, cuando venció el lease.
+  - **Filtro global:** `Feature` tiene `HasQueryFilter(f => f.DeletingAt == null)`. Una feature marcada desaparece para resolvedores, directorios, galería y enlaces públicos. Lo que tiene que verla (la propia eliminación) usa `IgnoreQueryFilters()`; no lo uses en otro lado.
+  - **Módulo nuevo con datos por app o feature:** implementa `IDeletionParticipant` (idempotente: un reintento no falla si ya no hay nada) y regístralo en su `Add<Módulo>Module`. Apps nunca escribe tablas de otro módulo.
+  - **Discovery:** borrar una feature conserva los vínculos (la revisión muestra `targetMissing` y deja restablecer); borrar la app purga todo el schema de esa app en una transacción (`PurgeAppAsync`, `ExecuteDelete` en orden de FK, cortando antes `previous_snapshot_id`). Es la única excepción a la inmutabilidad de los análisis y está auditada por la bitácora.
+  - **Imágenes:** al borrar una feature, solo las que ningún otro lienzo usa; al borrar la app, todas (S3 primero, fila después).
+  - **Puntos de prueba:** `IDeletionCheckpoints` (por paso); `DeletionTests` lo reemplaza para simular un fallo a mitad.
 - **Endpoints en un módulo**: el `.csproj` necesita `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Validación con `.WithValidation<TRequest>()` (`Walkie.Shared.Validation`); los validadores pueden ser `internal` (se registran con `includeInternalTypes: true`).
 
 ## Cómo crear un endpoint
