@@ -80,4 +80,27 @@ describe('lienzo inicial de Walkie Live', () => {
     expect(a!.x).toBe(b!.x);
     expect(overlaps(a!, b!)).toBe(false);
   });
+
+  it('con muchas APIs las pone en una grilla de 4 debajo de las pantallas, sin encimarse (spec walkie-live-arquitectura)', () => {
+    const apis = Array.from({ length: 11 }, (_, i) => `api:GET /api/recurso/${i}`);
+    const draft: CanvasDraft = {
+      ...feature,
+      nodes: [...feature.nodes.filter((n) => n.type === 'screen'), ...apis.map((key, i) => ({ key, type: 'ref' as const, title: key, catalogId: `0198f0c0-1111-7000-8000-0000000001${String(i).padStart(2, '0')}` }))],
+      edges: [
+        ...feature.edges.filter((e) => e.kind === 'navigation'),
+        ...apis.map((to, i) => ({ key: `calls:${i}`, from: i % 2 ? 'screen:web:/pedidos' : 'screen:web:/pedidos/{}', to, kind: 'request' as const, operation: 'http.request' as const })),
+      ],
+    };
+    const { layout } = planInitialCanvas(draft);
+
+    const screensBottom = Math.max(...['screen:web:/', 'screen:web:/pedidos', 'screen:web:/pedidos/{}'].map((k) => layout[k]!.y));
+    const rows = new Map<number, number>();
+    for (const key of apis) {
+      expect(layout[key]!.y).toBeGreaterThan(screensBottom);
+      rows.set(layout[key]!.y, (rows.get(layout[key]!.y) ?? 0) + 1);
+    }
+    expect([...rows.values()]).toEqual([4, 4, 3]);
+    const all = Object.values(layout);
+    all.forEach((a, i) => all.slice(i + 1).forEach((b) => expect(overlaps(a, b)).toBe(false)));
+  });
 });

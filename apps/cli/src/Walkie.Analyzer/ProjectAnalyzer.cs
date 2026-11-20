@@ -62,6 +62,7 @@ public static partial class ProjectAnalyzer
         new OpenApiDetector(),
         new AspNetCoreEndpointsDetector(),
         new EfCoreDetector(),
+        new AspNetCoreDataDetector(),
         // Front (tarea 8): después del backend, así una API que ya vio OpenAPI o ASP.NET Core conserva su título y contrato.
         new NextJsDetector(),
         new ReactRouterDetector(),

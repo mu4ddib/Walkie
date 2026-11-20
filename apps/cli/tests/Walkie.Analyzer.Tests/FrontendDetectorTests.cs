@@ -266,7 +266,8 @@ public sealed class FrontendDetectorTests
         Assert.Contains("calls:service:tienda-angular->api:PUT /api/pedidos/{}", result.RelationKeys());
         Assert.Contains("navigates:screen:ng:/pedidos->screen:ng:/perfil", result.RelationKeys()); // routerLink de la plantilla
         Assert.Contains("navigates:screen:ng:/pedidos->screen:ng:/pedidos/{}", result.RelationKeys()); // [routerLink]="['/pedidos', p.id]"
-        Assert.Contains("dynamic-http-url", result.LimitationCodes());
+        // `${environment.apiUrl}/clientes`: la base es configurable, la ruta es literal (ADR-0016).
+        Assert.Contains("calls:service:tienda-angular->api:GET /clientes", result.RelationKeys());
         Assert.DoesNotContain(result.Keys(), k => k.StartsWith("module:", StringComparison.Ordinal));
     }
 
@@ -311,10 +312,13 @@ public sealed class FrontendDetectorTests
         Assert.Equal(
             ["api:DELETE /api/pedidos/{}", "api:GET /api/pedidos", "api:POST /api/pedidos", "screen:web:/pedidos", "screen:web:/pedidos/{}"],
             pedidos["members"]!.AsArray().Select(m => m!.GetValue<string>()));
-        Assert.Contains("comparten el recurso «pedidos»", pedidos["description"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("son de la familia de rutas /pedidos", pedidos["description"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("Evidencia:", pedidos["description"]!.GetValue<string>(), StringComparison.Ordinal);
         var ventas = result.EntityOf("feature:ventas:Ventas")!;
-        Assert.Equal("medium", ventas["confidence"]!.GetValue<string>());
+        // Carga diferida es evidencia fuerte, pero sin APIs en común no alcanza para media (ADR-0016).
+        Assert.Equal("low", ventas["confidence"]!.GetValue<string>());
         Assert.Contains("se cargan juntas", ventas["description"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("carga diferida común", ventas["description"]!.GetValue<string>(), StringComparison.Ordinal);
         // Una pantalla sola (login, clientes, perfil) o la raíz no proponen nada.
         Assert.DoesNotContain("feature:web:Login", result.Keys());
         Assert.DoesNotContain("feature:web:Clientes", result.Keys());

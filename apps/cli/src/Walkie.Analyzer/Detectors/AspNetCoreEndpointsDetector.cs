@@ -100,7 +100,7 @@ public sealed class AspNetCoreEndpointsDetector : IDetector
             ? $"{member.Name.Identifier.Text} con ruta literal"
             : $"{member.Name.Identifier.Text} con ruta literal; el prefijo del receptor no se conoce (llega como parámetro u otra variable)";
         Endpoint(context, file, owner, method, Combine(prefix, pattern), Roslyn.SymbolOf(invocation), lines,
-            resolved ? Confidence.High : Confidence.Medium, note);
+            resolved ? Confidence.High : Confidence.Medium, note, invocation);
     }
 
     private void Controller(AnalysisContext context, SourceFile file, DotnetProject? owner, ClassDeclarationSyntax type)
@@ -128,7 +128,7 @@ public sealed class AspNetCoreEndpointsDetector : IDetector
                 route = route.Replace("[controller]", controller, StringComparison.OrdinalIgnoreCase)
                     .Replace("[action]", action.Identifier.Text, StringComparison.OrdinalIgnoreCase);
                 Endpoint(context, file, owner, verb, route, $"{name}.{action.Identifier.Text}", Roslyn.LinesOf(action),
-                    Confidence.High, $"Controller con [{verb switch { "GET" => "HttpGet", "POST" => "HttpPost", "PUT" => "HttpPut", "PATCH" => "HttpPatch", _ => "HttpDelete" }}] y ruta por atributo");
+                    Confidence.High, $"Controller con [{verb switch { "GET" => "HttpGet", "POST" => "HttpPost", "PUT" => "HttpPut", "PATCH" => "HttpPatch", _ => "HttpDelete" }}] y ruta por atributo", action);
             }
         }
 
@@ -140,7 +140,7 @@ public sealed class AspNetCoreEndpointsDetector : IDetector
     }
 
     private void Endpoint(AnalysisContext context, SourceFile file, DotnetProject? owner, string method, string rawPath,
-        string symbol, Lines lines, Confidence confidence, string note)
+        string symbol, Lines lines, Confidence confidence, string note, SyntaxNode node)
     {
         var path = CleanPath(rawPath);
         var evidence = context.Findings.Evidence(Id, file.Path, confidence, symbol, lines, note);
@@ -154,6 +154,7 @@ public sealed class AspNetCoreEndpointsDetector : IDetector
 
         api.Technology ??= "aspnetcore";
         api.Http ??= Http(method, path);
+        context.Endpoints.Add(new EndpointRecord(key, file, node, lines));
 
         switch (owner?.Role)
         {

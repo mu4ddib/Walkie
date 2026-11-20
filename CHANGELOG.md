@@ -5,6 +5,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Walkie Live, **relaciones verificables** (spec `walkie-live-arquitectura`, PR A, #177; ADR-0016):
+  - **Llamadas por envoltorios (D2):** el análisis sigue clientes propios (`request()` → `send()` → `fetch`), instancias de axios importadas, servicios de Angular inyectados y objetos de funciones, con el método literal, por argumento o por opciones, y una base configurable (`baseUrl`, `environment.apiUrl`). Hasta 3 niveles; lo que no se puede leer queda como limitación con archivo y línea.
+  - **Quién llama:** cada llamada sale de las pantallas que la alcanzan por sus hooks, servicios y componentes (no de la carpeta), con la cadena como evidencia; si ninguna, de la app. Un componente que muchas pantallas comparten no reparte sus llamadas.
+  - **Navegación (D3):** funciones de rutas (`appPath(id)`, `featurePath(a, f)`), constantes importadas, condicionales y navegación desde componentes dibujados; lo no resuelto se declara (`dynamic-navigation`, `navigation-target-unknown`, `navigation-unattributed`).
+  - **Backend:** qué base lee o escribe cada endpoint, siguiendo handler → servicio → `DbSet` (nuevo detector `aspnetcore-data`).
+  - **Propuestas de feature** por familias de rutas y evidencia (navegación, carga diferida, APIs en común y del mismo módulo), con el nombre de su pantalla principal y la evidencia en la descripción. Ya no se mezclan vistas distintas por compartir un segmento.
+  - **Contención:** cada app de front contiene sus pantallas (`contains`), así la arquitectura sabe de qué app es cada una.
+  - **Lienzo inicial:** con muchas APIs, van en una grilla de 4 debajo de las pantallas.
+  - Walkie analizándose: de 0 a 92 llamadas (los 45 endpoints que usa la web), de 9 a 34 navegaciones y de 0 a 103 lecturas y escrituras. Métricas en `docs/features/walkie-live/validacion.md` §19.
 - **Autorización por app** (spec `autorizacion-por-app`, #175; ADR-0015):
   - **Miembros y roles:** cada app tiene miembros `owner`, `editor` o `viewer`. Quien crea una app (vacía, importada de un `.walkie` o desde un proyecto local) queda como owner en la misma operación, y la migración da owner a quien creó cada app existente.
   - **En toda la API:** un solo filtro protege apps, features, módulos, catálogo, lienzos, mapa, imágenes, enlaces, export e import, análisis, evidencia y procedencia. Quien no es miembro recibe 404, como si no existiera; un rol menor, 403 con el motivo. `GET /api/apps` lista solo mis apps, con mi rol. Una prueba falla si un endpoint nuevo queda sin protección. Los enlaces públicos siguen igual.
