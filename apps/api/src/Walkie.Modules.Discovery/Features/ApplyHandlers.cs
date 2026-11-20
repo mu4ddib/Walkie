@@ -583,6 +583,13 @@ internal sealed partial class ApplyHandlers(
             .Where(b => b.Active)
             .ToDictionary(b => b.EntityKey, b => new DraftDecision(b.Decision!, b.TargetKind, b.TargetId), StringComparer.Ordinal);
 
+        // Vínculos de esta misma solicitud (revisión por conjuntos, spec walkie-live-arquitectura): el borrador los toma como
+        // decididos, como ya toma lo que la solicitud crea. El elemento ya existe en el catálogo (el plan lo valida).
+        foreach (var op in operations.Where(o => o.Op == "link" && o.Target is { Kind: CatalogItem }))
+        {
+            decisions[op.EntityKey] = new DraftDecision("linked", op.Target!.Kind, op.Target.Id);
+        }
+
         var planned = new Dictionary<string, (Guid Id, string Title)>(StringComparer.Ordinal);
         foreach (var op in operations.Where(o => o.Op == "create" && o.Id is not null && createData.ContainsKey(o.EntityKey)))
         {

@@ -44,6 +44,8 @@ const targets = [
   { schema: 'walkie-discovery-binding.schema.json', out: 'walkie-discovery-binding.ts', name: 'WalkieDiscoveryBinding' },
   { schema: 'walkie-discovery-snapshot.schema.json', out: 'walkie-discovery-snapshot.ts', name: 'WalkieDiscoverySnapshot' },
   { schema: 'walkie-discovery-review.schema.json', out: 'walkie-discovery-review.ts', name: 'WalkieDiscoveryReview' },
+  { schema: 'walkie-discovery-architecture.schema.json', out: 'walkie-discovery-architecture.ts', name: 'WalkieDiscoveryArchitecture' },
+  { schema: 'walkie-discovery-architecture-group.schema.json', out: 'walkie-discovery-architecture-group.ts', name: 'WalkieDiscoveryArchitectureGroup' },
   { schema: 'walkie-discovery-apply.schema.json', out: 'walkie-discovery-apply.ts', name: 'WalkieDiscoveryApply' },
   { schema: 'walkie-discovery-apply-result.schema.json', out: 'walkie-discovery-apply-result.ts', name: 'WalkieDiscoveryApplyResult' },
   { schema: 'walkie-discovery-upload.schema.json', out: 'walkie-discovery-upload.ts', name: 'WalkieDiscoveryUpload' },

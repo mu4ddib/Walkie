@@ -29,6 +29,7 @@ public static partial class DiscoveryModule
         services.AddScoped<SourceImportHandlers>();
         services.TryAddSingleton<ISourceImportCheckpoints, NoSourceImportCheckpoints>();
         services.AddScoped<ReviewHandlers>();
+        services.AddScoped<ArchitectureHandlers>();
         services.AddScoped<ApplyHandlers>();
         services.AddScoped<SourceHandlers>();
         services.AddScoped<EvidenceHandlers>();

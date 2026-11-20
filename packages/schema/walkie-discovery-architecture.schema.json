@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-architecture.schema.json",
+  "title": "Walkie discovery architecture v0",
+  "description": "Arquitectura descubierta de un análisis (spec walkie-live-arquitectura, ADR-0016): una proyección calculada al pedirla, sin guardar nada. Agrupa los hallazgos por app técnica y responsabilidad, agrega sus relaciones por tipo y significado, y lista las propuestas de feature con su evidencia. Es lo descubierto, no lo confirmado en Walkie. GET /api/snapshots/{snapshotId}/architecture.",
+  "type": "object",
+  "required": [
+    "snapshotId",
+    "completeness",
+    "totals",
+    "groups",
+    "links",
+    "proposals",
+    "limitations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "snapshotId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "completeness": {
+      "enum": [
+        "complete",
+        "partial"
+      ]
+    },
+    "totals": {
+      "type": "object",
+      "required": [
+        "entities",
+        "relations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entities": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relations": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/group"
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/link"
+      }
+    },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/proposal"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/limitation"
+      }
+    }
+  },
+  "$defs": {
+    "groupKind": {
+      "enum": [
+        "frontend",
+        "service",
+        "module",
+        "data",
+        "infrastructure",
+        "external",
+        "unassigned"
+      ],
+      "description": "frontend: una app de front y sus pantallas; service: un servicio del backend y sus APIs; module: un módulo y lo suyo; data: bases sin dueño; infrastructure: recursos; external: APIs que el análisis no ve publicar; unassigned: lo demás"
+    },
+    "semantic": {
+      "enum": [
+        "execution",
+        "navigation",
+        "containment",
+        "dependency"
+      ],
+      "description": "execution: calls, reads, writes, publishes, consumes; navigation: navigates; containment: exposes, contains; dependency: depends-on. Una contención o una dependencia nunca es una solicitud"
+    },
+    "counts": {
+      "type": "object",
+      "description": "Hallazgos por tipo",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "group": {
+      "type": "object",
+      "required": [
+        "key",
+        "kind",
+        "title",
+        "counts",
+        "internal",
+        "limitations",
+        "incomplete"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "kind": {
+          "$ref": "#/$defs/groupKind"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "technology": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "entityKey": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "El hallazgo que da nombre al grupo (la app o el módulo), si lo hay"
+        },
+        "counts": {
+          "$ref": "#/$defs/counts"
+        },
+        "internal": {
+          "type": "object",
+          "description": "Relaciones dentro del grupo, por significado",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "limitations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Limitaciones de sus archivos"
+        },
+        "incomplete": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "De ellas, las que dejan algo sin ver"
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": [
+        "from",
+        "to",
+        "kind",
+        "semantic",
+        "total",
+        "observed",
+        "inferred",
+        "low"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "kind": {
+          "enum": [
+            "calls",
+            "reads",
+            "writes",
+            "publishes",
+            "consumes",
+            "exposes",
+            "depends-on",
+            "navigates",
+            "contains"
+          ]
+        },
+        "semantic": {
+          "$ref": "#/$defs/semantic"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inferred": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "low": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "De ellas, las de confianza baja"
+        }
+      }
+    },
+    "proposal": {
+      "type": "object",
+      "required": [
+        "key",
+        "title",
+        "confidence",
+        "strength",
+        "screens",
+        "apis",
+        "navigation",
+        "requests",
+        "unresolved",
+        "members"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "app": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 600,
+          "description": "El grupo de su app técnica"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "strength": {
+          "enum": [
+            "evidence",
+            "heuristic"
+          ],
+          "description": "evidence: navegación o carga diferida, y APIs en común o del mismo módulo; heuristic: solo la forma de las rutas"
+        },
+        "screens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "apis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "navigation": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Navegaciones demostradas entre sus pantallas"
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Llamadas demostradas de sus pantallas a sus APIs"
+        },
+        "unresolved": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Limitaciones que dejan algo sin ver en su app técnica"
+        },
+        "decision": {
+          "enum": [
+            "created",
+            "linked",
+            "rejected"
+          ],
+          "description": "Si ya se decidió (la feature existe o se descartó)"
+        },
+        "members": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "description": "Sus pantallas y las APIs que llaman (las claves de los hallazgos), en orden"
+        }
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "incomplete"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "detector": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "incomplete": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
