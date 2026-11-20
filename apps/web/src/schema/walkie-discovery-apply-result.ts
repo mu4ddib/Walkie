@@ -136,6 +136,29 @@ export interface WalkieDiscoveryApplyResultV0 {
      */
     entityKey?: string;
   }[];
+  /**
+   * Pantallas que se incorporan a una feature existente (attach, ADR-0018): lo que ya tiene su lienzo y lo que se agrega. Sin attach, no viene
+   */
+  attached?: {
+    /**
+     * Identidad estable entre análisis: sale de lo que define al componente, nunca de líneas ni de la ruta del archivo donde está (ADR-0014). api:<MÉTODO> <ruta normalizada> (parámetros como {}), service:<nombre>, database:<motor>/<nombre>, resource:<subtipo>/<nombre>, screen:<ámbito de la app>:<ruta normalizada>, module:<nombre>, feature:<ámbito de la app>:<nombre> (formatVersion 1; en la 0, screen:<ruta> y feature:<nombre>, que siguen siendo válidas en los registros de la API: un vínculo decidido antes conserva su clave). DiscoveryKeys (Walkie.Shared) las arma
+     */
+    entityKey: string;
+    target: Target;
+    /**
+     * La versión del lienzo que se vio: confirmar la manda; si cambió, 409
+     */
+    canvasVersion: number;
+    /**
+     * Lo que el lienzo ya tiene y no cambia
+     */
+    existing: {
+      nodes: number;
+      edges: number;
+      tours?: number;
+    };
+    canvas: Canvas1;
+  }[];
 }
 /**
  * Elemento de Walkie al que apunta un vínculo (referencia por id, como un catalogId o un moduleId en el grafo; sin copia de su contenido)
@@ -327,7 +350,7 @@ export interface Resource {
 export interface Canvas {
   nodes: {
     key: string;
-    type: 'screen' | 'ref' | 'module';
+    type: 'screen' | 'ref' | 'module' | 'portal';
     title: string;
     /**
      * Solo screen: su ruta (va en la descripción de la caja)
@@ -341,6 +364,14 @@ export interface Canvas {
      * Solo module: el módulo existente que ofrece la interfaz
      */
     moduleId?: string;
+    /**
+     * Solo portal: la feature donde ya está la pantalla a la que navega (ADR-0018)
+     */
+    targetFeatureId?: string;
+    /**
+     * Solo en attach: la caja que ya está en el lienzo y se reutiliza (no se agrega ni se mueve)
+     */
+    existing?: string;
   }[];
   edges: {
     key: string;
@@ -921,4 +952,57 @@ export interface ModuleInterface {
    * UUID v7 generado en el cliente
    */
   tourId?: string;
+}
+/**
+ * Borrador del lienzo inicial de un módulo o una feature (spec walkie-live, tarea 9): solo lo que el análisis observó y una persona ya decidió. Las claves son de este borrador (de hallazgos, de relaciones walkie-module:<id> para la caja de un módulo existente o walkie-feature:<id> para un portal a una feature); la solicitud les da ids y posiciones. Sin respuestas, códigos ni pasos internos que el análisis no vio
+ */
+export interface Canvas1 {
+  nodes: {
+    key: string;
+    type: 'screen' | 'ref' | 'module' | 'portal';
+    title: string;
+    /**
+     * Solo screen: su ruta (va en la descripción de la caja)
+     */
+    route?: string;
+    /**
+     * Solo ref: el elemento del catálogo (decidido o creado en esta solicitud)
+     */
+    catalogId?: string;
+    /**
+     * Solo module: el módulo existente que ofrece la interfaz
+     */
+    moduleId?: string;
+    /**
+     * Solo portal: la feature donde ya está la pantalla a la que navega (ADR-0018)
+     */
+    targetFeatureId?: string;
+    /**
+     * Solo en attach: la caja que ya está en el lienzo y se reutiliza (no se agrega ni se mueve)
+     */
+    existing?: string;
+  }[];
+  edges: {
+    key: string;
+    from: string;
+    to: string;
+    kind: 'navigation' | 'request';
+    operation: 'navigation' | 'http.request';
+    toInterface?: InterfaceRef;
+  }[];
+  interfaces: {
+    key: string;
+    name: string;
+    kind: 'provides' | 'event' | 'requires';
+    node: string;
+  }[];
+  /**
+   * Lo que no entra y por qué: screen-rejected, screen-decided, api-undecided, api-rejected, api-target-missing, ambiguous-api
+   */
+  omitted: {
+    key: string;
+    code: string;
+    message: string;
+  }[];
+  graph?: WalkieCanvasGraphV0;
 }

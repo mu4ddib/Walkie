@@ -23,6 +23,27 @@ internal sealed class NoApplyCheckpoints : IApplyCheckpoints
 /// La aplicación se abandona en este punto sin compensar ni seguir, como si el proceso se hubiera caído (lo lanza un
 /// <see cref="IApplyCheckpoints"/> de prueba). Cualquier otra excepción es un fallo y se compensa.
 /// </summary>
+/// <summary>
+/// El lienzo de una feature cambió entre la vista previa (o el plan) y el momento de agregarle una pantalla (ADR-0018):
+/// no se agregó nada; la aplicación se compensa y responde 409 para pedir una vista previa nueva.
+/// </summary>
+internal sealed class CanvasChangedException : Exception
+{
+    public CanvasChangedException()
+    {
+    }
+
+    public CanvasChangedException(string entityKey)
+        : base($"El lienzo cambió antes de incorporar {entityKey}.")
+    {
+    }
+
+    public CanvasChangedException(string message, Exception inner)
+        : base(message, inner)
+    {
+    }
+}
+
 internal sealed class ApplyAbandonedException : Exception
 {
     public ApplyAbandonedException()

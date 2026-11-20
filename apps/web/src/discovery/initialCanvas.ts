@@ -64,3 +64,31 @@ export function planInitialCanvas(draft: CanvasDraft, previous?: CanvasInput): C
 
   return { nodes, edges, interfaces, layout };
 }
+
+type Box = { x: number; y: number; w?: number; h?: number };
+
+/**
+ * Ids y posiciones de lo que se agrega a un lienzo existente (ADR-0018): solo las cajas nuevas (las que el borrador
+ * no reutiliza), en una columna libre a la derecha de todo lo que ya está, alineada con su borde de arriba. Nada de lo
+ * que hay se mueve. `previous` conserva los ids de una vista previa anterior (un reintento manda los mismos).
+ */
+export function planAttachCanvas(draft: CanvasDraft, existing: Record<string, Box>, previous?: CanvasInput): CanvasInput {
+  const id = (map: Record<string, string> | undefined, key: string) => map?.[key] ?? uuidv7();
+  const added = draft.nodes.filter((n) => !n.existing);
+  const order = ['screen', 'ref', 'module', 'portal'];
+  const sorted = [...added].sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type) || a.key.localeCompare(b.key));
+  const boxes = Object.values(existing);
+  const right = boxes.length === 0 ? 0 : Math.max(...boxes.map((b) => b.x + (b.w ?? 184)));
+  const top = boxes.length === 0 ? 0 : Math.min(...boxes.map((b) => b.y));
+  const x = snap(right + CANVAS_METRICS.columnGap);
+  const layout: CanvasInput['layout'] = {};
+  sorted.forEach((n, i) => {
+    layout[n.key] = { x, y: snap(top + i * (CANVAS_METRICS.main.h + CANVAS_METRICS.rowGap)) };
+  });
+  return {
+    nodes: Object.fromEntries(added.map((n) => [n.key, id(previous?.nodes, n.key)])),
+    edges: Object.fromEntries(draft.edges.map((e) => [e.key, id(previous?.edges, e.key)])),
+    interfaces: {},
+    layout,
+  };
+}

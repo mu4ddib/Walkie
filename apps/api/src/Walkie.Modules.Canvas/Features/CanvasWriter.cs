@@ -1,8 +1,10 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Walkie.Modules.Canvas.Contracts;
 using Walkie.Modules.Canvas.Domain;
 using Walkie.Modules.Canvas.Persistence;
+using Walkie.Shared;
 using Walkie.Shared.Schemas;
 using Walkie.Shared.Time;
 
@@ -91,6 +93,133 @@ internal sealed class CanvasWriter(CanvasHandlers handlers, GraphValidator valid
         return WalkieSchemas.Errors(WalkieSchemas.MapLayout, layout.RootElement)
             .ToDictionary(e => prefix + e.Key.Replace("/positions", "", StringComparison.Ordinal), e => e.Value);
     }
+
+    public async Task<CanvasAppend> AppendAsync(Guid featureId, int expectedVersion, JsonElement additions, string userId, CancellationToken cancellationToken)
+    {
+        var canvas = await db.Canvases.AsNoTracking().Where(c => c.FeatureId == featureId).Select(c => new { c.Graph, c.Version })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var current = canvas is null ? EmptyGraph() : JsonNode.Parse(canvas.Graph)!.AsObject();
+        var version = canvas?.Version ?? 0;
+        var nodes = Section(current, "nodes");
+        var edges = Section(current, "edges");
+        var layout = Section(current, "layout");
+        var addNodes = additions.GetProperty("nodes").EnumerateObject().ToList();
+        var addEdges = additions.GetProperty("edges").EnumerateObject().ToList();
+
+        // Un reintento: todo lo de este agregado ya está en el lienzo.
+        if (addNodes.All(n => nodes.ContainsKey(n.Name)) && addEdges.All(e => edges.ContainsKey(e.Name)))
+        {
+            return new CanvasAppend(CanvasAppendOutcome.AlreadyApplied, version, new Dictionary<string, string[]>());
+        }
+
+        if (version != expectedVersion)
+        {
+            return new CanvasAppend(CanvasAppendOutcome.VersionChanged, version, new Dictionary<string, string[]>());
+        }
+
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        foreach (var node in addNodes.Where(n => nodes.ContainsKey(n.Name) || layout.ContainsKey(n.Name)))
+        {
+            errors[$"/nodes/{node.Name}"] = ["Ese id ya está en el lienzo: no se pisa nada."];
+        }
+
+        foreach (var edge in addEdges.Where(e => edges.ContainsKey(e.Name)))
+        {
+            errors[$"/edges/{edge.Name}"] = ["Ese id ya está en el lienzo: no se pisa nada."];
+        }
+
+        if (errors.Count > 0)
+        {
+            return new CanvasAppend(CanvasAppendOutcome.Invalid, version, errors);
+        }
+
+        foreach (var node in addNodes)
+        {
+            nodes[node.Name] = JsonNode.Parse(node.Value.GetRawText());
+        }
+
+        foreach (var edge in addEdges)
+        {
+            edges[edge.Name] = JsonNode.Parse(edge.Value.GetRawText());
+        }
+
+        foreach (var position in additions.GetProperty("layout").EnumerateObject())
+        {
+            layout[position.Name] = JsonNode.Parse(position.Value.GetRawText());
+        }
+
+        current["version"] = version;
+        return await handlers.SaveAsync(featureId, JsonSerializer.SerializeToElement(current), userId, cancellationToken).ConfigureAwait(false) switch
+        {
+            SaveResult.Saved => new CanvasAppend(CanvasAppendOutcome.Appended, version + 1, new Dictionary<string, string[]>()),
+            SaveResult.Invalid invalid => new CanvasAppend(CanvasAppendOutcome.Invalid, version, invalid.Errors),
+            SaveResult.Conflict conflict => new CanvasAppend(CanvasAppendOutcome.VersionChanged, conflict.CurrentVersion, new Dictionary<string, string[]>()),
+            _ => new CanvasAppend(CanvasAppendOutcome.Invalid, version, new Dictionary<string, string[]> { ["/"] = ["La feature no existe."] }),
+        };
+    }
+
+    public async Task<CanvasRemoval> DetachUntouchedAsync(
+        Guid featureId, int appendedVersion, IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> edgeIds, CancellationToken cancellationToken)
+    {
+        var canvas = await db.Canvases.AsNoTracking().Where(c => c.FeatureId == featureId).Select(c => new { c.Graph, c.Version })
+            .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (canvas is null)
+        {
+            return CanvasRemoval.Deleted;
+        }
+
+        var current = JsonNode.Parse(canvas.Graph)!.AsObject();
+        var nodes = Section(current, "nodes");
+        var edges = Section(current, "edges");
+        if (!nodeIds.Any(nodes.ContainsKey) && !edgeIds.Any(edges.ContainsKey))
+        {
+            return CanvasRemoval.Deleted; // nunca se agregó: nada que quitar
+        }
+
+        if (canvas.Version != appendedVersion)
+        {
+            return CanvasRemoval.Edited;
+        }
+
+        var layout = Section(current, "layout");
+        foreach (var id in nodeIds)
+        {
+            nodes.Remove(id);
+            layout.Remove(id);
+        }
+
+        foreach (var id in edgeIds)
+        {
+            edges.Remove(id);
+        }
+
+        current["version"] = canvas.Version;
+        return await handlers.SaveAsync(featureId, JsonSerializer.SerializeToElement(current), "walkie-live", cancellationToken).ConfigureAwait(false) switch
+        {
+            SaveResult.Saved => CanvasRemoval.Deleted,
+            _ => CanvasRemoval.Edited,
+        };
+    }
+
+    private static JsonObject Section(JsonObject graph, string name)
+    {
+        if (graph[name] is not JsonObject section)
+        {
+            section = [];
+            graph[name] = section;
+        }
+
+        return section;
+    }
+
+    private static JsonObject EmptyGraph() => new()
+    {
+        ["schemaVersion"] = WalkieInfo.SchemaVersion,
+        ["version"] = 0,
+        ["nodes"] = new JsonObject(),
+        ["edges"] = new JsonObject(),
+        ["layout"] = new JsonObject(),
+    };
 
     public async Task CreateMapAsync(Guid appId, JsonElement positions, string userId, CancellationToken cancellationToken)
     {

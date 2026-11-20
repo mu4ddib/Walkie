@@ -41,6 +41,8 @@ export interface DiscoverySeed {
   groups?: Record<string, DiscoveryArchitectureGroup>;
   /** Evidencia de una relación por `${snapshotId}|${relationKey}`; la que falte responde 404. */
   relationEvidence?: Record<string, DiscoveryRelationEvidence>;
+  /** Incorporar una pantalla a una feature (ADR-0018), por clave: lo que la API diría de su lienzo actual y lo que se agrega. */
+  attaches?: Record<string, Omit<NonNullable<DiscoveryApplyResult['attached']>[number], 'entityKey' | 'target'>>;
 }
 
 const CREATABLE = ['api', 'service', 'database', 'resource'];
@@ -71,6 +73,8 @@ export function fakeDiscovery(
     uploadErrors?: { status: number; errors?: Record<string, string[]> };
     applyStatus?: number;
     compensate?: boolean;
+    /** El próximo attach confirmado responde 409: el lienzo cambió desde la vista previa. */
+    attachConflict?: boolean;
     /** El próximo `POST /api/sources/import` sin dryRun responde este estado (ej. 409 por nombre, 500 sin terminar). */
     importStatus?: number;
     /** El próximo `POST /api/sources/import` sin dryRun falla por red después de crear (la respuesta no llega). */
@@ -266,7 +270,24 @@ export function fakeDiscovery(
         const item = review.items.find((i) => i.key === op.entityKey);
         if (!item) return json(400, { title: 'Hallazgo desconocido', status: 400 });
         if ((item.binding?.version ?? 0) !== op.bindingVersion) return json(409, { title: 'La decisión cambió', status: 409 });
-        if (op.op === 'create' && (item.kind === 'feature' || item.kind === 'module')) {
+        if (op.op === 'attach') {
+          // ADR-0018: incorporar una pantalla a una feature existente, con la versión del lienzo que se vio.
+          const attach = seed.attaches?.[item.key];
+          if (!attach || item.kind !== 'screen') return json(400, { title: 'Error de validación', status: 400, errors: { '/operations/0/op': ['Solo una pantalla.'] } });
+          if (!dryRun && next.attachConflict) {
+            delete next.attachConflict;
+            return json(409, { title: 'El lienzo de la feature cambió desde la vista previa: no se agregó nada.', status: 409 });
+          }
+          const added = attach.canvas.nodes.filter((n) => !n.existing).map((n) => n.key).sort();
+          if (!dryRun && (op.canvasVersion !== attach.canvasVersion || !op.canvas || Object.keys(op.canvas.nodes).sort().join() !== added.join())) {
+            return json(400, { title: 'Error de validación', status: 400, errors: { '/operations/0/canvas': ['Falta la versión o lo que se agrega.'] } });
+          }
+          const target: DiscoveryTarget = { kind: 'feature', id: op.target!.id!, title: op.target!.title ?? attach.canvas.nodes.find((n) => n.type === 'screen')?.title };
+          result.attached = [...(result.attached ?? []), { entityKey: item.key, target, ...attach }];
+          if (!dryRun) decide(item, 'linked', snapshotId, body.applyId, target);
+          continue;
+        }
+        if (op.op === 'create' && (item.kind === 'feature' || item.kind === 'module' || item.kind === 'screen')) {
           // Tarea 9: un módulo o una feature con su lienzo inicial. Al aplicar exige los ids y posiciones de cada clave.
           const draft = seed.drafts?.[item.key];
           if (!draft) return json(400, { title: 'Error de validación', status: 400, errors: { '/operations/0/entityKey': ['Sin borrador.'] } });
@@ -278,7 +299,7 @@ export function fakeDiscovery(
           // Lo que se crea o se vincula en la misma solicitud ya cuenta como decidido para el lienzo (como la API).
           const alsoCreated = new Set(body.operations.filter((o) => o.op === 'create' || o.op === 'link').map((o) => o.entityKey));
           const canvas = { ...draft, omitted: draft.omitted.filter((o) => !alsoCreated.has(o.key)) };
-          const target: DiscoveryTarget = { kind: item.kind, id: op.id!, title: op.name ?? item.title };
+          const target: DiscoveryTarget = { kind: item.kind === 'screen' ? 'feature' : item.kind, id: op.id!, title: op.name ?? item.title };
           result.created.push({ entityKey: item.key, target, includes: keys, canvas });
           result.warnings.push({ code: 'inferred', message: 'Walkie dedujo esta feature de las rutas: revisa el nombre y lo que agrupa.', entityKey: item.key });
           for (const o of canvas.omitted.filter((x) => x.code === 'ambiguous-api')) {

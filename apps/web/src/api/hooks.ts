@@ -763,6 +763,17 @@ export function useDiscoveryProvenance(appId: string, target: string) {
  * filtros, y la procedencia de los elementos de la app; si se creó algo, también el catálogo. Las demás consultas no se
  * tocan.
  */
+/**
+ * Lee el lienzo actual de una feature, sin caché (ADR-0018): para ubicar lo que se le agrega en un lugar libre, con
+ * lo que tiene ahora. Actualiza la consulta del lienzo con lo leído.
+ */
+export function useReadCanvas() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return (featureId: string) =>
+    queryClient.fetchQuery({ queryKey: queryKeys.canvas(featureId), queryFn: ({ signal }) => getCanvas(token, featureId, signal), staleTime: 0 });
+}
+
 export function useApplyDiscovery(snapshotId: string, appId: string) {
   const token = useToken();
   const queryClient = useQueryClient();
@@ -780,6 +791,15 @@ export function useApplyDiscovery(snapshotId: string, appId: string) {
       // Lo creado (o lo que una compensación dejó) está en el catálogo: solo esa lista, no toda la app.
       if (result.created.length > 0 || result.status === 'compensated') {
         void queryClient.invalidateQueries({ queryKey: queryKeys.catalog(appId) });
+      }
+      // Una pantalla incorporada a una feature (ADR-0018): su lienzo cambió; la galería y el mapa lo muestran.
+      for (const attached of result.attached ?? []) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.canvas(attached.target.id) });
+      }
+      if ((result.attached?.length ?? 0) > 0 || result.created.some((c) => c.target.kind === 'feature')) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.features(appId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.previews(appId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.map(appId) });
       }
     },
     onError: (error) => {

@@ -310,6 +310,13 @@ public sealed class ImportEndpointsTests(WalkieApiFactory factory)
         public Task DeleteAsync(IReadOnlyCollection<Guid> featureIds, CancellationToken cancellationToken) =>
             inner.DeleteAsync(featureIds, cancellationToken);
 
+        public Task<CanvasAppend> AppendAsync(Guid featureId, int expectedVersion, JsonElement additions, string userId, CancellationToken cancellationToken) =>
+            inner.AppendAsync(featureId, expectedVersion, additions, userId, cancellationToken);
+
+        public Task<CanvasRemoval> DetachUntouchedAsync(
+            Guid featureId, int appendedVersion, IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> edgeIds, CancellationToken cancellationToken) =>
+            inner.DetachUntouchedAsync(featureId, appendedVersion, nodeIds, edgeIds, cancellationToken);
+
         public IReadOnlyDictionary<string, string[]> ValidateMapPositions(JsonElement positions, string prefix) =>
             inner.ValidateMapPositions(positions, prefix);
 

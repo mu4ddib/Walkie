@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -127,10 +128,38 @@ internal sealed partial class ApplyHandlers(
             return failure;
         }
 
-        return planned.Plan!.Stored.Creates.Count == 0
+        return planned.Plan!.Stored.Creates.Count == 0 && planned.Plan.Stored.Attaches is not { Count: > 0 }
             ? await DecideAsync(snapshot, applyId, requestHash, planned.Plan, userId, ct).ConfigureAwait(false)
             : await StartAsync(snapshot, applyId, requestHash, planned.Plan, userId).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Una pantalla sola como si fuera una feature con un único miembro (ADR-0018): su título, su app técnica y una
+    /// descripción con su ruta. Así se dibuja por el mismo camino que una propuesta.
+    /// </summary>
+    private static string SingleScreenFeature(string key, string screenData)
+    {
+        using var screen = JsonDocument.Parse(screenData);
+        var root = screen.RootElement;
+        var title = root.GetProperty("title").GetString()!;
+        var route = root.TryGetProperty("route", out var r) ? r.GetString() : null;
+        var feature = new JsonObject
+        {
+            ["kind"] = "feature",
+            ["title"] = title,
+            ["members"] = new JsonArray(key),
+            ["description"] = route is null ? $"Desde la pantalla «{title}» del análisis." : $"Desde la pantalla «{title}» ({route}) del análisis.",
+        };
+        if (root.TryGetProperty("app", out var app))
+        {
+            feature["app"] = app.GetString();
+        }
+
+        return feature.ToJsonString();
+    }
+
+    private static int Count(JsonElement graph, string section) =>
+        graph.TryGetProperty(section, out var items) && items.ValueKind == JsonValueKind.Object ? items.EnumerateObject().Count() : 0;
 
     // ---------- Plan (vista previa y aplicación) ----------
 
@@ -149,7 +178,7 @@ internal sealed partial class ApplyHandlers(
         var requested = operations.Select(o => o.EntityKey).Distinct(StringComparer.Ordinal).ToList();
 
         // Lo que hace falta para crear: el hallazgo completo (y, de un módulo o una feature, sus miembros).
-        var createKeys = operations.Where(o => o.Op == "create").Select(c => c.EntityKey).ToList();
+        var createKeys = operations.Where(o => o.Op is "create" or "attach").Select(c => c.EntityKey).ToList();
         var createData = createKeys.Count == 0
             ? []
             : await db.Entities.AsNoTracking()
@@ -163,6 +192,11 @@ internal sealed partial class ApplyHandlers(
                 && document.RootElement.TryGetProperty("members", out var list))
             {
                 members.AddRange(list.EnumerateArray().Select(m => m.GetString()!));
+            }
+            else if (document.RootElement.GetProperty("kind").GetString() == "screen")
+            {
+                // Una pantalla sola (ADR-0018): es su propio miembro.
+                members.Add(key);
             }
         }
 
@@ -198,7 +232,7 @@ internal sealed partial class ApplyHandlers(
             .ToDictionaryAsync(b => b.EntityKey, StringComparer.Ordinal, ct).ConfigureAwait(false);
 
         var creates = operations.Where(o => o.Op == "create").ToList();
-        var needsTargets = creates.Count > 0 || operations.Any(o => o.Target is not null);
+        var needsTargets = creates.Count > 0 || operations.Any(o => o.Target is not null || o.Op == "attach");
         var existing = needsTargets ? await review.ExistingTargetsAsync(snapshot.AppId, ct).ConfigureAwait(false) : [];
         var targets = existing.ToDictionary(t => (t.TargetKind, t.Id));
         var index = new MatchIndex(existing);
@@ -223,7 +257,8 @@ internal sealed partial class ApplyHandlers(
             }
         }
 
-        var drafting = creates.Any(c => entities.TryGetValue(c.EntityKey, out var e) && e.Kind is "feature" or "module")
+        var drafting = creates.Any(c => entities.TryGetValue(c.EntityKey, out var e) && e.Kind is "feature" or "module" or "screen")
+            || operations.Any(o => o.Op == "attach")
             ? await DraftContextAsync(snapshot, operations, bindings, createData, members, existing, ct).ConfigureAwait(false)
             : null;
         var plannedNames = new List<(string Type, string Name)>();
@@ -239,6 +274,8 @@ internal sealed partial class ApplyHandlers(
         var stored = new List<StoredOp>();
         var steps = new List<CreateStep>();
         var created = new List<DiscoveryAppliedTarget>();
+        var attaches = new List<AttachStep>();
+        var attached = new List<DiscoveryAttached>();
         var warnings = new List<DiscoveryApplyWarning>();
         var unchanged = new List<DiscoveryTarget>();
         for (var i = 0; i < operations.Count; i++)
@@ -290,7 +327,7 @@ internal sealed partial class ApplyHandlers(
                     var expectedType = MatchIndex.TargetType(entity.Kind);
                     if (expectedKind is null)
                     {
-                        errors[$"{path}/entityKey"] = ["Una pantalla no se vincula sola: entra con su feature."];
+                        errors[$"{path}/entityKey"] = ["Una pantalla no se vincula a un elemento: crea una feature desde ella o incorpórala a una feature existente (attach)."];
                     }
                     else if (op.Target!.Kind != expectedKind)
                     {
@@ -315,13 +352,16 @@ internal sealed partial class ApplyHandlers(
                     }
 
                     break;
-                case "create" when entity!.Kind is "feature" or "module":
+                case "attach":
+                    await AttachAsync(op, i, path, entity!, binding).ConfigureAwait(false);
+                    break;
+                case "create" when entity!.Kind is "feature" or "module" or "screen":
                     if (CreateContainer(op, i, path, entity.Kind, binding) is { } container)
                     {
                         steps.Add(container.Step);
                         var target = new DiscoveryTarget(container.Step.Kind, container.Step.Id, container.Step.Name);
                         stored.Add(new StoredOp(op.Op, op.EntityKey, entity.Fingerprint, target, op.Note));
-                        foreach (var screen in container.Draft.Screens)
+                        foreach (var screen in container.Draft.Screens.Where(k => k != op.EntityKey))
                         {
                             if (requested.Contains(screen))
                             {
@@ -386,8 +426,11 @@ internal sealed partial class ApplyHandlers(
             [.. stored.Where(o => o.Op == "reject").Select(o => o.EntityKey)],
             [.. stored.Where(o => o.Op == "reset").Select(o => o.EntityKey)],
             [.. unchanged.DistinctBy(t => (t.Kind, t.Id))],
-            warnings);
-        return (new Plan(new StoredPlan(stored, steps, planned), bindings), null);
+            warnings)
+        {
+            Attached = attached.Count > 0 ? attached : null,
+        };
+        return (new Plan(new StoredPlan(stored, steps, planned) { Attaches = attaches }, bindings), null);
 
         // Las reglas de crear: tipo, id, decisión previa, contrato válido según el catálogo y que no duplique una firma.
         CreateStep? Create(Operation op, int opIndex, string path, string kind, Binding? binding)
@@ -459,6 +502,97 @@ internal sealed partial class ApplyHandlers(
             return true;
         }
 
+        // Incorporar una pantalla a una feature existente (ADR-0018): la elige la persona; solo se agrega, con la versión vista.
+        async Task AttachAsync(Operation op, int opIndex, string path, EntityRow entity, Binding? binding)
+        {
+            if (entity.Kind != "screen")
+            {
+                errors[$"{path}/op"] = ["Solo una pantalla se incorpora a una feature existente."];
+                return;
+            }
+
+            if (op.Target!.Kind != FeatureTarget || !targets.TryGetValue((FeatureTarget, op.Target.Id), out var feature))
+            {
+                errors[$"{path}/target"] = ["Tiene que ser una feature de esta app (no un módulo)."];
+                return;
+            }
+
+            if (binding?.Active == true)
+            {
+                conflicts[$"{path}/entityKey"] = [$"Ya tiene una decisión ({binding.Decision}): restablécela antes de incorporarla."];
+                return;
+            }
+
+            var graph = await canvasReader.GraphOfFeatureAsync(feature.Id, ct).ConfigureAwait(false);
+            var version = graph.TryGetProperty("version", out var v) ? v.GetInt32() : 0;
+            if (op.CanvasVersion is { } seen && seen != version)
+            {
+                conflicts[$"{path}/canvasVersion"] = [string.Create(CultureInfo.InvariantCulture,
+                    $"El lienzo de «{feature.Title}» cambió desde la vista previa (ahora en la versión {version}): revisa la vista previa de nuevo antes de incorporar.")];
+                return;
+            }
+
+            if (track && op.CanvasVersion is null)
+            {
+                errors[$"{path}/canvasVersion"] = ["Falta la versión del lienzo que mostró la vista previa."];
+                return;
+            }
+
+            using var document = JsonDocument.Parse(SingleScreenFeature(op.EntityKey, createData[op.EntityKey]));
+            var draft = CanvasDraft.Feature(document.RootElement, drafting!, portals: true, into: feature.Id);
+            if (draft.Errors.Count > 0)
+            {
+                errors[$"{path}/entityKey"] = [.. draft.Errors];
+                return;
+            }
+
+            var (reconciled, duplicates) = CanvasDraft.Attach(draft, graph);
+            foreach (var title in duplicates)
+            {
+                warnings.Add(new DiscoveryApplyWarning("possible-duplicate", Truncate(
+                    $"El lienzo de «{feature.Title}» ya tiene una pantalla «{title}»: revisa que no sea la misma antes de incorporarla.", 500), op.EntityKey));
+            }
+
+            if (reconciled.Omitted.Count > 0)
+            {
+                warnings.Add(new DiscoveryApplyWarning("omitted", Truncate(
+                    $"{reconciled.Omitted.Count} parte(s) de la pantalla no entran al lienzo: la vista previa dice cuáles y por qué.", 500), op.EntityKey));
+            }
+
+            JsonObject? additions = null;
+            if (op.Canvas is { } canvas)
+            {
+                var (built, buildErrors) = CanvasDraft.Additions(reconciled, CanvasInput.Read(canvas), graph, $"{path}/canvas");
+                foreach (var (field, messages) in buildErrors)
+                {
+                    errors[field] = messages;
+                }
+
+                if (built is null)
+                {
+                    return;
+                }
+
+                additions = built;
+            }
+            else if (track)
+            {
+                errors[$"{path}/canvas"] = ["Faltan los ids y las posiciones de lo que se agrega: pide la vista previa."];
+                return;
+            }
+
+            var target = new DiscoveryTarget(FeatureTarget, feature.Id, feature.Title);
+            stored.Add(new StoredOp("attach", op.EntityKey, entity.Fingerprint, target, op.Note));
+            var tours = graph.TryGetProperty("tours", out var t) && t.ValueKind == JsonValueKind.Object ? t.EnumerateObject().Count() : 0;
+            attached.Add(new DiscoveryAttached(op.EntityKey, target, version,
+                new DiscoveryCanvasExisting(Count(graph, "nodes"), Count(graph, "edges"), tours), reconciled.Contract()));
+            if (additions is not null)
+            {
+                attaches.Add(new AttachStep(opIndex, op.EntityKey, feature.Id, version, JsonSerializer.SerializeToElement(additions),
+                    [.. additions["nodes"]!.AsObject().Select(n => n.Key)], [.. additions["edges"]!.AsObject().Select(e => e.Key)]));
+            }
+        }
+
         // Un módulo o una feature: su lienzo inicial (borrador y, con los ids y posiciones, el grafo validado), su nombre y avisos.
         (CreateStep Step, Draft Draft, List<DiscoveryApplyWarning> Warnings)? CreateContainer(Operation op, int opIndex, string path, string kind, Binding? binding)
         {
@@ -467,8 +601,14 @@ internal sealed partial class ApplyHandlers(
                 return null;
             }
 
-            using var document = JsonDocument.Parse(createData[op.EntityKey]);
+            using var document = JsonDocument.Parse(kind == "screen" ? SingleScreenFeature(op.EntityKey, createData[op.EntityKey]) : createData[op.EntityKey]);
             var finding = document.RootElement;
+            var fromScreen = kind == "screen";
+            if (fromScreen)
+            {
+                kind = "feature";
+            }
+
             // Un conjunto más grande que lo que la revisión puede listar no se crea de una vez: nadie lo confirmaría sin ver
             // todos sus miembros (spec walkie-live-arquitectura, revisión del PR B). Sus elementos se deciden uno por uno.
             var memberCount = finding.TryGetProperty("members", out var memberList) && memberList.ValueKind == JsonValueKind.Array ? memberList.GetArrayLength() : 0;
@@ -479,7 +619,7 @@ internal sealed partial class ApplyHandlers(
                 return null;
             }
 
-            var draft = kind == "feature" ? CanvasDraft.Feature(finding, drafting!) : CanvasDraft.Module(finding, drafting!);
+            var draft = kind == "feature" ? CanvasDraft.Feature(finding, drafting!, portals: fromScreen) : CanvasDraft.Module(finding, drafting!);
             // Un módulo sin ninguna API en el catálogo todavía: la vista previa igual muestra su borrador (vacío) y las APIs
             // sin decidir, para que la persona pueda sumarlas en la misma solicitud (tarea 11: si no, no había cómo hacerlo
             // desde la vista previa). Al confirmar sin ellas se rechaza como siempre.
@@ -505,7 +645,9 @@ internal sealed partial class ApplyHandlers(
 
             var warnings = new List<DiscoveryApplyWarning>
             {
-                new("inferred", kind == "feature"
+                new("inferred", fromScreen
+                    ? "Una feature a partir de una sola pantalla: ponle un nombre que diga su objetivo. Puedes sumarle pantallas después."
+                    : kind == "feature"
                     ? "Walkie dedujo esta feature de las rutas: un grupo de pantallas no es por sí solo un objetivo funcional. Revisa el nombre y lo que agrupa."
                     : "Walkie dedujo este módulo de un proyecto con endpoints: no todo proyecto es un módulo reutilizable. Revisa qué ofrece.", op.EntityKey),
             };
@@ -576,6 +718,8 @@ internal sealed partial class ApplyHandlers(
             .Select(r => new DraftRelation(r.Key, r.Kind, r.FromKey, r.ToKey))
             .ToListAsync(ct).ConfigureAwait(false);
         var apis = members.Concat(relations.Select(r => r.To)).Where(k => k.StartsWith("api:", StringComparison.Ordinal)).Distinct(StringComparer.Ordinal).ToList();
+        // Las pantallas a las que navegan (para un portal a la feature donde ya están, ADR-0018).
+        var navigated = relations.Where(r => r.Kind == "navigates" && !memberSet.Contains(r.To)).Select(r => r.To).Distinct(StringComparer.Ordinal).ToList();
         var exposes = await db.Relations.AsNoTracking()
             .Where(r => r.SnapshotId == snapshot.Id && r.Kind == "exposes" && apis.Contains(r.ToKey))
             .Select(r => new { r.FromKey, r.ToKey })
@@ -586,7 +730,7 @@ internal sealed partial class ApplyHandlers(
             .ToDictionary(g => g.Key, g => g.Services, StringComparer.Ordinal);
 
         // Decisiones de las APIs que se llaman pero no son miembros (también pueden estar en el catálogo).
-        var extra = apis.Where(k => !bindings.ContainsKey(k)).ToList();
+        var extra = apis.Concat(navigated).Where(k => !bindings.ContainsKey(k)).ToList();
         var decisions = bindings.Values.Concat(extra.Count == 0 ? [] : await db.Bindings.AsNoTracking()
                 .Where(b => b.AppId == snapshot.AppId && b.SourceId == snapshot.SourceId && extra.Contains(b.EntityKey))
                 .ToListAsync(ct).ConfigureAwait(false))
@@ -639,7 +783,10 @@ internal sealed partial class ApplyHandlers(
 
         return new DraftContext(
             memberData, relations, decisions, planned, catalogTitles, ambiguous,
-            interfaces.ToDictionary(p => p.Key, p => (IReadOnlyList<ModuleInterface>)p.Value));
+            interfaces.ToDictionary(p => p.Key, p => (IReadOnlyList<ModuleInterface>)p.Value))
+        {
+            Features = existing.Where(t => t.TargetKind == FeatureTarget).ToDictionary(t => t.Id, t => t.Title),
+        };
     }
 
     /// <summary>Los detectores de la evidencia de un hallazgo (para avisar de una base que solo es un modelo de EF).</summary>
@@ -781,6 +928,24 @@ internal sealed partial class ApplyHandlers(
                 }
             }
 
+            // Lo que se agrega a lienzos existentes, después de crear lo que sus cajas pueden referir (APIs de esta solicitud).
+            foreach (var attach in plan.Attaches ?? [])
+            {
+                var outcome = await canvases.AppendAsync(attach.FeatureId, attach.ExpectedVersion, attach.Additions, record.CreatedBy, CancellationToken.None)
+                    .ConfigureAwait(false);
+                if (outcome.Outcome is CanvasAppendOutcome.VersionChanged)
+                {
+                    throw new CanvasChangedException(attach.EntityKey);
+                }
+
+                if (outcome.Outcome is CanvasAppendOutcome.Invalid)
+                {
+                    throw new InvalidOperationException("No se pudo agregar al lienzo: " + string.Join("; ", outcome.Errors.Select(e => $"{e.Key}: {string.Join(" ", e.Value)}")));
+                }
+
+                await checkpoints.ReachedAsync(string.Create(CultureInfo.InvariantCulture, $"attach:{attach.Index}"), applyId).ConfigureAwait(false);
+            }
+
             await checkpoints.ReachedAsync("finalize", applyId).ConfigureAwait(false);
             var keys = plan.Operations.Select(o => o.EntityKey).ToList();
             var bindings = await db.Bindings
@@ -808,6 +973,16 @@ internal sealed partial class ApplyHandlers(
         catch (ApplyAbandonedException)
         {
             throw; // una caída simulada: ni se compensa ni se sigue
+        }
+        catch (CanvasChangedException ex)
+        {
+            // Alguien guardó el lienzo de la feature entre la vista previa y este momento: nada se agregó; se deshace lo
+            // demás y se pide una vista previa nueva (ADR-0018). Nunca se pisa lo que la persona guardó.
+            LogApplyFailed(logger, ex, applyId);
+            db.ChangeTracker.Clear();
+            return await CompensateAsync(applyId).ConfigureAwait(false) is ApplyOutcome.Done
+                ? Conflict("operations", "El lienzo de la feature cambió desde la vista previa: no se agregó nada. Pide la vista previa de nuevo.")
+                : new ApplyOutcome.Unfinished("No se pudo terminar ni deshacer la aplicación: quedó pendiente. Reintenta con el mismo applyId para terminarla.");
         }
 #pragma warning disable CA1031 // cualquier fallo al escribir se compensa; la excepción queda en el log
         catch (Exception ex)
@@ -896,6 +1071,17 @@ internal sealed partial class ApplyHandlers(
                 new("compensated", "No se pudo terminar la aplicación: se deshizo lo que había creado y no quedó ninguna decisión guardada."),
             };
             var kept = new List<DiscoveryTarget>();
+            foreach (var attach in (plan.Attaches ?? []).Reverse())
+            {
+                var removal = await canvases.DetachUntouchedAsync(attach.FeatureId, attach.ExpectedVersion + 1, attach.NodeIds, attach.EdgeIds, CancellationToken.None)
+                    .ConfigureAwait(false);
+                if (removal == CanvasRemoval.Edited)
+                {
+                    warnings.Add(new DiscoveryApplyWarning("compensation-kept",
+                        "Lo agregado al lienzo no se quitó: alguien ya lo guardó después. Quedó en el lienzo; quítalo a mano si no corresponde.", attach.EntityKey));
+                }
+            }
+
             // Un paso planned también se intenta: pudo crearse justo antes de que fallara marcarlo.
             foreach (var step in steps.Where(s => s.Status is ApplyStep.Created or ApplyStep.Planned or ApplyStep.Saved))
             {
@@ -1049,7 +1235,7 @@ internal sealed partial class ApplyHandlers(
 
     private static void Decide(Binding binding, StoredOp op, Guid applyId, Guid snapshotId, string userId, DateTimeOffset now)
     {
-        binding.Decision = op.Op switch { "reject" => "rejected", "link" => "linked", "create" => "created", _ => null };
+        binding.Decision = op.Op switch { "reject" => "rejected", "link" or "attach" => "linked", "create" => "created", _ => null };
         binding.TargetKind = op.Target?.Kind;
         binding.TargetId = op.Target?.Id;
         binding.TargetTitle = op.Target?.Title is { } title ? Truncate(title, 120) : null;
@@ -1091,7 +1277,18 @@ internal sealed partial class ApplyHandlers(
     /// Lo que se guarda en la bitácora: las operaciones ya validadas, los pasos que escriben fuera de Discovery y el
     /// resultado de la vista previa. La aplicación real es este mismo plan.
     /// </summary>
-    private sealed record StoredPlan(IReadOnlyList<StoredOp> Operations, IReadOnlyList<CreateStep> Creates, DiscoveryApplyResult Planned);
+    private sealed record StoredPlan(IReadOnlyList<StoredOp> Operations, IReadOnlyList<CreateStep> Creates, DiscoveryApplyResult Planned)
+    {
+        /// <summary>Lo que se agrega a lienzos existentes (ADR-0018); vacío en las bitácoras anteriores.</summary>
+        public IReadOnlyList<AttachStep>? Attaches { get; init; }
+    }
+
+    /// <summary>
+    /// Incorporar una pantalla a una feature (ADR-0018): lo que se agrega a su lienzo (<c>{ nodes, edges, layout }</c>), con
+    /// la versión que vio la vista previa y los ids, para saber si ya se agregó (reintento) y para deshacerlo.
+    /// </summary>
+    private sealed record AttachStep(
+        int Index, string EntityKey, Guid FeatureId, int ExpectedVersion, JsonElement Additions, IReadOnlyList<string> NodeIds, IReadOnlyList<string> EdgeIds);
 
     /// <summary>Una decisión validada: con su destino (vinculado o creado) y el fingerprint del hallazgo.</summary>
     private sealed record StoredOp(string Op, string EntityKey, string? Fingerprint, DiscoveryTarget? Target, string? Note);
@@ -1106,7 +1303,8 @@ internal sealed partial class ApplyHandlers(
     private sealed record EntityRow(string Key, string Kind, string Fingerprint);
 
     private sealed record Operation(
-        string Op, string EntityKey, DiscoveryTarget? Target, Guid? Id, int? BindingVersion, string? Note, string? Name = null, JsonElement? Canvas = null)
+        string Op, string EntityKey, DiscoveryTarget? Target, Guid? Id, int? BindingVersion, string? Note, string? Name = null, JsonElement? Canvas = null,
+        int? CanvasVersion = null)
     {
         public static Operation Read(JsonElement op) => new(
             op.GetProperty("op").GetString()!,
@@ -1118,6 +1316,7 @@ internal sealed partial class ApplyHandlers(
             op.TryGetProperty("bindingVersion", out var version) ? version.GetInt32() : null,
             op.TryGetProperty("note", out var note) ? note.GetString() : null,
             op.TryGetProperty("name", out var name) ? name.GetString() : null,
-            op.TryGetProperty("canvas", out var canvas) ? canvas.Clone() : null);
+            op.TryGetProperty("canvas", out var canvas) ? canvas.Clone() : null,
+            op.TryGetProperty("canvasVersion", out var canvasVersion) ? canvasVersion.GetInt32() : null);
     }
 }

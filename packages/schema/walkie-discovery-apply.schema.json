@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-apply.schema.json",
   "title": "Walkie discovery apply v0",
-  "description": "Operaciones de revisión sobre un análisis (spec walkie-live, ADR-0012 y ADR-0014): el único camino por el que un hallazgo cambia algo en Walkie. Con dryRun es la vista previa. Idempotente por applyId: repetirlo devuelve el mismo resultado. Nunca escribe en lienzos existentes, nunca cambia un elemento vinculado y nunca borra.",
+  "description": "Operaciones de revisión sobre un análisis (spec walkie-live, ADR-0012 y ADR-0014): el único camino por el que un hallazgo cambia algo en Walkie. Con dryRun es la vista previa. Idempotente por applyId: repetirlo devuelve el mismo resultado. Nunca cambia ni borra nada de un lienzo existente (solo attach le agrega, con la versión que vio la vista previa; ADR-0018), nunca cambia un elemento vinculado y nunca borra.",
   "type": "object",
   "required": ["applyId", "operations"],
   "additionalProperties": false,
@@ -18,7 +18,7 @@
   "$defs": {
     "canvas": {
       "type": "object",
-      "description": "Solo en create de module o feature (tarea 9): los ids (UUID v7 del cliente) y las posiciones de cada clave del borrador del lienzo que devolvió la vista previa (created[].canvas). Obligatorio al aplicar; en la vista previa, sin él se devuelve el borrador y con él, también el grafo validado. Tiene que cubrir exactamente las claves del borrador, sin ids repetidos ni cajas encimadas",
+      "description": "En create de module, feature o screen (tarea 9) y en attach (solo lo que se agrega; ADR-0018): los ids (UUID v7 del cliente) y las posiciones de cada clave del borrador del lienzo que devolvió la vista previa (created[].canvas). Obligatorio al aplicar; en la vista previa, sin él se devuelve el borrador y con él, también el grafo validado. Tiene que cubrir exactamente las claves del borrador, sin ids repetidos ni cajas encimadas",
       "required": ["nodes", "edges", "layout"],
       "additionalProperties": false,
       "properties": {
@@ -51,21 +51,23 @@
       "additionalProperties": false,
       "properties": {
         "op": {
-          "enum": ["create", "link", "reject", "reset"],
-          "description": "create: crea el elemento (api/service/database/resource → catálogo; module → módulo con su lienzo e interfaces; feature → feature con su lienzo inicial y sus pantallas) con el id dado; link: vincula a un elemento existente sin cambiarlo; reject: descarta; reset: quita el vínculo (el elemento creado o vinculado sigue igual)"
+          "enum": ["create", "link", "reject", "reset", "attach"],
+          "description": "create: crea el elemento (api/service/database/resource → catálogo; module → módulo con su lienzo e interfaces; feature → feature con su lienzo inicial y sus pantallas; screen → una feature nueva con esa pantalla, ADR-0018) con el id dado; link: vincula a un elemento existente sin cambiarlo; attach: incorpora una pantalla a una feature existente agregando a su lienzo, sin cambiar ni mover nada (ADR-0018); reject: descarta; reset: quita el vínculo (el elemento creado o vinculado sigue igual)"
         },
         "entityKey": { "$ref": "walkie-discovery.schema.json#/$defs/entityKey" },
         "id": { "type": "string", "format": "uuid", "description": "Solo en create: UUID v7 del cliente para lo que se crea (idempotente)" },
-        "target": { "$ref": "walkie-discovery-binding.schema.json#/$defs/target", "description": "Solo en link" },
+        "target": { "$ref": "walkie-discovery-binding.schema.json#/$defs/target", "description": "En link (el elemento existente) y en attach (la feature a la que se incorpora la pantalla)" },
+        "canvasVersion": { "type": "integer", "minimum": 0, "description": "Solo en attach: la versión del lienzo de la feature que mostró la vista previa; si cambió, 409 (ADR-0018). Obligatoria al aplicar" },
         "bindingVersion": { "type": "integer", "minimum": 0, "description": "Versión del vínculo que se espera (0: que no haya ninguno); si no coincide, 409" },
         "note": { "type": "string", "maxLength": 500 },
         "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Solo en create de module o feature: el nombre con que se crea (sin él, el del hallazgo; si ya hay uno igual, con su app técnica entre paréntesis)" },
         "canvas": { "$ref": "#/$defs/canvas" }
       },
       "allOf": [
-        { "if": { "properties": { "op": { "const": "create" } } }, "then": { "required": ["id"], "not": { "required": ["target"] } } },
-        { "if": { "properties": { "op": { "const": "link" } } }, "then": { "required": ["target"], "not": { "anyOf": [{ "required": ["id"] }, { "required": ["name"] }, { "required": ["canvas"] }] } } },
-        { "if": { "properties": { "op": { "enum": ["reject", "reset"] } } }, "then": { "not": { "anyOf": [{ "required": ["id"] }, { "required": ["target"] }, { "required": ["name"] }, { "required": ["canvas"] }] } } }
+        { "if": { "properties": { "op": { "const": "create" } } }, "then": { "required": ["id"], "not": { "anyOf": [{ "required": ["target"] }, { "required": ["canvasVersion"] }] } } },
+        { "if": { "properties": { "op": { "const": "attach" } } }, "then": { "required": ["target"], "not": { "anyOf": [{ "required": ["id"] }, { "required": ["name"] }] } } },
+        { "if": { "properties": { "op": { "const": "link" } } }, "then": { "required": ["target"], "not": { "anyOf": [{ "required": ["id"] }, { "required": ["name"] }, { "required": ["canvas"] }, { "required": ["canvasVersion"] }] } } },
+        { "if": { "properties": { "op": { "enum": ["reject", "reset"] } } }, "then": { "not": { "anyOf": [{ "required": ["id"] }, { "required": ["target"] }, { "required": ["name"] }, { "required": ["canvas"] }, { "required": ["canvasVersion"] }] } } }
       ]
     }
   }

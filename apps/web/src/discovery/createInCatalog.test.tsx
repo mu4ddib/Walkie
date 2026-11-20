@@ -143,11 +143,12 @@ describe('crear en el catálogo desde la revisión', () => {
       await userEvent.click(row(name));
       expect(within(inspector()).queryByRole('button', { name: /Crear en el catálogo/ })).not.toBeInTheDocument();
     }
-    // Un módulo se crea con su lienzo (tarea 9), no en el catálogo; una pantalla entra con su feature.
+    // Un módulo se crea con su lienzo (tarea 9), no en el catálogo. Una pantalla tampoco va al catálogo: desde ADR-0018
+    // se convierte en una feature (o se incorpora a una existente), nunca en un elemento del catálogo.
     await userEvent.click(row(/module:/));
     expect(within(inspector()).getByRole('button', { name: 'Crear módulo…' })).toBeInTheDocument();
     await userEvent.click(row(/screen:/));
-    expect(within(inspector()).queryByRole('button', { name: /^Crear/ })).not.toBeInTheDocument();
+    expect(within(inspector()).getByRole('button', { name: 'Crear feature desde esta pantalla…' })).toBeInTheDocument();
   });
 
   it('si la API compensa, lo dice y no muestra un elemento creado', async () => {
