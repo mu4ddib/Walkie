@@ -1,3 +1,5 @@
+using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Apps;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -38,7 +40,8 @@ internal static class SnapshotEndpoints
             .Produces<DiscoveryUploadResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+            .RequireAppRole(AppRole.Editor);
 
         discovery.MapPost("/api/sources/import", ImportAsNewApp)
             .WithName("ImportDiscoverySourceAsApp")

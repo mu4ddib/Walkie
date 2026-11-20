@@ -50,6 +50,7 @@ export function FeatureEditor({
   focusCenter,
   initialPlay,
   banner,
+  canShare = true,
 }: {
   featureId: string;
   initialGraph: WalkieCanvasGraphV0;
@@ -68,7 +69,11 @@ export function FeatureEditor({
    * Navega con `useEditorNavigate`, que resuelve antes los cambios pendientes.
    */
   banner?: ReactNode;
+  /** «Compartir» (enlaces de solo lectura) es del owner de la app (ADR-0015). */
+  canShare?: boolean;
 }) {
+  // Un viewer (ADR-0015): sin guardar, autoguardar ni compartir; exportar sigue.
+  const readOnly = Boolean(catalog?.readOnly);
   const [store] = useState(() => {
     const s = createGraphStore();
     s.getState().loadGraph(initialGraph);
@@ -130,7 +135,7 @@ export function FeatureEditor({
   const saveNow = useCallback(async (): Promise<boolean> => {
     while (saving.current) await saving.current;
     const state = store.getState();
-    if (!state.dirty) return true;
+    if (!state.dirty || readOnly) return true;
     const run = (async () => {
       setPending(true);
       try {
@@ -149,14 +154,14 @@ export function FeatureEditor({
     })();
     saving.current = run;
     return run;
-  }, [mutateAsync, store]);
+  }, [mutateAsync, store, readOnly]);
 
   // Con un conflicto de versión el autoguardado se detiene: reintentar daría otro 409.
   const blocked = status.kind === 'conflict' || status.kind === 'stale';
 
   // Autoguardado: tras una pausa breve en la edición y al terminar un movimiento. Mientras se arrastra no guarda.
   useEffect(() => {
-    if (!autosave || blocked) return;
+    if (!autosave || blocked || readOnly) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let pointerDown = false;
     const schedule = (ms: number) => {
@@ -199,7 +204,7 @@ export function FeatureEditor({
       window.removeEventListener('pointerup', onUp, true);
       window.removeEventListener('pointercancel', onUp, true);
     };
-  }, [autosave, blocked, saveNow, store]);
+  }, [autosave, blocked, saveNow, store, readOnly]);
 
   // Si el editor se desmonta por otra vía (atrás del navegador) con el autoguardado activo, se intenta guardar.
   const leaving = useRef({ autosave, blocked, saveNow });
@@ -244,20 +249,20 @@ export function FeatureEditor({
 
   // Avisa al cerrar o recargar la pestaña con cambios sin guardar.
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || readOnly) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [dirty]);
+  }, [dirty, readOnly]);
 
   const navigate = useNavigate();
   // Salir del lienzo (otra feature, otra app) con cambios pendientes: con autoguardado se guardan antes;
   // si no se puede, o en modo manual, la persona decide.
   const canLeaveNow = useCallback(async () => {
-    if (!store.getState().dirty) return true;
+    if (!store.getState().dirty || readOnly) return true;
     if (!autosave || blocked) return window.confirm(UNSAVED_CONFIRM);
     return (await saveNow()) || window.confirm(UNSAVED_AFTER_ERROR_CONFIRM);
-  }, [autosave, blocked, saveNow, store]);
+  }, [autosave, blocked, saveNow, store, readOnly]);
   // Cambiar de app o feature desde la barra: con cambios sin guardar se confirma (spec imagenes-portal, decisión 3).
   const go = useCallback(
     (path: string) => {
@@ -307,48 +312,56 @@ export function FeatureEditor({
             onNavigate={go}
           />
         )}
-        <div className="save-bar">
-          <Popover
-            className="save-menu"
-            label="Opciones de guardado"
-            buttonLabel={
-              <span className="save-status" role="status" data-state={saveState} data-tip="Opciones de guardado">
-                {SAVE_LABELS[saveState]}
-                {autosave && !blocked && <span className="save-auto"> · auto</span>}
-              </span>
-            }
-          >
-            {() => (
-              <div className="save-options">
-                <label className="save-option">
-                  <input type="checkbox" checked={autosave} onChange={(e) => toggleAutosave(e.target.checked)} />
-                  <span>Autoguardado</span>
-                </label>
-                <p>
-                  {autosave
-                    ? 'Guarda solo tras una pausa breve al editar y al terminar de mover. Guardar y Ctrl+S siguen disponibles.'
-                    : 'Desactivado: los cambios se guardan con el botón Guardar o con Ctrl+S.'}
-                </p>
-                {autosave && blocked && <p>En pausa: el servidor tiene una versión más reciente de este lienzo.</p>}
-              </div>
-            )}
-          </Popover>
-          {saveState === 'error' ? (
-            <button type="button" className="pixel-button is-primary" onClick={() => void saveNow()}>
-              Reintentar
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={dirty ? 'pixel-button is-primary' : 'pixel-button'}
-              onClick={() => void saveNow()}
-              disabled={!dirty || pending}
-              data-tip="Guardar · Ctrl+S"
+        {readOnly ? (
+          <div className="save-bar">
+            <span className="save-status" role="status" data-state="readonly" data-tip="Tu rol en esta app es «viewer»">
+              Solo lectura
+            </span>
+          </div>
+        ) : (
+          <div className="save-bar">
+            <Popover
+              className="save-menu"
+              label="Opciones de guardado"
+              buttonLabel={
+                <span className="save-status" role="status" data-state={saveState} data-tip="Opciones de guardado">
+                  {SAVE_LABELS[saveState]}
+                  {autosave && !blocked && <span className="save-auto"> · auto</span>}
+                </span>
+              }
             >
-              {pending ? 'Guardando…' : 'Guardar'}
-            </button>
-          )}
-        </div>
+              {() => (
+                <div className="save-options">
+                  <label className="save-option">
+                    <input type="checkbox" checked={autosave} onChange={(e) => toggleAutosave(e.target.checked)} />
+                    <span>Autoguardado</span>
+                  </label>
+                  <p>
+                    {autosave
+                      ? 'Guarda solo tras una pausa breve al editar y al terminar de mover. Guardar y Ctrl+S siguen disponibles.'
+                      : 'Desactivado: los cambios se guardan con el botón Guardar o con Ctrl+S.'}
+                  </p>
+                  {autosave && blocked && <p>En pausa: el servidor tiene una versión más reciente de este lienzo.</p>}
+                </div>
+              )}
+            </Popover>
+            {saveState === 'error' ? (
+              <button type="button" className="pixel-button is-primary" onClick={() => void saveNow()}>
+                Reintentar
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={dirty ? 'pixel-button is-primary' : 'pixel-button'}
+                onClick={() => void saveNow()}
+                disabled={!dirty || pending}
+                data-tip="Guardar · Ctrl+S"
+              >
+                {pending ? 'Guardando…' : 'Guardar'}
+              </button>
+            )}
+          </div>
+        )}
         <div className="workspace-messages">
           {status.kind === 'error' && dirty && (
             <span role="alert" className="save-error">
@@ -388,9 +401,11 @@ export function FeatureEditor({
             onPdf={() => void exportPdfNow()}
             onWalkie={() => void exportNow('walkie')}
           />
-          <button type="button" className="pixel-button" onClick={() => setSharing(true)}>
-            Compartir
-          </button>
+          {canShare && !readOnly && (
+            <button type="button" className="pixel-button" onClick={() => setSharing(true)}>
+              Compartir
+            </button>
+          )}
           <button
             type="button"
             className="pixel-button is-ghost icon-button"

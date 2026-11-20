@@ -13,7 +13,7 @@ internal sealed class AppWriter(
 {
     public async Task<Guid> CreateAppAsync(string name, string userId, CancellationToken cancellationToken)
     {
-        var app = new App { Name = name.Trim(), CreatedBy = userId, CreatedAt = clock.GetUtcNowForDb() };
+        var app = App.Create(name, userId, clock.GetUtcNowForDb());
         db.Apps.Add(app);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return app.Id;
@@ -26,7 +26,7 @@ internal sealed class AppWriter(
             return existing;
         }
 
-        db.Apps.Add(new App { Id = appId, Name = name.Trim(), CreatedBy = userId, CreatedAt = clock.GetUtcNowForDb() });
+        db.Apps.Add(App.Create(name, userId, clock.GetUtcNowForDb(), appId));
         try
         {
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -68,8 +68,9 @@ internal sealed class AppWriter(
         return deleted == 1 ? AppRemoval.Deleted : AppRemoval.Edited;
     }
 
-    public async Task<IReadOnlyList<string>> AppNamesAsync(CancellationToken cancellationToken) =>
-        await db.Apps.AsNoTracking().Select(a => a.Name).ToListAsync(cancellationToken).ConfigureAwait(false);
+    public async Task<IReadOnlyList<string>> AppNamesAsync(string userId, CancellationToken cancellationToken) =>
+        await db.Apps.AsNoTracking().Where(a => a.Members.Any(m => m.UserId == userId)).Select(a => a.Name)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
     public async Task DeleteAppAsync(Guid appId, CancellationToken cancellationToken)
     {

@@ -20,6 +20,7 @@ public static class FilesModule
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.Section));
         services.AddSingleton<IFileStorage, S3FileStorage>();
         services.AddScoped<AssetHandlers>();
+        services.AddScoped<Walkie.Modules.Apps.Contracts.IAppScopeResolver, AssetScope>();
         services.AddScoped<Contracts.IAssetDirectory, AssetDirectory>();
         services.AddScoped<Contracts.IAssetWriter, AssetWriter>();
         services.TryAddSingleton(TimeProvider.System);

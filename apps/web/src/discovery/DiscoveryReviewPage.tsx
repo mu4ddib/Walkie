@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ApiError, type DiscoveryReview, type DiscoveryReviewItem, type DiscoveryStatus } from '../api/client';
-import { useApp, useDiscoveryReview, useDiscoverySources } from '../api/hooks';
+import { useApp, useAppRole, useDiscoveryReview, useDiscoverySources } from '../api/hooks';
 import { appPath } from '../workspace/paths';
 import { AnalysisSummary } from './AnalysisSummary';
 import { formatDayAndTime } from '../share/shareFormat';
@@ -39,6 +39,8 @@ export function DiscoveryReviewPage() {
   const data = review.data;
   const source = sources.data?.sources.find((s) => s.source.id === data?.sourceId);
   const isLatest = source?.latestSnapshot.id === snapshotId;
+  // Decidir es de editor (ADR-0015): un viewer revisa hallazgos y evidencia sin decidir.
+  const { canEdit } = useAppRole(appId);
   const items = data?.items ?? [];
   const current = items.find((i) => i.key === selected) ?? null;
 
@@ -191,7 +193,7 @@ export function DiscoveryReviewPage() {
               )}
             </div>
             {current ? (
-              <ReviewInspector appId={appId} snapshotId={snapshotId} item={current} canDecide={isLatest} />
+              <ReviewInspector appId={appId} snapshotId={snapshotId} item={current} canDecide={isLatest} readOnly={!canEdit} />
             ) : (
               <aside className="discovery-inspector" aria-label="Detalle del hallazgo">
                 <p className="gallery-note">Elige un hallazgo para ver por qué Walkie lo detectó y decidir qué hacer con él.</p>

@@ -56,11 +56,21 @@ import {
   getDiscoveryStatus,
   type DiscoveryOperation,
   type ReviewQuery,
+  addMember,
+  listMembers,
+  removeMember,
+  updateMember,
+  type AppRole,
 } from './client';
 
 /** Access token de la sesión actual. `AuthGate` garantiza que existe dentro de la app. */
 export function useToken(): string {
   return useAuth().user?.access_token ?? '';
+}
+
+/** El `sub` de quien está en sesión (para reconocerse en la lista de miembros). */
+export function useUserId(): string | undefined {
+  return useAuth().user?.profile?.sub;
 }
 
 export const queryKeys = {
@@ -75,6 +85,7 @@ export const queryKeys = {
   discoveryProvenanceAll: (appId: string) => ['discovery', 'provenance', appId] as const,
   apps: ['apps'] as const,
   app: (appId: string) => ['apps', appId] as const,
+  members: (appId: string) => ['apps', appId, 'members'] as const,
   features: (appId: string) => ['apps', appId, 'features'] as const,
   /** Bajo `canvas` para que guardar un lienzo las marque viejas (ver `useSaveCanvas`). */
   previews: (appId: string) => ['canvas', 'previews', appId] as const,
@@ -105,6 +116,49 @@ export function useApps() {
 export function useApp(appId: string) {
   const token = useToken();
   return useQuery({ queryKey: queryKeys.app(appId), queryFn: ({ signal }) => getApp(token, appId, signal) });
+}
+
+/**
+ * Mi rol en la app (ADR-0015) y lo que permite: `canEdit` (editor u owner) y `isOwner`. Mientras carga, nada se
+ * permite: así un viewer nunca ve un botón que después desaparece.
+ */
+export function useAppRole(appId: string): { role?: AppRole; canEdit: boolean; isOwner: boolean } {
+  const role = useApp(appId).data?.role;
+  return { role, canEdit: role === 'owner' || role === 'editor', isOwner: role === 'owner' };
+}
+
+export function useMembers(appId: string) {
+  const token = useToken();
+  return useQuery({ queryKey: queryKeys.members(appId), queryFn: ({ signal }) => listMembers(token, appId, signal) });
+}
+
+export function useAddMember(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ email, role }: { email: string; role: AppRole }) => addMember(token, appId, email, role),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.members(appId) }),
+  });
+}
+
+export function useUpdateMember(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: AppRole }) => updateMember(token, appId, userId, role),
+    // Cambiar el propio rol cambia lo que la app permite: se refresca la app (y, debajo, sus miembros).
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.app(appId) }),
+  });
+}
+
+/** Quitar a alguien; si soy yo, la app deja de estar en mi lista. */
+export function useRemoveMember(appId: string) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => removeMember(token, appId, userId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.apps }),
+  });
 }
 
 export function useFeatures(appId: string) {

@@ -1,6 +1,6 @@
 # ADR-0015: Autorización por app con membresías y roles
 
-- Estado: propuesto (bloqueante para cualquier piloto de Walkie Live con proyectos privados)
+- Estado: aceptado (2026-11-19). Implementado en la rama `feat/autorizacion-por-app` (`docs/features/autorizacion-por-app`); hasta que esté en `main`, sigue siendo bloqueante para cualquier piloto de Walkie Live con proyectos privados
 - Fecha: 2026-11-19
 
 ## Contexto
@@ -16,6 +16,12 @@ Hoy cualquier usuario autenticado lee y escribe cualquier app: `GET /api/apps` l
 ## Decisión
 
 Se propone la opción 1. Una tabla `apps.memberships (app_id, user_id, role, granted_by, granted_at)` y una política `AppAccess(role mínimo)`. Un `IAppAccess` (en Apps, consumido por los demás módulos como `ICatalogUsage`) resuelve la app de cada recurso y decide. Discovery solo se habilita para usuarios reales cuando esta política cubre todos sus endpoints y pasan las pruebas IDOR.
+
+**Decisiones al aceptarlo (2026-11-19):**
+
+- **Quiénes son las personas:** Walkie guarda `apps.users` (`sub`, nombre y correo del token) cuando alguien entra. Un owner suma a otra persona **por su correo**, si ya entró al menos una vez; si no, se le pide que inicie sesión primero. No se usa la API de administración de Keycloak.
+- **Roles:** como abajo. `editor` no borra ni maneja enlaces ni miembros.
+- **Web:** un `viewer` ve todo en solo lectura (lienzos sin edición, sin crear, borrar, importar ni decidir); el owner tiene «Miembros» en la página de la app.
 
 ## Detalle
 

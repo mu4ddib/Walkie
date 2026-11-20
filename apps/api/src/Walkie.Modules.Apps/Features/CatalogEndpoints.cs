@@ -1,3 +1,4 @@
+using Walkie.Modules.Apps;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -13,23 +14,29 @@ internal static class CatalogEndpoints
     public static IEndpointRouteBuilder MapCatalogEndpoints(this IEndpointRouteBuilder routes)
     {
         var byApp = routes.MapGroup("/api/apps/{appId:guid}/catalog").WithTags("Catalog");
-        byApp.MapGet("/", ListCatalog).WithName("ListCatalog");
-        byApp.MapPost("/", CreateCatalogItem).WithName("CreateCatalogItem").WithValidation<CreateCatalogItemRequest>();
+        byApp.MapGet("/", ListCatalog).WithName("ListCatalog")
+            .RequireAppRole(AppRole.Viewer);
+        byApp.MapPost("/", CreateCatalogItem).WithName("CreateCatalogItem").WithValidation<CreateCatalogItemRequest>()
+            .RequireAppRole(AppRole.Editor);
 
         var items = routes.MapGroup("/api/catalog").WithTags("Catalog");
-        items.MapGet("/{itemId:guid}", GetCatalogItem).WithName("GetCatalogItem");
+        items.MapGet("/{itemId:guid}", GetCatalogItem).WithName("GetCatalogItem")
+            .RequireAppRole(AppRole.Viewer);
         items.MapPut("/{itemId:guid}", UpdateCatalogItem)
             .WithName("UpdateCatalogItem")
             .WithSummary("Guarda el elemento si su version coincide con la guardada; responde el elemento con version + 1.")
             .WithValidation<UpdateCatalogItemRequest>()
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAppRole(AppRole.Editor);
         items.MapDelete("/{itemId:guid}", DeleteCatalogItem)
             .WithName("DeleteCatalogItem")
             .WithSummary("Borra el elemento; 409 con las features que lo usan si algún lienzo tiene un ref a él.")
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAppRole(AppRole.Owner);
         items.MapGet("/{itemId:guid}/usages", ListCatalogItemUsages)
             .WithName("ListCatalogItemUsages")
-            .WithSummary("Features cuyo lienzo tiene un nodo ref al elemento.");
+            .WithSummary("Features cuyo lienzo tiene un nodo ref al elemento.")
+            .RequireAppRole(AppRole.Viewer);
 
         return routes;
     }

@@ -1,3 +1,5 @@
+using Walkie.Modules.Apps.Contracts;
+using Walkie.Modules.Apps;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
@@ -25,7 +27,8 @@ internal static class ExportEndpoints
                 + "format=walkie: archivo para reconstruir la feature (<slug>.walkie: manifest.json según walkie-package, lienzo, catálogo usado e imágenes).")
             .Produces(StatusCodes.Status200OK, contentType: "application/zip")
             .Produces(StatusCodes.Status200OK, contentType: "text/markdown")
-            .Produces(StatusCodes.Status200OK, contentType: "application/json");
+            .Produces(StatusCodes.Status200OK, contentType: "application/json")
+            .RequireAppRole(AppRole.Viewer);
 
         routes.MapPost("/api/features/{featureId:guid}/export/pdf", ExportPdf)
             .WithTags("Export")
@@ -36,7 +39,8 @@ internal static class ExportEndpoints
                 + "que genera el navegador. Sin ella, el PDF va sin la página del lienzo.")
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery()
-            .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
+            .Produces(StatusCodes.Status200OK, contentType: "application/pdf")
+            .RequireAppRole(AppRole.Viewer);
 
         routes.MapGet("/api/apps/{appId:guid}/export", ExportApp)
             .WithTags("Export")
@@ -49,7 +53,8 @@ internal static class ExportEndpoints
                 + "catálogo, las imágenes y la distribución del mapa en map.json).")
             .Produces(StatusCodes.Status200OK, contentType: "application/zip")
             .Produces(StatusCodes.Status200OK, contentType: "text/markdown")
-            .Produces(StatusCodes.Status200OK, contentType: "application/json");
+            .Produces(StatusCodes.Status200OK, contentType: "application/json")
+            .RequireAppRole(AppRole.Viewer);
 
         routes.MapPost("/api/apps/{appId:guid}/import", Import)
             .WithTags("Export")
@@ -64,7 +69,8 @@ internal static class ExportEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(ImportHandlers.MaxFileBytes + (1024 * 1024)))
             .Produces<ImportSummary>(StatusCodes.Status200OK)
             .Produces<ImportSummary>(StatusCodes.Status201Created)
-            .ProducesProblem(StatusCodes.Status413PayloadTooLarge);
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+            .RequireAppRole(AppRole.Editor);
 
         routes.MapPost("/api/apps/import", ImportApp)
             .WithTags("Export")

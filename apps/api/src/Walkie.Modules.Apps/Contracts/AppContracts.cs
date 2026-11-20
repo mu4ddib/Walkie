@@ -3,7 +3,12 @@ namespace Walkie.Modules.Apps.Contracts;
 public sealed record CreateAppRequest(string Name);
 
 /// <param name="FeatureCount">Cantidad de features de la app (tarjetas de la galería).</param>
-public sealed record AppResponse(Guid Id, string Name, DateTimeOffset CreatedAt, int FeatureCount);
+public sealed record AppResponse(
+    Guid Id,
+    string Name,
+    DateTimeOffset CreatedAt,
+    int FeatureCount,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Role = null);
 
 public sealed record CreateFeatureRequest(string Name, string? Description = null);
 

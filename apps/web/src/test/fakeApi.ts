@@ -3,6 +3,8 @@ import {
   ASSET_TYPES,
   SHARE_DAYS,
   type App,
+  type AppMember,
+  type AppRole,
   type Asset,
   type CatalogItem,
   type Feature,
@@ -31,9 +33,21 @@ export function installFakeApi(
     modules?: Feature[];
     /** Walkie Live (spec walkie-live, tarea 5). Sin él, Discovery responde 404, como apagado en la API. */
     discovery?: DiscoverySeed;
+    /**
+     * Miembros por app (ADR-0015). Sin ellos, cada app tiene solo a `me` como owner. El rol de cada app es el `role`
+     * sembrado (por defecto `owner`). `known` son los correos que ya entraron a Walkie (los demás: 400 al sumarlos).
+     */
+    members?: Record<string, AppMember[]>;
+    known?: { userId: string; name: string; email: string }[];
   } = {},
 ) {
-  const apps = [...(seed.apps ?? [])];
+  const apps = [...(seed.apps ?? [])].map((a) => ({ ...a }));
+  const members: Record<string, AppMember[]> = Object.fromEntries(
+    Object.entries(seed.members ?? {}).map(([appId, list]) => [appId, list.map((m) => ({ ...m }))]),
+  );
+  const membersOf = (appId: string): AppMember[] =>
+    (members[appId] ??= [{ userId: 'me', name: 'Yo', role: 'owner', grantedAt: new Date(0).toISOString() }]);
+  const known = seed.known ?? [];
   const catalog = [...(seed.catalog ?? [])];
   const assets = new Map<string, { asset: Asset; file: File }>();
   const features = [...(seed.features ?? []), ...(seed.modules ?? []).map((m) => ({ ...m, kind: 'module' as const }))].map(
@@ -411,19 +425,66 @@ export function installFakeApi(
       return json(201, { ...summary, features: [{ sourceName, name, id: feature.id }] });
     }
 
-    const withCount = (a: App) => ({ ...a, featureCount: features.filter((f) => f.appId === a.id && !isModule(f)).length });
+    const withCount = (a: App) => ({
+      ...a,
+      featureCount: features.filter((f) => f.appId === a.id && !isModule(f)).length,
+      role: a.role ?? 'owner',
+    });
 
     if (!appId) {
       if (method === 'GET') return json(200, apps.map(withCount));
       const error = invalidName(body.name);
       if (error) return error;
-      const app: App = { id: id(), name: body.name!.trim(), createdAt: new Date(0).toISOString(), featureCount: 0 };
+      const app: App = {
+        id: id(),
+        name: body.name!.trim(),
+        createdAt: new Date(0).toISOString(),
+        featureCount: 0,
+        role: 'owner',
+      };
       apps.push(app);
       return json(201, app);
     }
 
     const app = apps.find((a) => a.id === appId);
     if (!app) return notFound();
+    // /api/apps/{appId}/members[/{userId}] — como la API (ADR-0015): 400 sin registrar, 409 repetido o sin owner.
+    if (parts[3] === 'members') {
+      const list = membersOf(appId);
+      const role = (body as { role?: AppRole }).role;
+      const conflict = (title: string) => json(409, { title, status: 409 });
+      const userId = parts[4] && decodeURIComponent(parts[4]);
+      if (!userId) {
+        if (method === 'GET') return json(200, list);
+        const email = (body as { email?: string }).email?.trim().toLowerCase() ?? '';
+        const person = known.find((k) => k.email === email);
+        if (!person)
+          return json(400, {
+            title: 'Datos inválidos.',
+            status: 400,
+            errors: {
+              Email: ['Esa persona todavía no entró a Walkie: pídele que inicie sesión una vez y vuelve a intentarlo.'],
+            },
+          });
+        if (list.some((m) => m.userId === person.userId)) return conflict('Esa persona ya es miembro de la app.');
+        const member: AppMember = { ...person, role: role!, grantedAt: new Date(0).toISOString() };
+        list.push(member);
+        return json(201, member);
+      }
+      const member = list.find((m) => m.userId === userId);
+      if (!member) return notFound();
+      const lastOwner = member.role === 'owner' && list.filter((m) => m.role === 'owner').length === 1;
+      if (lastOwner && (method === 'DELETE' || role !== 'owner'))
+        return conflict('La app tiene que quedar con al menos un owner.');
+      if (method === 'DELETE') {
+        list.splice(list.indexOf(member), 1);
+        if (userId === 'me') apps.splice(apps.indexOf(app), 1);
+        return new Response(null, { status: 204 });
+      }
+      member.role = role!;
+      if (userId === 'me') app.role = role;
+      return json(200, member);
+    }
     // /api/apps/{appId}/assets — como la API: tipo por el archivo (aquí, su `type`), 400 o 201.
     if (parts[3] === 'assets') {
       const file = (init?.body as FormData).get('file') as File | null;
@@ -556,5 +617,5 @@ export function installFakeApi(
   });
 
   vi.stubGlobal('fetch', fetchMock);
-  return { apps, features, canvases, catalog, assets, shares, next: next_, discovery, fetchMock };
+  return { apps, features, canvases, catalog, assets, shares, members, next: next_, discovery, fetchMock };
 }

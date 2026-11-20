@@ -3,13 +3,15 @@ import { expect, type Page } from '@playwright/test';
 
 /** Usuario de prueba del realm de desarrollo (infra/keycloak/walkie-realm.json). */
 const USER = { username: 'dev', password: 'walkie_dev' };
+/** Segunda persona ficticia del realm de desarrollo (autorización por app, ADR-0015). */
+export const SECOND_USER = { username: 'dev2', password: 'walkie_dev2', email: 'dev2@walkie.local' };
 
 /**
  * Inicia sesión desde la pantalla de login de Walkie. Por defecto entra por la lista de apps (`/` abre
  * el último lienzo, que en las pruebas depende de las anteriores). Si Keycloak ya tiene sesión (otra pestaña
  * del mismo contexto), vuelve sin pedir contraseña. Termina en la página que se abrió.
  */
-export async function login(page: Page, path = '/apps') {
+export async function login(page: Page, path = '/apps', user: { username: string; password: string } = USER) {
   await page.goto(path);
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
   const form = page.locator('#kc-login');
@@ -17,8 +19,8 @@ export async function login(page: Page, path = '/apps') {
   // Lo que llegue primero: el formulario de Keycloak o la app ya con sesión.
   await expect(form.or(loggedIn)).toBeVisible({ timeout: 30_000 });
   if (await form.isVisible()) {
-    await page.fill('#username', USER.username);
-    await page.fill('#password', USER.password);
+    await page.fill('#username', user.username);
+    await page.fill('#password', user.password);
     await form.click();
   }
   await expect(loggedIn).toBeVisible({ timeout: 30_000 });

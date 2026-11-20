@@ -1,0 +1,41 @@
+/* «Miembros» (ADR-0015): reusa el diálogo de «Compartir» (share.css). */
+.members-add {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.members-add input {
+  min-width: 0;
+}
+
+.members-add-help {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.members-list li {
+  align-items: center;
+}
+
+.members-who {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.members-email,
+.members-since {
+  color: var(--stone-700);
+}
+
+.members-role {
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 640px) {
+  .members-add {
+    grid-template-columns: 1fr;
+  }
+}

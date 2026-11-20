@@ -35,6 +35,7 @@ const targets = [
   },
   { schema: 'walkie-operations.schema.json', out: 'walkie-operations-catalog.ts', name: 'WalkieOperationsCatalog' },
   { schema: 'walkie-module-summary.schema.json', out: 'walkie-module-summary.ts', name: 'WalkieModuleSummary' },
+  { schema: 'walkie-app-member.schema.json', out: 'walkie-app-member.ts', name: 'WalkieAppMember' },
   { schema: 'walkie-share.schema.json', out: 'walkie-share.ts', name: 'WalkieShare' },
   { schema: 'walkie-app-map.schema.json', out: 'walkie-app-map.ts', name: 'WalkieAppMap' },
   // .walkiepack (spec walkie-live, ADR-0013). Sin `imports`: declaran los `$defs` del grafo y del discovery que usan.

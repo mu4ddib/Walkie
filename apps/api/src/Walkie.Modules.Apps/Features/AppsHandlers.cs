@@ -11,22 +11,26 @@ internal sealed class AppsHandlers(AppsDbContext db, TimeProvider clock)
 {
     public async Task<AppResponse> CreateAppAsync(CreateAppRequest request, string userId, CancellationToken ct)
     {
-        var app = new App { Name = request.Name.Trim(), CreatedBy = userId, CreatedAt = clock.GetUtcNowForDb() };
+        var app = App.Create(request.Name, userId, clock.GetUtcNowForDb());
         db.Apps.Add(app);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return ToResponse(app);
     }
 
-    public async Task<IReadOnlyList<AppResponse>> ListAppsAsync(CancellationToken ct) =>
+    /// <summary>Solo las apps de las que la persona es miembro, con su rol (ADR-0015).</summary>
+    public async Task<IReadOnlyList<AppResponse>> ListAppsAsync(string userId, CancellationToken ct) =>
         await db.Apps.AsNoTracking()
+            .Where(a => a.Members.Any(m => m.UserId == userId))
             .OrderBy(a => a.Name).ThenBy(a => a.Id)
-            .Select(a => new AppResponse(a.Id, a.Name, a.CreatedAt, a.Features.Count(f => f.Kind == FeatureKind.Feature)))
+            .Select(a => new AppResponse(a.Id, a.Name, a.CreatedAt, a.Features.Count(f => f.Kind == FeatureKind.Feature),
+                a.Members.Where(m => m.UserId == userId).Select(m => m.Role).First()))
             .ToListAsync(ct).ConfigureAwait(false);
 
-    public async Task<AppResponse?> GetAppAsync(Guid appId, CancellationToken ct) =>
+    public async Task<AppResponse?> GetAppAsync(Guid appId, string userId, CancellationToken ct) =>
         await db.Apps.AsNoTracking()
             .Where(a => a.Id == appId)
-            .Select(a => new AppResponse(a.Id, a.Name, a.CreatedAt, a.Features.Count(f => f.Kind == FeatureKind.Feature)))
+            .Select(a => new AppResponse(a.Id, a.Name, a.CreatedAt, a.Features.Count(f => f.Kind == FeatureKind.Feature),
+                a.Members.Where(m => m.UserId == userId).Select(m => m.Role).FirstOrDefault()))
             .SingleOrDefaultAsync(ct).ConfigureAwait(false);
 
     /// <summary>Crea la feature; <c>null</c> si la app no existe.</summary>
@@ -89,7 +93,7 @@ internal sealed class AppsHandlers(AppsDbContext db, TimeProvider clock)
         db.Apps.AnyAsync(a => a.Id == appId, ct);
 
     private static AppResponse ToResponse(App app) =>
-        new(app.Id, app.Name, app.CreatedAt, app.Features.Count(f => f.Kind == FeatureKind.Feature));
+        new(app.Id, app.Name, app.CreatedAt, app.Features.Count(f => f.Kind == FeatureKind.Feature), "owner");
 
     private static FeatureResponse ToResponse(Feature f) => new(f.Id, f.AppId, f.Name, f.Description, f.CreatedAt, f.UpdatedAt, f.Kind);
 }

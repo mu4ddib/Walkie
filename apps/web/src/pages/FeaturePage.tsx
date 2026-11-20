@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useApp, useCanvas } from '../api/hooks';
 import { FeatureOrigin } from '../discovery/OriginPopover';
 import { FeatureEditor } from '../canvas/FeatureEditor';
-import { QueryState } from '../ui/QueryState';
+import { APP_NO_ACCESS, QueryState } from '../ui/QueryState';
 import { APPS_PATH, appPath } from '../workspace/paths';
 import { forgetLastWorkspace, setLastWorkspace } from '../workspace/session';
 import { useEditorCatalog } from './editorCatalog';
@@ -22,7 +22,7 @@ export function FeaturePage() {
   const play = search.get('play');
   const step = Number(search.get('step') ?? 0);
   const app = useApp(appId);
-  const { catalog, features, error } = useEditorCatalog(appId, featureId);
+  const { catalog, features, error, isOwner } = useEditorCatalog(appId, featureId);
   const feature = features.data?.find((f) => f.id === featureId);
   const canvas = useCanvas(featureId);
   const missing = features.data !== undefined && !feature;
@@ -38,7 +38,7 @@ export function FeaturePage() {
         {missing ? (
           <p role="alert">Esta feature no existe.</p>
         ) : (
-          <QueryState isPending={false} error={error ?? canvas.error} notFound="Esta app no existe." />
+          <QueryState isPending={false} error={error ?? canvas.error} notFound={APP_NO_ACCESS} />
         )}
         <p>
           <Link to={appPath(appId)}>Ver las features de la app</Link> · <Link to={APPS_PATH}>Todas las apps</Link>
@@ -59,6 +59,7 @@ export function FeaturePage() {
   return (
     <section className="feature-page">
       <FeatureEditor
+        canShare={isOwner}
         featureId={featureId}
         initialGraph={canvas.data}
         catalog={catalog}

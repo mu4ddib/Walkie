@@ -17,6 +17,7 @@ public static class SharingModule
         services.AddDbContext<SharingDbContext>(options => options.UseNpgsql(connectionString, ConfigureNpgsql));
         services.AddValidatorsFromAssemblyContaining<SharingDbContext>(includeInternalTypes: true);
         services.AddScoped<ShareHandlers>();
+        services.AddScoped<Walkie.Modules.Apps.Contracts.IAppScopeResolver, ShareScope>();
         services.AddScoped<PublicShareHandlers>();
         services.TryAddSingleton(TimeProvider.System);
         return services;

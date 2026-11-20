@@ -230,7 +230,10 @@ public sealed class DiscoveryCanvasTests(WalkieApiFactory factory)
         }
 
         // Mientras tanto, otra persona crea un módulo con ese mismo id (la API de módulos acepta el id del cliente).
-        using var other = factory.CreateAuthenticatedClient(WalkieApiFactory.CreateToken(sub: "otra-persona"));
+        // (Una persona de la app: desde ADR-0015, alguien de afuera ni siquiera la ve.)
+        var sub = "otra-persona-" + Guid.NewGuid().ToString("N")[..8];
+        using var other = await Members.PersonAsync(factory, sub);
+        await Members.GrantAsync(client, appId, sub, "editor");
         var foreign = await other.PostAsJsonAsync(new Uri($"/api/apps/{appId}/modules", UriKind.Relative), new { name = "Ajeno", id = moduleId });
         Assert.Equal(HttpStatusCode.Created, foreign.StatusCode);
 

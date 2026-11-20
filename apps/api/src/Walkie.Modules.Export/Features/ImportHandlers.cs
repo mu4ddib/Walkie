@@ -146,7 +146,7 @@ internal sealed class ImportHandlers(
             return new ImportResult.Invalid(errors);
         }
 
-        var appNames = new HashSet<string>(await appWriter.AppNamesAsync(ct).ConfigureAwait(false), StringComparer.OrdinalIgnoreCase);
+        var appNames = new HashSet<string>(await appWriter.AppNamesAsync(userId, ct).ConfigureAwait(false), StringComparer.OrdinalIgnoreCase);
         var sourceName = package.Manifest.App.Name.Trim();
         var appName = UniqueName(sourceName.Length == 0 ? "App importada" : sourceName, appNames);
         if (dryRun)

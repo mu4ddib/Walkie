@@ -13,4 +13,16 @@ internal sealed class App
 
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public List<Feature> Features { get; } = [];
+    public List<AppMembership> Members { get; } = [];
+
+    /// <summary>
+    /// Una app nueva con quien la crea como <c>owner</c> (ADR-0015), en el mismo guardado: ninguna app queda sin dueño,
+    /// la cree quien la cree (vacía, importada o desde un proyecto local).
+    /// </summary>
+    public static App Create(string name, string userId, DateTimeOffset now, Guid? id = null)
+    {
+        var app = new App { Id = id ?? Guid.CreateVersion7(), Name = name.Trim(), CreatedBy = userId, CreatedAt = now };
+        app.Members.Add(new AppMembership { AppId = app.Id, UserId = userId, Role = AppMembership.Owner, GrantedBy = userId, GrantedAt = now });
+        return app;
+    }
 }

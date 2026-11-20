@@ -25,7 +25,8 @@ public interface IAppWriter
     Task<AppRemoval> DeleteUntouchedAppAsync(Guid appId, string name, CancellationToken cancellationToken);
 
     /// <summary>Nombres de todas las apps, para no repetir uno al importar.</summary>
-    Task<IReadOnlyList<string>> AppNamesAsync(CancellationToken cancellationToken);
+    /// <summary>Nombres de las apps de las que la persona es miembro (ADR-0015: no se revelan las de otros).</summary>
+    Task<IReadOnlyList<string>> AppNamesAsync(string userId, CancellationToken cancellationToken);
 
     /// <summary>Borra la app con sus features y su catálogo (deshacer una importación de app).</summary>
     Task DeleteAppAsync(Guid appId, CancellationToken cancellationToken);

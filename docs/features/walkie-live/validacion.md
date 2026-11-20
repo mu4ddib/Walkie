@@ -339,11 +339,11 @@ Los binarios autocontenidos y un envoltorio npm son opcionales y se deciden desp
 
 ## 18. Deuda registrada y próximos incrementos
 
-Estado de la autorización: **ADR-0015 sigue propuesto y la autorización por app no está implementada.** Ningún endpoint compara al usuario con la app.
+Estado de la autorización (2026-11-19): **D1 resuelto en la rama `feat/autorizacion-por-app`** (spec `autorizacion-por-app`, #175): ADR-0015 aceptado, membresías con roles en todos los endpoints con un recurso de app, migración que da owner a cada app existente y pruebas IDOR en verde. Discovery sigue apagado por defecto: el piloto sigue bloqueado por D2–D6.
 
 | Id | Prioridad | Deuda | Evidencia | Criterio de cierre |
 |---|---|---|---|---|
-| D1 | **Bloqueante** | Autorización por app (ADR-0015) | §13; `GET /api/apps` lista todas | Política implementada en todos los endpoints, migración de las apps existentes y pruebas IDOR en verde; ADR-0015 aceptado |
+| D1 | ~~Bloqueante~~ **Resuelto** | Autorización por app (ADR-0015) | §13; `GET /api/apps` lista todas | Cumplido: filtro único en todos los endpoints (`AppAuthorizationTests`: guardia de cobertura y matriz IDOR), migración `Memberships` probada y ADR-0015 aceptado |
 | D2 | **Alta** | Seguir clientes HTTP envoltorio de un nivel (`request(path)`/`send(path)` → `fetch(base + path)`) cuando la ruta es literal en quien llama | §2: 0 de 43 llamadas detectadas en Walkie | En el análisis de Walkie, las llamadas de `apps/web/src/api/client.ts` aparecen como `calls` a las 43 APIs, sin falsos positivos en el corpus de la CLI; lo dinámico sigue como limitación |
 | D3 | **Alta** | Declarar la navegación que no se resuelve (por ejemplo `navigate(appPath(id))`, `<Link to={featurePath(…)}>`) con una limitación propia | §2: 9 de 56 navegaciones, ninguna limitación | Toda navegación no literal deja una limitación con archivo y línea; el análisis queda parcial cuando corresponde |
 | D4 | Media | Inicio de sesión en WebKit vuelve a `/` (o a «Iniciar sesión») en vez de la ruta pedida | §12: 2 E2E de Walkie Live fallan en WebKit de forma reproducible; Chromium pasa | La causa se identifica en `signinRedirect`/`onSigninCallback` y los E2E de Walkie Live pasan con `WALKIE_BROWSER=webkit` |

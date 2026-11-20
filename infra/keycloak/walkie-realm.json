@@ -44,6 +44,15 @@
       "lastName": "Walkie",
       "enabled": true,
       "credentials": [{ "type": "password", "value": "walkie_dev", "temporary": false }]
+    },
+    {
+      "username": "dev2",
+      "email": "dev2@walkie.local",
+      "emailVerified": true,
+      "firstName": "Dev2",
+      "lastName": "Walkie",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "walkie_dev2", "temporary": false }]
     }
   ]
 }

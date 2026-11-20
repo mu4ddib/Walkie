@@ -50,6 +50,78 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                     b.ToTable("apps", "apps");
                 });
 
+            modelBuilder.Entity("Walkie.Modules.Apps.Domain.AppMembership", b =>
+                {
+                    b.Property<Guid>("AppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("app_id");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTimeOffset>("GrantedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("granted_at");
+
+                    b.Property<string>("GrantedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("granted_by");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("role");
+
+                    b.HasKey("AppId", "UserId");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_memberships_user_id");
+
+                    b.ToTable("memberships", "apps", t =>
+                        {
+                            t.HasCheckConstraint("ck_memberships_role", "role IN ('owner', 'editor', 'viewer')");
+                        });
+                });
+
+            modelBuilder.Entity("Walkie.Modules.Apps.Domain.AppUser", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_seen_at");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .HasDatabaseName("ix_users_email");
+
+                    b.ToTable("users", "apps");
+                });
+
             modelBuilder.Entity("Walkie.Modules.Apps.Domain.CatalogItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -181,6 +253,15 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                     b.ToTable("features", "apps");
                 });
 
+            modelBuilder.Entity("Walkie.Modules.Apps.Domain.AppMembership", b =>
+                {
+                    b.HasOne("Walkie.Modules.Apps.Domain.App", null)
+                        .WithMany("Members")
+                        .HasForeignKey("AppId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Walkie.Modules.Apps.Domain.CatalogItem", b =>
                 {
                     b.HasOne("Walkie.Modules.Apps.Domain.App", null)
@@ -202,6 +283,8 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
             modelBuilder.Entity("Walkie.Modules.Apps.Domain.App", b =>
                 {
                     b.Navigation("Features");
+
+                    b.Navigation("Members");
                 });
 #pragma warning restore 612, 618
         }

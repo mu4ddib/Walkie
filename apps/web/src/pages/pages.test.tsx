@@ -178,7 +178,7 @@ describe('detalle de app', () => {
     installFakeApi();
     renderRoute('/apps/no-existe');
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Esta app no existe.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No tienes acceso a esta app');
   });
 });
 
