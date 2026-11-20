@@ -105,6 +105,9 @@ public sealed class Findings(AnalyzerLimits limits)
 
     public IReadOnlyDictionary<string, EntityDraft> Entities => entities;
 
+    /// <summary>Las relaciones hasta ahora (tipo y extremos), para las reglas que interpretan (ADR-0016).</summary>
+    public IEnumerable<(string Kind, string From, string To)> RelationEnds => relations.Values.Select(r => (r.Kind, r.From, r.To));
+
     public int RelationCount => relations.Count;
 
     public int EvidenceCount => evidence.Count;

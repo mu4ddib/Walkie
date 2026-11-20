@@ -511,16 +511,19 @@ public sealed class FrontendHttpDetector : IDetector
 }
 
 /// <summary>
-/// Candidatos a feature (ADR-0013, tarea 8). Una feature es una decisión de una persona; esto solo la propone, con dos
-/// reglas conservadoras y explicables, y siempre con sus pantallas y las APIs que llaman como miembros:
+/// Candidatos a feature (ADR-0013 y ADR-0016). Una feature es una decisión de una persona; esto solo la propone, con
+/// reglas conservadoras, deterministas y explicables, y con sus pantallas y las APIs que llaman como miembros:
 /// <list type="number">
-/// <item><b>Carga diferida</b> (Angular <c>loadChildren</c>): las pantallas que se cargan juntas bajo una ruta son una
-/// propuesta, de confianza media.</item>
-/// <item><b>Recurso</b>: dos o más pantallas cuyo último segmento estático es el mismo (una lista y su detalle:
-/// <c>/pedidos</c> y <c>/pedidos/{}</c>), de confianza baja.</item>
+/// <item><b>Carga diferida</b> (Angular <c>loadChildren</c>): las pantallas que se cargan juntas bajo una ruta.</item>
+/// <item><b>Familia de rutas:</b> la ruta sin parámetros (<c>/apps/:appId/catalog/:itemId</c> → <c>apps/catalog</c>),
+/// dentro de una app técnica; una familia con dos o más pantallas es candidata. Dos familias no se juntan por compartir
+/// un segmento: <c>/s/:token/modules/:id</c> y <c>/apps/:appId/modules/:id</c> no son la misma.</item>
+/// <item><b>Una pantalla de detalle</b> (una familia de una sola pantalla que cuelga de otra) se une a la familia de la
+/// que cuelga solo si toda navegación que llega a ella sale de esa familia, vuelve a ella y comparten al menos una API.</item>
 /// </list>
-/// Una pantalla de una carga diferida no se vuelve a agrupar por recurso. Una pantalla sola o la raíz no proponen nada.
-/// Inferida siempre.
+/// El puntaje (ADR-0016) suma evidencia fuerte (navegación observada entre sus pantallas, carga diferida común), media
+/// (APIs en común, APIs de un mismo módulo del backend) y débil (solo la forma de la ruta): confianza media con al menos
+/// una fuerte y una media; si no, baja. El nombre es el título de la pantalla con la ruta más corta. Inferida siempre.
 /// </summary>
 public sealed class FrontendFeaturesDetector : IDetector
 {
@@ -536,30 +539,89 @@ public sealed class FrontendFeaturesDetector : IDetector
     public void Run(AnalysisContext context)
     {
         var model = FrontendModel.Of(context);
-        var lazy = model.Screens.Where(s => s.LazyMount is not null)
-            .GroupBy(s => (s.App.Scope, Name: LastStatic(s.LazyMount!)))
-            .Where(g => g.Key.Name is not null);
-        var byResource = model.Screens.Where(s => s.LazyMount is null && model.Screens.All(o => o.Key != s.Key || o.LazyMount is null))
-            .GroupBy(s => (s.App.Scope, Name: LastStatic(s.Route)))
-            .Where(g => g.Key.Name is not null);
-        foreach (var (group, isLazy) in lazy.Select(g => (g, true)).Concat(byResource.Select(g => (g, false)))
-                     .OrderBy(x => x.g.Key.Scope, StringComparer.Ordinal).ThenBy(x => x.g.Key.Name, StringComparer.Ordinal))
+        var navigation = context.Findings.RelationEnds.Where(r => r.Kind == "navigates").Select(r => (r.From, r.To)).ToHashSet();
+        var moduleOf = context.Findings.RelationEnds.Where(r => r.Kind == "exposes" && r.From.StartsWith("module:", StringComparison.Ordinal))
+            .GroupBy(r => r.To).ToDictionary(g => g.Key, g => g.Select(r => r.From).Order(StringComparer.Ordinal).First(), StringComparer.Ordinal);
+        foreach (var app in model.Apps)
         {
-            Propose(context, model, group.Key.Name!, [.. group], isLazy);
+            var records = model.Screens.Where(s => s.App == app).GroupBy(s => s.Key).Select(g => g.First()).OrderBy(s => s.Key, StringComparer.Ordinal).ToList();
+            var groups = new List<(string Reason, List<ScreenRecord> Screens, bool Lazy)>();
+
+            // 1. Carga diferida.
+            foreach (var lazy in records.Where(s => s.LazyMount is not null).GroupBy(s => s.LazyMount!).OrderBy(g => g.Key, StringComparer.Ordinal))
+            {
+                groups.Add(($"se cargan juntas bajo {lazy.Key}", [.. lazy], true));
+            }
+
+            // 2. Familias de rutas (sin las de carga diferida ni la raíz).
+            var families = records.Where(s => s.LazyMount is null).GroupBy(s => Family(s.Route)).Where(g => g.Key.Length > 0)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+
+            // 3. Una pantalla de detalle se une a la familia de la que cuelga si solo se llega desde ella, vuelve y comparten API.
+            foreach (var (family, screens) in families.Where(f => f.Value.Count == 1).OrderBy(f => f.Key, StringComparer.Ordinal).ToList())
+            {
+                var detail = screens[0].Key;
+                var parent = families.Keys.Where(k => k != family && families[k].Count > 0 && family.StartsWith(k + "/", StringComparison.Ordinal))
+                    .OrderByDescending(k => k.Length).FirstOrDefault();
+                if (parent is null)
+                {
+                    continue;
+                }
+
+                var parentKeys = families[parent].Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
+                var inbound = navigation.Where(n => n.To == detail && n.From != detail).Select(n => n.From).ToList();
+                var calls = Calls(model, detail);
+                if (inbound.Count > 0 && inbound.All(parentKeys.Contains) && navigation.Any(n => n.From == detail && parentKeys.Contains(n.To))
+                    && families[parent].Any(p => Calls(model, p.Key).Overlaps(calls)))
+                {
+                    families[parent].Add(screens[0]);
+                    families.Remove(family);
+                }
+            }
+
+            foreach (var (family, screens) in families.Where(f => f.Value.Count >= 2).OrderBy(f => f.Key, StringComparer.Ordinal))
+            {
+                groups.Add(($"son de la familia de rutas /{family}", screens, false));
+            }
+
+            foreach (var (reason, screens, lazy) in groups)
+            {
+                Propose(context, model, navigation, moduleOf, reason, screens, lazy);
+            }
         }
     }
 
-    private void Propose(AnalysisContext context, FrontendModel model, string segment, List<ScreenRecord> records, bool lazy)
+    private static SortedSet<string> Calls(FrontendModel model, string screen) =>
+        model.CallsByScreen.TryGetValue(screen, out var calls) ? calls : new SortedSet<string>(StringComparer.Ordinal);
+
+    /// <summary>La familia de una ruta: sus segmentos fijos (<c>/apps/:appId/catalog/:itemId</c> → <c>apps/catalog</c>); la raíz, vacía.</summary>
+    internal static string Family(string route) =>
+        string.Join('/', DiscoveryKeys.NormalizePath(route).Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Where(s => s != "{}" && !s.Contains('*', StringComparison.Ordinal)));
+
+    private void Propose(
+        AnalysisContext context, FrontendModel model, HashSet<(string From, string To)> navigation, Dictionary<string, string> moduleOf,
+        string reason, List<ScreenRecord> records, bool lazy)
     {
-        var screens = records.GroupBy(s => s.Key).Select(s => s.First()).OrderBy(s => s.Key, StringComparer.Ordinal).ToList();
+        var screens = records.GroupBy(s => s.Key).Select(s => s.First()).OrderBy(s => s.Route.Length).ThenBy(s => s.Key, StringComparer.Ordinal).ToList();
         if (screens.Count < 2)
         {
             return;
         }
 
-        var title = Humanize(segment);
-        var confidence = lazy ? Confidence.Medium : Confidence.Low;
-        var apis = screens.SelectMany(s => model.CallsByScreen.TryGetValue(s.Key, out var calls) ? calls : []).Distinct().Order(StringComparer.Ordinal).ToList();
+        var keys = screens.Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
+        var links = navigation.Count(n => keys.Contains(n.From) && keys.Contains(n.To));
+        var perScreen = screens.Select(s => Calls(model, s.Key)).ToList();
+        var apis = perScreen.SelectMany(c => c).Distinct().Order(StringComparer.Ordinal).ToList();
+        var shared = apis.Where(a => perScreen.Count(c => c.Contains(a)) >= 2).ToList();
+        var modules = apis.Where(moduleOf.ContainsKey).Select(a => moduleOf[a]).GroupBy(m => m).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).ToList();
+        var strong = links > 0 || lazy;
+        var medium = shared.Count > 0 || (modules.Count > 0 && modules[0].Count() >= 2);
+        var confidence = strong && medium ? Confidence.Medium : Confidence.Low;
+
+        // El nombre: el título de la pantalla principal (la de ruta más corta), que es lo que una persona ya escribió.
+        var main = context.Findings.Entities.TryGetValue(screens[0].Key, out var mainScreen) ? mainScreen.Title : Humanize(LastStatic(screens[0].Route) ?? screens[0].Route);
+        var title = Text.Truncate(main, 120);
         EntityDraft? feature = null;
         foreach (var screen in screens)
         {
@@ -574,12 +636,32 @@ public sealed class FrontendFeaturesDetector : IDetector
         }
 
         feature.App ??= screens[0].App.Scope;
+        var evidenceText = new List<string>();
+        if (lazy)
+        {
+            evidenceText.Add("carga diferida común");
+        }
 
-        var why = lazy ? $"se cargan juntas bajo /{segment}" : $"comparten el recurso «{segment}»";
+        if (links > 0)
+        {
+            evidenceText.Add(links == 1 ? "1 navegación entre ellas" : $"{links} navegaciones entre ellas");
+        }
+
+        if (shared.Count > 0)
+        {
+            evidenceText.Add(shared.Count == 1 ? "1 API en común" : $"{shared.Count} APIs en común");
+        }
+
+        if (modules.Count > 0)
+        {
+            evidenceText.Add($"{modules[0].Count()} de sus APIs son de {modules[0].Key["module:".Length..]}");
+        }
+
         feature.Description ??= Text.Truncate(
-            $"Propuesta: {screens.Count} pantallas que {why} ({string.Join(", ", screens.Select(s => s.Route))})"
+            $"Propuesta: {screens.Count} pantallas que {reason} ({string.Join(", ", screens.Select(s => s.Route))})"
             + (apis.Count switch { 0 => "", 1 => " y la API que llaman", _ => $" y las {apis.Count} APIs que llaman" })
-            + ". Es una sugerencia: la feature la decides tú.", 2000);
+            + ". Evidencia: " + (evidenceText.Count == 0 ? "solo la forma de las rutas (débil)" : string.Join(", ", evidenceText))
+            + $". Confianza {(confidence == Confidence.Medium ? "media" : "baja")}. Es una sugerencia: el nombre y el alcance los decides tú.", 2000);
         foreach (var screen in screens)
         {
             feature.AddMember(screen.Key);
