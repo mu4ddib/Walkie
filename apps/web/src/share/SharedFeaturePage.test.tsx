@@ -12,7 +12,8 @@ import { installFakeApi } from '../test/fakeApi';
 import { formatDay } from './shareFormat';
 
 // Sin sesión: si la ruta pasara por AuthGate, se vería "Iniciar sesión".
-vi.mock('react-oidc-context', () => ({
+vi.mock('react-oidc-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-oidc-context')>()),
   useAuth: () => ({ isLoading: false, isAuthenticated: false, user: null, signinRedirect: vi.fn() }),
 }));
 // React Flow no corre bien en jsdom: un lienzo mínimo que muestra lo que recibe.

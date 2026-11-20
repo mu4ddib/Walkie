@@ -157,11 +157,19 @@ export class ApiError extends Error {
   }
 }
 
-/** `fetch` a la API con el token; un error HTTP llega como `ApiError`. JSON solo si el cuerpo es texto. */
+/**
+ * `fetch` a la API con el token; un error HTTP llega como `ApiError`. JSON solo si el cuerpo es texto.
+ *
+ * El `signal` de TanStack Query no llega a `fetch`: una consulta cancelada (otro hallazgo elegido mientras cargaba su
+ * evidencia, una página que se desmonta) igual se descarta, pero el pedido termina. Abortar pedidos en curso tumba el
+ * proceso de red del WebKit de Linux que usa Playwright (libsoup, WebKit bug 276819) y con él se iban la sesión, las
+ * cookies y los pedidos pendientes; ver `apps/web/CLAUDE.md` → Trampas.
+ */
 async function send(path: string, init: RequestInit & { token?: string } = {}): Promise<Response> {
   const { token, headers, ...rest } = init;
   const res = await fetch(`${baseUrl}${path}`, {
     ...rest,
+    signal: undefined,
     headers: {
       ...(typeof rest.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
       ...headers,
