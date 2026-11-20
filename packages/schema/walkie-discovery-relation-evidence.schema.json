@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-relation-evidence.schema.json",
+  "title": "Walkie discovery relation evidence v0",
+  "description": "Una relación de un análisis con su evidencia resuelta (spec walkie-live-arquitectura, ADR-0016): para una relación inferida, la cadena entera (cada salto con su archivo, línea y nota). GET /api/snapshots/{snapshotId}/relation-evidence?key=…",
+  "type": "object",
+  "required": ["snapshotId", "relation", "evidence"],
+  "additionalProperties": false,
+  "properties": {
+    "snapshotId": { "type": "string", "format": "uuid" },
+    "relation": { "$ref": "walkie-discovery.schema.json#/$defs/relation" },
+    "evidence": { "type": "array", "items": { "$ref": "walkie-discovery.schema.json#/$defs/evidence" } }
+  }
+}

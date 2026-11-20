@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-discovery-architecture-group.schema.json",
+  "title": "Walkie discovery architecture group v0",
+  "description": "Lo que hay dentro de un grupo de la arquitectura descubierta (spec walkie-live-arquitectura): sus hallazgos (paginados), sus relaciones y los vecinos de otros grupos con los que se relaciona. Calculado, sin guardar. GET /api/snapshots/{snapshotId}/architecture/group?key=…",
+  "type": "object",
+  "required": ["key", "page", "pageSize", "total", "entities", "relations", "neighbors"],
+  "additionalProperties": false,
+  "properties": {
+    "key": { "type": "string", "minLength": 1, "maxLength": 600 },
+    "page": { "type": "integer", "minimum": 0 },
+    "pageSize": { "type": "integer", "minimum": 1, "maximum": 500 },
+    "total": { "type": "integer", "minimum": 0 },
+    "entities": { "type": "array", "items": { "$ref": "#/$defs/entity" } },
+    "relations": { "type": "array", "items": { "$ref": "#/$defs/relation" } },
+    "neighbors": { "type": "array", "items": { "$ref": "#/$defs/entity" }, "description": "Hallazgos de otros grupos en el otro extremo de una relación" }
+  },
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "required": ["key", "kind", "title", "basis", "confidence", "group"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "kind": { "enum": ["api", "service", "database", "resource", "screen", "module", "feature"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "basis": { "enum": ["observed", "inferred"] },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "group": { "type": "string", "maxLength": 600 },
+        "route": { "type": "string", "maxLength": 500 },
+        "decision": { "enum": ["created", "linked", "rejected"] }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "required": ["key", "kind", "from", "to", "basis", "confidence", "semantic"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 1100 },
+        "kind": { "enum": ["calls", "reads", "writes", "publishes", "consumes", "exposes", "depends-on", "navigates", "contains"] },
+        "from": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "to": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "basis": { "enum": ["observed", "inferred"] },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "semantic": { "enum": ["execution", "navigation", "containment", "dependency"] }
+      }
+    }
+  }
+}

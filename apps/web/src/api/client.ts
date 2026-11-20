@@ -10,6 +10,22 @@ import type { Interface, WalkieModuleSummaryV0 } from '../schema/walkie-module-s
 import type { Role, WalkieAppMemberV0 } from '../schema/walkie-app-member';
 import type { WalkieDeletionImpactV0 } from '../schema/walkie-deletion-impact';
 import type { WalkieDeletionV0 } from '../schema/walkie-deletion';
+import type { WalkieDiscoveryArchitectureV0 } from '../schema/walkie-discovery-architecture';
+import type { WalkieDiscoveryArchitectureGroupV0 } from '../schema/walkie-discovery-architecture-group';
+import type { WalkieDiscoveryRelationEvidenceV0 } from '../schema/walkie-discovery-relation-evidence';
+
+/** Arquitectura descubierta (`walkie-discovery-architecture.schema.json`). */
+export type DiscoveryArchitecture = WalkieDiscoveryArchitectureV0;
+export type ArchitectureGroup = DiscoveryArchitecture['groups'][number];
+export type ArchitectureLink = DiscoveryArchitecture['links'][number];
+export type ArchitectureProposal = DiscoveryArchitecture['proposals'][number];
+export type ArchitectureLimitation = DiscoveryArchitecture['limitations'][number];
+/** Un grupo por dentro (`walkie-discovery-architecture-group.schema.json`). */
+export type DiscoveryArchitectureGroup = WalkieDiscoveryArchitectureGroupV0;
+export type ArchitectureEntity = DiscoveryArchitectureGroup['entities'][number];
+export type ArchitectureRelation = DiscoveryArchitectureGroup['relations'][number];
+/** Una relación con su evidencia (`walkie-discovery-relation-evidence.schema.json`). */
+export type DiscoveryRelationEvidence = WalkieDiscoveryRelationEvidenceV0;
 
 /** Rol en una app (spec autorizacion-por-app, ADR-0015): `viewer` lee, `editor` crea y edita, `owner` además administra. */
 export type AppRole = Role;
@@ -545,6 +561,8 @@ export interface ReviewQuery {
   change?: string;
   /** Solo lo que pide una decisión de una persona (tarea 10). */
   needsReview?: boolean;
+  /** Solo estas claves (un conjunto de la revisión por conjuntos, spec walkie-live-arquitectura). */
+  keys?: readonly string[];
   page: number;
   pageSize: number;
 }
@@ -594,7 +612,31 @@ export function getDiscoveryReview(token: string, snapshotId: string, query: Rev
   if (query.status) params.set('status', query.status);
   if (query.change) params.set('change', query.change);
   if (query.needsReview) params.set('needsReview', 'true');
+  for (const key of query.keys ?? []) params.append('key', key);
   return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/review?${params}`, { token, signal });
+}
+
+/** Arquitectura descubierta de un análisis (calculada, sin efectos; ADR-0016). */
+export function getDiscoveryArchitecture(token: string, snapshotId: string, signal?: AbortSignal): Promise<DiscoveryArchitecture> {
+  return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/architecture`, { token, signal });
+}
+
+/** Una relación con su evidencia resuelta: para una inferida, cada salto de la cadena. */
+export function getDiscoveryRelationEvidence(token: string, snapshotId: string, key: string, signal?: AbortSignal): Promise<DiscoveryRelationEvidence> {
+  return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/relation-evidence?${new URLSearchParams({ key })}`, { token, signal });
+}
+
+/** Un grupo de la arquitectura por dentro: hallazgos (paginados), relaciones y vecinos. */
+export function getDiscoveryArchitectureGroup(
+  token: string,
+  snapshotId: string,
+  key: string,
+  page: number,
+  pageSize: number,
+  signal?: AbortSignal,
+): Promise<DiscoveryArchitectureGroup> {
+  const params = new URLSearchParams({ key, page: String(page), pageSize: String(pageSize) });
+  return request(`/api/snapshots/${encodeURIComponent(snapshotId)}/architecture/group?${params}`, { token, signal });
 }
 
 /** Decisiones sobre hallazgos (reject, link, reset); con `dryRun` es la vista previa. */

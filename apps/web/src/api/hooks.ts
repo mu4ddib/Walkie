@@ -61,6 +61,9 @@ import {
   getDiscoveryStatus,
   type DiscoveryOperation,
   type ReviewQuery,
+  getDiscoveryArchitecture,
+  getDiscoveryArchitectureGroup,
+  getDiscoveryRelationEvidence,
   addMember,
   listMembers,
   removeMember,
@@ -85,6 +88,9 @@ export const queryKeys = {
   discoveryReviewAll: (snapshotId: string) => ['discovery', 'review', snapshotId] as const,
   discoveryReview: (snapshotId: string, query: ReviewQuery) => ['discovery', 'review', snapshotId, query] as const,
   discoveryEvidence: (snapshotId: string, entityKey: string) => ['discovery', 'evidence', snapshotId, entityKey] as const,
+  /** Arquitectura descubierta (spec walkie-live-arquitectura): bajo la revisión del análisis, así una decisión la marca vieja. */
+  discoveryArchitecture: (snapshotId: string) => ['discovery', 'review', snapshotId, 'architecture'] as const,
+  discoveryArchitectureGroup: (snapshotId: string, key: string, page: number) => ['discovery', 'review', snapshotId, 'architecture', key, page] as const,
   /** Procedencia de un elemento de la app (`target` = `catalogItem:{id}`…). */
   discoveryProvenance: (appId: string, target: string) => ['discovery', 'provenance', appId, target] as const,
   discoveryProvenanceAll: (appId: string) => ['discovery', 'provenance', appId] as const,
@@ -689,6 +695,40 @@ export function useDiscoveryReview(snapshotId: string, query: ReviewQuery) {
     queryKey: queryKeys.discoveryReview(snapshotId, query),
     queryFn: ({ signal }) => getDiscoveryReview(token, snapshotId, query, signal),
     placeholderData: keepPreviousData,
+    retry: notFoundIsFinal,
+  });
+}
+
+/** Arquitectura descubierta de un análisis: se calcula en la API; aquí solo se dibuja. */
+export function useDiscoveryArchitecture(snapshotId: string) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.discoveryArchitecture(snapshotId),
+    queryFn: ({ signal }) => getDiscoveryArchitecture(token, snapshotId, signal),
+    retry: notFoundIsFinal,
+  });
+}
+
+/** Un grupo por dentro, bajo demanda (al abrirlo). */
+export function useDiscoveryArchitectureGroup(snapshotId: string, key: string | null, page = 0, pageSize = 200) {
+  const token = useToken();
+  return useQuery({
+    queryKey: queryKeys.discoveryArchitectureGroup(snapshotId, key ?? '', page),
+    queryFn: ({ signal }) => getDiscoveryArchitectureGroup(token, snapshotId, key!, page, pageSize, signal),
+    enabled: key !== null,
+    placeholderData: keepPreviousData,
+    retry: notFoundIsFinal,
+  });
+}
+
+/** La cadena de evidencia de una relación elegida; un análisis no cambia: no se vuelve a pedir. */
+export function useDiscoveryRelationEvidence(snapshotId: string, key: string | null) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['discovery', 'relation-evidence', snapshotId, key ?? ''] as const,
+    queryFn: ({ signal }) => getDiscoveryRelationEvidence(token, snapshotId, key!, signal),
+    enabled: key !== null,
+    staleTime: Infinity,
     retry: notFoundIsFinal,
   });
 }

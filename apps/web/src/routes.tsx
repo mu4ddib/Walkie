@@ -9,6 +9,7 @@ import { SharedFeaturePage } from './share/SharedFeaturePage';
 import { SHARED_MODULE_PATH, SHARED_PATH } from './share/sharedPath';
 import { SharedModulePage } from './share/SharedModulePage';
 import { DiscoveryReviewPage } from './discovery/DiscoveryReviewPage';
+import { ArchitecturePage } from './discovery/architecture/ArchitecturePage';
 import { HomePage } from './workspace/HomePage';
 import { APPS_PATH } from './workspace/paths';
 
@@ -26,6 +27,8 @@ export const routes: RouteObject[] = [
   { path: '/apps/:appId/modules/:moduleId', element: <ModuleRoute /> },
   // Revisión de un análisis de Walkie Live (spec walkie-live, tarea 5).
   { path: '/apps/:appId/sources/:snapshotId', element: <DiscoveryReviewPage /> },
+  // Arquitectura descubierta de ese análisis (spec walkie-live-arquitectura): solo lectura, sin decisiones.
+  { path: '/apps/:appId/sources/:snapshotId/architecture', element: <ArchitecturePage /> },
   // Pública (ADR-0005): `App` la monta sin `AuthGate`.
   { path: SHARED_PATH, element: <SharedFeaturePage /> },
   { path: SHARED_MODULE_PATH, element: <SharedModulePage /> },

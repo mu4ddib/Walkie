@@ -73,6 +73,12 @@ public sealed class AnalysisContext(string root, IReadOnlyList<SourceFile> files
     /// <summary>Lo que comparten los detectores del front (apps, archivos escaneados, pantallas); se arma al usarlo.</summary>
     internal Frontend.FrontendModel? Frontend { get; set; }
 
+    /// <summary>Endpoints de ASP.NET Core con el nodo que los atiende (los registra <c>aspnetcore-endpoints</c>; los lee <c>aspnetcore-data</c>).</summary>
+    internal List<Detectors.EndpointRecord> Endpoints { get; } = [];
+
+    /// <summary>Clase de un <c>DbContext</c> → clave de su base lógica (la registra <c>efcore</c>).</summary>
+    internal Dictionary<string, string> DbContexts { get; } = new(StringComparer.Ordinal);
+
     public Findings Findings { get; } = findings;
 
     /// <summary>Proyectos .NET que encontró el detector <c>csproj</c> (vacío si no corrió).</summary>

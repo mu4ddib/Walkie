@@ -49,7 +49,8 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
     private static readonly HashSet<string> NeedsDecision = new(["new", "matched", "changed", "missing"], StringComparer.Ordinal);
 
     public async Task<ReviewResult> ReviewAsync(
-        Guid snapshotId, string? kind, string? status, int? page, int? pageSize, CancellationToken ct, string? change = null, bool? needsReview = null)
+        Guid snapshotId, string? kind, string? status, int? page, int? pageSize, CancellationToken ct, string? change = null, bool? needsReview = null,
+        IReadOnlyCollection<string>? keys = null)
     {
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
         if (kind is not null && !Kinds.Contains(kind))
@@ -148,7 +149,8 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
 
         var filtered = classified
             .Where(c => (kind is null || c.Row.Kind == kind) && (status is null || c.Status == status)
-                && (change is null || c.Change == change) && (needsReview is not true || Needs(c)))
+                && (change is null || c.Change == change) && (needsReview is not true || Needs(c))
+                && (keys is not { Count: > 0 } || keys.Contains(c.Row.Key)))
             .OrderBy(c => Array.IndexOf(Kinds, c.Row.Kind)).ThenBy(c => c.Row.Key, StringComparer.Ordinal)
             .ToList();
         var size = pageSize ?? DefaultPageSize;

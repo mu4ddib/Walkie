@@ -42,11 +42,54 @@ internal sealed class RouteDecl
     public bool HasPayload => Component is not null || LoadComponent is not null || LoadChildren is not null || HasChildren || Redirect || Index;
 }
 
-/// <summary>Una llamada HTTP: método, ruta (con <c>{nombre}</c> por cada parte variable) o por qué no se pudo resolver.</summary>
-internal sealed record HttpCall(string Method, string? Path, string? Unresolved, bool External, bool Relative, int Offset);
+/// <summary>
+/// Una llamada HTTP: método, ruta (con <c>{nombre}</c> por cada parte variable) o por qué no se pudo resolver. Con la
+/// URL sin resolver, <see cref="Url"/> y <see cref="Options"/> guardan las expresiones tal como están escritas, para que
+/// <see cref="FrontendSymbols"/> las evalúe con los parámetros de la función que la contiene (envoltorios, ADR-0016).
+/// </summary>
+internal sealed record HttpCall(string Method, string? Path, string? Unresolved, bool External, bool Relative, int Offset)
+{
+    /// <summary>Posición del token de la llamada.</summary>
+    public int Index { get; init; }
+
+    public IReadOnlyList<Token>? Url { get; init; }
+
+    public IReadOnlyList<Token>? Options { get; init; }
+
+    /// <summary><c>fetch</c>: el método sale de <see cref="Options"/>; si no, es el del nombre (<c>axios.post</c>, <c>http.get</c>).</summary>
+    public bool MethodFromOptions { get; init; }
+
+    /// <summary>Prefijo de la instancia de axios (<c>baseURL</c>); vacío si no hay.</summary>
+    public string BaseUrl { get; init; } = "";
+}
 
 /// <summary>Una navegación a otra pantalla (<c>Link to</c>, <c>navigate()</c>, <c>routerLink</c>…), con la ruta destino.</summary>
-internal sealed record NavigationTarget(string Path, int Offset);
+internal sealed record NavigationTarget(string Path, int Offset)
+{
+    /// <summary>Posición del token (para saber en qué función está); -1 en una plantilla HTML de Angular.</summary>
+    public int Index { get; init; } = -1;
+}
+
+/// <summary>Una navegación cuyo destino no es literal en ese lugar (<c>navigate(appPath(id))</c>): se evalúa después con <see cref="FrontendSymbols"/>.</summary>
+internal sealed record NavigationSite(IReadOnlyList<Token> Expression, int Offset, int Index);
+
+/// <summary>
+/// Una función con nombre: de primer nivel (<c>function X</c>, <c>const X = (…) =&gt;</c>), un método de una clase o una
+/// función de un objeto de primer nivel (<c>const api = { listar: () =&gt; … }</c>), con <see cref="Container"/> = la
+/// clase o el objeto. <see cref="Params"/> lleva null en un parámetro desestructurado. El cuerpo va de
+/// <see cref="BodyStart"/> a <see cref="BodyEnd"/> (posiciones de token, sin incluir el final); con
+/// <see cref="Expression"/>, es la expresión que devuelve.
+/// </summary>
+internal sealed record FunctionInfo(string Name, string? Container, IReadOnlyList<string?> Params, int BodyStart, int BodyEnd, bool Expression, int Offset)
+{
+    public string FullName => Container is null ? Name : Container + "." + Name;
+}
+
+/// <summary>Una llamada por nombre (<c>f(…)</c>) o a un miembro (<c>obj.m(…)</c>, <c>this.servicio.m(…)</c>, con <see cref="Receiver"/>).</summary>
+internal sealed record CallSite(string Callee, string? Receiver, int Index, int Open, int Offset);
+
+/// <summary>Un componente que el código dibuja (<c>&lt;FeatureCard … /&gt;</c>).</summary>
+internal sealed record JsxUse(string Name, int Offset, int Index);
 
 /// <summary>
 /// Lo que el escáner ve en un archivo de TypeScript o JavaScript (ADR-0013, opción a): importaciones, exportaciones,
@@ -72,6 +115,9 @@ internal sealed partial class ScriptFacts
     /// <summary>Nombre local importado → módulo (<c>import { A as B } from 'x'</c> da B → x).</summary>
     public Dictionary<string, string> Imports { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Nombre local → nombre que exporta el módulo, cuando difieren (<c>import { A as B }</c> da B → A).</summary>
+    public Dictionary<string, string> ImportAliases { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Todos los módulos importados (también <c>export … from</c> e <c>import('x')</c>).</summary>
     public List<string> ImportSpecs { get; } = [];
 
@@ -87,6 +133,105 @@ internal sealed partial class ScriptFacts
     public List<HttpCall> Http { get; } = [];
 
     public List<NavigationTarget> Navigations { get; } = [];
+
+    /// <summary>Navegaciones con un destino que no se resolvió en el archivo (funciones de rutas, variables).</summary>
+    public List<NavigationSite> NavigationSites { get; } = [];
+
+    /// <summary>Funciones con nombre (de primer nivel, métodos y funciones de objetos), en orden.</summary>
+    public List<FunctionInfo> Functions { get; } = [];
+
+    /// <summary>Todas las llamadas con nombre del archivo, en orden.</summary>
+    public List<CallSite> Calls { get; } = [];
+
+    public List<JsxUse> JsxUses { get; } = [];
+
+    /// <summary>Campos con tipo de cada clase (<c>private pedidos: PedidosService</c>, <c>http = inject(HttpClient)</c>): clase → campo → tipo.</summary>
+    public Dictionary<string, Dictionary<string, string>> Fields { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Constantes de primer nivel con valor no literal (<c>const baseUrl = import.meta.env.X ?? '…'</c>): sirven de base de una URL.</summary>
+    public HashSet<string> ModuleBindings { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Instancias de <c>axios.create</c> del archivo: nombre → <c>baseURL</c> literal (vacío sin él; null si no es literal).</summary>
+    public IReadOnlyDictionary<string, string?> AxiosInstances => axiosInstances;
+
+    public IReadOnlyList<Token> Tokens => tokens;
+
+    private int[]? innermost;
+    private Dictionary<FunctionInfo, Members>? members;
+
+    /// <summary>Lo que hay dentro de una función (sin las funciones con nombre anidadas): se arma una vez por archivo.</summary>
+    internal sealed record Members(List<CallSite> Calls, List<HttpCall> Http, List<JsxUse> Jsx, List<NavigationTarget> Navigations, List<NavigationSite> Sites);
+
+    /// <summary>La función con nombre más interna que contiene la posición de token <paramref name="index"/>, o null.</summary>
+    public FunctionInfo? FunctionAt(int index)
+    {
+        if (innermost is null)
+        {
+            // Una sola pasada: cada token queda con la función más interna (las anidadas empiezan después y la pisan).
+            innermost = new int[tokens.Count];
+            Array.Fill(innermost, -1);
+            foreach (var (f, k) in Functions.Select((f, k) => (f, k)).OrderBy(x => x.f.BodyStart).ThenByDescending(x => x.f.BodyEnd))
+            {
+                for (var j = Math.Max(0, f.BodyStart); j < Math.Min(tokens.Count, f.BodyEnd); j++)
+                {
+                    innermost[j] = k;
+                }
+            }
+        }
+
+        return index >= 0 && index < innermost.Length && innermost[index] >= 0 ? Functions[innermost[index]] : null;
+    }
+
+    /// <summary>Las llamadas, HTTP, componentes y navegaciones de <paramref name="function"/>.</summary>
+    public Members In(FunctionInfo function)
+    {
+        if (members is null)
+        {
+            members = new Dictionary<FunctionInfo, Members>(ReferenceEqualityComparer.Instance as IEqualityComparer<FunctionInfo>);
+            // El código suelto del módulo (fuera de toda función) no es de ninguna: queda fuera.
+            Members? Of(int index)
+            {
+                if (FunctionAt(index) is not { } owner)
+                {
+                    return null;
+                }
+
+                if (!members.TryGetValue(owner, out var found))
+                {
+                    members[owner] = found = new Members([], [], [], [], []);
+                }
+
+                return found;
+            }
+
+            foreach (var c in Calls)
+            {
+                Of(c.Index)?.Calls.Add(c);
+            }
+
+            foreach (var h in Http)
+            {
+                Of(h.Index)?.Http.Add(h);
+            }
+
+            foreach (var u in JsxUses)
+            {
+                Of(u.Index)?.Jsx.Add(u);
+            }
+
+            foreach (var n in Navigations.Where(n => n.Index >= 0))
+            {
+                Of(n.Index)?.Navigations.Add(n);
+            }
+
+            foreach (var n in NavigationSites)
+            {
+                Of(n.Index)?.Sites.Add(n);
+            }
+        }
+
+        return members.TryGetValue(function, out var result) ? result : new Members([], [], [], [], []);
+    }
 
     /// <summary>
     /// Declaraciones de primer nivel (<c>function X</c>, <c>const X =</c>, <c>class X</c>) con dónde empiezan y hasta
@@ -121,6 +266,7 @@ internal sealed partial class ScriptFacts
         var facts = new ScriptFacts(tokens, hasErrors);
         facts.ReadDeclarations();
         facts.ReadTopLevel(text.Length);
+        facts.ReadFunctions();
         if (facts.RouterImport)
         {
             facts.ReadRouteObjects();
@@ -248,6 +394,427 @@ internal sealed partial class ScriptFacts
         }
     }
 
+    // ---------- Funciones con nombre (ADR-0016) ----------
+
+    private static readonly HashSet<string> Modifiers =
+        ["public", "private", "protected", "static", "async", "readonly", "override", "abstract", "get", "set", "declare"];
+
+    private static readonly HashSet<string> NotCallees =
+        ["if", "for", "while", "switch", "catch", "function", "return", "typeof", "await", "new", "super", "import", "delete", "void", "in", "of", "instanceof", "yield", "case", "do", "else", "throw"];
+
+    /// <summary>
+    /// Funciones de primer nivel, métodos de clases y funciones de objetos de primer nivel, con sus parámetros y su
+    /// cuerpo; y los campos con tipo de cada clase. Solo la forma: lo que no encaja no es una función.
+    /// </summary>
+    private void ReadFunctions()
+    {
+        var depth = 0;
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Kind == TokenKind.Punct && t.Text is "{" or "(" or "[")
+            {
+                depth++;
+                continue;
+            }
+
+            if (t.Kind == TokenKind.Punct && t.Text is "}" or ")" or "]")
+            {
+                depth = Math.Max(0, depth - 1);
+                continue;
+            }
+
+            if (depth != 0 || t.Kind != TokenKind.Identifier)
+            {
+                continue;
+            }
+
+            if (t.Text == "function" && At(i + 1) is { Kind: TokenKind.Identifier } fname && At(i - 1)?.Is(".") != true)
+            {
+                if (ParseFunction(fname.Text, null, SkipGeneric(i + 2), fname.Offset) is { } f)
+                {
+                    Functions.Add(f);
+                }
+            }
+            else if (t.Text is "const" or "let" or "var" && At(i + 1) is { Kind: TokenKind.Identifier } cname)
+            {
+                // const X: Tipo = valor: el valor empieza después del primer «=» de primer nivel.
+                var eq = i + 2;
+                var d = 0;
+                while (At(eq) is { } e && !(d == 0 && e.Is("=")) && !(d == 0 && (e.Is(";") || e.Is(","))))
+                {
+                    if (e.Kind == TokenKind.Punct && e.Text is "(" or "[" or "{" or "<")
+                    {
+                        d++;
+                    }
+                    else if (e.Kind == TokenKind.Punct && e.Text is ")" or "]" or "}" or ">")
+                    {
+                        d--;
+                    }
+
+                    eq++;
+                }
+
+                if (At(eq)?.Is("=") != true)
+                {
+                    continue;
+                }
+
+                var value = eq + 1;
+                if (At(value)?.IsIdentifier("async") == true)
+                {
+                    value++;
+                }
+
+                if (At(value)?.IsIdentifier("function") == true)
+                {
+                    var open = At(value + 1) is { Kind: TokenKind.Identifier } ? value + 2 : value + 1;
+                    if (ParseFunction(cname.Text, null, SkipGeneric(open), cname.Offset) is { } f)
+                    {
+                        Functions.Add(f);
+                    }
+                }
+                else if (ArrowAt(SkipGeneric(value)) is { } arrow)
+                {
+                    Functions.Add(arrow with { Name = cname.Text, Offset = cname.Offset });
+                }
+                else if (At(value)?.Is("{") == true)
+                {
+                    ReadObjectFunctions(cname.Text, value);
+                }
+                else if (!Constants.ContainsKey(cname.Text))
+                {
+                    ModuleBindings.Add(cname.Text);
+                }
+            }
+            else if (t.Text == "class" && At(i + 1) is { Kind: TokenKind.Identifier } klass)
+            {
+                var open = i + 2;
+                while (At(open) is { } o && !o.Is("{"))
+                {
+                    open++;
+                }
+
+                if (At(open) is not null)
+                {
+                    ReadClass(klass.Text, open);
+                }
+            }
+        }
+    }
+
+    /// <summary><c>function X(params) [: tipo] { … }</c> desde el paréntesis que abre.</summary>
+    private FunctionInfo? ParseFunction(string name, string? container, int open, int offset)
+    {
+        if (At(open)?.Is("(") != true)
+        {
+            return null;
+        }
+
+        var close = Matching(open);
+        if (close < 0)
+        {
+            return null;
+        }
+
+        var body = BodyBrace(close + 1);
+        if (body < 0)
+        {
+            return null;
+        }
+
+        var end = Matching(body);
+        return end < 0 ? null : new FunctionInfo(name, container, Params(open, close), body + 1, end, false, offset);
+    }
+
+    /// <summary><c>(params) [: tipo] =&gt; cuerpo</c> o <c>param =&gt; cuerpo</c> en <paramref name="start"/>.</summary>
+    private FunctionInfo? ArrowAt(int start)
+    {
+        IReadOnlyList<string?> parameters;
+        int after;
+        if (At(start) is { Kind: TokenKind.Identifier } single && At(start + 1)?.Is("=>") == true)
+        {
+            parameters = [single.Text];
+            after = start + 1;
+        }
+        else if (At(start)?.Is("(") == true && Matching(start) is var close and >= 0)
+        {
+            after = close + 1;
+            if (At(after)?.Is(":") == true)
+            {
+                // Tipo de retorno: hasta la flecha de primer nivel.
+                var d = 0;
+                while (At(after) is { } a && !(d == 0 && a.Is("=>")))
+                {
+                    if (a.Kind == TokenKind.Punct && a.Text is "(" or "[" or "{" or "<")
+                    {
+                        d++;
+                    }
+                    else if (a.Kind == TokenKind.Punct && a.Text is ")" or "]" or "}" or ">")
+                    {
+                        d--;
+                    }
+
+                    after++;
+                }
+            }
+
+            if (At(after)?.Is("=>") != true)
+            {
+                return null;
+            }
+
+            parameters = Params(start, close);
+        }
+        else
+        {
+            return null;
+        }
+
+        var bodyStart = after + 1;
+        if (At(bodyStart)?.Is("{") == true)
+        {
+            var end = Matching(bodyStart);
+            return end < 0 ? null : new FunctionInfo("", null, parameters, bodyStart + 1, end, false, tokens[start].Offset);
+        }
+
+        // Cuerpo de expresión: hasta «;», «,» o el cierre de primer nivel.
+        var j = bodyStart;
+        var depth = 0;
+        while (At(j) is { } x)
+        {
+            if (x.Kind == TokenKind.Punct && x.Text is "(" or "[" or "{")
+            {
+                depth++;
+            }
+            else if (x.Kind == TokenKind.Punct && x.Text is ")" or "]" or "}")
+            {
+                if (depth == 0)
+                {
+                    break;
+                }
+
+                depth--;
+            }
+            else if (depth == 0 && (x.Is(";") || x.Is(",")))
+            {
+                break;
+            }
+            else if (depth == 0 && j > bodyStart && x.Kind == TokenKind.Identifier && x.Text is "export" or "const" or "function" or "class" or "let" && tokens[j - 1].Kind != TokenKind.Punct)
+            {
+                break;
+            }
+
+            j++;
+        }
+
+        return j > bodyStart ? new FunctionInfo("", null, parameters, bodyStart, j, true, tokens[start].Offset) : null;
+    }
+
+    /// <summary>La llave del cuerpo después de los parámetros, saltando un tipo de retorno (también <c>: { … }</c>).</summary>
+    private int BodyBrace(int from)
+    {
+        var j = from;
+        var depth = 0;
+        while (At(j) is { } t)
+        {
+            if (t.Is("{"))
+            {
+                // Un tipo objeto (`: { a: b }`, `Promise<{ a; b }>`) se salta entero; la primera llave fuera de un tipo es el cuerpo.
+                var before = At(j - 1);
+                if (depth > 0 || (before is not null && (before.Is(":") || before.Is("|") || before.Is("&") || before.Is(",") || before.Is("<"))))
+                {
+                    var end = Matching(j);
+                    if (end < 0)
+                    {
+                        return -1;
+                    }
+
+                    j = end + 1;
+                    continue;
+                }
+
+                return j;
+            }
+
+            if (t.Kind == TokenKind.Punct && t.Text is "(" or "[" or "<")
+            {
+                depth++;
+            }
+            else if (t.Kind == TokenKind.Punct && t.Text is ")" or "]" or ">")
+            {
+                depth--;
+            }
+            else if (t.Is(";") || t.Is("=>") || (depth == 0 && t.Is("=")))
+            {
+                return -1;
+            }
+
+            j++;
+            if (j - from > 200)
+            {
+                return -1;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>Nombres de los parámetros entre <paramref name="open"/> y <paramref name="close"/> (null si se desestructura).</summary>
+    private List<string?> Params(int open, int close)
+    {
+        var result = new List<string?>();
+        foreach (var part in Split(tokens, open + 1, close))
+        {
+            var k = 0;
+            while (k < part.Count && (part[k].Kind == TokenKind.Identifier && Modifiers.Contains(part[k].Text) || part[k].Is("...") || part[k].Text.StartsWith('@')))
+            {
+                k++;
+            }
+
+            result.Add(k < part.Count && part[k].Kind == TokenKind.Identifier ? part[k].Text : null);
+        }
+
+        return result;
+    }
+
+    /// <summary>Funciones de un objeto de primer nivel: <c>listar: (…) =&gt; …</c>, <c>listar(…) { … }</c>, <c>listar: function (…) { … }</c>.</summary>
+    private void ReadObjectFunctions(string container, int open)
+    {
+        var close = Matching(open);
+        if (close < 0)
+        {
+            return;
+        }
+
+        for (var j = open + 1; j < close; j++)
+        {
+            // Solo las propiedades de primer nivel del objeto.
+            if (tokens[j].Kind == TokenKind.Punct && tokens[j].Text is "(" or "[" or "{")
+            {
+                var end = Matching(j);
+                if (end < 0)
+                {
+                    return;
+                }
+
+                if (tokens[j].Is("(") && At(j - 1) is { Kind: TokenKind.Identifier } method && (At(j - 2) is null || At(j - 2)!.Is(",") || At(j - 2)!.Is("{") || At(j - 2)!.IsIdentifier("async")))
+                {
+                    if (ParseFunction(method.Text, container, j, method.Offset) is { } f)
+                    {
+                        Functions.Add(f);
+                    }
+                }
+
+                j = end;
+                continue;
+            }
+
+            if (tokens[j].Kind is TokenKind.Identifier or TokenKind.String && At(j + 1)?.Is(":") == true && (At(j - 1)?.Is(",") == true || At(j - 1)?.Is("{") == true))
+            {
+                var value = j + 2;
+                if (At(value)?.IsIdentifier("async") == true)
+                {
+                    value++;
+                }
+
+                if (At(value)?.IsIdentifier("function") == true && ParseFunction(tokens[j].Text, container, value + 1, tokens[j].Offset) is { } f)
+                {
+                    Functions.Add(f);
+                }
+                else if (ArrowAt(value) is { } arrow)
+                {
+                    Functions.Add(arrow with { Name = tokens[j].Text, Container = container, Offset = tokens[j].Offset });
+                }
+            }
+        }
+    }
+
+    /// <summary>Métodos y campos con tipo de una clase (también los parámetros del constructor con modificador).</summary>
+    private void ReadClass(string name, int open)
+    {
+        var close = Matching(open);
+        if (close < 0)
+        {
+            return;
+        }
+
+        var fields = Fields.TryGetValue(name, out var existing) ? existing : Fields[name] = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (var j = open + 1; j < close; j++)
+        {
+            var t = tokens[j];
+            if (t.Is("(") && At(j - 1) is { Kind: TokenKind.Identifier } method && !NotCallees.Contains(method.Text) && !method.Text.StartsWith('@')
+                && (At(j - 2) is not { } before || before.Is("{") || before.Is("}") || before.Is(";") || (before.Kind == TokenKind.Identifier && Modifiers.Contains(before.Text))))
+            {
+                var paramsClose = Matching(j);
+                if (paramsClose < 0)
+                {
+                    return;
+                }
+
+                if (method.Text == "constructor")
+                {
+                    // constructor(private pedidos: PedidosService, readonly http: HttpClient)
+                    foreach (var part in Split(tokens, j + 1, paramsClose))
+                    {
+                        if (part.Count >= 3 && part[0].Kind == TokenKind.Identifier && Modifiers.Contains(part[0].Text))
+                        {
+                            var k = 0;
+                            while (k < part.Count && part[k].Kind == TokenKind.Identifier && Modifiers.Contains(part[k].Text))
+                            {
+                                k++;
+                            }
+
+                            if (k + 2 < part.Count && part[k].Kind == TokenKind.Identifier && part[k + 1].Is(":") && part[k + 2].Kind == TokenKind.Identifier)
+                            {
+                                fields[part[k].Text] = part[k + 2].Text;
+                            }
+                        }
+                    }
+                }
+
+                var body = BodyBrace(paramsClose + 1);
+                if (body >= 0 && Matching(body) is var end and >= 0)
+                {
+                    if (method.Text != "constructor")
+                    {
+                        Functions.Add(new FunctionInfo(method.Text, name, Params(j, paramsClose), body + 1, end, false, method.Offset));
+                    }
+
+                    j = end;
+                }
+                else
+                {
+                    j = paramsClose;
+                }
+
+                continue;
+            }
+
+            // campo: Tipo · campo = inject(Tipo) · campo = new Tipo(
+            if (t.Kind == TokenKind.Identifier && (At(j - 1) is not { } prev || prev.Is(";") || prev.Is("{") || prev.Is("}") || (prev.Kind == TokenKind.Identifier && Modifiers.Contains(prev.Text))))
+            {
+                if (At(j + 1)?.Is(":") == true && At(j + 2) is { Kind: TokenKind.Identifier } type)
+                {
+                    fields[t.Text] = type.Text;
+                }
+                else if (At(j + 1)?.Is("=") == true && At(j + 2)?.IsIdentifier("inject") == true && At(j + 3)?.Is("(") == true && At(j + 4) is { Kind: TokenKind.Identifier } injected)
+                {
+                    fields[t.Text] = injected.Text;
+                }
+                else if (At(j + 1)?.Is("=") == true && At(j + 2)?.IsIdentifier("new") == true && At(j + 3) is { Kind: TokenKind.Identifier } created)
+                {
+                    fields[t.Text] = created.Text;
+                }
+            }
+
+            if (t.Kind == TokenKind.Punct && t.Text is "{" or "[" && Matching(j) is var skip and >= 0)
+            {
+                j = skip;
+            }
+        }
+    }
+
     /// <summary><c>import … from 'x'</c>, <c>export … from 'x'</c> y las exportaciones con nombre del archivo.</summary>
     private void ReadImport(int i)
     {
@@ -283,6 +850,7 @@ internal sealed partial class ScriptFacts
 
         // Nombres hasta «from 'x'» (o el módulo directo: import 'x').
         var names = new List<string>();
+        var originals = new Dictionary<string, string>(StringComparer.Ordinal);
         var depth = 0;
         for (var j = i + 1; j < tokens.Count && j < i + 200; j++)
         {
@@ -308,6 +876,10 @@ internal sealed partial class ScriptFacts
                     foreach (var name in names)
                     {
                         Imports[name] = t.Text;
+                        if (originals.TryGetValue(name, out var original))
+                        {
+                            ImportAliases[name] = original;
+                        }
                     }
                 }
                 else if (names.Count == 0)
@@ -330,6 +902,11 @@ internal sealed partial class ScriptFacts
                 // import { A as B }: el nombre local es el que sigue a «as».
                 if (At(j - 1)?.IsIdentifier("as") == true && names.Count > 0)
                 {
+                    if (depth > 0)
+                    {
+                        originals[t.Text] = names[^1];
+                    }
+
                     names[^1] = t.Text;
                 }
                 else if (depth > 0 || At(j - 1) is { } before && (before.IsIdentifier("import") || before.Is(",") || before.Is("*") || before.IsIdentifier("as")))
@@ -691,10 +1268,20 @@ internal sealed partial class ScriptFacts
                     var target = attribute.Literal ?? (attribute.Expression is { } e ? Url(e).Path : null);
                     if (target?.StartsWith('/') == true)
                     {
-                        Navigations.Add(new NavigationTarget(target, t.Offset));
+                        Navigations.Add(new NavigationTarget(target, t.Offset) { Index = i });
+                    }
+                    else if (attribute.Literal is null && attribute.Expression is { Count: > 0 } expression)
+                    {
+                        NavigationSites.Add(new NavigationSite(expression, t.Offset, i));
                     }
                 }
 
+                continue;
+            }
+
+            if (t.Kind == TokenKind.JsxOpen && t.Text.Length > 0 && char.IsUpper(t.Text[0]))
+            {
+                JsxUses.Add(new JsxUse(t.Text.Split('.')[0], t.Offset, i));
                 continue;
             }
 
@@ -703,6 +1290,8 @@ internal sealed partial class ScriptFacts
                 continue;
             }
 
+            RecordCall(i);
+
             // fetch('/api/x', { method: 'POST' })
             if (t.Text == "fetch" && At(i - 1)?.Is(".") != true && At(i + 1)?.Is("(") == true)
             {
@@ -710,7 +1299,7 @@ internal sealed partial class ScriptFacts
                 if (args.Count > 0)
                 {
                     var method = args.Count > 1 ? FetchMethod(args[1]) : "GET";
-                    AddCall(method, args[0], t.Offset, "");
+                    AddCall(method, args, i, t.Offset, "", fromOptions: true);
                 }
 
                 continue;
@@ -719,7 +1308,7 @@ internal sealed partial class ScriptFacts
             // navigate('/x') de useNavigate
             if (navigateFunctions.Contains(t.Text) && At(i - 1)?.Is(".") != true && At(i + 1)?.Is("(") == true)
             {
-                AddNavigation(Arguments(i + 1), t.Offset);
+                AddNavigation(Arguments(i + 1), t.Offset, i);
                 continue;
             }
 
@@ -747,7 +1336,7 @@ internal sealed partial class ScriptFacts
                     var args = Arguments(callStart);
                     if (args.Count > 0)
                     {
-                        AddCall(t.Text.ToUpperInvariant(), args[0], t.Offset, owner == "axios" ? "" : baseUrl ?? (axiosInstances.ContainsKey(owner) ? null : ""));
+                        AddCall(t.Text.ToUpperInvariant(), args, i, t.Offset, owner == "axios" ? "" : baseUrl ?? (axiosInstances.ContainsKey(owner) ? null : ""), fromOptions: false);
                     }
                 }
 
@@ -757,7 +1346,7 @@ internal sealed partial class ScriptFacts
             var routerOwner = owner.StartsWith("this.", StringComparison.Ordinal) ? owner[5..] : owner;
             if (routerObjects.Contains(routerOwner) && t.Text is "push" or "replace" or "navigateByUrl")
             {
-                AddNavigation(Arguments(callStart), t.Offset);
+                AddNavigation(Arguments(callStart), t.Offset, i);
             }
             else if (routerObjects.Contains(routerOwner) && t.Text == "navigate" && Arguments(callStart) is [var commands, ..]
                      && commands is [{ } open, ..] && open.Is("["))
@@ -767,7 +1356,7 @@ internal sealed partial class ScriptFacts
                 var path = string.Join('/', parts.Select(p => p is [{ Kind: TokenKind.String } s] ? s.Text.Trim('/') : "{}"));
                 if (parts.Count > 0 && parts[0] is [{ Kind: TokenKind.String } first] && first.Text.StartsWith('/'))
                 {
-                    Navigations.Add(new NavigationTarget("/" + path, t.Offset));
+                    Navigations.Add(new NavigationTarget("/" + path, t.Offset) { Index = i });
                 }
             }
         }
@@ -908,18 +1497,51 @@ internal sealed partial class ScriptFacts
         return "GET";
     }
 
-    private void AddCall(string method, List<Token> argument, int offset, string? baseUrl)
+    /// <summary>Una llamada con nombre (<c>f(…)</c>, <c>obj.m(…)</c>); no la declaración de un método (<c>m(…) {</c>).</summary>
+    private void RecordCall(int i)
     {
+        var name = tokens[i];
+        if (NotCallees.Contains(name.Text) || name.Text.StartsWith('@') || At(i - 1)?.IsIdentifier("function") == true)
+        {
+            return;
+        }
+
+        var open = SkipGeneric(i + 1);
+        if (At(open)?.Is("(") != true)
+        {
+            return;
+        }
+
+        // m(…) { … } o m(…): Tipo { … } (un método que se declara) no es una llamada.
+        var close = Matching(open);
+        var before = At(i - 1);
+        var statementStart = before is null || before.Is("{") || before.Is("}") || before.Is(";") || (before.Kind == TokenKind.Identifier && Modifiers.Contains(before.Text));
+        if (close >= 0 && before?.Is(".") != true && At(close + 1) is { } after && (after.Is("{") || (after.Is(":") && statementStart)))
+        {
+            return;
+        }
+
+        var receiver = At(i - 1)?.Is(".") == true ? Owner(i - 1) : null;
+        Calls.Add(new CallSite(name.Text, receiver is { Length: > 0 } ? receiver : null, i, open, name.Offset));
+    }
+
+    private void AddCall(string method, List<List<Token>> args, int index, int offset, string? baseUrl, bool fromOptions)
+    {
+        var argument = args[0];
+        var options = fromOptions && args.Count > 1 ? args[1] : null;
         if (baseUrl is null)
         {
-            Http.Add(new HttpCall(method, null, "baseURL de axios.create no literal", false, false, offset));
+            Http.Add(new HttpCall(method, null, "baseURL de axios.create no literal", false, false, offset) { Index = index });
             return;
         }
 
         var (path, unresolved) = Url(argument);
         if (path is null)
         {
-            Http.Add(new HttpCall(method, null, unresolved, false, false, offset));
+            Http.Add(new HttpCall(method, null, unresolved, false, false, offset)
+            {
+                Index = index, Url = argument, Options = options, MethodFromOptions = fromOptions, BaseUrl = baseUrl,
+            });
             return;
         }
 
@@ -937,14 +1559,26 @@ internal sealed partial class ScriptFacts
             return;
         }
 
-        Http.Add(new HttpCall(method, relative ? "/" + path : path, null, false, relative, offset));
+        Http.Add(new HttpCall(method, relative ? "/" + path : path, null, false, relative, offset)
+        {
+            Index = index, Url = argument, Options = options, MethodFromOptions = fromOptions, BaseUrl = baseUrl,
+        });
     }
 
-    private void AddNavigation(List<List<Token>> args, int offset)
+    private void AddNavigation(List<List<Token>> args, int offset, int index)
     {
-        if (args.Count > 0 && Url(args[0]).Path is { } target && target.StartsWith('/'))
+        if (args.Count == 0)
         {
-            Navigations.Add(new NavigationTarget(target, offset));
+            return;
+        }
+
+        if (Url(args[0]).Path is { } target && target.StartsWith('/'))
+        {
+            Navigations.Add(new NavigationTarget(target, offset) { Index = index });
+        }
+        else if (args[0].Count > 0 && args[0][0].Kind != TokenKind.Number)
+        {
+            NavigationSites.Add(new NavigationSite(args[0], offset, index));
         }
     }
 

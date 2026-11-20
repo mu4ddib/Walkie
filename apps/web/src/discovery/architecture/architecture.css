@@ -1,0 +1,547 @@
+/*
+ * «Explorar arquitectura» (spec walkie-live-arquitectura): página ancha con tres columnas (grupos y propuestas, el
+ * lienzo de solo lectura y el inspector). Tokens de theme/global.css; sin gradientes; grilla de 8 px. El significado de
+ * una flecha nunca va solo por el color: el trazo cambia (punteado inferido, guiones de contención, sin punta).
+ */
+.page.arch-page {
+  max-width: 1600px;
+  /* Lo que queda bajo la cabecera, el aviso y los filtros: el lienzo entra entero en la ventana (1280 × 800 incluido). */
+  --arch-height: max(420px, calc(100vh - 320px));
+}
+
+.arch-banner {
+  margin-bottom: 16px;
+}
+
+.arch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+
+.arch-summary {
+  font-size: 14px;
+  color: var(--stone-700);
+}
+
+.arch-summary .is-ok {
+  color: var(--ok);
+}
+
+.arch-summary .is-warn {
+  color: var(--warn);
+}
+
+.arch-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.arch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--dune-300);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.arch-chip:has(input:focus-visible) {
+  outline: 2px solid var(--ibad);
+  outline-offset: 2px;
+}
+
+.arch-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+/* Paneles plegados: el grafo toma su ancho (a 1280 px, de ~600 a ~1200 px). */
+.arch-layout.no-side {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.arch-layout.no-inspector {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.arch-layout.no-side.no-inspector {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.arch-panels {
+  display: flex;
+  gap: 8px;
+}
+
+.arch-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.arch-side,
+.arch-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: var(--arch-height);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-float);
+  font-size: 14px;
+}
+
+.arch-side h3,
+.arch-inspector h3 {
+  margin: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.arch-inspector h4 {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--stone-700);
+}
+
+.arch-inspector p {
+  margin: 0;
+}
+
+.arch-kicker {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 9px;
+  line-height: 1.6;
+  color: var(--stone-500);
+  text-transform: uppercase;
+}
+
+.arch-page .link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--spice-strong);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.arch-page .link-button[aria-current='true'] {
+  color: var(--ibad);
+  font-weight: 600;
+}
+
+.arch-group-list,
+.arch-proposals,
+.arch-relations,
+.arch-limitations,
+.arch-members,
+.arch-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.arch-group-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 8px;
+}
+
+.arch-group-list .arch-evidence-meta {
+  grid-column: 1;
+}
+
+.arch-group-list .arch-open {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.arch-proposals li,
+.arch-members li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-s);
+  background: var(--sand);
+}
+
+.arch-proposals li.is-highlighted {
+  border-color: var(--ibad);
+  box-shadow: inset 3px 0 0 var(--ibad);
+}
+
+.arch-proposal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.arch-weak {
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.arch-member-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.arch-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+}
+
+.arch-choice label {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.arch-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.arch-evidence li,
+.arch-relations li,
+.arch-limitations li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.arch-evidence code,
+.arch-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.arch-evidence-meta {
+  font-size: 12px;
+  color: var(--stone-500);
+}
+
+.arch-limitations li.is-incomplete code:first-child {
+  color: var(--warn);
+}
+
+.arch-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.arch-legend dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.arch-legend dd {
+  margin: 0 0 0 40px;
+  color: var(--stone-700);
+  font-size: 13px;
+}
+
+.arch-swatch {
+  display: inline-block;
+  width: 32px;
+  border-top: 2px solid var(--stone-700);
+}
+
+.arch-swatch.is-execution {
+  border-top-color: var(--spice);
+}
+
+.arch-swatch.is-navigation {
+  border-top-color: var(--ibad);
+}
+
+.arch-swatch.is-dependency {
+  border-top-color: var(--stone-500);
+  border-top-style: dotted;
+  border-top-width: 3px;
+}
+
+.arch-swatch.is-containment {
+  border-top-color: var(--dune-300);
+  border-top-style: dashed;
+}
+
+.arch-swatch.is-inferred {
+  border-top-style: dashed;
+  opacity: 0.8;
+}
+
+/* Lienzo */
+.arch-canvas {
+  position: relative;
+  height: var(--arch-height);
+  border: 1px solid var(--dune-200);
+  border-radius: var(--radius-m);
+  background: var(--sand);
+  overflow: hidden;
+}
+
+.arch-canvas > p {
+  margin: 16px;
+}
+
+.arch-node {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 2px solid var(--stone-700);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+  box-shadow: var(--shadow-pixel);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.arch-group {
+  width: 232px;
+  min-height: 120px;
+}
+
+/* La vista general se ve alejada: su texto es más grande que el del detalle. */
+.arch-group .arch-node-title {
+  font-size: 18px;
+}
+
+.arch-group .arch-node-meta {
+  font-size: 14px;
+}
+
+.arch-group .arch-node-kind {
+  font-size: 10px;
+}
+
+.arch-entity,
+.arch-stub {
+  width: 232px;
+  min-height: 64px;
+}
+
+.arch-stub {
+  border-style: dashed;
+  background: var(--dune-100);
+}
+
+.arch-node.is-selected {
+  outline: 3px solid var(--ibad);
+  outline-offset: 2px;
+}
+
+.arch-node.is-dim {
+  opacity: 0.35;
+}
+
+.arch-node-kind {
+  font-family: var(--font-title);
+  font-size: 8px;
+  line-height: 1.6;
+  color: var(--stone-500);
+  text-transform: uppercase;
+}
+
+.arch-node-title {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.arch-node-meta {
+  font-size: 12px;
+  color: var(--stone-700);
+}
+
+.arch-node-route {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--stone-700);
+  overflow-wrap: anywhere;
+}
+
+.arch-coverage {
+  align-self: flex-start;
+  padding: 0 4px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-s);
+  color: var(--warn);
+  font-size: 11px;
+}
+
+.arch-group.is-frontend,
+.arch-entity.is-screen {
+  border-left: 6px solid var(--ibad);
+}
+
+.arch-group.is-service,
+.arch-group.is-module,
+.arch-entity.is-api,
+.arch-entity.is-service,
+.arch-entity.is-module {
+  border-left: 6px solid var(--spice);
+}
+
+.arch-group.is-data,
+.arch-entity.is-database {
+  border-left: 6px solid var(--ok);
+}
+
+.arch-group.is-infrastructure,
+.arch-group.is-external,
+.arch-entity.is-resource {
+  border-left: 6px solid var(--stone-500);
+}
+
+.arch-entity.is-feature {
+  border-style: dashed;
+}
+
+.arch-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.arch-edge .react-flow__edge-path {
+  stroke: var(--stone-700);
+  stroke-width: 2;
+}
+
+.arch-edge.is-execution .react-flow__edge-path {
+  stroke: var(--spice);
+}
+
+.arch-edge.is-navigation .react-flow__edge-path {
+  stroke: var(--ibad);
+}
+
+.arch-edge.is-dependency .react-flow__edge-path {
+  stroke: var(--stone-500);
+  stroke-dasharray: 2 4;
+}
+
+.arch-edge.is-containment .react-flow__edge-path {
+  stroke: var(--dune-300);
+  stroke-dasharray: 8 4;
+}
+
+.arch-edge.is-inferred .react-flow__edge-path {
+  stroke-dasharray: 6 4;
+}
+
+.arch-edge.is-low .react-flow__edge-path {
+  opacity: 0.55;
+}
+
+.arch-edge.is-selected .react-flow__edge-path {
+  stroke: var(--ibad);
+  stroke-width: 3;
+}
+
+.arch-edge .react-flow__edge-text {
+  font-family: var(--font-body);
+  font-size: 11px;
+  fill: var(--ink);
+}
+
+.arch-edge .react-flow__edge-textbg {
+  fill: var(--sand-raised);
+}
+
+@media (max-width: 1100px) {
+  .arch-layout,
+  .arch-layout.no-side {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+
+  .arch-layout.no-inspector,
+  .arch-layout.no-side.no-inspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .arch-side {
+    grid-column: 1 / -1;
+    max-height: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .arch-layout,
+  .arch-layout.no-side,
+  .arch-layout.no-inspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .arch-canvas {
+    height: 60vh;
+  }
+
+  .arch-inspector {
+    max-height: none;
+  }
+}
+
+.arch-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.arch-canvas .react-flow__controls {
+  box-shadow: var(--shadow-float);
+}
+
+.arch-canvas .react-flow__controls-button {
+  width: 32px;
+  height: 32px;
+  background: var(--sand-raised);
+  border-bottom: 1px solid var(--dune-200);
+}

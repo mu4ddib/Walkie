@@ -46,6 +46,12 @@ public static class WalkieSchemas
     /// <summary>Resumen de un módulo compartido (<c>walkie-module-summary.schema.json</c>, spec modulos-compartidos).</summary>
     public static JsonSchema ModuleSummary { get; } = JsonSchema.FromText(Load("walkie-module-summary.schema.json"), Options);
 
+    /// <summary>Arquitectura descubierta de un análisis (<c>walkie-discovery-architecture.schema.json</c>, ADR-0016).</summary>
+    public static JsonSchema DiscoveryArchitecture { get; } = JsonSchema.FromText(Load("walkie-discovery-architecture.schema.json"), Options);
+
+    /// <summary>Lo que hay dentro de un grupo de la arquitectura (<c>walkie-discovery-architecture-group.schema.json</c>).</summary>
+    public static JsonSchema DiscoveryArchitectureGroup { get; } = JsonSchema.FromText(Load("walkie-discovery-architecture-group.schema.json"), Options);
+
     /// <summary>Un miembro de una app (<c>walkie-app-member.schema.json</c>, spec autorizacion-por-app).</summary>
     public static JsonSchema AppMember { get; } = JsonSchema.FromText(Load("walkie-app-member.schema.json"), Options);
 
@@ -102,6 +108,9 @@ public static class WalkieSchemas
 
     /// <summary><c>walkie-discovery-evidence.schema.json</c>: evidencia y relaciones de un hallazgo (usa el discovery).</summary>
     public static JsonSchema DiscoveryEvidence { get; } = LoadAfter(Discovery, "walkie-discovery-evidence.schema.json");
+
+    /// <summary><c>walkie-discovery-relation-evidence.schema.json</c>: una relación con su evidencia resuelta (la cadena).</summary>
+    public static JsonSchema DiscoveryRelationEvidence { get; } = LoadAfter(Discovery, "walkie-discovery-relation-evidence.schema.json");
 
     /// <summary><c>walkie-discovery-provenance.schema.json</c>: de dónde viene un elemento (<c>GET /api/apps/{appId}/bindings</c>, tarea 6).</summary>
     public static JsonSchema DiscoveryProvenance { get; } = LoadAfter(DiscoveryBinding, "walkie-discovery-provenance.schema.json");

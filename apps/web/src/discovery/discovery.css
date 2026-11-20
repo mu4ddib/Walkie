@@ -575,3 +575,12 @@
 .local-import-dialog .save-error {
   scroll-margin-bottom: 88px;
 }
+
+/* Título de la revisión y de la arquitectura con su acción a la derecha (spec walkie-live-arquitectura). */
+.discovery-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
