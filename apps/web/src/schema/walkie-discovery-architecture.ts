@@ -67,6 +67,18 @@ export interface Link {
    * De ellas, las de confianza baja
    */
   low: number;
+  /**
+   * Las mismas relaciones en categorías disjuntas (base × confianza): la web suma las que deja ver cada filtro, sin mostrar un total que no cumple el filtro.
+   */
+  byBasis: {
+    observed: CountByConfidence;
+    inferred: CountByConfidence;
+  };
+}
+export interface CountByConfidence {
+  high: number;
+  medium: number;
+  low: number;
 }
 export interface Proposal {
   key: string;
@@ -106,6 +118,10 @@ export interface Proposal {
    * @maxItems 500
    */
   members: string[];
+  /**
+   * Cuántos miembros tiene la propuesta en el análisis. Si es mayor que members (que llega hasta 500), la lista está truncada y la revisión por conjuntos no la aplica de una vez.
+   */
+  memberCount: number;
 }
 export interface Limitation {
   code: string;

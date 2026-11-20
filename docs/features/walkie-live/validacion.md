@@ -439,3 +439,15 @@ Una consulta de proyección sin `jsonb` (solo `members` de módulos y features),
 | Después | una sola API con `GET /api/pedidos` en el catálogo; el lienzo de la feature hecha a mano sigue en su versión; «Abrir el lienzo» abre la feature con 6 cajas y 7 conexiones |
 
 **Lo que no se midió.** El tiempo de dibujo de la vista en el navegador con 20.000 entidades (la vista general de ese caso tiene 2 cajas y un grupo trae a lo sumo 500, con `onlyRenderVisibleElements`); queda para el banco de rendimiento si un proyecto real lo pide.
+
+**Ajustes de la revisión técnica (2026-11-20).**
+
+| Punto | Resultado |
+|---|---|
+| Coincidencia solo por título | No se preselecciona: la vista previa espera una elección explícita. Caso F: una API hecha a mano «PUT /api/pedidos/{id}» con contrato `POST /api/notas` no se vincula; al elegir «Crear en el catálogo» quedan las dos, cada una con su contrato (E2E y Vitest) |
+| Filtros y conteos | `byBasis` disjunto; un vínculo de 3 observadas (alta, media, baja) y 5 inferidas (2 medias, 3 bajas) muestra 8, 3 con «Solo observadas», 4 sin «Confianza baja» y 2 con los dos filtros (Vitest). La API comprueba que las categorías suman los totales en Walkie |
+| Más de 500 miembros | Propuesta real de la CLI con 2 pantallas y 501 APIs: `memberCount` 503 y 500 en la lista; la API rechaza crearla (vista previa y confirmación, 400 con el total) y una API suelta se sigue creando; la web lo dice y lleva a la revisión individual |
+| Más de 500 hallazgos en un grupo | Recorrido por páginas de 500 sin repetir ni saltear, en el mismo orden al pedir otra vez (API, 2.801 entidades); la web pagina con «Anterior»/«Siguiente» en la URL (`?pagina=`), dibuja a lo sumo 500 cajas y conserva la selección |
+| Vista a 1280 y 1440 px | Paneles de grupos y detalle plegables (se recuerdan); la vista general elige columnas o filas según el tamaño del lienzo al abrirse, con zoom inicial de al menos 0,5; la vista no salta al plegar paneles (E2E compara la transformación), filtrar ni cambiar de página; controles de zoom y encuadre a pedido |
+| Orden de la evidencia | Pantalla → servicio → envoltorio (E2E del caso F y Vitest con la cadena real de Walkie: HomePage → useApps → listApps → request → send) |
+| Safari | Caso F completo en WebKit (Playwright `Desktop Safari`, 1280 × 800): pasa |

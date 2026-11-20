@@ -44,6 +44,15 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
 
         // La web llama a los módulos (ejecución, inferida por sus hooks); exponer o contener nunca es ejecución.
         var links = architecture.GetProperty("links").EnumerateArray().ToList();
+        // Categorías disjuntas (base × confianza): suman el total y cuadran con observadas, inferidas y bajas.
+        Assert.All(links, l =>
+        {
+            int Sum(string basis) => l.GetProperty("byBasis").GetProperty(basis).EnumerateObject().Sum(c => c.Value.GetInt32());
+            var split = l.GetProperty("byBasis");
+            Assert.Equal(l.GetProperty("observed").GetInt32(), Sum("observed"));
+            Assert.Equal(l.GetProperty("inferred").GetInt32(), Sum("inferred"));
+            Assert.Equal(l.GetProperty("low").GetInt32(), split.GetProperty("observed").GetProperty("low").GetInt32() + split.GetProperty("inferred").GetProperty("low").GetInt32());
+        });
         var calls = links.Single(l => l.GetProperty("from").GetString() == web.GetProperty("key").GetString()
             && l.GetProperty("to").GetString() == "module:module:Walkie.Modules.Apps" && l.GetProperty("kind").GetString() == "calls");
         Assert.Equal("execution", calls.GetProperty("semantic").GetString());
@@ -175,6 +184,33 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
         Assert.Equal("created", after.GetProperty("decision").GetString());
     }
 
+    [Fact]
+    public async Task Una_propuesta_de_mas_de_500_miembros_dice_su_total_y_no_se_crea_de_una_vez()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client, "Propuesta enorme");
+        var snapshotId = await UploadSnapshotAsync(client, appId, Huge(501));
+
+        var proposal = (await ArchitectureAsync(client, snapshotId)).GetProperty("proposals").EnumerateArray().Single();
+        Assert.Equal(503, proposal.GetProperty("memberCount").GetInt32()); // 2 pantallas y 501 APIs
+        Assert.Equal(500, proposal.GetProperty("members").GetArrayLength());
+
+        // El backend no confía en la lista del navegador: rechaza crearla de una vez, también en la vista previa.
+        var key = proposal.GetProperty("key").GetString()!;
+        foreach (var dryRun in new[] { true, false })
+        {
+            var response = await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), dryRun, [Create(key, Guid.CreateVersion7())]);
+            var problem = await JsonAsync(response, HttpStatusCode.BadRequest);
+            Assert.Contains("503 miembros", problem.GetProperty("errors").GetProperty("/operations/0/entityKey")[0].GetString(), StringComparison.Ordinal);
+        }
+
+        // La revisión individual sigue: una de sus APIs se crea sola.
+        var created = await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), false, [Create("api:GET /api/pedidos/r0", Guid.CreateVersion7())]), HttpStatusCode.OK);
+        Assert.Equal("completed", created.GetProperty("status").GetString());
+        var features = await JsonAsync(await client.GetAsync(new Uri($"/api/apps/{appId}/features", UriKind.Relative)), HttpStatusCode.OK);
+        Assert.Equal(0, features.GetArrayLength());
+    }
+
     // ---------- Escala ----------
 
     [Fact]
@@ -209,6 +245,25 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
             // Holgado a propósito: atrapa un orden peor (cuadrático, N+1), no ruido de la máquina.
             Assert.True(overview[2] < (entities > 10_000 ? 4_000 : 1_000), $"Vista general: {overview[2]} ms con {entities} entidades.");
             Assert.True(architecture.GetProperty("groups").GetArrayLength() < 50, "La vista general agrupa: nunca una caja por hallazgo.");
+
+            // Un grupo de más de 500 hallazgos se recorre por páginas: sin repetir ni saltear, siempre en el mismo orden.
+            var biggest = architecture.GetProperty("groups").EnumerateArray()
+                .OrderByDescending(g => g.GetProperty("counts").EnumerateObject().Sum(c => c.Value.GetInt32())).First().GetProperty("key").GetString()!;
+            var seen = new List<string>();
+            var total = 0;
+            for (var page = 0; page == 0 || seen.Count < total; page++)
+            {
+                var detailPage = await JsonAsync(await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/architecture/group?key={Uri.EscapeDataString(biggest)}&page={page}&pageSize=500", UriKind.Relative)), HttpStatusCode.OK);
+                total = detailPage.GetProperty("total").GetInt32();
+                var keys = detailPage.GetProperty("entities").EnumerateArray().Select(e => e.GetProperty("key").GetString()!).ToList();
+                Assert.InRange(keys.Count, 1, 500);
+                seen.AddRange(keys);
+            }
+
+            Assert.True(total > 500, $"El grupo más grande tiene {total} hallazgos: la prueba necesita más de 500.");
+            Assert.Equal(total, seen.Distinct(StringComparer.Ordinal).Count());
+            var again = await JsonAsync(await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/architecture/group?key={Uri.EscapeDataString(biggest)}&page=1&pageSize=500", UriKind.Relative)), HttpStatusCode.OK);
+            Assert.Equal(seen.Skip(500).Take(500), again.GetProperty("entities").EnumerateArray().Select(e => e.GetProperty("key").GetString()!));
         }
     }
 
@@ -260,6 +315,25 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
             export function EditarPedidoPage({ id }: { id: string }) { const navigate = useNavigate(); obtener(id); return <form onSubmit={() => editar(id).then(() => navigate(pedidoPath(id)))} />; }
             """,
     }, "--source-id", source.ToString());
+
+    /// <summary>Una lista y su detalle que navegan entre sí; la lista llama a <paramref name="apis"/> APIs distintas (una propuesta enorme).</summary>
+    private static byte[] Huge(int apis) => Scan(new Dictionary<string, string>
+    {
+        ["web/package.json"] = """{ "name": "enorme", "dependencies": { "react": "19.0.0", "react-router-dom": "7.0.0" } }""",
+        ["web/src/rutas.tsx"] = """
+            import { createBrowserRouter } from 'react-router-dom';
+            import { PedidosPage, PedidoPage } from './paginas';
+            export const router = createBrowserRouter([
+              { path: '/pedidos', element: <PedidosPage /> },
+              { path: '/pedidos/:id', element: <PedidoPage /> },
+            ]);
+            """,
+        ["web/src/paginas.tsx"] = "import { Link } from 'react-router-dom';\n"
+            + "export function PedidosPage() {\n"
+            + string.Concat(Enumerable.Range(0, apis).Select(i => string.Create(CultureInfo.InvariantCulture, $"  fetch('/api/pedidos/r{i}');\n")))
+            + "  return <Link to={`/pedidos/${1}`}>Ver</Link>;\n}\n"
+            + "export function PedidoPage() { fetch('/api/pedidos/r0'); return <Link to=\"/pedidos\">Volver</Link>; }\n",
+    }, "--source-id", Guid.CreateVersion7().ToString());
 
     /// <summary>Un front sintético de muchos recursos (listado, detalle y edición, con su cliente y sus hooks), analizado por la CLI.</summary>
     private static byte[] Synthetic(int resources)

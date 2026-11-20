@@ -469,21 +469,25 @@ public sealed class FrontendHttpDetector : IDetector
     /// envoltorio, un hook o un servicio, inferida media; a través de un componente dibujado, inferida baja. La
     /// evidencia es la cadena entera, cada salto con su archivo y línea.
     /// </summary>
+    /// <summary>La nota de un paso: lo que ya decía y en qué función está («… · en useApps»), para ordenar la cadena al mostrarla.</summary>
+    private static string? Where(Hop hop, string? note) =>
+        hop.In is null ? note : note is null ? $"en {hop.In}" : $"{note} · en {hop.In}";
+
     private void Relate(AnalysisContext context, FrontendModel model, FrontendApp app, ResolvedCall call, IReadOnlyList<Reach> consumers, bool relative)
     {
         var key = DiscoveryKeys.Api(call.Method, call.Path);
         var site = call.Chain[0];
         var siteConfidence = relative ? Confidence.Low : Confidence.Medium;
         var siteEvidence = context.Findings.Evidence(Id, site.Path, siteConfidence, $"{call.Method} {call.Path}", new Lines(site.Line, site.Line),
-            relative ? "URL relativa: se asumió que cuelga de la raíz del sitio"
-            : call.ViaBase ? "Ruta literal sobre una base configurable (una constante que no es literal)" : null);
+            Where(site, relative ? "URL relativa: se asumió que cuelga de la raíz del sitio"
+                : call.ViaBase ? "Ruta literal sobre una base configurable (una constante que no es literal)" : null));
         if (context.Findings.Entity(key, "api", $"{call.Method} {DiscoveryKeys.NormalizePath(call.Path)}", Basis.Inferred, siteConfidence, siteEvidence) is not { } api)
         {
             return;
         }
 
         api.Http ??= RouteScreens.Http(call.Method, Text.Truncate(call.Path.Split('?', '#')[0], 500));
-        var chain = call.Chain.Skip(1).Select(h => context.Findings.Evidence(Id, h.Path, Confidence.Medium, h.Note, new Lines(h.Line, h.Line))).ToList();
+        var chain = call.Chain.Skip(1).Select(h => context.Findings.Evidence(Id, h.Path, Confidence.Medium, h.Note, new Lines(h.Line, h.Line), Where(h, null))).ToList();
         var bestByScreen = consumers.GroupBy(c => c.Screen).Select(g => g.OrderBy(c => c.Jsx).ThenBy(c => c.Calls).First()).OrderBy(c => c.Screen, StringComparer.Ordinal).ToList();
         if (bestByScreen.Count == 0)
         {
@@ -505,7 +509,7 @@ public sealed class FrontendHttpDetector : IDetector
                 : (Basis.Inferred, Confidence.Medium);
             api.AddDerivedFrom(consumer.Screen);
             context.Findings.Relation("calls", consumer.Screen, key, basis, confidence, siteEvidence);
-            foreach (var hop in chain.Concat(consumer.Path.Select(h => context.Findings.Evidence(Id, h.Path, Confidence.Medium, h.Note, new Lines(h.Line, h.Line)))))
+            foreach (var hop in chain.Concat(consumer.Path.Select(h => context.Findings.Evidence(Id, h.Path, Confidence.Medium, h.Note, new Lines(h.Line, h.Line), Where(h, null)))))
             {
                 context.Findings.Relation("calls", consumer.Screen, key, basis, confidence, hop);
             }

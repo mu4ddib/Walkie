@@ -1,16 +1,20 @@
-import { useMemo } from 'react';
-import { MarkerType, ReactFlow, ReactFlowProvider, type Edge, type Node } from '@xyflow/react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Controls, MarkerType, ReactFlow, ReactFlowProvider, type Edge, type Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { ArchitectureGroup, ArchitectureLink, DiscoveryArchitectureGroup } from '../../api/client';
 import {
   RELATION_LABELS,
   detailLayout,
+  linkCount,
+  linkCounts,
   linkText,
   overviewLayout,
+  overviewOrientation,
   stubKey,
   visibleLinks,
   visibleRelations,
   type Filters,
+  type Orientation,
   type Semantic,
 } from './architectureModel';
 import { architectureNodeTypes } from './architectureTypes';
@@ -46,6 +50,14 @@ const marker = (semantic: Semantic) => (semantic === 'containment' ? undefined :
 export function ArchitectureCanvas(props: Props) {
   const { groups, filters, selection, onSelect, onOpen, highlight } = props;
   const byKey = useMemo(() => new Map(groups.map((g) => [g.key, g])), [groups]);
+  // El tamaño del lienzo se mide una vez al abrir la vista y decide columnas o filas (la que se lee con más zoom). No
+  // se vuelve a medir: plegar un panel o filtrar no reordena ni encuadra de nuevo.
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const rect = box.current?.getBoundingClientRect();
+    setSize(rect && rect.width > 0 && rect.height > 0 ? { w: rect.width, h: rect.height } : { w: 0, h: 0 });
+  }, []);
 
   const { nodes, edges } = useMemo(() => {
     if (props.mode === 'overview') {
@@ -54,9 +66,12 @@ export function ArchitectureCanvas(props: Props) {
       // el de más relaciones; el inspector ofrece los demás.
       const pairs = new Map<string, ArchitectureLink[]>();
       for (const link of links) pairs.set(`${link.from}|${link.to}`, [...(pairs.get(`${link.from}|${link.to}`) ?? []), link]);
-      const labels = new Map([...pairs].map(([id, list]) => [id, [...list].sort((a, b) => b.total - a.total).map(linkText).join(' · ')]));
+      const byCount = (list: ArchitectureLink[]) => [...list].sort((a, b) => linkCount(b, filters) - linkCount(a, filters));
+      const labels = new Map([...pairs].map(([id, list]) => [id, byCount(list).map((l) => linkText(l, filters)).join(' · ')]));
       // Las columnas se separan lo que pide la etiqueta más larga: así ninguna tapa una caja.
-      const positions = overviewLayout(groups, Math.max(0, ...[...labels.values()].map((l) => l.length)));
+      const longest = Math.max(0, ...[...labels.values()].map((l) => l.length));
+      const orientation: Orientation = size && size.w > 0 ? overviewOrientation(groups, longest, size) : 'columns';
+      const positions = overviewLayout(groups, longest, orientation);
       const nodes: Node[] = groups.map((group) => ({
         id: group.key,
         type: 'archGroup',
@@ -65,19 +80,21 @@ export function ArchitectureCanvas(props: Props) {
           group,
           selected: selection?.kind === 'group' && selection.key === group.key,
           dim: highlight ? !highlight.has(group.key) : false,
+          vertical: orientation === 'rows',
         },
       }));
       const edges: Edge[] = [...pairs.entries()].map(([id, list]) => {
-        const sorted = [...list].sort((a, b) => b.total - a.total);
-        const main = sorted[0]!;
+        const main = byCount(list)[0]!;
         const selected = selection?.kind === 'link' && list.some((l) => l === selection.link);
+        // El trazo dice lo que se ve con el filtro: punteado si todo lo visible es inferido; tenue si todo es de confianza baja.
+        const counts = list.map((l) => linkCounts(l, filters));
         return {
           id,
           source: main.from,
           target: main.to,
           label: labels.get(id),
           className:
-            edgeClass(main.semantic, list.every((l) => l.observed === 0), list.every((l) => l.low === l.total)) + (selected ? ' is-selected' : ''),
+            edgeClass(main.semantic, counts.every((c) => c.observed === 0), counts.every((c) => c.low === c.total)) + (selected ? ' is-selected' : ''),
           markerEnd: marker(main.semantic),
           data: { link: main },
         };
@@ -134,44 +151,53 @@ export function ArchitectureCanvas(props: Props) {
     }
     return { nodes, edges: [...edges.values()] };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cada rama lee lo suyo de props
-  }, [props.mode, props.mode === 'overview' ? props.links : props.detail, groups, filters, selection, highlight, byKey]);
+  }, [props.mode, props.mode === 'overview' ? props.links : props.detail, groups, filters, selection, highlight, byKey, size]);
 
   return (
-    <ReactFlowProvider>
-      <ReactFlow
-        key={props.mode === 'overview' ? 'general' : props.detail.key}
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={architectureNodeTypes}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        edgesFocusable
-        elementsSelectable={false}
-        onlyRenderVisibleElements
-        fitView
-        fitViewOptions={{ padding: 0.15 }}
-        minZoom={0.1}
-        maxZoom={1.5}
-        zoomOnDoubleClick={false}
-        proOptions={{ hideAttribution: true }}
-        onPaneClick={() => onSelect(null)}
-        onNodeClick={(_, node) => {
-          if (node.type === 'archGroup') onSelect({ kind: 'group', key: node.id });
-          else if (node.type === 'archStub') onSelect({ kind: 'group', key: node.id.slice('grupo:'.length) });
-          else onSelect({ kind: 'entity', key: node.id, title: (node.data as { entity?: { title: string } }).entity?.title });
-        }}
-        onNodeDoubleClick={(_, node) => {
-          if (node.type === 'archGroup') onOpen(node.id);
-          else if (node.type === 'archStub') onOpen(node.id.slice('grupo:'.length));
-        }}
-        onEdgeClick={(_, edge) => {
-          if (edge.data?.link) onSelect({ kind: 'link', link: edge.data.link as ArchitectureLink });
-          else if (edge.data?.relation) {
-            const r = edge.data.relation as { key: string; from: string; to: string; kind: string };
-            onSelect({ kind: 'relation', key: r.key, from: r.from, to: r.to, relation: r.kind });
-          }
-        }}
-      />
-    </ReactFlowProvider>
+    <div ref={box} className="arch-flow">
+      {size && (
+        <ReactFlowProvider>
+          <ReactFlow
+            key={props.mode === 'overview' ? 'general' : props.detail.key}
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={architectureNodeTypes}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            edgesFocusable
+            elementsSelectable={false}
+            onlyRenderVisibleElements
+            fitView
+            // Encuadre inicial legible: nunca más chico que la mitad (lo que no entra se recorre arrastrando o con la rueda,
+            // y desde ahí manda la persona: la vista no se vuelve a encuadrar al elegir, filtrar ni cambiar de página).
+            fitViewOptions={{ padding: 0.15, minZoom: 0.5, maxZoom: 1 }}
+            minZoom={0.1}
+            maxZoom={1.5}
+            zoomOnDoubleClick={false}
+            proOptions={{ hideAttribution: true }}
+            onPaneClick={() => onSelect(null)}
+            onNodeClick={(_, node) => {
+              if (node.type === 'archGroup') onSelect({ kind: 'group', key: node.id });
+              else if (node.type === 'archStub') onSelect({ kind: 'group', key: node.id.slice('grupo:'.length) });
+              else onSelect({ kind: 'entity', key: node.id, title: (node.data as { entity?: { title: string } }).entity?.title });
+            }}
+            onNodeDoubleClick={(_, node) => {
+              if (node.type === 'archGroup') onOpen(node.id);
+              else if (node.type === 'archStub') onOpen(node.id.slice('grupo:'.length));
+            }}
+            onEdgeClick={(_, edge) => {
+              if (edge.data?.link) onSelect({ kind: 'link', link: edge.data.link as ArchitectureLink });
+              else if (edge.data?.relation) {
+                const r = edge.data.relation as { key: string; from: string; to: string; kind: string };
+                onSelect({ kind: 'relation', key: r.key, from: r.from, to: r.to, relation: r.kind });
+              }
+            }}
+          >
+            {/* Acercar, alejar y encuadrar a pedido: la vista solo se mueve cuando la persona lo pide. */}
+            <Controls showInteractive={false} position="bottom-right" />
+          </ReactFlow>
+        </ReactFlowProvider>
+      )}
+    </div>
   );
 }

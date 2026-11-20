@@ -77,6 +77,13 @@ El nombre es el título de la pantalla con la ruta más corta. Una pantalla est�
 
 **Proyección (API, PR B).** `GET /api/snapshots/{id}/architecture` (grupos, vínculos agregados por tipo con observados, inferidos y de confianza baja, propuestas con sus miembros, limitaciones por grupo), `…/architecture/group?key=` (los hallazgos de un grupo, paginados, con sus relaciones y los vecinos de otros grupos) y `…/relation-evidence?key=` (una relación con su cadena). Todos de lectura, con `RequireAppRole(Viewer)` y detrás de `Discovery:Enabled`. La revisión acepta `key` repetido (hasta 500) para pedir solo los miembros de un conjunto.
 
+**Ajustes de la revisión técnica del PR B.**
+
+- **Coincidencias:** la revisión por conjuntos solo propone vincular una coincidencia **por firma** (método y ruta) y única. Una coincidencia solo por título, o varias candidatas, quedan sin elegir y la vista previa no se pide hasta que la persona decida: dos APIs con el mismo nombre pueden tener contratos distintos. Lo descartado no se reincorpora solo.
+- **Conteos de un vínculo:** además de los totales, cada vínculo trae `byBasis` (observadas y inferidas, cada una en alta, media y baja: categorías disjuntas). La web suma las que deja ver cada filtro; nunca muestra el total como si cumpliera el filtro. Cambio aditivo del contrato de la proyección.
+- **Conjuntos grandes:** una propuesta trae `memberCount` (el total real) además de `members` (hasta 500). Si hay más, la web no ofrece crearla de una vez y lleva a la revisión individual, y la API rechaza crear una feature o un módulo de más de 500 miembros (400, también en la vista previa): no depende de la lista del navegador.
+- **Orden de la evidencia:** los ids de evidencia de una relación se guardan ordenados, así que la cadena pierde su orden. La CLI anota en la `note` de cada paso la función que lo contiene («… · en useApps»); la web reconstruye la cadena (pantalla → hook o servicio → cliente → API). No cambia el formato ni los ids. Los análisis anteriores se muestran sin ordenar y lo dicen.
+
 ## Consecuencias
 
 - Los análisis guardados no cambian: son inmutables y se interpretan igual. Un reanálisis con la CLI nueva da más relaciones y otras propuestas.

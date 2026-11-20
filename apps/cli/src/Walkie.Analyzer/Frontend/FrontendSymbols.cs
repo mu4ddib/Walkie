@@ -24,7 +24,12 @@ internal sealed record BaseUrl(string Name) : Part;
 internal sealed record Missing : Part;
 
 /// <summary>Un salto de una cadena de evidencia: archivo, línea y qué se vio ahí.</summary>
-internal sealed record Hop(string Path, int Line, string Note);
+/// <summary>
+/// Un paso de una cadena: dónde está (archivo y línea), qué hace y en qué función (<see cref="In"/>). La función va a la
+/// nota de su evidencia («en useApps») para que la web pueda mostrar la cadena en orden (pantalla → hook → cliente → API):
+/// los ids de evidencia de una relación se guardan ordenados y el orden de la cadena se pierde.
+/// </summary>
+internal sealed record Hop(string Path, int Line, string Note, string? In = null);
 
 internal enum MethodSource
 {
@@ -297,7 +302,7 @@ internal sealed class FrontendSymbols
             }
 
             var line = model.Line(file.Path, call.Offset);
-            var hop = new Hop(file.Path, line, call.MethodFromOptions ? "fetch" : $"{call.Method.ToUpperInvariant()} del cliente HTTP");
+            var hop = new Hop(file.Path, line, call.MethodFromOptions ? "fetch" : $"{call.Method.ToUpperInvariant()} del cliente HTTP", info.FullName);
             if (call.MethodFromOptions && NonApi(scope, call.Url))
             {
                 summary.Problems.Add(new SymbolProblem("non-api-fetch", file.Path, line,
@@ -332,7 +337,7 @@ internal sealed class FrontendSymbols
                     continue;
                 }
 
-                var hop = new Hop(file.Path, line, $"{call.Callee.ToUpperInvariant()} con la instancia {receiver} de axios");
+                var hop = new Hop(file.Path, line, $"{call.Callee.ToUpperInvariant()} con la instancia {receiver} de axios", info.FullName);
                 if (dynamicBase)
                 {
                     summary.Problems.Add(new SymbolProblem("dynamic-http-url", file.Path, line,
@@ -360,7 +365,7 @@ internal sealed class FrontendSymbols
             }
 
             var bindings = Bind(scope, target.Function, args);
-            var callHop = new Hop(file.Path, line, $"llama a {target.Function.FullName}");
+            var callHop = new Hop(file.Path, line, $"llama a {target.Function.FullName}", info.FullName);
             foreach (var template in inner.OpenCalls)
             {
                 if (template.Depth >= MaxDepth)

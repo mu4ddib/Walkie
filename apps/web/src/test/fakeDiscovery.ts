@@ -168,7 +168,11 @@ export function fakeDiscovery(
     if (parts[3] === 'architecture' && method === 'GET') {
       if (parts[4] === 'group') {
         const found = seed.groups?.[`${snapshotId}|${url.searchParams.get('key') ?? ''}`];
-        return found ? json(200, found) : notFound();
+        if (!found) return notFound();
+        // Pagina los hallazgos como la API (los vecinos y relaciones sembrados van en todas las páginas).
+        const index = Number(url.searchParams.get('page') ?? 0);
+        const size = Number(url.searchParams.get('pageSize') ?? 200);
+        return json(200, { ...found, page: index, pageSize: size, total: found.entities.length, entities: found.entities.slice(index * size, (index + 1) * size) });
       }
       const found = seed.architecture?.[snapshotId];
       return found ? json(200, found) : notFound();

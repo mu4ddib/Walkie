@@ -469,6 +469,16 @@ internal sealed partial class ApplyHandlers(
 
             using var document = JsonDocument.Parse(createData[op.EntityKey]);
             var finding = document.RootElement;
+            // Un conjunto más grande que lo que la revisión puede listar no se crea de una vez: nadie lo confirmaría sin ver
+            // todos sus miembros (spec walkie-live-arquitectura, revisión del PR B). Sus elementos se deciden uno por uno.
+            var memberCount = finding.TryGetProperty("members", out var memberList) && memberList.ValueKind == JsonValueKind.Array ? memberList.GetArrayLength() : 0;
+            if (memberCount > ArchitectureProjection.MaxMembers)
+            {
+                errors[$"{path}/entityKey"] = [string.Create(CultureInfo.InvariantCulture,
+                    $"Tiene {memberCount} miembros y {(kind == "feature" ? "una feature" : "un módulo")} se crea de una vez con hasta {ArchitectureProjection.MaxMembers}: decide sus elementos uno por uno en la revisión.")];
+                return null;
+            }
+
             var draft = kind == "feature" ? CanvasDraft.Feature(finding, drafting!) : CanvasDraft.Module(finding, drafting!);
             // Un módulo sin ninguna API en el catálogo todavía: la vista previa igual muestra su borrador (vacío) y las APIs
             // sin decidir, para que la persona pueda sumarlas en la misma solicitud (tarea 11: si no, no había cómo hacerlo

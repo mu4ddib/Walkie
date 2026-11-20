@@ -94,6 +94,8 @@ Analizar el propio repo sin escribir en él: `--source-id <uuid>`. Así no se cr
 
 ## Trampas conocidas
 
+- **El orden de una cadena no se guarda**: los ids de evidencia de una relación van en un conjunto ordenado (`SortedSet`), así que la cadena pantalla → hook → cliente → API llega desordenada. Cada `Hop` lleva la función que lo contiene (`In`) y `FrontendHttpDetector.Where` la escribe en la `note` («… · en useApps»); la web reconstruye el orden con eso (`orderChain`). La `note` no entra al id de la evidencia, así que no cambia ids ni fingerprints.
+
 - **No versiones `.walkie/source.json` del propio repo**: `walkie scan .` en la raíz lo crea, pero `WalkieRepositoryTests` exige que no exista (analizar Walkie no escribe en él). Usa `--source-id <uuid>` (o bórralo después).
 - **Un detector sin nada que mirar queda `ran`, no `skipped`.**
   - El validador exige que todos los detectores hayan corrido para un análisis `complete`, y `skipped` lo deja parcial.

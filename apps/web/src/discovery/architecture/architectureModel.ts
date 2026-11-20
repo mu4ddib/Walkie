@@ -12,6 +12,9 @@ import type {
  * vista, nunca al mover). Nada se guarda.
  */
 
+/** Hallazgos por página al abrir un grupo (lo que React Flow dibuja de una vez; la API admite hasta 500). */
+export const GROUP_PAGE_SIZE = 500;
+
 export type Semantic = 'execution' | 'navigation' | 'containment' | 'dependency';
 
 export const SEMANTICS: readonly Semantic[] = ['execution', 'navigation', 'dependency', 'containment'];
@@ -86,12 +89,28 @@ export interface Filters {
 
 export const DEFAULT_FILTERS: Filters = { semantics: new Set(['execution', 'navigation', 'dependency']), showLow: true, onlyObserved: false };
 
-/** Los vínculos que quedan con los filtros: por significado, por base (observado) y sin los de confianza baja si se piden fuera. */
+/**
+ * Cuántas relaciones de un vínculo deja ver un filtro, sumando sus categorías disjuntas (base × confianza): «Solo
+ * observadas» saca las inferidas y sin «Confianza baja» se van las bajas; las dos juntas dejan las observadas altas y
+ * medias. Nunca el total del vínculo si el filtro deja menos.
+ */
+export function linkCount(link: ArchitectureLink, filters: Filters): number {
+  const bases = filters.onlyObserved ? [link.byBasis.observed] : [link.byBasis.observed, link.byBasis.inferred];
+  return bases.reduce((sum, c) => sum + c.high + c.medium + (filters.showLow ? c.low : 0), 0);
+}
+
+/** Lo que el filtro deja ver de un vínculo: total, observadas e inferidas (y cuántas de confianza baja). */
+export function linkCounts(link: ArchitectureLink, filters: Filters) {
+  const of = (c: ArchitectureLink['byBasis']['observed']) => c.high + c.medium + (filters.showLow ? c.low : 0);
+  const observed = of(link.byBasis.observed);
+  const inferred = filters.onlyObserved ? 0 : of(link.byBasis.inferred);
+  const low = filters.showLow ? link.byBasis.observed.low + (filters.onlyObserved ? 0 : link.byBasis.inferred.low) : 0;
+  return { total: observed + inferred, observed, inferred, low };
+}
+
+/** Los vínculos que quedan con los filtros: por significado y con al menos una relación que cumpla los demás. */
 export function visibleLinks(links: readonly ArchitectureLink[], filters: Filters): ArchitectureLink[] {
-  return links.filter(
-    (l) =>
-      filters.semantics.has(l.semantic) && (!filters.onlyObserved || l.observed > 0) && (filters.showLow || l.low < l.total),
-  );
+  return links.filter((l) => filters.semantics.has(l.semantic) && linkCount(l, filters) > 0);
 }
 
 export function visibleRelations(relations: readonly ArchitectureRelation[], filters: Filters): ArchitectureRelation[] {
@@ -102,11 +121,11 @@ export function visibleRelations(relations: readonly ArchitectureRelation[], fil
 }
 
 /**
- * Texto de un vínculo agregado, corto para que quepa entre dos cajas: «llama a ×12». Si es observado o inferido lo dice
- * el trazo (punteado = inferido) y el inspector lo detalla.
+ * Texto de un vínculo agregado, corto para que quepa entre dos cajas: «llama a ×12», con lo que deja ver el filtro. Si
+ * es observado o inferido lo dice el trazo (punteado = inferido) y el inspector lo detalla.
  */
-export function linkText(link: ArchitectureLink): string {
-  return `${RELATION_LABELS[link.kind] ?? link.kind} ×${link.total}`;
+export function linkText(link: ArchitectureLink, filters: Filters): string {
+  return `${RELATION_LABELS[link.kind] ?? link.kind} ×${linkCount(link, filters)}`;
 }
 
 export interface Point {
@@ -137,8 +156,32 @@ const GROUP_COLUMNS: Record<ArchitectureGroup['kind'], number> = {
  * Vista general: una columna por responsabilidad (front, servicios, módulos, datos, infraestructura), en el orden de
  * la API. Una columna larga se parte en varias (como mucho {@link PER_COLUMN} cajas por columna).
  */
-export function overviewLayout(groups: readonly ArchitectureGroup[], longestLabel = 0): Record<string, Point> {
-  return columns(groups.map((g) => ({ key: g.key, column: GROUP_COLUMNS[g.kind] })), GROUP_BOX, Math.max(OVERVIEW_GAP, labelWidth(longestLabel)));
+export function overviewLayout(groups: readonly ArchitectureGroup[], longestLabel = 0, orientation: Orientation = 'columns'): Record<string, Point> {
+  const items = groups.map((g) => ({ key: g.key, column: GROUP_COLUMNS[g.kind] }));
+  return orientation === 'columns'
+    ? columns(items, GROUP_BOX, Math.max(OVERVIEW_GAP, labelWidth(longestLabel)))
+    : rows(items, GROUP_BOX, ROWS_GAP);
+}
+
+/** Columnas (de izquierda a derecha) o filas (de arriba abajo): la misma secuencia por responsabilidad. */
+export type Orientation = 'columns' | 'rows';
+/** Entre filas de la vista general: la etiqueta va sobre una flecha vertical, así que basta su alto y aire. */
+const ROWS_GAP = 96;
+const PER_ROW = 6;
+
+/**
+ * La orientación que se lee mejor en un lienzo de este tamaño: la que permite encuadrar todo con más zoom. Se elige una
+ * vez al abrir la vista (nunca al plegar un panel ni al filtrar), así la vista no salta.
+ */
+export function overviewOrientation(groups: readonly ArchitectureGroup[], longestLabel: number, size: { w: number; h: number }): Orientation {
+  const zoom = (orientation: Orientation) => {
+    const points = Object.values(overviewLayout(groups, longestLabel, orientation));
+    if (points.length === 0) return 1;
+    const w = Math.max(...points.map((p) => p.x)) + GROUP_BOX.w;
+    const h = Math.max(...points.map((p) => p.y)) + GROUP_BOX.h;
+    return Math.min(size.w / w, size.h / h);
+  };
+  return zoom('rows') > zoom('columns') ? 'rows' : 'columns';
 }
 
 /** Ancho aproximado de la etiqueta de una flecha (11 px de IBM Plex Sans ≈ 6 px por carácter, más el relleno). */
@@ -192,4 +235,77 @@ function columns(items: readonly { key: string; column: number }[], box: { w: nu
     }
   }
   return positions;
+}
+
+function rows(items: readonly { key: string; column: number }[], box: { w: number; h: number }, gap: number): Record<string, Point> {
+  const byRow = new Map<number, string[]>();
+  for (const item of items) byRow.set(item.column, [...(byRow.get(item.column) ?? []), item.key]);
+  const positions: Record<string, Point> = {};
+  let y = 0;
+  for (const row of [...byRow.keys()].sort((a, b) => a - b)) {
+    const keys = byRow.get(row)!;
+    for (let part = 0; part < Math.ceil(keys.length / PER_ROW); part++) {
+      keys.slice(part * PER_ROW, (part + 1) * PER_ROW).forEach((key, column) => {
+        positions[key] = { x: column * (box.w + ROW_GAP), y };
+      });
+      y += box.h + gap;
+    }
+  }
+  return positions;
+}
+
+/** Un paso de evidencia tal como llega de la API (lo que hace falta para ordenarlo). */
+export interface EvidenceStep {
+  id: string;
+  symbol?: string;
+  note?: string;
+}
+
+const CALLEE = /^(?:llama a |dibuja <)([^>\s]+)>?$/;
+const WHERE = /(?:^|· )en (\S+)$/;
+
+/** En qué función está un paso («… · en useApps») y a quién llama o dibuja («llama a listApps», «dibuja <Welcome>»). */
+export function stepParts(step: EvidenceStep): { in?: string; calls?: string; note?: string } {
+  const where = step.note ? WHERE.exec(step.note) : null;
+  const calls = step.symbol ? CALLEE.exec(step.symbol) : null;
+  const note = step.note && where ? step.note.slice(0, where.index).trim() || undefined : step.note;
+  return { ...(where ? { in: where[1] } : {}), ...(calls ? { calls: calls[1] } : {}), ...(note ? { note } : {}) };
+}
+
+/**
+ * La evidencia de una relación en el orden en que ocurre (pantalla → hook o servicio → cliente → API). La API la guarda
+ * ordenada por id, así que el orden se reconstruye de cada paso: en qué función está y a qué función llama. Empieza por
+ * un paso cuya función nadie llama (la pantalla), sigue al paso de la función llamada y, si un paso no llama a nadie
+ * (donde se arma la URL), sigue por el siguiente que nadie de lo que queda llama. Lo que no tiene función (análisis
+ * anteriores) queda al final en el orden recibido; `ordered` dice si se pudo ordenar.
+ */
+export function orderChain<T extends EvidenceStep>(steps: readonly T[]): { steps: T[]; ordered: boolean } {
+  const parts = new Map(steps.map((s) => [s.id, stepParts(s)]));
+  const located = steps.filter((s) => parts.get(s.id)!.in);
+  if (located.length < 2) return { steps: [...steps], ordered: false };
+  const rest = [...located];
+  const out: T[] = [];
+  let next: string | undefined;
+  // Cuántos pasos se encadenan desde uno (siguiendo a quién llama), para empezar por la cadena más larga: la pantalla.
+  const reach = (from: T, pool: readonly T[]) => {
+    let length = 1;
+    let callee = parts.get(from.id)!.calls;
+    const seen = new Set([from.id]);
+    for (let step = pool.find((s) => parts.get(s.id)!.in === callee); step && !seen.has(step.id); step = pool.find((s) => parts.get(s.id)!.in === callee)) {
+      seen.add(step.id);
+      length++;
+      callee = parts.get(step.id)!.calls;
+    }
+    return length;
+  };
+  while (rest.length > 0) {
+    const called = new Set(rest.map((s) => parts.get(s.id)!.calls).filter(Boolean));
+    const roots = rest.filter((s) => !called.has(parts.get(s.id)!.in));
+    const root = roots.reduce<T | undefined>((best, s) => (best === undefined || reach(s, rest) > reach(best, rest) ? s : best), undefined);
+    const pick = (next !== undefined ? rest.find((s) => parts.get(s.id)!.in === next) : undefined) ?? root ?? rest[0]!;
+    out.push(pick);
+    rest.splice(rest.indexOf(pick), 1);
+    next = parts.get(pick.id)!.calls;
+  }
+  return { steps: [...out, ...steps.filter((s) => !parts.get(s.id)!.in)], ordered: true };
 }

@@ -124,7 +124,7 @@ internal sealed class FrontendReach
                     continue;
                 }
 
-                var next = new Step(step.Calls, step.Jsx + 1, [.. step.Path, new Hop(file.Path, symbols.Line(file.Path, use.Offset), $"dibuja <{use.Name}>")]);
+                var next = new Step(step.Calls, step.Jsx + 1, [.. step.Path, new Hop(file.Path, symbols.Line(file.Path, use.Offset), $"dibuja <{use.Name}>", info.FullName)]);
                 if (best.TryAdd(component.Key, (component, next)))
                 {
                     queue.Enqueue((component, next));
@@ -143,7 +143,7 @@ internal sealed class FrontendReach
                     continue;
                 }
 
-                var next = new Step(step.Calls + 1, step.Jsx, [.. step.Path, new Hop(file.Path, symbols.Line(file.Path, call.Offset), $"llama a {target.Function.FullName}")]);
+                var next = new Step(step.Calls + 1, step.Jsx, [.. step.Path, new Hop(file.Path, symbols.Line(file.Path, call.Offset), $"llama a {target.Function.FullName}", info.FullName)]);
                 if (best.TryAdd(target.Key, (target, next)))
                 {
                     queue.Enqueue((target, next));

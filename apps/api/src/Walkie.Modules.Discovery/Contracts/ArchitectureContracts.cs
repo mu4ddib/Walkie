@@ -25,7 +25,12 @@ public sealed record ArchitectureGroup(
     int Limitations,
     int Incomplete);
 
-public sealed record ArchitectureLink(string From, string To, string Kind, string Semantic, int Total, int Observed, int Inferred, int Low);
+public sealed record ArchitectureLink(string From, string To, string Kind, string Semantic, int Total, int Observed, int Inferred, int Low, LinkBreakdown ByBasis);
+
+/// <summary>Las relaciones de un vínculo en categorías disjuntas (base × confianza), para contar exacto lo que deja ver un filtro.</summary>
+public sealed record LinkBreakdown(ConfidenceCounts Observed, ConfidenceCounts Inferred);
+
+public sealed record ConfidenceCounts(int High, int Medium, int Low);
 
 public sealed record ArchitectureProposal(
     string Key,
@@ -41,7 +46,8 @@ public sealed record ArchitectureProposal(
     int Requests,
     int Unresolved,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Decision,
-    IReadOnlyList<string> Members);
+    IReadOnlyList<string> Members,
+    int MemberCount);
 
 public sealed record ArchitectureLimitation(
     string Code,

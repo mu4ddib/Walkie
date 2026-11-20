@@ -2,23 +2,39 @@ import { v7 as uuidv7 } from 'uuid';
 import type { ArchitectureProposal, DiscoveryOperation, DiscoveryReviewItem } from '../../api/client';
 import type { CanvasInput } from '../initialCanvas';
 
-/** Qué hacer con una API del conjunto. `keep`: ya está en Walkie (vinculada o creada), no se toca. */
-export type Choice = { op: 'link'; target: string } | { op: 'create'; id: string } | { op: 'omit' } | { op: 'keep' };
+/**
+ * Qué hacer con una API del conjunto. `keep`: ya está en Walkie (vinculada o creada), no se toca. `choose`: nada elegido
+ * todavía; la persona tiene que decidir antes de la vista previa (una coincidencia solo por título o varias candidatas).
+ */
+export type Choice = { op: 'link'; target: string } | { op: 'create'; id: string } | { op: 'omit' } | { op: 'keep' } | { op: 'choose' };
 
 export const MAX_MEMBERS = 500;
 const DECIDED = new Set(['linked', 'created', 'changed']);
 
 /**
- * La elección inicial de una API, conservadora (spec walkie-live-arquitectura, tarea 9): lo ya decidido se conserva; una
- * sola coincidencia se propone vincular (nunca se reemplaza por una copia); con varias candidatas no se elige ninguna; lo
- * nuevo se propone crear. Lo descartado queda fuera. Nada se aplica hasta «Confirmar».
+ * La elección inicial de una API, conservadora (spec walkie-live-arquitectura, revisión del PR B). Nada se aplica hasta
+ * «Confirmar»:
+ * - lo ya vinculado o creado se conserva (`keep`);
+ * - lo descartado, lo que ya no aparece o no se pudo ver queda fuera (`omit`): nunca se reincorpora solo;
+ * - varias candidatas o una coincidencia solo por título: ninguna elegida (`choose`). Dos APIs con el mismo nombre
+ *   pueden tener contratos distintos; vincularlas es una decisión de la persona;
+ * - una sola coincidencia por firma (método y ruta): se propone vincular (nunca una copia);
+ * - lo nuevo se propone crear.
  */
 export function initialChoice(item: DiscoveryReviewItem): Choice {
   if (DECIDED.has(item.status)) return { op: 'keep' };
   if (item.status === 'rejected' || item.status === 'missing' || item.status === 'unverified') return { op: 'omit' };
-  if (item.candidates && item.candidates.length > 0) return { op: 'omit' };
-  if (item.match) return { op: 'link', target: `${item.match.target.kind}:${item.match.target.id}` };
+  if (item.candidates && item.candidates.length > 0) return { op: 'choose' };
+  if (item.match?.reason === 'signature') return { op: 'link', target: `${item.match.target.kind}:${item.match.target.id}` };
+  if (item.match) return { op: 'choose' };
   return { op: 'create', id: uuidv7() };
+}
+
+/** Qué entra y qué queda fuera con estas elecciones, para decirlo antes de la vista previa. */
+export function choiceSummary(choices: Readonly<Record<string, Choice>>) {
+  const values = Object.values(choices);
+  const n = (op: Choice['op']) => values.filter((c) => c.op === op).length;
+  return { keep: n('keep'), link: n('link'), create: n('create'), omit: n('omit'), choose: n('choose') };
 }
 
 /** Las operaciones de una sola aplicación: vínculos y APIs nuevas primero (el lienzo las referencia), la feature al final. */

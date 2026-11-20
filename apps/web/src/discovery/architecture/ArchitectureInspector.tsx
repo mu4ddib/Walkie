@@ -1,27 +1,34 @@
 import type { ArchitectureGroup, ArchitectureLimitation, DiscoveryArchitecture } from '../../api/client';
 import { useDiscoveryArchitectureGroup, useDiscoveryEvidence, useDiscoveryRelationEvidence } from '../../api/hooks';
 import type { ArchitectureSelection } from './ArchitectureCanvas';
-import { ENTITY_LABELS, GROUP_KIND_LABELS, RELATION_LABELS, SEMANTIC_HELP, SEMANTIC_LABELS, count, shortKey, type Semantic } from './architectureModel';
+import { ENTITY_LABELS, GROUP_KIND_LABELS, RELATION_LABELS, SEMANTIC_HELP, SEMANTIC_LABELS, count, linkCount, linkCounts, orderChain, shortKey, stepParts, visibleLinks, visibleRelations, type Filters, type Semantic } from './architectureModel';
 
 type Evidence = { id: string; detector: string; path: string; lines?: { start: number }; note?: string; symbol?: string; confidence: string };
 
-/** Una evidencia: archivo y línea, detector y por qué. Todo es texto del paquete: se muestra como texto. */
+/** Una evidencia: archivo y línea, qué hace, en qué función, detector y confianza. Todo es texto del paquete: se muestra como texto. */
 function EvidenceList({ items }: { items: readonly Evidence[] }) {
   if (items.length === 0) return <p className="panel-help">Sin evidencia registrada.</p>;
   return (
     <ol className="arch-evidence">
-      {items.map((e) => (
-        <li key={e.id}>
-          <code>
-            {e.path}
-            {e.lines ? `:${e.lines.start}` : ''}
-          </code>
-          <span className="arch-evidence-note">{e.note ?? e.symbol ?? ''}</span>
-          <span className="arch-evidence-meta">
-            {e.detector} · confianza {e.confidence === 'high' ? 'alta' : e.confidence === 'medium' ? 'media' : 'baja'}
-          </span>
-        </li>
-      ))}
+      {items.map((e) => {
+        const parts = stepParts(e);
+        return (
+          <li key={e.id}>
+            <code>
+              {e.path}
+              {e.lines ? `:${e.lines.start}` : ''}
+            </code>
+            <span className="arch-evidence-note">
+              {e.symbol ?? parts.note ?? ''}
+              {parts.in && <span className="arch-evidence-meta"> · en {parts.in}</span>}
+            </span>
+            {e.symbol && parts.note && <span className="arch-evidence-meta">{parts.note}</span>}
+            <span className="arch-evidence-meta">
+              {e.detector} · confianza {e.confidence === 'high' ? 'alta' : e.confidence === 'medium' ? 'media' : 'baja'}
+            </span>
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -56,12 +63,14 @@ export function ArchitectureInspector({
   snapshotId,
   architecture,
   selection,
+  filters,
   onSelect,
   onOpen,
 }: {
   snapshotId: string;
   architecture: DiscoveryArchitecture;
   selection: ArchitectureSelection | null;
+  filters: Filters;
   onSelect: (selection: ArchitectureSelection) => void;
   onOpen: (groupKey: string) => void;
 }) {
@@ -124,8 +133,9 @@ export function ArchitectureInspector({
 
   if (selection.kind === 'link') {
     const { link } = selection;
-    const siblings = architecture.links.filter((l) => l.from === link.from && l.to === link.to && l.kind !== link.kind);
-    const relations = (detail.data?.relations ?? []).filter((r) => {
+    const siblings = visibleLinks(architecture.links, filters).filter((l) => l.from === link.from && l.to === link.to && l.kind !== link.kind);
+    const shown = linkCounts(link, filters);
+    const relations = visibleRelations(detail.data?.relations ?? [], filters).filter((r) => {
       if (r.kind !== link.kind) return false;
       const other = detail.data?.neighbors.find((n) => n.key === r.to || n.key === r.from);
       return other?.group === link.to;
@@ -143,15 +153,16 @@ export function ArchitectureInspector({
               <span key={l.kind}>
                 {i > 0 && ', '}
                 <button type="button" className="link-button" onClick={() => onSelect({ kind: 'link', link: l })}>
-                  {RELATION_LABELS[l.kind] ?? l.kind} ×{l.total}
+                  {RELATION_LABELS[l.kind] ?? l.kind} ×{linkCount(l, filters)}
                 </button>
               </span>
             ))}
           </p>
         )}
         <p>
-          {link.total} {link.total === 1 ? 'relación' : 'relaciones'}: {link.observed} observadas, {link.inferred} inferidas
-          {link.low > 0 ? ` (${link.low} de confianza baja)` : ''}.
+          {shown.total} {shown.total === 1 ? 'relación' : 'relaciones'}
+          {shown.total < link.total ? ` a la vista (de ${link.total}; las demás las oculta el filtro)` : ''}: {shown.observed} observadas,{' '}
+          {shown.inferred} inferidas{shown.low > 0 ? ` (${shown.low} de confianza baja)` : ''}.
         </p>
         {detail.isPending && <p role="status">Cargando las relaciones…</p>}
         {relations.length > 0 && (
@@ -172,6 +183,7 @@ export function ArchitectureInspector({
   }
 
   if (selection.kind === 'relation') {
+    const chain = relation.data ? orderChain(relation.data.evidence as Evidence[]) : null;
     return (
       <aside className="arch-inspector" aria-label="Detalle de la arquitectura">
         <p className="arch-kicker">Relación</p>
@@ -182,7 +194,14 @@ export function ArchitectureInspector({
           <>
             <p>{basisText(relation.data.relation.basis, relation.data.relation.confidence)}</p>
             <h4>Por qué ({relation.data.evidence.length === 1 ? '1 paso' : `${relation.data.evidence.length} pasos`})</h4>
-            <EvidenceList items={relation.data.evidence as Evidence[]} />
+            {chain && (
+              <p className="panel-help">
+                {chain.ordered
+                  ? 'En el orden en que ocurre: de quien llama a la API.'
+                  : 'Este análisis no guarda en qué función está cada paso: se muestran sin ordenar.'}
+              </p>
+            )}
+            <EvidenceList items={chain?.steps ?? []} />
           </>
         )}
         {relation.isPending && <p role="status">Cargando la evidencia…</p>}

@@ -50,6 +50,9 @@ internal sealed record ArchitectureLimitationRow(string Code, string Message, st
 /// </summary>
 internal static class ArchitectureProjection
 {
+    /// <summary>Miembros de una propuesta que se listan y que una feature o un módulo puede tener al crearse de una vez.</summary>
+    public const int MaxMembers = 500;
+
     private static readonly string[] GroupOrder = ["frontend", "service", "module", "data", "infrastructure", "external", "unassigned"];
 
     public static string Semantic(string kind) => kind switch
@@ -175,15 +178,19 @@ internal static class ArchitectureProjection
 
             if (!links.TryGetValue((from, to, relation.Kind), out var tally))
             {
-                links[(from, to, relation.Kind)] = tally = new int[4];
+                links[(from, to, relation.Kind)] = tally = new int[10];
             }
 
+            // 0 total, 1 observadas, 2 inferidas, 3 bajas; 4..9 disjuntas: observadas alta/media/baja, inferidas alta/media/baja.
             tally[0]++;
-            tally[relation.Basis == "observed" ? 1 : 2]++;
+            var observed = relation.Basis == "observed";
+            tally[observed ? 1 : 2]++;
             if (relation.Confidence == "low")
             {
                 tally[3]++;
             }
+
+            tally[(observed ? 4 : 7) + relation.Confidence switch { "high" => 0, "medium" => 1, _ => 2 }]++;
         }
 
         // Cobertura: cada limitación al grupo de su archivo.
@@ -208,7 +215,8 @@ internal static class ArchitectureProjection
                 screens.Sum(s => calls[s].Count(r => members.Contains(r.To))),
                 group is not null && byGroup.TryGetValue(group, out var unresolved) ? unresolved.Incomplete : 0,
                 decisions.GetValueOrDefault(feature.Key),
-                [.. members.Order(StringComparer.Ordinal).Take(500)]));
+                [.. members.Order(StringComparer.Ordinal).Take(MaxMembers)],
+                members.Count));
         }
 
         var groupList = groups
@@ -222,7 +230,8 @@ internal static class ArchitectureProjection
         return new DiscoveryArchitecture(
             snapshotId, completeness, new ArchitectureTotals(entities.Count, relations.Count), groupList,
             [.. links.OrderBy(l => l.Key.From, StringComparer.Ordinal).ThenBy(l => l.Key.To, StringComparer.Ordinal).ThenBy(l => l.Key.Kind, StringComparer.Ordinal)
-                .Select(l => new ArchitectureLink(l.Key.From, l.Key.To, l.Key.Kind, Semantic(l.Key.Kind), l.Value[0], l.Value[1], l.Value[2], l.Value[3]))],
+                .Select(l => new ArchitectureLink(l.Key.From, l.Key.To, l.Key.Kind, Semantic(l.Key.Kind), l.Value[0], l.Value[1], l.Value[2], l.Value[3],
+                    new LinkBreakdown(new ConfidenceCounts(l.Value[4], l.Value[5], l.Value[6]), new ConfidenceCounts(l.Value[7], l.Value[8], l.Value[9]))))],
             proposals,
             [.. placed.Select(p => new ArchitectureLimitation(p.Limitation.Code, Truncate(p.Limitation.Message, 1000), p.Limitation.Path, p.Limitation.Detector, p.Group, p.Limitation.Incomplete))]);
     }

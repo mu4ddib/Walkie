@@ -166,7 +166,8 @@
         "total",
         "observed",
         "inferred",
-        "low"
+        "low",
+        "byBasis"
       ],
       "additionalProperties": false,
       "properties": {
@@ -212,6 +213,23 @@
           "type": "integer",
           "minimum": 0,
           "description": "De ellas, las de confianza baja"
+        },
+        "byBasis": {
+          "type": "object",
+          "required": [
+            "observed",
+            "inferred"
+          ],
+          "additionalProperties": false,
+          "description": "Las mismas relaciones en categorías disjuntas (base × confianza): la web suma las que deja ver cada filtro, sin mostrar un total que no cumple el filtro.",
+          "properties": {
+            "observed": {
+              "$ref": "#/$defs/countByConfidence"
+            },
+            "inferred": {
+              "$ref": "#/$defs/countByConfidence"
+            }
+          }
         }
       }
     },
@@ -227,7 +245,8 @@
         "navigation",
         "requests",
         "unresolved",
-        "members"
+        "members",
+        "memberCount"
       ],
       "additionalProperties": false,
       "properties": {
@@ -308,6 +327,11 @@
             "maxLength": 500
           },
           "description": "Sus pantallas y las APIs que llaman (las claves de los hallazgos), en orden"
+        },
+        "memberCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cuántos miembros tiene la propuesta en el análisis. Si es mayor que members (que llega hasta 500), la lista está truncada y la revisión por conjuntos no la aplica de una vez."
         }
       }
     },
@@ -343,6 +367,29 @@
         },
         "incomplete": {
           "type": "boolean"
+        }
+      }
+    },
+    "countByConfidence": {
+      "type": "object",
+      "required": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "high": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "medium": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "low": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     }

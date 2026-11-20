@@ -5,8 +5,8 @@ import { ApiError, type ArchitectureProposal, type DiscoveryApplyResult, type Di
 import { useApplyDiscovery, useDiscoveryReview } from '../../api/hooks';
 import { featurePath } from '../../workspace/paths';
 import { planInitialCanvas, type CanvasInput } from '../initialCanvas';
-import { STATUS } from '../discoveryText';
-import { MAX_MEMBERS, initialChoice, proposalOperations, type Choice } from './proposalModel';
+import { STATUS, reviewPath } from '../discoveryText';
+import { MAX_MEMBERS, choiceSummary, initialChoice, proposalOperations, type Choice } from './proposalModel';
 
 /**
  * Revisar una propuesta de feature como conjunto: sus pantallas y APIs con su estado en Walkie, qué hacer con cada API
@@ -26,7 +26,7 @@ export function ProposalReview({
   canEdit: boolean;
   onClose: () => void;
 }) {
-  const keys = useMemo(() => [...proposal.members, proposal.key].slice(0, MAX_MEMBERS), [proposal]);
+  const keys = useMemo(() => [proposal.key, ...proposal.members].slice(0, MAX_MEMBERS), [proposal]);
   const review = useDiscoveryReview(snapshotId, { keys, page: 0, pageSize: MAX_MEMBERS });
   const preview = useApplyDiscovery(snapshotId, appId);
   const commit = useApplyDiscovery(snapshotId, appId);
@@ -79,7 +79,9 @@ export function ProposalReview({
 
   const conflict = [preview.error, commit.error].find((e) => e instanceof ApiError && e.status === 409) as ApiError | undefined;
   const failure = conflict ? null : (commit.error ?? preview.error);
-  const truncated = proposal.members.length >= MAX_MEMBERS;
+  // La lista llega truncada a 500: un conjunto más grande no se crea de una vez (la API también lo rechaza).
+  const truncated = proposal.memberCount > proposal.members.length;
+  const summary = choiceSummary(current);
 
   return (
     <aside className="arch-inspector arch-review" aria-label={`Revisar la propuesta ${proposal.title}`}>
@@ -126,9 +128,15 @@ export function ProposalReview({
                 ))}
               </ul>
             </section>
-            {truncated && <p className="panel-help">La propuesta tiene más de {MAX_MEMBERS} miembros: se muestran los primeros.</p>}
-
-            {decided ? (
+            {truncated ? (
+              <div className="discovery-note" role="alert">
+                <p>
+                  Esta propuesta tiene {proposal.memberCount} miembros y aquí se ven {proposal.members.length}: no se puede revisar ni crear como un
+                  solo conjunto, porque quedarían elementos sin ver.
+                </p>
+                <Link to={reviewPath(appId, snapshotId)}>Decidir sus elementos uno por uno en la revisión</Link>
+              </div>
+            ) : decided ? (
               <p className="discovery-note" role="note">
                 Esta propuesta ya tiene una decisión en Walkie ({STATUS[self?.status ?? 'created'].label.toLowerCase()}). Para cambiarla, ve a la
                 revisión hallazgo por hallazgo.
@@ -138,9 +146,22 @@ export function ProposalReview({
             ) : (
               <div className="discovery-box">
                 {!preview.data && (
-                  <button type="button" className="pixel-button is-primary" disabled={preview.isPending} onClick={check}>
-                    {preview.isPending ? 'Revisando…' : 'Ver qué se creará'}
-                  </button>
+                  <>
+                    <p className="panel-help" aria-live="polite">
+                      Entran {screens.length} {screens.length === 1 ? 'pantalla' : 'pantallas'} y{' '}
+                      {summary.keep + summary.link + summary.create} {summary.keep + summary.link + summary.create === 1 ? 'API' : 'APIs'} ({summary.keep}{' '}
+                      ya en Walkie, {summary.link} a vincular, {summary.create} nuevas); {summary.omit}{' '}
+                      {summary.omit === 1 ? 'queda' : 'quedan'} fuera.
+                    </p>
+                    {summary.choose > 0 && (
+                      <p className="arch-weak" role="status">
+                        Elige qué hacer con {summary.choose === 1 ? '1 API' : `${summary.choose} APIs`} antes de ver qué se creará.
+                      </p>
+                    )}
+                    <button type="button" className="pixel-button is-primary" disabled={preview.isPending || summary.choose > 0} onClick={check}>
+                      {preview.isPending ? 'Revisando…' : 'Ver qué se creará'}
+                    </button>
+                  </>
                 )}
                 {preview.data && <Preview result={preview.data} entityKey={proposal.key} name={name} onName={setName} />}
                 {conflict && (
@@ -229,8 +250,12 @@ function ApiMember({
             Vincular a «{t.title ?? t.id}»
           </label>
         ))}
-        {item.candidates && item.candidates.length > 0 && choice.op === 'omit' && (
-          <span className="arch-weak">Varias coinciden: elige una o déjala fuera (nunca se vincula sola).</span>
+        {choice.op === 'choose' && (
+          <span className="arch-weak">
+            {item.candidates && item.candidates.length > 0
+              ? 'Varias coinciden: elige una, créala aparte o déjala fuera (nunca se vincula sola).'
+              : 'Coincide solo por el nombre: su método o su ruta pueden ser otros. Elige si es la misma, si se crea aparte o si queda fuera.'}
+          </span>
         )}
         {item.status !== 'rejected' && item.status !== 'missing' && (
           <label>

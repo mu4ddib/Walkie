@@ -138,6 +138,12 @@ test('explorar la arquitectura descubierta e incorporar una propuesta como conju
     body: { type: 'api', title: 'Pedidos (a mano)', http: { method: 'GET', path: '/api/pedidos' } },
   });
   expect(manual.status).toBe(201);
+  // Y otra que se llama igual que una descubierta (PUT /api/pedidos/{id}) con otro contrato: coincide solo por título.
+  const twin = await api<{ id: string }>(page, `/api/apps/${appId}/catalog`, {
+    method: 'POST',
+    body: { type: 'api', title: 'PUT /api/pedidos/{id}', http: { method: 'POST', path: '/api/notas' } },
+  });
+  expect(twin.status).toBe(201);
   const existing = await api<{ id: string }>(page, `/api/apps/${appId}/features`, { method: 'POST', body: { name: 'Hecha a mano' } });
   expect(existing.status).toBe(201);
   const before = await api<{ version: number }>(page, `/api/features/${existing.body.id}/canvas`);
@@ -161,7 +167,20 @@ test('explorar la arquitectura descubierta e incorporar una propuesta como conju
   await expect(canvas.locator('.arch-edge').first()).toBeVisible();
   const side = page.getByRole('complementary', { name: 'Grupos y propuestas' });
   await expect(side.getByText('Pedidos', { exact: true })).toBeVisible();
-  await capture(page, 'vista-general');
+  await capture(page, 'vista-general-1280');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await capture(page, 'vista-general-1440');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  // Más ancho para el grafo: los paneles se pliegan y la vista no salta (el zoom y el encuadre siguen).
+  const viewport = canvas.locator('.react-flow__viewport');
+  const transform = await viewport.getAttribute('style');
+  await page.getByRole('button', { name: 'Ocultar grupos' }).click();
+  await page.getByRole('button', { name: 'Ocultar detalle' }).click();
+  await expect(side).toBeHidden();
+  expect(await viewport.getAttribute('style')).toBe(transform);
+  await capture(page, 'vista-general-paneles-plegados');
+  await page.getByRole('button', { name: 'Mostrar grupos' }).click();
+  await page.getByRole('button', { name: 'Mostrar detalle' }).click();
 
   // Filtros: sin ejecución se van las llamadas; vuelven al marcarla.
   const edges = await canvas.locator('.arch-edge').count();
@@ -174,14 +193,19 @@ test('explorar la arquitectura descubierta e incorporar una propuesta como conju
   await side.getByRole('button', { name: /^Abrir tienda-web/ }).click();
   const detail = page.getByRole('region', { name: /^Detalle de / });
   await expect(detail.locator('.arch-entity')).not.toHaveCount(0);
-  await capture(page, 'grupo-front');
+  await capture(page, 'grupo-front-1280');
   await detail.locator('.arch-entity.is-screen').filter({ has: page.locator('.arch-node-route', { hasText: /^\/pedidos$/ }) }).click();
   const inspector = page.getByRole('complementary', { name: 'Detalle de la arquitectura' });
   await expect(inspector.getByRole('heading', { name: 'Evidencia' })).toBeVisible();
   await inspector.getByRole('button', { name: /llama a GET \/api\/pedidos$/ }).click();
   await expect(inspector).toContainText(/Inferida · confianza media|Observada/);
   await expect(inspector.getByRole('heading', { name: /^Por qué \(\d+ pasos?\)/ })).toBeVisible();
-  await expect(inspector).toContainText('web/src/');
+  // En el orden en que ocurre: la pantalla, el servicio que arma la ruta y el envoltorio con fetch.
+  await expect(inspector).toContainText('de quien llama a la API');
+  const steps = inspector.locator('.arch-evidence li code');
+  await expect(steps.first()).toContainText('web/src/paginas.tsx');
+  await expect(steps.nth(1)).toContainText('web/src/servicios.ts');
+  await expect(steps.last()).toContainText('web/src/http.ts');
   await capture(page, 'evidencia-relacion');
 
   // Nada cambió por explorar.
@@ -195,6 +219,14 @@ test('explorar la arquitectura descubierta e incorporar una propuesta como conju
   await expect(review.getByRole('heading', { name: /^Pantallas \(3\)/ })).toBeVisible();
   await expect(review.getByRole('radio', { name: 'Vincular a «Pedidos (a mano)»' })).toBeChecked();
   await expect(review.getByText('Clientes')).toHaveCount(0); // otra familia de rutas: no entra
+  // La del mismo nombre y otro contrato no se vincula sola: sin elegir, no hay vista previa.
+  const sameName = review.getByRole('group', { name: 'Qué hacer con PUT /api/pedidos/{id}' });
+  await expect(sameName).toContainText('Coincide solo por el nombre');
+  await expect(sameName.getByRole('radio', { name: 'Vincular a «PUT /api/pedidos/{id}»' })).not.toBeChecked();
+  await expect(review.getByRole('button', { name: 'Ver qué se creará' })).toBeDisabled();
+  await sameName.scrollIntoViewIfNeeded();
+  await capture(page, 'revision-eleccion-por-titulo');
+  await sameName.getByRole('radio', { name: 'Crear en el catálogo' }).check();
   await review.getByRole('button', { name: 'Ver qué se creará' }).click();
   const preview = review.getByRole('region', { name: 'Lo que se creará' });
   await expect(preview).toContainText(/3 pantallas, 3 APIs, 3 de navegación y 4 solicitudes HTTP/);
@@ -210,6 +242,11 @@ test('explorar la arquitectura descubierta e incorporar una propuesta como conju
   // Sin duplicados: lo hecho a mano + las APIs nuevas; una sola con GET /api/pedidos.
   const catalog = await api<{ title: string; http?: { method: string; path: string } }[]>(page, `/api/apps/${appId}/catalog`);
   expect(catalog.body.filter((i) => i.http?.method === 'GET' && i.http.path === '/api/pedidos')).toHaveLength(1);
+  // La del mismo nombre sigue con su contrato y la descubierta se creó aparte.
+  expect(catalog.body.filter((i) => i.title === 'PUT /api/pedidos/{id}').map((i) => `${i.http?.method} ${i.http?.path}`).sort()).toEqual([
+    'POST /api/notas',
+    'PUT /api/pedidos/{id}',
+  ]);
   // El lienzo que ya existía no cambió.
   expect((await api<{ version: number }>(page, `/api/features/${existing.body.id}/canvas`)).body.version).toBe(before.body.version);
 

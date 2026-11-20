@@ -5,6 +5,8 @@
  */
 .page.arch-page {
   max-width: 1600px;
+  /* Lo que queda bajo la cabecera, el aviso y los filtros: el lienzo entra entero en la ventana (1280 × 800 incluido). */
+  --arch-height: max(420px, calc(100vh - 320px));
 }
 
 .arch-banner {
@@ -62,9 +64,35 @@
 
 .arch-layout {
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr) 352px;
+  grid-template-columns: 240px minmax(0, 1fr) 320px;
   gap: 16px;
   align-items: start;
+}
+
+/* Paneles plegados: el grafo toma su ancho (a 1280 px, de ~600 a ~1200 px). */
+.arch-layout.no-side {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.arch-layout.no-inspector {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.arch-layout.no-side.no-inspector {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.arch-panels {
+  display: flex;
+  gap: 8px;
+}
+
+.arch-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
 }
 
 .arch-side,
@@ -72,7 +100,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: 72vh;
+  max-height: var(--arch-height);
   overflow: auto;
   padding: 16px;
   border: 1px solid var(--dune-200);
@@ -292,8 +320,7 @@
 /* Lienzo */
 .arch-canvas {
   position: relative;
-  height: 72vh;
-  min-height: 480px;
+  height: var(--arch-height);
   border: 1px solid var(--dune-200);
   border-radius: var(--radius-m);
   background: var(--sand);
@@ -470,9 +497,15 @@
   fill: var(--sand-raised);
 }
 
-@media (max-width: 1200px) {
-  .arch-layout {
-    grid-template-columns: minmax(0, 1fr) 320px;
+@media (max-width: 1100px) {
+  .arch-layout,
+  .arch-layout.no-side {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+
+  .arch-layout.no-inspector,
+  .arch-layout.no-side.no-inspector {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .arch-side {
@@ -482,7 +515,9 @@
 }
 
 @media (max-width: 800px) {
-  .arch-layout {
+  .arch-layout,
+  .arch-layout.no-side,
+  .arch-layout.no-inspector {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -493,4 +528,20 @@
   .arch-inspector {
     max-height: none;
   }
+}
+
+.arch-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.arch-canvas .react-flow__controls {
+  box-shadow: var(--shadow-float);
+}
+
+.arch-canvas .react-flow__controls-button {
+  width: 32px;
+  height: 32px;
+  background: var(--sand-raised);
+  border-bottom: 1px solid var(--dune-200);
 }
