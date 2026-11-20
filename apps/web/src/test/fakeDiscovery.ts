@@ -1,5 +1,8 @@
 import type {
   CatalogItem,
+  DiscoveryArchitecture,
+  DiscoveryArchitectureGroup,
+  DiscoveryRelationEvidence,
   DiscoveryApplyResult,
   DiscoveryEvidence,
   DiscoveryOperation,
@@ -32,6 +35,12 @@ export interface DiscoverySeed {
   contracts?: Record<string, Partial<CatalogItem>>;
   /** Borrador del lienzo inicial de cada módulo o feature por clave (tarea 9): lo que la API armaría del análisis. */
   drafts?: Record<string, NonNullable<DiscoveryApplyResult['created'][number]['canvas']>>;
+  /** Arquitectura por análisis (spec walkie-live-arquitectura); sin ella, 404. */
+  architecture?: Record<string, DiscoveryArchitecture>;
+  /** Detalle de un grupo por `${snapshotId}|${groupKey}` (la fake no pagina: devuelve lo sembrado). */
+  groups?: Record<string, DiscoveryArchitectureGroup>;
+  /** Evidencia de una relación por `${snapshotId}|${relationKey}`; la que falte responde 404. */
+  relationEvidence?: Record<string, DiscoveryRelationEvidence>;
 }
 
 const CREATABLE = ['api', 'service', 'database', 'resource'];
@@ -156,7 +165,24 @@ export function fakeDiscovery(
     const review = reviews[snapshotId];
     if (!review) return notFound();
 
+    if (parts[3] === 'architecture' && method === 'GET') {
+      if (parts[4] === 'group') {
+        const found = seed.groups?.[`${snapshotId}|${url.searchParams.get('key') ?? ''}`];
+        return found ? json(200, found) : notFound();
+      }
+      const found = seed.architecture?.[snapshotId];
+      return found ? json(200, found) : notFound();
+    }
+
+    if (parts[3] === 'relation-evidence' && method === 'GET') {
+      const key = url.searchParams.get('key');
+      if (!key) return json(400, { title: 'Falta key', status: 400 });
+      const found = seed.relationEvidence?.[`${snapshotId}|${key}`];
+      return found ? json(200, found) : notFound();
+    }
+
     if (parts[3] === 'review' && method === 'GET') {
+      const keys = url.searchParams.getAll('key');
       const kind = url.searchParams.get('kind');
       const status = url.searchParams.get('status');
       const index = Number(url.searchParams.get('page') ?? 0);
@@ -174,7 +200,8 @@ export function fakeDiscovery(
           (!kind || i.kind === kind) &&
           (!status || i.status === status) &&
           (!change || i.change === change) &&
-          (!needsReview || i.needsReview),
+          (!needsReview || i.needsReview) &&
+          (keys.length === 0 || keys.includes(i.key)),
       );
       return json(200, {
         snapshotId,
@@ -244,7 +271,8 @@ export function fakeDiscovery(
           if (!dryRun && (!op.canvas || Object.keys(op.canvas.nodes).sort().join() !== keys.join() || Object.keys(op.canvas.layout).sort().join() !== keys.join())) {
             return json(400, { title: 'Error de validación', status: 400, errors: { '/operations/0/canvas': ['Falta el lienzo inicial o no coincide.'] } });
           }
-          const alsoCreated = new Set(body.operations.filter((o) => o.op === 'create').map((o) => o.entityKey));
+          // Lo que se crea o se vincula en la misma solicitud ya cuenta como decidido para el lienzo (como la API).
+          const alsoCreated = new Set(body.operations.filter((o) => o.op === 'create' || o.op === 'link').map((o) => o.entityKey));
           const canvas = { ...draft, omitted: draft.omitted.filter((o) => !alsoCreated.has(o.key)) };
           const target: DiscoveryTarget = { kind: item.kind, id: op.id!, title: op.name ?? item.title };
           result.created.push({ entityKey: item.key, target, includes: keys, canvas });

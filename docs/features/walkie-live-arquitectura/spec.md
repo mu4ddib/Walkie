@@ -75,23 +75,23 @@ Una relación con varias evidencias muestra la cadena completa (cada salto con s
 
 **Explorar arquitectura (API y web)**
 
-- [ ] Dado un análisis importado, cuando abro «Explorar arquitectura» desde la revisión, entonces veo, sin haber decidido nada:
+- [x] Dado un análisis importado, cuando abro «Explorar arquitectura» desde la revisión, entonces veo, sin haber decidido nada:
   - las apps técnicas (front, servicios, módulos), bases y recursos agrupados, con sus relaciones agregadas y cuántas son observadas e inferidas;
   - qué hay dentro de un grupo, al abrirlo;
   - filtros por tipo, confianza y cobertura;
   - las limitaciones del grupo como «sin resolver»;
   - las propuestas de feature, con su motivo y confianza.
-- [ ] La vista distingue contención (`exposes`, `contains`), ejecución (`calls`, `reads`, `writes`), navegación y dependencia declarada (`depends-on`). Una contención o una dependencia nunca se dibuja como solicitud.
-- [ ] Seleccionar una relación o un elemento muestra su evidencia (con la cadena), bajo demanda.
-- [ ] Nada se guarda: ni posiciones ni decisiones.
-- [ ] Con 20.000 entidades, la vista general dibuja grupos (nunca miles de cajas), abre un grupo bajo demanda y responde en el presupuesto de rendimiento (abajo).
+- [x] La vista distingue contención (`exposes`, `contains`), ejecución (`calls`, `reads`, `writes`), navegación y dependencia declarada (`depends-on`). Una contención o una dependencia nunca se dibuja como solicitud.
+- [x] Seleccionar una relación o un elemento muestra su evidencia (con la cadena), bajo demanda.
+- [x] Nada se guarda: ni posiciones ni decisiones.
+- [x] Con 20.000 entidades, la vista general dibuja grupos (nunca miles de cajas), abre un grupo bajo demanda y responde en el presupuesto de rendimiento (abajo).
 
 **Revisión por conjuntos**
 
-- [ ] Dada una propuesta de feature, cuando la reviso, entonces veo sus pantallas, APIs, módulos y relaciones. Cada una dice si es observada o inferida, si ya está en el catálogo (vinculada o coincidencia única por firma) y si falta. Elijo qué incorporar.
-- [ ] Al previsualizar, veo todo lo que se va a crear, reutilizar y omitir con su motivo: el elemento del catálogo de cada API que falta, la feature con su lienzo inicial y la navegación y solicitudes dibujadas. Al confirmar, es **una** aplicación (`applyId`, `dryRun`, bitácora y compensación de siempre).
-- [ ] No se duplica una API ya confirmada ni se crea una copia. Una pantalla ya incluida en otra feature no se repite. Una coincidencia ambigua no se vincula sola. No se toca ningún lienzo existente. Un reintento usa los mismos ids.
-- [ ] Al terminar, «Abrir lienzo» abre la feature con pantallas, navegación y llamadas a las APIs del catálogo (o a la interfaz del módulo que las ofrece).
+- [x] Dada una propuesta de feature, cuando la reviso, entonces veo sus pantallas, APIs, módulos y relaciones. Cada una dice si es observada o inferida, si ya está en el catálogo (vinculada o coincidencia única por firma) y si falta. Elijo qué incorporar.
+- [x] Al previsualizar, veo todo lo que se va a crear, reutilizar y omitir con su motivo: el elemento del catálogo de cada API que falta, la feature con su lienzo inicial y la navegación y solicitudes dibujadas. Al confirmar, es **una** aplicación (`applyId`, `dryRun`, bitácora y compensación de siempre).
+- [x] No se duplica una API ya confirmada ni se crea una copia. Una pantalla ya incluida en otra feature no se repite. Una coincidencia ambigua no se vincula sola. No se toca ningún lienzo existente. Un reintento usa los mismos ids.
+- [x] Al terminar, «Abrir lienzo» abre la feature con pantallas, navegación y llamadas a las APIs del catálogo (o a la interfaz del módulo que las ofrece).
 
 **Calidad medida (Walkie y fixtures)**
 

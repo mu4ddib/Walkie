@@ -1,3 +1,4 @@
+using Walkie.Modules.Discovery.Contracts;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Walkie.Modules.Discovery.Persistence;
@@ -64,6 +65,25 @@ internal sealed class EvidenceHandlers(DiscoveryDbContext db)
         }
 
         return null;
+    }
+
+    /// <summary>Una relación con su evidencia resuelta: para una inferida, cada salto de la cadena (ADR-0016). Null si no está.</summary>
+    public async Task<RelationEvidence?> RelationAsync(Guid snapshotId, string relationKey, CancellationToken ct)
+    {
+        var data = await db.Relations.AsNoTracking()
+            .Where(r => r.SnapshotId == snapshotId && r.Key == relationKey).Select(r => r.Data)
+            .FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (data is null)
+        {
+            return null;
+        }
+
+        var relation = Parse(data);
+        var ids = relation.GetProperty("evidence").EnumerateArray().Select(e => e.GetString()!).ToList();
+        var evidence = await db.Evidence.AsNoTracking()
+            .Where(e => e.SnapshotId == snapshotId && ids.Contains(e.Id))
+            .Select(e => new { e.Id, e.Data }).ToListAsync(ct).ConfigureAwait(false);
+        return new RelationEvidence(snapshotId, relation, [.. evidence.OrderBy(e => e.Id, StringComparer.Ordinal).Select(e => Parse(e.Data))]);
     }
 
     private static JsonElement Parse(string json)

@@ -67,6 +67,16 @@ internal static class ReviewEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .RequireAppRole(AppRole.Viewer);
 
+        discovery.MapGet("/api/snapshots/{snapshotId:guid}/relation-evidence", RelationEvidenceOf)
+            .WithName("GetDiscoveryRelationEvidence")
+            .WithSummary(
+                "Una relación con su evidencia resuelta (walkie-discovery-relation-evidence): key en la query. Para una relación "
+                + "inferida es la cadena entera (pantalla → hook → cliente → API; endpoint → servicio → DbSet), cada salto con su archivo y línea.")
+            .Produces<RelationEvidence>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .RequireAppRole(AppRole.Viewer);
+
         discovery.MapGet("/api/snapshots/{snapshotId:guid}/evidence", Evidence)
             .WithName("GetDiscoveryEvidence")
             .WithSummary(
@@ -113,6 +123,17 @@ internal static class ReviewEndpoints
             ReviewResult.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
             _ => TypedResults.NotFound(),
         };
+    }
+
+    private static async Task<Results<Ok<RelationEvidence>, NotFound, ValidationProblem>> RelationEvidenceOf(
+        Guid snapshotId, string? key, EvidenceHandlers handlers, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(key) || key.Length > 1100)
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["key"] = ["Falta la clave de la relación."] });
+        }
+
+        return await handlers.RelationAsync(snapshotId, key, ct).ConfigureAwait(false) is { } found ? TypedResults.Ok(found) : TypedResults.NotFound();
     }
 
     private static async Task<Results<Ok<DiscoveryArchitecture>, NotFound>> Architecture(Guid snapshotId, ArchitectureHandlers handlers, CancellationToken ct) =>

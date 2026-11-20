@@ -413,3 +413,29 @@ Walkie analizándose a sí mismo (`main` en `d8159c5` contra la rama `feat/walki
 
 El crecimiento es lineal: cada archivo se escanea una vez, las funciones se agrupan por archivo una sola vez (`ScriptFacts.In`) y cada resumen se calcula una vez (`FrontendSymbols.Summary`).
 
+
+## 20. Explorar arquitectura y revisión por conjuntos (spec walkie-live-arquitectura, PR B, 2026-11-20)
+
+**Proyección de la API** (`DiscoveryArchitectureTests`, Postgres real, mediana de 5 pedidos; `WALKIE_BENCH=1` para el caso grande):
+
+| Análisis | Vista general | Abrir un grupo (hasta 500 hallazgos) | Lo que dibuja la vista general |
+|---|---|---|---|
+| Sintético de 400 recursos (2.801 entidades) | 65 ms | 34 ms | 2 grupos, 1 vínculo, 400 propuestas |
+| Sintético de 2.900 recursos (20.000 entidades, el máximo de un paquete) | 193 ms | 239 ms | 2 grupos, 1 vínculo, 2.599 propuestas |
+
+Una consulta de proyección sin `jsonb` (solo `members` de módulos y features), relaciones sin `jsonb`, vínculos agregados en memoria (O(n)); la web muestra las propuestas de a 30 y abre un grupo por pedido. Abrir la vista no escribe nada (prueba: sin vínculos ni creaciones en la revisión y el catálogo sigue vacío; el E2E compara el catálogo antes y después).
+
+**Walkie analizándose, con la vista nueva.** La pantalla de arquitectura (`/apps/:appId/sources/:snapshotId/architecture`) y la de revisión navegan entre sí y comparten las APIs de `/api/snapshots/{}`: el análisis propone una tercera feature, «Discovery review» (media, con navegación y solicitudes). Las APIs de Walkie pasan de 50 a 53 (los tres endpoints de lectura nuevos).
+
+**Caso F** (`apps/web/e2e/walkie-live-arquitectura.spec.ts`, CLI + Postgres + API + web): una tienda ficticia React + .NET con un cliente envoltorio (`request(method, path)` con base en una constante), servicios y EF Core.
+
+| Paso | Resultado |
+|---|---|
+| Importar y «Explorar arquitectura» | 3 grupos (tienda-web, Tienda.Api, Datos), 13 hallazgos, 25 relaciones, cobertura completa; nada creado |
+| Filtros | quitar «Ejecución» saca las llamadas; volver a marcarla las devuelve |
+| Abrir el grupo del front | 4 pantallas, la propuesta y el servicio vecino; la llamada de «Pedidos» a `GET /api/pedidos` muestra su cadena (pantalla → servicio → envoltorio) con archivo y línea |
+| Revisar «Pedidos» | 3 pantallas y 3 APIs; `GET /api/pedidos` coincide por firma con la API hecha a mano y se propone **vincular**; «Clientes» (otra familia de rutas) no entra |
+| Vista previa y confirmación | una sola aplicación: 1 vínculo, 2 APIs nuevas y la feature; lienzo de 3 pantallas, 3 APIs, 3 navegaciones y 4 solicitudes |
+| Después | una sola API con `GET /api/pedidos` en el catálogo; el lienzo de la feature hecha a mano sigue en su versión; «Abrir el lienzo» abre la feature con 6 cajas y 7 conexiones |
+
+**Lo que no se midió.** El tiempo de dibujo de la vista en el navegador con 20.000 entidades (la vista general de ese caso tiene 2 cajas y un grupo trae a lo sumo 500, con `onlyRenderVisibleElements`); queda para el banco de rendimiento si un proyecto real lo pide.

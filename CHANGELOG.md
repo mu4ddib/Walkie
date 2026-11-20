@@ -5,6 +5,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Walkie Live, **explorar la arquitectura e incorporar por conjuntos** (spec `walkie-live-arquitectura`, PR B, #177; ADR-0016):
+  - **«Explorar arquitectura»** desde la revisión de un análisis, sin decidir nada: apps de front, servicios, módulos, datos e infraestructura como grupos, con los vínculos agregados (cuántos observados e inferidos); filtros por significado (ejecución, navegación, dependencia, contención), confianza baja y solo lo observado; cobertura y lo que quedó sin resolver en cada grupo. Abrir un grupo muestra sus hallazgos y una caja por grupo vecino. Elegir un hallazgo o una relación muestra su evidencia; la de una relación inferida, con la cadena entera. No guarda posiciones ni decisiones.
+  - **Revisar una propuesta como conjunto:** sus pantallas y APIs con su estado en Walkie; cada API se vincula a lo que coincide (nunca se copia), se crea o queda fuera, y una coincidencia ambigua no se elige sola. Vista previa y **una** aplicación (mismo `applyId`), y «Abrir el lienzo».
+  - **API:** `GET /api/snapshots/{id}/architecture`, `…/architecture/group?key=` y `…/relation-evidence?key=` (de lectura, con rol de lectura), y la revisión filtra por `key`. Un vínculo de la misma solicitud ya cuenta para el lienzo de la feature. Schemas `walkie-discovery-architecture`, `-architecture-group` y `-relation-evidence`.
+  - 20.000 entidades: vista general en 193 ms y un grupo en 239 ms (`validacion.md` §20).
 - Walkie Live, **relaciones verificables** (spec `walkie-live-arquitectura`, PR A, #177; ADR-0016):
   - **Llamadas por envoltorios (D2):** el análisis sigue clientes propios (`request()` → `send()` → `fetch`), instancias de axios importadas, servicios de Angular inyectados y objetos de funciones, con el método literal, por argumento o por opciones, y una base configurable (`baseUrl`, `environment.apiUrl`). Hasta 3 niveles; lo que no se puede leer queda como limitación con archivo y línea.
   - **Quién llama:** cada llamada sale de las pantallas que la alcanzan por sus hooks, servicios y componentes (no de la carpeta), con la cadena como evidencia; si ninguna, de la app. Un componente que muchas pantallas comparten no reparte sus llamadas.

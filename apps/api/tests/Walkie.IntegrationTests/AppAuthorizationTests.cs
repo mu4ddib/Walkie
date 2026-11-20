@@ -264,6 +264,7 @@ public sealed class AppAuthorizationTests(WalkieApiFactory factory)
         yield return new("GET", $"/api/snapshots/{w.Snapshot}/review", AppRole.Viewer);
         yield return new("GET", $"/api/snapshots/{w.Snapshot}/evidence?entityKey={Uri.EscapeDataString(w.EntityKey)}", AppRole.Viewer);
         yield return new("GET", $"/api/snapshots/{w.Snapshot}/architecture", AppRole.Viewer);
+        yield return new("GET", $"/api/snapshots/{w.Snapshot}/relation-evidence", AppRole.Viewer); // sin clave: 400 para quien puede
         yield return new("GET", $"/api/snapshots/{w.Snapshot}/architecture/group?key=data", AppRole.Viewer);
         yield return new("GET", $"/api/apps/{w.App}/bindings?target=catalogItem:{w.Item}", AppRole.Viewer);
         yield return new("GET", $"/api/apps/{w.App}/members", AppRole.Viewer);

@@ -76,7 +76,7 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   const summary = dialog.getByLabel('Resumen del análisis');
   await expect(summary).toContainText('Walkie');
   // Las APIs de Walkie: crece con cada endpoint nuevo (46 en la tarea 11; 50 con los miembros de ADR-0015).
-  await expect(summary).toContainText('50 API');
+  await expect(summary).toContainText('53 API');
   await expect(summary).toContainText(/parcial/i);
   const app = `E2E Walkie se analiza ${Date.now()}`;
   await dialog.getByLabel('Nombre de la app').fill(app);
@@ -117,7 +117,7 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   await expect(inspector.getByRole('status')).toContainText('Creado en el catálogo');
 
   // ---------- Crear un módulo: el de imágenes, con sus APIs y su base ----------
-  await page.goto(`${reviewUrl}?kind=module`); // 50 APIs van antes: se filtra por tipo, como el selector «Tipo»
+  await page.goto(`${reviewUrl}?kind=module`); // 53 APIs van antes: se filtra por tipo, como el selector «Tipo»
   await list.getByRole('button', { name: /module:Walkie\.Modules\.Files/ }).click();
   await inspector.getByRole('button', { name: 'Crear módulo…' }).click();
   let preview = inspector.getByRole('region', { name: 'Lo que se creará' });

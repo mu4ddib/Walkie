@@ -72,3 +72,6 @@ public sealed record ArchitectureEntity(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Decision);
 
 public sealed record ArchitectureRelation(string Key, string Kind, string From, string To, string Basis, string Confidence, string Semantic);
+
+/// <summary>Una relación con su evidencia resuelta (<c>walkie-discovery-relation-evidence.schema.json</c>).</summary>
+public sealed record RelationEvidence(Guid SnapshotId, System.Text.Json.JsonElement Relation, IReadOnlyList<System.Text.Json.JsonElement> Evidence);

@@ -73,6 +73,10 @@ El nombre es el título de la pantalla con la ruta más corta. Una pantalla est�
 - `reads`/`writes` pueden salir de una `api`: el validador no restringe los extremos, y se amplía la descripción del tipo.
 - Las capacidades nuevas de los detectores van en el manifest de cada paquete, como siempre.
 
+**Incorporar un conjunto (PR B).** No hay una operación nueva: la revisión por conjuntos manda **una** solicitud de `apply` con las operaciones de siempre (`link` de las APIs que coinciden, `create` de las que faltan y `create` de la feature con su lienzo), con su `applyId`, `dryRun`, bitácora y compensación. Única extensión: al armar el borrador del lienzo (`DraftContextAsync`), un `link` de la misma solicitud cuenta como decisión, igual que un `create` (el mensaje «puede ser en esta misma solicitud» ya lo prometía). Así el lienzo apunta a lo hecho a mano y nunca a una copia. Una coincidencia ambigua no se elige sola: la web la deja fuera hasta que la persona elija.
+
+**Proyección (API, PR B).** `GET /api/snapshots/{id}/architecture` (grupos, vínculos agregados por tipo con observados, inferidos y de confianza baja, propuestas con sus miembros, limitaciones por grupo), `…/architecture/group?key=` (los hallazgos de un grupo, paginados, con sus relaciones y los vecinos de otros grupos) y `…/relation-evidence?key=` (una relación con su cadena). Todos de lectura, con `RequireAppRole(Viewer)` y detrás de `Discovery:Enabled`. La revisión acepta `key` repetido (hasta 500) para pedir solo los miembros de un conjunto.
+
 ## Consecuencias
 
 - Los análisis guardados no cambian: son inmutables y se interpretan igual. Un reanálisis con la CLI nueva da más relaciones y otras propuestas.

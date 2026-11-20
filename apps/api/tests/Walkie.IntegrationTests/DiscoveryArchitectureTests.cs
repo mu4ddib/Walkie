@@ -37,7 +37,7 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
         var web = groups.Single(g => g.GetProperty("key").GetString() == "frontend:service:@walkie/web");
         Assert.Equal("frontend", web.GetProperty("kind").GetString());
         Assert.True(web.GetProperty("counts").GetProperty("screen").GetInt32() >= 11);
-        Assert.Equal(2, web.GetProperty("counts").GetProperty("feature").GetInt32());
+        Assert.Equal(3, web.GetProperty("counts").GetProperty("feature").GetInt32());
         var modules = groups.Where(g => g.GetProperty("kind").GetString() == "module").Select(g => g.GetProperty("title").GetString()).ToList();
         Assert.Contains("Walkie.Modules.Apps", modules);
         Assert.Contains("Walkie.Modules.Discovery", modules);
@@ -57,7 +57,7 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
 
         // Propuestas con su evidencia, y las limitaciones de la web en su grupo.
         var proposals = architecture.GetProperty("proposals").EnumerateArray().ToList();
-        Assert.Equal(["feature:apps/web:Apps", "feature:apps/web:Catalog"], proposals.Select(p => p.GetProperty("key").GetString()));
+        Assert.Equal(["feature:apps/web:Apps", "feature:apps/web:Catalog", "feature:apps/web:Discovery review"], proposals.Select(p => p.GetProperty("key").GetString()));
         Assert.All(proposals, p =>
         {
             Assert.Equal("evidence", p.GetProperty("strength").GetString());
@@ -87,6 +87,14 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
         var screens = all.GetProperty("entities").EnumerateArray().Where(e => e.GetProperty("kind").GetString() == "screen").ToList();
         Assert.All(screens, s => Assert.StartsWith("/", s.GetProperty("route").GetString(), StringComparison.Ordinal));
         Assert.Contains(all.GetProperty("relations").EnumerateArray(), r => r.GetProperty("kind").GetString() == "calls" && r.GetProperty("semantic").GetString() == "execution");
+
+        // Una relación inferida trae su cadena: la pantalla, el hook y el cliente, cada uno con su archivo.
+        var inferred = all.GetProperty("relations").EnumerateArray().First(r => r.GetProperty("kind").GetString() == "calls" && r.GetProperty("basis").GetString() == "inferred");
+        var chain = await JsonAsync(await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/relation-evidence?key={Uri.EscapeDataString(inferred.GetProperty("key").GetString()!)}", UriKind.Relative)), HttpStatusCode.OK);
+        Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.DiscoveryRelationEvidence, chain));
+        Assert.True(chain.GetProperty("evidence").GetArrayLength() >= 3);
+        Assert.Contains(chain.GetProperty("evidence").EnumerateArray(), e => e.GetProperty("path").GetString() == "apps/web/src/api/client.ts");
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/relation-evidence?key=nada", UriKind.Relative))).StatusCode);
 
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/architecture/group?key={group}&pageSize=0", UriKind.Relative))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/architecture/group", UriKind.Relative))).StatusCode);
@@ -175,7 +183,7 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
         using var client = factory.CreateAuthenticatedClient();
         client.Timeout = TimeSpan.FromMinutes(5);
         var appId = await CreateAppAsync(client, "Arquitectura a escala");
-        foreach (var resources in Bench ? new[] { 400, 2_400 } : [400])
+        foreach (var resources in Bench ? new[] { 400, 2_900 } : [400])
         {
             var pack = Synthetic(resources);
             var snapshotId = await UploadSnapshotAsync(client, appId, pack);
