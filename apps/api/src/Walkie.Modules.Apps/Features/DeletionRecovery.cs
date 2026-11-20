@@ -7,8 +7,8 @@ namespace Walkie.Modules.Apps.Features;
 
 /// <summary>
 /// Retoma las eliminaciones que quedaron pendientes (un paso falló o el proceso se cayó en medio; ADR-0017). Cada
-/// <c>Deletion:RecoverySeconds</c> (60 por defecto; 0 la apaga) toma las que tienen la concesión vencida y corre de nuevo
-/// su fase 2, que es idempotente.
+/// <c>Deletion:RecoverySeconds</c> (60 por defecto; 0 la apaga) toma las que ya pueden reintentarse y corre de nuevo su
+/// fase 2 si consigue el candado exclusivo de la app (si otra ejecución o instancia lo tiene, la salta).
 /// </summary>
 internal sealed partial class DeletionRecovery(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<DeletionRecovery> logger) : BackgroundService
 {
@@ -48,7 +48,7 @@ internal sealed partial class DeletionRecovery(IServiceScopeFactory scopes, ICon
         foreach (var id in pending)
         {
             await using var scope = scopes.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<DeletionHandlers>().RunAsync(id, ownsLease: false, ct).ConfigureAwait(false);
+            await scope.ServiceProvider.GetRequiredService<DeletionHandlers>().ResumeAsync(id, held: null, ignoreRetryAt: false, ct).ConfigureAwait(false);
         }
 
         return pending.Count;

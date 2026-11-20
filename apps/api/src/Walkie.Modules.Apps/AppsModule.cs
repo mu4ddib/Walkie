@@ -34,6 +34,8 @@ public static class AppsModule
         services.AddScoped<MembersHandlers>();
         // Eliminar apps y features (ADR-0017): orquestación, puntos de prueba y recuperación de las pendientes.
         services.AddScoped<DeletionHandlers>();
+        services.AddSingleton(new AppLocks(connectionString));
+        services.TryAddScoped<Contracts.IAppWriteCheckpoints, NoAppWriteCheckpoints>();
         services.TryAddScoped<Contracts.IDeletionCheckpoints, NoDeletionCheckpoints>();
         services.AddHostedService<DeletionRecovery>();
         services.TryAddSingleton(TimeProvider.System);

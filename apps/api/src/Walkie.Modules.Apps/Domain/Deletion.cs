@@ -8,6 +8,8 @@ internal sealed class Deletion
 {
     public const string Pending = "pending";
     public const string Completed = "completed";
+
+    /// <summary>Solo histórico: versiones anteriores revertían la marca así. Hoy el impacto se revisa con el candado tomado y ya no se usa.</summary>
     public const string Cancelled = "cancelled";
     public const string AppKind = "app";
     public const string FeatureKind = "feature";
@@ -32,8 +34,20 @@ internal sealed class Deletion
     public string? Error { get; set; }
     public int Attempts { get; set; }
 
-    /// <summary>Hasta cuándo la tiene tomada una ejecución (la de la solicitud o la de recuperación).</summary>
-    public DateTimeOffset? LeaseUntil { get; set; }
+    /// <summary>
+    /// La versión del lienzo que vio quien la pidió (solo feature). Es parte de la identidad de la solicitud: el mismo
+    /// <see cref="Id"/> con otra versión no es un reintento.
+    /// </summary>
+    public int? CanvasVersion { get; init; }
+
+    /// <summary>
+    /// Ficha de la ejecución que la tiene (fencing): cada ejecución que toma el candado de la app pone una nueva, y toda
+    /// escritura de la bitácora y el paso final exigen la suya. Un ejecutor que perdió el candado no puede terminarla.
+    /// </summary>
+    public Guid? OwnerToken { get; set; }
+
+    /// <summary>Después de un fallo, no se retoma antes de esta hora (espera entre reintentos). No es un candado.</summary>
+    public DateTimeOffset? RetryAt { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
 }

@@ -20,13 +20,13 @@ internal static class DeletionEndpoints
             .RequireAppRole(AppRole.Owner);
         routes.MapDelete("/api/features/{featureId:guid}", DeleteFeature).WithTags("Apps").WithName("DeleteFeature")
             .WithSummary("Elimina la feature para siempre (no un módulo). Exige deletionId (UUID del cliente) y la canvasVersion del impacto.")
-            .RequireAppRole(AppRole.Owner);
+            .RequireAppRole(AppRole.Owner).WithoutAppWriteGate();
         routes.MapGet("/api/apps/{appId:guid}/deletion", AppImpact).WithTags("Apps").WithName("GetAppDeletionImpact")
             .WithSummary("Qué se pierde al eliminar la app: features, módulos, catálogo, imágenes, enlaces, miembros y Walkie Live.")
             .RequireAppRole(AppRole.Owner);
         routes.MapDelete("/api/apps/{appId:guid}", DeleteApp).WithTags("Apps").WithName("DeleteApp")
             .WithSummary("Elimina la app y todo su contenido para siempre. Exige deletionId y confirmName (el nombre exacto).")
-            .RequireAppRole(AppRole.Owner);
+            .RequireAppRole(AppRole.Owner).WithoutAppWriteGate();
         routes.MapGet("/api/deletions/{deletionId:guid}", Status).WithTags("Apps").WithName("GetDeletion")
             .WithSummary("Estado de una eliminación, para quien la pidió (la app ya puede no existir). Retoma una pendiente.");
         return routes;
@@ -38,10 +38,10 @@ internal static class DeletionEndpoints
     private static async Task<Results<Ok<DeletionImpactResponse>, ProblemHttpResult>> AppImpact(Guid appId, DeletionHandlers handlers, CancellationToken ct) =>
         await handlers.AppImpactAsync(appId, ct).ConfigureAwait(false) is { } impact ? TypedResults.Ok(impact) : NotFound();
 
-    private static async Task<IResult> DeleteFeature(Guid featureId, Guid? deletionId, int? canvasVersion, ClaimsPrincipal user, DeletionHandlers handlers, CancellationToken ct) =>
+    private static async Task<IResult> DeleteFeature(Guid featureId, Guid? deletionId, int? canvasVersion, ClaimsPrincipal user, HttpContext http, DeletionHandlers handlers, CancellationToken ct) =>
         deletionId is not { } id || id == Guid.Empty
             ? Invalid("deletionId", "Falta el id de la eliminación (un UUID que genera el cliente y repite en cada reintento).")
-            : ToResult(await handlers.DeleteFeatureAsync(featureId, id, canvasVersion, user.FindFirstValue("sub")!, ct).ConfigureAwait(false));
+            : ToResult(await handlers.DeleteFeatureAsync(AppAuthorization.AppOf(http), featureId, id, canvasVersion, user.FindFirstValue("sub")!, ct).ConfigureAwait(false));
 
     private static async Task<IResult> DeleteApp(Guid appId, Guid? deletionId, string? confirmName, ClaimsPrincipal user, DeletionHandlers handlers, CancellationToken ct) =>
         deletionId is not { } id || id == Guid.Empty
@@ -62,6 +62,7 @@ internal static class DeletionEndpoints
         DeletionOutcome.Changed c => TypedResults.Problem(title: c.Message, statusCode: StatusCodes.Status409Conflict,
             extensions: new Dictionary<string, object?> { ["impact"] = c.Impact }),
         DeletionOutcome.Conflict c => TypedResults.Problem(title: c.Message, statusCode: StatusCodes.Status409Conflict),
+        DeletionOutcome.Busy b => TypedResults.Problem(title: b.Message, statusCode: StatusCodes.Status409Conflict),
         DeletionOutcome.Invalid i => Invalid(i.Field, i.Message),
         _ => NotFound(),
     };

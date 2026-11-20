@@ -28,7 +28,7 @@ namespace Walkie.IntegrationTests;
 /// recuperación y concurrencia. Cada prueba crea sus propias apps.
 /// </summary>
 [Collection(ApiTestGroup.Name)]
-public sealed class DeletionTests(WalkieApiFactory factory)
+public sealed partial class DeletionTests(WalkieApiFactory factory)
 {
     // ---------- Feature ----------
 
@@ -591,7 +591,7 @@ public sealed class DeletionTests(WalkieApiFactory factory)
     }
 
     private Task<int> ExpireLeaseAsync(Guid deletionId) =>
-        AppsAsync(db => db.Deletions.Where(d => d.Id == deletionId).ExecuteUpdateAsync(s => s.SetProperty(d => d.LeaseUntil, (DateTimeOffset?)null)));
+        AppsAsync(db => db.Deletions.Where(d => d.Id == deletionId).ExecuteUpdateAsync(s => s.SetProperty(d => d.RetryAt, (DateTimeOffset?)null)));
 
     private async Task<T> AppsAsync<T>(Func<AppsDbContext, Task<T>> query) => await QueryAsync(query);
 

@@ -51,6 +51,18 @@ public interface IDeletionParticipant
     Task DeleteAppAsync(AppDeletionTarget target, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Puntos de prueba de una escritura en una app (ADR-0017): con el candado compartido ya tomado, antes del handler y
+/// después (lo escrito ya está guardado y el candado sigue tomado). En producción no hace nada. Las pruebas de
+/// concurrencia los usan como barreras deterministas.
+/// </summary>
+public interface IAppWriteCheckpoints
+{
+    Task EnteredAsync(Guid appId, string route, CancellationToken cancellationToken);
+
+    Task LeavingAsync(Guid appId, string route, CancellationToken cancellationToken);
+}
+
 /// <summary>Puntos de prueba de una eliminación (antes de cada paso); en producción no hace nada.</summary>
 public interface IDeletionCheckpoints
 {

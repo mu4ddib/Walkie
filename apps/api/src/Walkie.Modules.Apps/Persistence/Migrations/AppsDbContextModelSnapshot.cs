@@ -217,6 +217,10 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("attempts");
 
+                    b.Property<int?>("CanvasVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("canvas_version");
+
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");
@@ -236,15 +240,15 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                         .HasColumnType("character varying(16)")
                         .HasColumnName("kind");
 
-                    b.Property<DateTimeOffset?>("LeaseUntil")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("lease_until");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)")
                         .HasColumnName("name");
+
+                    b.Property<Guid?>("OwnerToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_token");
 
                     b.Property<DateTimeOffset>("RequestedAt")
                         .HasColumnType("timestamp with time zone")
@@ -255,6 +259,10 @@ namespace Walkie.Modules.Apps.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("requested_by");
+
+                    b.Property<DateTimeOffset?>("RetryAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("retry_at");
 
                     b.Property<string>("Status")
                         .IsRequired()

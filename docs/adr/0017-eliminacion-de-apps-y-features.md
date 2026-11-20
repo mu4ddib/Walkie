@@ -41,7 +41,7 @@ Opción 1, **eliminación definitiva, en dos fases y con bitácora**. La prefere
 4. **Files:** de una app, todas sus imágenes (filas y bytes en S3).
 5. **Apps:** la feature, o el catálogo, las features, los módulos y la app.
 
-Cada paso se anota en la bitácora (`steps`). Si uno falla, la bitácora queda `pending` con el paso y el error, la respuesta es **202** con el estado, y un servicio en segundo plano (`DeletionRecovery`) la retoma desde el principio (cada paso es idempotente) con una concesión (`lease_until`) para no correr dos veces. La app o la feature ya es inaccesible desde la fase 1. La bitácora conserva el nombre y el resultado: es el registro auditable de qué se borró, cuándo y quién.
+Cada paso se anota en la bitácora (`steps`). Si uno falla, la bitácora queda `pending` con el paso y el error, la respuesta es **202** con el estado, y un servicio en segundo plano (`DeletionRecovery`) la retoma desde el principio (cada paso es idempotente). Que no corran dos ejecuciones a la vez lo garantiza el candado de la app (ver «Exclusión mutua»), no la idempotencia; `retry_at` solo es la espera entre reintentos. La app o la feature ya es inaccesible desde la fase 1. La bitácora conserva el nombre y el resultado: es el registro auditable de qué se borró, cuándo y quién.
 
 **Bloqueos (409, sin borrar nada):**
 
@@ -50,17 +50,26 @@ Cada paso se anota en la bitácora (`steps`). Si uno falla, la bitácora queda `
 - Una aplicación o una importación de Walkie Live **en curso** (su candado tomado) sobre esa feature o esa app.
 - La feature **cambió** desde que se vio el resumen (`canvasVersion`), o el nombre escrito no es el de la app.
 
-Los bloqueos se vuelven a comprobar después de la marca; si aparece uno en medio, la marca se revierte.
+El impacto y los bloqueos se calculan **con el candado exclusivo de la app tomado** (ver abajo): nadie guarda un lienzo ni crea un portal entre la revisión y la marca, así que no hay que revertir nada.
+
+**Exclusión mutua y escrituras en curso (revisión final del PR #181).** Un candado por app en PostgreSQL (`pg_advisory_lock(int, int)`, clase `AppLocks`), sostenido por una conexión propia mientras dura:
+
+- **Compartido** en toda solicitud que escribe en una app (cualquier método distinto de GET/HEAD/OPTIONS con `RequireAppRole`): lo toma el mismo filtro de autorización, resuelve otra vez el recurso con el candado tomado (lo marcado mientras esperaba ya no existe: 404) y lo suelta al terminar el handler. Cubre lienzo, mapa, features, módulos, catálogo, imágenes (S3 incluido), importar `.walkie`, análisis y decisiones de Walkie Live, enlaces y miembros sin tocar ningún módulo.
+- **Exclusivo** en una eliminación, desde antes de revisar el impacto hasta el final de la fase 2: espera a que terminen las escrituras en curso (que la limpieza se lleva después) y ninguna nueva empieza mientras lo tiene. Las eliminaciones (`DELETE` de feature y app) no toman el compartido (`WithoutAppWriteGate`).
+- La **recuperación** (en cualquier instancia), la consulta del estado y un reintento lo piden sin esperar (`pg_try_advisory_lock`): si otra ejecución lo tiene, solo informan el estado. Si el proceso o su conexión mueren, PostgreSQL lo suelta y la recuperación la retoma enseguida.
+- **Ficha (fencing):** cada ejecución que toma el candado escribe una `owner_token` nueva. Antes de cada paso comprueba que su conexión sigue teniendo el candado y que la ficha es la suya; el cierre de la bitácora y el borrado de las filas de Apps van en una transacción que exige la ficha. Un ejecutor que perdió el candado (corte de red) no escribe nada más.
+- Esperar el candado tiene un límite (30 s, `lock_timeout`): una escritura o una eliminación que no lo consigue responde 409 «ocupada» sin hacer nada.
 
 **Discovery y procedencia.** Borrar una feature creada por Walkie Live no reescribe ningún análisis ni bitácora `completed`, ni crea nada: su vínculo `created` se conserva tal cual. La revisión siguiente ya lo muestra con `targetMissing` («el elemento se borró») y la persona decide de nuevo (restablecer y crear otra, o descartar). Nada se recrea solo.
 
 **Autorización.** `DELETE /api/apps/{appId}`, `DELETE /api/features/{featureId}` y sus consultas de impacto exigen `owner` con `RequireAppRole` (404 a quien no es miembro, 403 a un rol menor). La app de una feature la resuelve el servidor. `GET /api/deletions/{id}` responde solo a quien pidió esa eliminación (la app ya puede no existir).
 
-**Reintentos.** El cliente genera el id de la eliminación (UUID v7) y lo reutiliza: el mismo id con la eliminación ya registrada devuelve su estado. Si la respuesta se perdió y la app ya no es accesible, el cliente consulta `GET /api/deletions/{id}`.
+**Reintentos.** El cliente genera el id de la eliminación (UUID v7) y lo reutiliza. El mismo id solo es un reintento si es la **misma solicitud**: mismo tipo (feature o app), misma app (la resuelve el servidor), misma feature, misma persona y los mismos datos (la `canvasVersion` que vio, guardada en la bitácora, o el nombre que escribió). Entonces devuelve su estado y retoma una pendiente; si no, 409: un id nunca sirve para dos recursos. Si la respuesta se perdió y la app ya no es accesible, el cliente consulta `GET /api/deletions/{id}`; la interfaz ofrece «Consultar estado» en el aviso de una eliminación pendiente (202).
 
 ## Consecuencias
 
-- Borrar es definitivo: no hay papelera. Exportar la app (`.walkie`) antes es la forma de conservar una copia; la confirmación lo sugiere.
+- Borrar es definitivo: no hay papelera. Exportar la app (`.walkie`) antes es la forma de conservar una copia de features, módulos, catálogo, lienzos e imágenes; **no** guarda el historial de Walkie Live (análisis, evidencia, decisiones), los miembros ni los enlaces. La confirmación lo dice.
+- Mientras se elimina una feature, las demás escrituras de su app esperan (normalmente milisegundos; lo que tarde S3 en borrar sus imágenes). Cada escritura usa una conexión más del pool mientras dura.
 - Toda consulta nueva sobre `Features` hereda el filtro de las marcadas; el código de eliminación usa `IgnoreQueryFilters`.
 - Un módulo nuevo que guarde datos de una app tiene que implementar `IDeletionParticipant`; si no, la prueba de huérfanos de la app lo detecta.
 - Una eliminación incompleta queda visible en la bitácora (paso y error) y se reintenta sola; no hay estados en los que la app esté oculta pero sus enlaces o análisis sigan accesibles, porque la fase 1 los corta antes.

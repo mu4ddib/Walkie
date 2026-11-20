@@ -25,6 +25,24 @@ internal abstract record DeletionOutcome
     public sealed record Invalid(string Field, string Message) : DeletionOutcome;
 
     public sealed record Conflict(string Message) : DeletionOutcome;
+
+    public sealed record Busy(string Message) : DeletionOutcome;
+}
+
+/// <summary>Esta ejecución perdió el candado o la ficha: otra tiene la eliminación y esta no escribe nada más.</summary>
+internal sealed class DeletionSupersededException : Exception
+{
+    public DeletionSupersededException() : base("Otra ejecución tomó la eliminación.")
+    {
+    }
+}
+
+/// <summary>Solo en pruebas: un punto de prueba la lanza para simular que el proceso murió en ese paso.</summary>
+public sealed class DeletionAbandonedException : Exception
+{
+    public DeletionAbandonedException() : base("Caída simulada.")
+    {
+    }
 }
 
 /// <summary>
@@ -37,12 +55,10 @@ internal sealed partial class DeletionHandlers(
     AppsDbContext db,
     IEnumerable<IDeletionParticipant> participants,
     IDeletionCheckpoints checkpoints,
+    AppLocks locks,
     TimeProvider clock,
     ILogger<DeletionHandlers> logger)
 {
-    /// <summary>Lo que una ejecución tiene tomada una eliminación antes de que otra pueda retomarla.</summary>
-    public static readonly TimeSpan Lease = TimeSpan.FromMinutes(2);
-
     /// <summary>Espera antes de reintentar una eliminación que falló (la recuperación no la toma antes).</summary>
     public static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(30);
 
@@ -109,24 +125,41 @@ internal sealed partial class DeletionHandlers(
 
     // ---------- Eliminar una feature ----------
 
-    public async Task<DeletionOutcome> DeleteFeatureAsync(Guid featureId, Guid deletionId, int? canvasVersion, string userId, CancellationToken ct)
+    public async Task<DeletionOutcome> DeleteFeatureAsync(Guid appId, Guid featureId, Guid deletionId, int? canvasVersion, string userId, CancellationToken ct)
     {
-        if (await ExistingAsync(deletionId, userId, ct).ConfigureAwait(false) is { } existing)
-        {
-            return existing;
-        }
-
         if (canvasVersion is null)
         {
             return new DeletionOutcome.Invalid("canvasVersion", "Falta la versión del lienzo que viste: pide el impacto antes de eliminar.");
         }
 
-        var feature = await db.Features.AsNoTracking().SingleOrDefaultAsync(f => f.Id == featureId, ct).ConfigureAwait(false);
+        var request = new DeletionRequest(Deletion.FeatureKind, appId, featureId, userId, canvasVersion, null);
+        if (await ExistingAsync(deletionId, request, ct).ConfigureAwait(false) is { } existing)
+        {
+            return existing;
+        }
+
+        // El candado exclusivo de la app: espera a las escrituras en curso y ninguna nueva empieza hasta terminar.
+        await using var held = await locks.ExclusiveAsync(appId, AppLocks.DeletionSession(deletionId), ct).ConfigureAwait(false);
+        if (held is null)
+        {
+            return Busy();
+        }
+
+        // Con el candado: otra solicitud con el mismo id pudo ganar la carrera mientras esperábamos.
+        if (await ExistingAsync(deletionId, request, ct, held).ConfigureAwait(false) is { } raced)
+        {
+            return raced;
+        }
+
+        await checkpoints.ReachedAsync(deletionId, LockedStep, ct).ConfigureAwait(false);
+
+        var feature = await db.Features.AsNoTracking().SingleOrDefaultAsync(f => f.Id == featureId && f.AppId == appId, ct).ConfigureAwait(false);
         if (feature is null)
         {
             return new DeletionOutcome.NotFound();
         }
 
+        // El impacto, con el candado tomado: nadie guarda un lienzo ni crea un portal hasta que la marca esté hecha.
         var impact = await DescribeFeatureAsync(feature, ct).ConfigureAwait(false);
         if (Refusal(impact, canvasVersion.Value) is { } refused)
         {
@@ -135,6 +168,7 @@ internal sealed partial class DeletionHandlers(
 
         // Fase 1: bitácora y marca juntas. Desde aquí la feature no existe para nadie (ni su enlace público).
         var now = clock.GetUtcNowForDb();
+        var token = Guid.CreateVersion7();
         await using (var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false))
         {
             var marked = await db.Features.Where(f => f.Id == featureId && f.DeletingAt == null)
@@ -144,24 +178,12 @@ internal sealed partial class DeletionHandlers(
                 return new DeletionOutcome.NotFound();
             }
 
-            db.Deletions.Add(Journal(deletionId, Deletion.FeatureKind, feature.AppId, featureId, feature.Name, userId, now));
+            db.Deletions.Add(Journal(deletionId, request, feature.Name, now, token));
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await tx.CommitAsync(ct).ConfigureAwait(false);
         }
 
-        // Lo que cambió entre la consulta y la marca (un portal nuevo, un guardado en vuelo): se deshace la marca.
-        var after = await DescribeFeatureAsync(feature, ct).ConfigureAwait(false);
-        if (Refusal(after, canvasVersion.Value) is { } late)
-        {
-            await db.Features.IgnoreQueryFilters().Where(f => f.Id == featureId)
-                .ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletingAt, (DateTimeOffset?)null), CancellationToken.None).ConfigureAwait(false);
-            await db.Deletions.Where(d => d.Id == deletionId)
-                .ExecuteUpdateAsync(s => s.SetProperty(d => d.Status, Deletion.Cancelled).SetProperty(d => d.LeaseUntil, (DateTimeOffset?)null), CancellationToken.None)
-                .ConfigureAwait(false);
-            return late;
-        }
-
-        return await RunAsync(deletionId, ownsLease: true, CancellationToken.None).ConfigureAwait(false);
+        return await RunAsync(deletionId, token, held).ConfigureAwait(false);
     }
 
     private static DeletionOutcome? Refusal(DeletionImpactResponse impact, int canvasVersion) =>
@@ -174,7 +196,8 @@ internal sealed partial class DeletionHandlers(
 
     public async Task<DeletionOutcome> DeleteAppAsync(Guid appId, Guid deletionId, string? confirmName, string userId, CancellationToken ct)
     {
-        if (await ExistingAsync(deletionId, userId, ct).ConfigureAwait(false) is { } existing)
+        var request = new DeletionRequest(Deletion.AppKind, appId, null, userId, null, confirmName?.Trim());
+        if (await ExistingAsync(deletionId, request, ct).ConfigureAwait(false) is { } existing)
         {
             return existing;
         }
@@ -185,10 +208,23 @@ internal sealed partial class DeletionHandlers(
             return new DeletionOutcome.NotFound();
         }
 
-        if (!string.Equals(confirmName?.Trim(), app.Name, StringComparison.Ordinal))
+        if (!string.Equals(request.ConfirmName, app.Name, StringComparison.Ordinal))
         {
             return new DeletionOutcome.Invalid("confirmName", "Escribe el nombre exacto de la app para confirmar que quieres eliminarla.");
         }
+
+        await using var held = await locks.ExclusiveAsync(appId, AppLocks.DeletionSession(deletionId), ct).ConfigureAwait(false);
+        if (held is null)
+        {
+            return Busy();
+        }
+
+        if (await ExistingAsync(deletionId, request, ct, held).ConfigureAwait(false) is { } raced)
+        {
+            return raced;
+        }
+
+        await checkpoints.ReachedAsync(deletionId, LockedStep, ct).ConfigureAwait(false);
 
         var impact = await DescribeAppAsync(appId, ct).ConfigureAwait(false);
         if (impact.Blockers.Count > 0)
@@ -198,47 +234,55 @@ internal sealed partial class DeletionHandlers(
 
         // Fase 1: bitácora, marca de la app y de todo lo suyo, y sin miembros: nadie vuelve a entrar.
         var now = clock.GetUtcNowForDb();
+        var token = Guid.CreateVersion7();
         await using (var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false))
         {
-            // La fila de la app, bloqueada: dos eliminaciones a la vez no pasan las dos de aquí.
-            var locked = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM apps.apps WHERE id = {appId} AND deleting_at IS NULL FOR UPDATE")
-                .ToListAsync(ct).ConfigureAwait(false);
-            if (locked.Count == 0)
+            var marked = await db.Apps.Where(a => a.Id == appId && a.DeletingAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.DeletingAt, now), ct).ConfigureAwait(false);
+            if (marked == 0)
             {
                 return new DeletionOutcome.NotFound();
             }
 
-            await db.Apps.Where(a => a.Id == appId).ExecuteUpdateAsync(s => s.SetProperty(a => a.DeletingAt, now), ct).ConfigureAwait(false);
             await db.Features.IgnoreQueryFilters().Where(f => f.AppId == appId && f.DeletingAt == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletingAt, now), ct).ConfigureAwait(false);
             await db.Memberships.Where(m => m.AppId == appId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
-            db.Deletions.Add(Journal(deletionId, Deletion.AppKind, appId, null, app.Name, userId, now));
+            db.Deletions.Add(Journal(deletionId, request, app.Name, now, token));
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await tx.CommitAsync(ct).ConfigureAwait(false);
         }
 
-        return await RunAsync(deletionId, ownsLease: true, CancellationToken.None).ConfigureAwait(false);
+        return await RunAsync(deletionId, token, held).ConfigureAwait(false);
     }
 
-    private static Deletion Journal(Guid id, string kind, Guid appId, Guid? featureId, string name, string userId, DateTimeOffset now) =>
+    private static DeletionOutcome.Busy Busy() =>
+        new("La app está ocupada (hay escrituras en curso u otra eliminación): vuelve a intentarlo en unos segundos. No se eliminó nada.");
+
+    private static Deletion Journal(Guid id, DeletionRequest request, string name, DateTimeOffset now, Guid token) =>
         new()
         {
             Id = id,
-            Kind = kind,
-            AppId = appId,
-            FeatureId = featureId,
+            Kind = request.Kind,
+            AppId = request.AppId,
+            FeatureId = request.FeatureId,
             Name = name,
-            RequestedBy = userId,
+            RequestedBy = request.UserId,
             RequestedAt = now,
+            CanvasVersion = request.CanvasVersion,
             Status = Deletion.Pending,
-            LeaseUntil = now + Lease,
+            OwnerToken = token,
+            Attempts = 1,
         };
 
+    /// <summary>Lo que identifica una solicitud de eliminación: un mismo id solo es un reintento si todo coincide.</summary>
+    private sealed record DeletionRequest(string Kind, Guid AppId, Guid? FeatureId, string UserId, int? CanvasVersion, string? ConfirmName);
+
     /// <summary>
-    /// El mismo id de eliminación otra vez (un reintento): su estado, retomándola si quedó pendiente. Otro usuario con ese
-    /// id: conflicto. Una cancelada (la feature cambió en medio) no se reutiliza.
+    /// Un id de eliminación que ya existe. Solo es un reintento si es la misma solicitud: mismo tipo, misma app, misma
+    /// feature, misma persona y los mismos datos (la versión del lienzo que vio, el nombre que escribió). Si no, 409: un
+    /// id nunca sirve para dos recursos. Un reintento devuelve el estado y retoma una pendiente.
     /// </summary>
-    private async Task<DeletionOutcome?> ExistingAsync(Guid deletionId, string userId, CancellationToken ct)
+    private async Task<DeletionOutcome?> ExistingAsync(Guid deletionId, DeletionRequest request, CancellationToken ct, AppLock? held = null)
     {
         var deletion = await db.Deletions.AsNoTracking().SingleOrDefaultAsync(d => d.Id == deletionId, ct).ConfigureAwait(false);
         if (deletion is null)
@@ -246,13 +290,20 @@ internal sealed partial class DeletionHandlers(
             return null;
         }
 
-        if (deletion.RequestedBy != userId || deletion.Status == Deletion.Cancelled)
+        var same = deletion.Kind == request.Kind
+            && deletion.AppId == request.AppId
+            && deletion.FeatureId == request.FeatureId
+            && deletion.RequestedBy == request.UserId
+            && (request.Kind == Deletion.FeatureKind
+                ? deletion.CanvasVersion == request.CanvasVersion
+                : string.Equals(deletion.Name, request.ConfirmName, StringComparison.Ordinal));
+        if (!same)
         {
-            return new DeletionOutcome.Conflict("Ese id de eliminación ya se usó: pide otra.");
+            return new DeletionOutcome.Conflict("Ese id de eliminación ya se usó para otra solicitud (otro recurso, otra persona u otros datos): genera uno nuevo.");
         }
 
         return deletion.Status == Deletion.Pending
-            ? await RunAsync(deletionId, ownsLease: false, CancellationToken.None).ConfigureAwait(false)
+            ? await ResumeAsync(deletionId, held, ignoreRetryAt: true, CancellationToken.None).ConfigureAwait(false)
             : new DeletionOutcome.Completed(Response(deletion));
     }
 
@@ -270,7 +321,7 @@ internal sealed partial class DeletionHandlers(
             return Response(deletion);
         }
 
-        return await RunAsync(deletionId, ownsLease: false, CancellationToken.None).ConfigureAwait(false) switch
+        return await ResumeAsync(deletionId, held: null, ignoreRetryAt: false, CancellationToken.None).ConfigureAwait(false) switch
         {
             DeletionOutcome.Completed c => c.Deletion,
             DeletionOutcome.Pending p => p.Deletion,
@@ -281,26 +332,53 @@ internal sealed partial class DeletionHandlers(
     // ---------- Fase 2 ----------
 
     /// <summary>
-    /// Corre (o retoma) la fase 2. Sin <paramref name="ownsLease"/>, primero toma la concesión: si otra ejecución la tiene
-    /// o la espera tras un fallo no venció, solo informa el estado. Cada paso es idempotente: se repiten todos.
+    /// Retoma una eliminación pendiente (recuperación, consulta del estado o reintento). Toma el candado exclusivo de la
+    /// app sin esperar: si otra ejecución lo tiene, solo informa el estado. Con el candado, pone una ficha nueva
+    /// (fencing) y corre la fase 2. Después de un fallo respeta <see cref="Deletion.RetryAt"/>, salvo un reintento explícito.
     /// </summary>
-    public async Task<DeletionOutcome> RunAsync(Guid deletionId, bool ownsLease, CancellationToken ct)
+    public async Task<DeletionOutcome> ResumeAsync(Guid deletionId, AppLock? held, bool ignoreRetryAt, CancellationToken ct)
     {
-        var now = clock.GetUtcNowForDb();
-        if (!ownsLease)
+        var deletion = await db.Deletions.AsNoTracking().SingleAsync(d => d.Id == deletionId, ct).ConfigureAwait(false);
+        if (deletion.Status != Deletion.Pending)
         {
-            var taken = await db.Deletions
-                .Where(d => d.Id == deletionId && d.Status == Deletion.Pending && (d.LeaseUntil == null || d.LeaseUntil < now))
-                .ExecuteUpdateAsync(s => s.SetProperty(d => d.LeaseUntil, now + Lease), ct).ConfigureAwait(false);
-            if (taken == 0)
+            return Outcome(deletion);
+        }
+
+        AppLock? taken = null;
+        if (held is null)
+        {
+            taken = await locks.TryExclusiveAsync(deletion.AppId, AppLocks.DeletionSession(deletionId), ct).ConfigureAwait(false);
+            if (taken is null)
             {
-                var current = await db.Deletions.AsNoTracking().SingleAsync(d => d.Id == deletionId, ct).ConfigureAwait(false);
-                return Outcome(current);
+                return Outcome(deletion);
             }
         }
 
-        var deletion = await db.Deletions.SingleAsync(d => d.Id == deletionId, ct).ConfigureAwait(false);
-        deletion.Attempts++;
+        await using (taken)
+        {
+            var now = clock.GetUtcNowForDb();
+            var token = Guid.CreateVersion7();
+            var claimed = await db.Deletions
+                .Where(d => d.Id == deletionId && d.Status == Deletion.Pending && (ignoreRetryAt || d.RetryAt == null || d.RetryAt < now))
+                .ExecuteUpdateAsync(s => s.SetProperty(d => d.OwnerToken, token).SetProperty(d => d.Attempts, d => d.Attempts + 1), ct).ConfigureAwait(false);
+            if (claimed == 0)
+            {
+                return Outcome(await db.Deletions.AsNoTracking().SingleAsync(d => d.Id == deletionId, ct).ConfigureAwait(false));
+            }
+
+            return await RunAsync(deletionId, token, held ?? taken!).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// La fase 2, con el candado exclusivo tomado y la ficha <paramref name="token"/>. Cada paso es idempotente y antes de
+    /// cada uno se comprueba que el candado y la ficha siguen siendo nuestros. El último paso (las filas de Apps) y el cierre
+    /// de la bitácora van en una transacción que exige la ficha: si otra ejecución la tomó, no se escribe nada.
+    /// </summary>
+    private async Task<DeletionOutcome> RunAsync(Guid deletionId, Guid token, AppLock held)
+    {
+        var ct = CancellationToken.None;
+        var deletion = await db.Deletions.AsNoTracking().SingleAsync(d => d.Id == deletionId, ct).ConfigureAwait(false);
         var steps = new List<DeletionStepResult>();
         var step = "";
         try
@@ -311,48 +389,82 @@ internal sealed partial class DeletionHandlers(
                 foreach (var participant in Ordered)
                 {
                     step = participant.Step;
-                    await checkpoints.ReachedAsync(deletionId, step, CancellationToken.None).ConfigureAwait(false);
-                    await participant.DeleteFeatureAsync(target, CancellationToken.None).ConfigureAwait(false);
+                    await checkpoints.ReachedAsync(deletionId, step, ct).ConfigureAwait(false);
+                    await EnsureOwnerAsync(deletionId, token, held).ConfigureAwait(false);
+                    await participant.DeleteFeatureAsync(target, ct).ConfigureAwait(false);
                     steps.Add(new DeletionStepResult(step, "done", null));
                 }
-
-                step = AppsStep;
-                await checkpoints.ReachedAsync(deletionId, step, CancellationToken.None).ConfigureAwait(false);
-                await db.Features.IgnoreQueryFilters().Where(f => f.Id == target.FeatureId).ExecuteDeleteAsync(CancellationToken.None).ConfigureAwait(false);
-                steps.Add(new DeletionStepResult(step, "done", null));
             }
             else
             {
-                // Una feature creada en vuelo durante la fase 1 también se marca y entra en la limpieza.
+                // Con el candado tomado no entra ninguna escritura; esto cubre las features que alguien creó justo
+                // antes de la marca (ya guardadas al tomar el candado).
+                var now = clock.GetUtcNowForDb();
                 await db.Features.IgnoreQueryFilters().Where(f => f.AppId == deletion.AppId && f.DeletingAt == null)
-                    .ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletingAt, now), CancellationToken.None).ConfigureAwait(false);
+                    .ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletingAt, now), ct).ConfigureAwait(false);
                 var featureIds = await db.Features.IgnoreQueryFilters().AsNoTracking().Where(f => f.AppId == deletion.AppId)
-                    .Select(f => f.Id).ToListAsync(CancellationToken.None).ConfigureAwait(false);
+                    .Select(f => f.Id).ToListAsync(ct).ConfigureAwait(false);
                 var target = new AppDeletionTarget(deletion.AppId, featureIds);
                 foreach (var participant in Ordered)
                 {
                     step = participant.Step;
-                    await checkpoints.ReachedAsync(deletionId, step, CancellationToken.None).ConfigureAwait(false);
-                    await participant.DeleteAppAsync(target, CancellationToken.None).ConfigureAwait(false);
+                    await checkpoints.ReachedAsync(deletionId, step, ct).ConfigureAwait(false);
+                    await EnsureOwnerAsync(deletionId, token, held).ConfigureAwait(false);
+                    await participant.DeleteAppAsync(target, ct).ConfigureAwait(false);
                     steps.Add(new DeletionStepResult(step, "done", null));
                 }
-
-                step = AppsStep;
-                await checkpoints.ReachedAsync(deletionId, step, CancellationToken.None).ConfigureAwait(false);
-                await using var tx = await db.Database.BeginTransactionAsync(CancellationToken.None).ConfigureAwait(false);
-                await db.Memberships.Where(m => m.AppId == deletion.AppId).ExecuteDeleteAsync(CancellationToken.None).ConfigureAwait(false);
-                await db.CatalogItems.Where(i => i.AppId == deletion.AppId).ExecuteDeleteAsync(CancellationToken.None).ConfigureAwait(false);
-                await db.Features.IgnoreQueryFilters().Where(f => f.AppId == deletion.AppId).ExecuteDeleteAsync(CancellationToken.None).ConfigureAwait(false);
-                await db.Apps.Where(a => a.Id == deletion.AppId).ExecuteDeleteAsync(CancellationToken.None).ConfigureAwait(false);
-                await tx.CommitAsync(CancellationToken.None).ConfigureAwait(false);
-                steps.Add(new DeletionStepResult(step, "done", null));
             }
 
-            deletion.Status = Deletion.Completed;
-            deletion.CompletedAt = clock.GetUtcNowForDb();
-            deletion.LeaseUntil = null;
-            deletion.Error = null;
+            step = AppsStep;
+            await checkpoints.ReachedAsync(deletionId, step, ct).ConfigureAwait(false);
+            await EnsureOwnerAsync(deletionId, token, held).ConfigureAwait(false);
+            steps.Add(new DeletionStepResult(step, "done", null));
+            var completedAt = clock.GetUtcNowForDb();
+            var stepsJson = JsonSerializer.Serialize(steps, Json);
+            await using (var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false))
+            {
+                // La ficha primero: la fila queda bloqueada hasta el commit y nadie más la cierra.
+                var closed = await db.Deletions.Where(d => d.Id == deletionId && d.OwnerToken == token && d.Status == Deletion.Pending)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(d => d.Status, Deletion.Completed)
+                        .SetProperty(d => d.CompletedAt, completedAt)
+                        .SetProperty(d => d.OwnerToken, (Guid?)null)
+                        .SetProperty(d => d.RetryAt, (DateTimeOffset?)null)
+                        .SetProperty(d => d.Error, (string?)null)
+                        .SetProperty(d => d.Steps, stepsJson), ct).ConfigureAwait(false);
+                if (closed == 0)
+                {
+                    throw new DeletionSupersededException();
+                }
+
+                if (deletion.Kind == Deletion.FeatureKind)
+                {
+                    await db.Features.IgnoreQueryFilters().Where(f => f.Id == deletion.FeatureId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    await db.Memberships.Where(m => m.AppId == deletion.AppId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+                    await db.CatalogItems.Where(i => i.AppId == deletion.AppId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+                    await db.Features.IgnoreQueryFilters().Where(f => f.AppId == deletion.AppId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+                    await db.Apps.Where(a => a.Id == deletion.AppId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+                }
+
+                await checkpoints.ReachedAsync(deletionId, CommitStep, ct).ConfigureAwait(false);
+                await tx.CommitAsync(ct).ConfigureAwait(false);
+            }
+
             LogCompleted(logger, deletionId, deletion.Kind, deletion.AppId);
+        }
+        catch (DeletionSupersededException)
+        {
+            // Otra ejecución tiene la eliminación: esta no escribe nada más.
+            LogSuperseded(logger, deletionId, step);
+            return Outcome(await db.Deletions.AsNoTracking().SingleAsync(d => d.Id == deletionId, ct).ConfigureAwait(false));
+        }
+        catch (DeletionAbandonedException)
+        {
+            // Solo en pruebas: simula que el proceso murió aquí (sin escribir nada; el candado se suelta al cerrar).
+            throw;
         }
 #pragma warning disable CA1031 // Un fallo en cualquier módulo se registra y queda para reintentar; nunca se pierde.
         catch (Exception ex)
@@ -360,14 +472,35 @@ internal sealed partial class DeletionHandlers(
         {
             var message = Truncate(ex.Message, 500);
             steps.Add(new DeletionStepResult(step, "failed", message));
-            deletion.Error = string.Create(CultureInfo.InvariantCulture, $"{step}: {message}");
-            deletion.LeaseUntil = clock.GetUtcNowForDb() + RetryAfter;
+            var error = string.Create(CultureInfo.InvariantCulture, $"{step}: {message}");
+            var retryAt = clock.GetUtcNowForDb() + RetryAfter;
+            var stepsJson = JsonSerializer.Serialize(steps, Json);
+            await db.Deletions.Where(d => d.Id == deletionId && d.OwnerToken == token && d.Status == Deletion.Pending)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(d => d.Error, error)
+                    .SetProperty(d => d.RetryAt, retryAt)
+                    .SetProperty(d => d.OwnerToken, (Guid?)null)
+                    .SetProperty(d => d.Steps, stepsJson), ct).ConfigureAwait(false);
             LogIncomplete(logger, ex, deletionId, step);
         }
 
-        deletion.Steps = JsonSerializer.Serialize(steps, Json);
-        await db.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
-        return Outcome(deletion);
+        return Outcome(await db.Deletions.AsNoTracking().SingleAsync(d => d.Id == deletionId, ct).ConfigureAwait(false));
+    }
+
+    /// <summary>Punto de prueba con el candado exclusivo ya tomado, antes de revisar el impacto y marcar.</summary>
+    public const string LockedStep = "locked";
+
+    /// <summary>Punto de prueba dentro de la transacción final, después de borrar las filas de Apps y antes del commit.</summary>
+    public const string CommitStep = "apps:commit";
+
+    /// <summary>¿Seguimos siendo la ejecución de esta eliminación? El candado vivo y la ficha nuestra; si no, se detiene.</summary>
+    private async Task EnsureOwnerAsync(Guid deletionId, Guid token, AppLock held)
+    {
+        if (!await held.HeldAsync().ConfigureAwait(false)
+            || !await db.Deletions.AnyAsync(d => d.Id == deletionId && d.OwnerToken == token).ConfigureAwait(false))
+        {
+            throw new DeletionSupersededException();
+        }
     }
 
     /// <summary>Las eliminaciones pendientes que ya se pueden retomar (la concesión venció).</summary>
@@ -375,7 +508,7 @@ internal sealed partial class DeletionHandlers(
     {
         var now = clock.GetUtcNowForDb();
         return await db.Deletions.AsNoTracking()
-            .Where(d => d.Status == Deletion.Pending && (d.LeaseUntil == null || d.LeaseUntil < now))
+            .Where(d => d.Status == Deletion.Pending && (d.RetryAt == null || d.RetryAt < now))
             .OrderBy(d => d.RequestedAt).Select(d => d.Id).Take(20).ToListAsync(ct).ConfigureAwait(false);
     }
 
@@ -393,6 +526,9 @@ internal sealed partial class DeletionHandlers(
     [LoggerMessage(Level = LogLevel.Information, Message = "Eliminación {DeletionId} completa: {Kind} de la app {AppId}.")]
     private static partial void LogCompleted(ILogger logger, Guid deletionId, string kind, Guid appId);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Eliminación {DeletionId}: otra ejecución la tomó en el paso {Step}; esta se detiene sin escribir.")]
+    private static partial void LogSuperseded(ILogger logger, Guid deletionId, string step);
+
     [LoggerMessage(Level = LogLevel.Error, Message = "Eliminación {DeletionId} incompleta en el paso {Step}: queda pending y se reintentará.")]
     private static partial void LogIncomplete(ILogger logger, Exception exception, Guid deletionId, string step);
 }
@@ -401,4 +537,12 @@ internal sealed partial class DeletionHandlers(
 internal sealed class NoDeletionCheckpoints : IDeletionCheckpoints
 {
     public Task ReachedAsync(Guid deletionId, string step, CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+/// <summary>Sin puntos de prueba en las escrituras (producción).</summary>
+internal sealed class NoAppWriteCheckpoints : IAppWriteCheckpoints
+{
+    public Task EnteredAsync(Guid appId, string route, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task LeavingAsync(Guid appId, string route, CancellationToken cancellationToken) => Task.CompletedTask;
 }

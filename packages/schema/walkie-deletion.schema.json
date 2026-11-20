@@ -14,7 +14,7 @@
     "name": { "type": "string", "minLength": 1, "maxLength": 120 },
     "status": {
       "enum": ["pending", "completed", "cancelled"],
-      "description": "pending: ya no es accesible, falta limpiar algún módulo (se reintenta sola); completed: no queda nada; cancelled: algo cambió en medio y no se eliminó"
+      "description": "pending: ya no es accesible, falta limpiar algún módulo (se reintenta sola); completed: no queda nada; cancelled: solo histórico (versiones anteriores revertían así una marca; hoy no se produce)"
     },
     "requestedAt": { "type": "string", "format": "date-time" },
     "completedAt": { "type": "string", "format": "date-time" },

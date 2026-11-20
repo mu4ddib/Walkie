@@ -89,7 +89,9 @@ internal sealed class AppsDbContext(DbContextOptions<AppsDbContext> options) : D
             deletion.Property(d => d.Steps).HasColumnName("steps").HasColumnType("jsonb");
             deletion.Property(d => d.Error).HasColumnName("error").HasMaxLength(2000);
             deletion.Property(d => d.Attempts).HasColumnName("attempts");
-            deletion.Property(d => d.LeaseUntil).HasColumnName("lease_until");
+            deletion.Property(d => d.CanvasVersion).HasColumnName("canvas_version");
+            deletion.Property(d => d.OwnerToken).HasColumnName("owner_token");
+            deletion.Property(d => d.RetryAt).HasColumnName("retry_at");
             deletion.Property(d => d.CompletedAt).HasColumnName("completed_at");
             deletion.HasIndex(d => d.Status).HasDatabaseName("ix_deletions_status");
             deletion.HasIndex(d => d.AppId).HasDatabaseName("ix_deletions_app_id");
