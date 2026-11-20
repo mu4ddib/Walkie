@@ -10,7 +10,7 @@ internal sealed class AppIdScope(AppsDbContext db) : IAppScopeResolver
     public string RouteKey => "appId";
 
     public async Task<Guid?> AppOfAsync(Guid id, CancellationToken cancellationToken) =>
-        await db.Apps.AsNoTracking().AnyAsync(a => a.Id == id, cancellationToken).ConfigureAwait(false) ? id : null;
+        await db.Apps.AsNoTracking().AnyAsync(a => a.Id == id && a.DeletingAt == null, cancellationToken).ConfigureAwait(false) ? id : null;
 }
 
 /// <summary><c>featureId</c>: la app de la feature (también de un módulo, que es una feature de tipo <c>module</c>).</summary>

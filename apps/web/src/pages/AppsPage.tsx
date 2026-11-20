@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import '../gallery/gallery.css';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
+import type { DeletedAppNotice } from '../deletion/DeleteAppDialog';
+import { PendingDeletion } from '../deletion/PendingDeletion';
 import { useApps, useCreateApp, useDiscoveryStatus } from '../api/hooks';
 import { NewAppFromProjectDialog } from '../discovery/NewAppFromProjectDialog';
 import { GalleryTools } from '../gallery/GalleryTools';
@@ -23,6 +25,9 @@ export function AppsPage() {
   const discovery = useDiscoveryStatus();
   const [fromProject, setFromProject] = useState(false);
   const shown = (apps.data ?? []).filter((a) => matches(a.name, query));
+  // Al volver de eliminar una app (ADR-0017): qué se eliminó y si Walkie termina de borrarla en segundo plano.
+  const state = useLocation().state as Partial<DeletedAppNotice> | null;
+  const deleted = state?.deletedApp ? state : null;
 
   return (
     <section className="page gallery-page">
@@ -52,6 +57,16 @@ export function AppsPage() {
           )}
         </div>
       </header>
+      {deleted &&
+        (deleted.pending && deleted.deletionId ? (
+          <PendingDeletion deletionId={deleted.deletionId} name={deleted.deletedApp!} kind="app" />
+        ) : (
+          <p className="gallery-note" role="status">
+            {deleted.pending
+              ? `La eliminación de la app «${deleted.deletedApp}» todavía está pendiente: ya no está disponible para nadie y Walkie la termina solo.`
+              : `Se eliminó la app «${deleted.deletedApp}» con toda su documentación.`}
+          </p>
+        ))}
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
       {fromProject && <NewAppFromProjectDialog onClose={() => setFromProject(false)} />}
       <div className="gallery-create">

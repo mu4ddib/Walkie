@@ -26,4 +26,10 @@ internal sealed class Feature
 
     /// <summary>Último cambio de nombre o descripción (el del lienzo lo lleva Canvas).</summary>
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Cuándo empezó a eliminarse, ella o su app (ADR-0017). Un filtro global la oculta de toda consulta de Apps (y por
+    /// eso de sus resolvedores, directorios y enlaces públicos); el código de eliminación usa <c>IgnoreQueryFilters</c>.
+    /// </summary>
+    public DateTimeOffset? DeletingAt { get; set; }
 }

@@ -32,13 +32,19 @@ public static class AppsModule
         services.AddScoped<Contracts.IAppScopeResolver, ModuleScope>();
         services.AddScoped<Contracts.IAppScopeResolver, CatalogItemScope>();
         services.AddScoped<MembersHandlers>();
+        // Eliminar apps y features (ADR-0017): orquestación, puntos de prueba y recuperación de las pendientes.
+        services.AddScoped<DeletionHandlers>();
+        services.AddSingleton(new AppLocks(connectionString));
+        services.TryAddScoped<Contracts.IAppWriteCheckpoints, NoAppWriteCheckpoints>();
+        services.TryAddScoped<Contracts.IDeletionCheckpoints, NoDeletionCheckpoints>();
+        services.AddHostedService<DeletionRecovery>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 
     /// <summary>Endpoints <c>/api/apps</c>, <c>/api/apps/{appId}/features</c>, <c>/api/apps/{appId}/catalog</c> y <c>/api/catalog</c>.</summary>
     public static IEndpointRouteBuilder MapAppsModule(this IEndpointRouteBuilder routes) =>
-        routes.MapAppsEndpoints().MapCatalogEndpoints().MapMembersEndpoints();
+        routes.MapAppsEndpoints().MapCatalogEndpoints().MapMembersEndpoints().MapDeletionEndpoints();
 
     /// <summary>
     /// Anota a quien entra (<c>sub</c>, correo y nombre del token) para poder sumarlo a una app por correo (ADR-0015).

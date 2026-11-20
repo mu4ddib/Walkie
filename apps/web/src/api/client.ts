@@ -8,6 +8,8 @@ import type { Layout, WalkieAppMapV0 } from '../schema/walkie-app-map';
 import type { WalkieImportSummaryV0 } from '../schema/walkie-import-summary';
 import type { Interface, WalkieModuleSummaryV0 } from '../schema/walkie-module-summary';
 import type { Role, WalkieAppMemberV0 } from '../schema/walkie-app-member';
+import type { WalkieDeletionImpactV0 } from '../schema/walkie-deletion-impact';
+import type { WalkieDeletionV0 } from '../schema/walkie-deletion';
 import type { WalkieDiscoveryArchitectureV0 } from '../schema/walkie-discovery-architecture';
 import type { WalkieDiscoveryArchitectureGroupV0 } from '../schema/walkie-discovery-architecture-group';
 import type { WalkieDiscoveryRelationEvidenceV0 } from '../schema/walkie-discovery-relation-evidence';
@@ -177,6 +179,38 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
   const res = await send(path, init);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/** Qué se pierde al eliminar una feature o una app y qué lo impide (ADR-0017). */
+export type DeletionImpact = WalkieDeletionImpactV0;
+/** Estado de una eliminación (202 o `GET /api/deletions/{id}`). */
+export type Deletion = WalkieDeletionV0;
+/** Cómo terminó un pedido de eliminación: completa (204) o pendiente (202, se termina sola). */
+export type DeletionResult = { status: 'completed' } | Deletion;
+
+export function getFeatureDeletionImpact(token: string, featureId: string, signal?: AbortSignal): Promise<DeletionImpact> {
+  return request(`/api/features/${encodeURIComponent(featureId)}/deletion`, { token, signal });
+}
+
+export function getAppDeletionImpact(token: string, appId: string, signal?: AbortSignal): Promise<DeletionImpact> {
+  return request(`/api/apps/${encodeURIComponent(appId)}/deletion`, { token, signal });
+}
+
+/** El id de la eliminación lo genera el cliente y se repite en un reintento (la API no la hace dos veces). */
+export async function deleteFeature(token: string, featureId: string, deletionId: string, canvasVersion: number): Promise<DeletionResult> {
+  const query = new URLSearchParams({ deletionId, canvasVersion: String(canvasVersion) });
+  const result = await request<Deletion | undefined>(`/api/features/${encodeURIComponent(featureId)}?${query}`, { token, method: 'DELETE' });
+  return result ?? { status: 'completed' };
+}
+
+export async function deleteApp(token: string, appId: string, deletionId: string, confirmName: string): Promise<DeletionResult> {
+  const query = new URLSearchParams({ deletionId, confirmName });
+  const result = await request<Deletion | undefined>(`/api/apps/${encodeURIComponent(appId)}?${query}`, { token, method: 'DELETE' });
+  return result ?? { status: 'completed' };
+}
+
+export function getDeletion(token: string, deletionId: string, signal?: AbortSignal): Promise<Deletion> {
+  return request(`/api/deletions/${encodeURIComponent(deletionId)}`, { token, signal });
 }
 
 export function getHealth(signal?: AbortSignal): Promise<Health> {

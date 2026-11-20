@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mu4ddib/Walkie/packages/schema/walkie-deletion-impact.schema.json",
+  "title": "Walkie deletion impact v0",
+  "description": "Lo que se pierde al eliminar una feature o una app y lo que lo impide (spec eliminar-apps-y-features, ADR-0017). GET /api/features/{featureId}/deletion y GET /api/apps/{appId}/deletion; también va en extensions.impact de un 409.",
+  "type": "object",
+  "required": ["kind", "id", "name", "reversible", "counts", "blockers"],
+  "additionalProperties": false,
+  "properties": {
+    "kind": { "enum": ["feature", "app"] },
+    "id": { "type": "string", "format": "uuid" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "reversible": { "type": "boolean", "description": "Siempre false: la eliminación es definitiva (ADR-0017)" },
+    "canvasVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Solo de una feature: la versión de su lienzo (0 sin lienzo). DELETE la exige igual: si alguien guardó después, 409"
+    },
+    "counts": {
+      "type": "object",
+      "description": "Conteos por concepto. Feature: nodes, edges, tours, flows, shares (enlaces activos), images (exclusivas, se borran), imagesShared (las usa otro lienzo, se conservan), mapPosition, provenance (vínculos de Walkie Live). App: features, modules, catalogItems, members, canvases, tours, flows, map, images, shares, sources, snapshots, decisions, pendingOperations",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "blockers": {
+      "type": "array",
+      "description": "Lo que impide eliminar ahora; vacío si se puede",
+      "items": {
+        "type": "object",
+        "required": ["code", "message", "references"],
+        "additionalProperties": false,
+        "properties": {
+          "code": { "enum": ["portal", "module", "discovery-in-progress"] },
+          "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "references": {
+            "type": "array",
+            "description": "Lo que hay que resolver (ej. las features con portales hacia esta)",
+            "items": {
+              "type": "object",
+              "required": ["kind", "id", "name"],
+              "additionalProperties": false,
+              "properties": {
+                "kind": { "enum": ["feature", "module"] },
+                "id": { "type": "string", "format": "uuid" },
+                "name": { "type": "string", "minLength": 1, "maxLength": 120 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

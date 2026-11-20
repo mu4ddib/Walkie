@@ -75,8 +75,13 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   await dialog.getByLabel('Archivo .walkiepack').setInputFiles(first);
   const summary = dialog.getByLabel('Resumen del análisis');
   await expect(summary).toContainText('Walkie');
-  // Las APIs de Walkie: crece con cada endpoint nuevo (46 en la tarea 11; 50 con los miembros de ADR-0015).
-  await expect(summary).toContainText('53 API');
+  // Las APIs de Walkie crecen con cada endpoint nuevo: no se fija un número exacto (cambiaría con cada PR). Se exige un
+  // mínimo y, ya creada la app, endpoints concretos con sus relaciones verificables.
+  await expect(summary).toContainText(/\d+ API/);
+  // La línea de conteos («55 API · 2 Servicio · … relaciones»), aparte de la de tecnologías y versiones.
+  const counts = summary.locator('p', { hasText: /relaciones$/ });
+  const apiCount = Number(/^(\d+) API/.exec((await counts.textContent()) ?? '')![1]);
+  expect(apiCount).toBeGreaterThanOrEqual(50);
   await expect(summary).toContainText(/parcial/i);
   const app = `E2E Walkie se analiza ${Date.now()}`;
   await dialog.getByLabel('Nombre de la app').fill(app);
@@ -87,6 +92,42 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   const appId = /apps\/([^/]+)\/sources/.exec(reviewUrl)![1]!;
   const list = page.getByRole('list', { name: 'Hallazgos' });
   const inspector = page.getByRole('complementary', { name: 'Detalle del hallazgo' });
+  const snapshotId = /sources\/([^/?]+)/.exec(reviewUrl)![1]!;
+
+  // Endpoints representativos de cada área de la API (auth, apps, autorización, lienzo, eliminación, Walkie Live) con su
+  // firma normalizada.
+  const apis = await api<{ items: { key: string }[]; page: { total: number } }>(page, 'GET', `/api/snapshots/${snapshotId}/review?kind=api&pageSize=500`);
+  expect(apis.page.total).toBe(apiCount);
+  const keys = new Set(apis.items.map((i) => i.key));
+  const representative = [
+    'api:GET /api/health',
+    'api:GET /api/apps',
+    'api:POST /api/apps/{}/members',
+    'api:PUT /api/features/{}/canvas',
+    'api:DELETE /api/apps/{}',
+    'api:DELETE /api/features/{}',
+    'api:GET /api/deletions/{}',
+    'api:POST /api/apps/{}/sources/snapshots',
+  ];
+  for (const key of representative) expect(keys, key).toContain(key);
+  // Quién publica cada uno, verificable en su evidencia: el módulo que lo implementa (una biblioteca con endpoints) o
+  // el servicio del host.
+  const publishers: [string, RegExp][] = [
+    ['api:DELETE /api/apps/{}', /^module:.*Walkie\.Modules\.Apps$/],
+    ['api:PUT /api/features/{}/canvas', /^module:.*Walkie\.Modules\.Canvas$/],
+    ['api:POST /api/apps/{}/sources/snapshots', /^module:.*Walkie\.Modules\.Discovery$/],
+    ['api:GET /api/health', /^service:.*Walkie\.Api$/],
+  ];
+  for (const [key, publisher] of publishers) {
+    const evidence = await api<{ relations: { kind: string; from: string; to: string }[] }>(
+      page,
+      'GET',
+      `/api/snapshots/${snapshotId}/evidence?entityKey=${encodeURIComponent(key)}`,
+    );
+    const exposedBy = evidence.relations.filter((r) => r.kind === 'exposes' && r.to === key).map((r) => r.from);
+    expect(exposedBy.some((from) => publisher.test(from)), `${key} ← ${exposedBy.join(', ')}`).toBe(true);
+  }
+
 
   // Lo que no se ve, dicho como limitación: una navegación a una variable (`navigate(path)`) no tiene destino seguro.
   await page.getByText(/^Limitaciones \(\d+\)$/).click();
@@ -117,7 +158,7 @@ test('Walkie se analiza a sí mismo: de la CLI al lienzo, y un reanálisis que n
   await expect(inspector.getByRole('status')).toContainText('Creado en el catálogo');
 
   // ---------- Crear un módulo: el de imágenes, con sus APIs y su base ----------
-  await page.goto(`${reviewUrl}?kind=module`); // 53 APIs van antes: se filtra por tipo, como el selector «Tipo»
+  await page.goto(`${reviewUrl}?kind=module`); // las APIs van antes: se filtra por tipo, como el selector «Tipo»
   await list.getByRole('button', { name: /module:Walkie\.Modules\.Files/ }).click();
   await inspector.getByRole('button', { name: 'Crear módulo…' }).click();
   let preview = inspector.getByRole('region', { name: 'Lo que se creará' });

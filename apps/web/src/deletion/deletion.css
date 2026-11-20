@@ -1,0 +1,73 @@
+/* Diálogos de eliminación (spec eliminar-apps-y-features): los de «Compartir» y «Miembros» con un aviso de peligro. */
+.deletion-dialog {
+  max-width: 520px;
+}
+
+.deletion-facts {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.deletion-facts li + li {
+  margin-top: 4px;
+}
+
+.deletion-final {
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.deletion-blockers {
+  padding: 8px 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-s);
+  background: var(--sand-raised);
+}
+
+.deletion-blockers ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+
+.deletion-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.deletion-confirm input {
+  font: inherit;
+  padding: 6px 8px;
+}
+
+.pixel-button.is-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+
+.pixel-button.is-danger:disabled {
+  opacity: 0.5;
+}
+
+.gallery-admin {
+  margin-top: 40px;
+  padding: 16px;
+  border: 1px dashed var(--dune-300);
+  border-radius: var(--radius-m);
+}
+
+.gallery-admin h3 {
+  margin: 0 0 8px;
+}
+
+/* Eliminación pendiente (202): el aviso, su estado y «Consultar estado». */
+.deletion-pending p {
+  margin: 0 0 8px;
+}
+
+.deletion-pending code {
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  overflow-wrap: anywhere;
+}

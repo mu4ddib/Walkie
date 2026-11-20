@@ -7,6 +7,8 @@ import {
   type AppRole,
   type Asset,
   type CatalogItem,
+  type Deletion,
+  type DeletionImpact,
   type Feature,
   type ModuleSummary,
   type ModuleUsage,
@@ -109,7 +111,11 @@ export function installFakeApi(
     importErrors?: Record<string, string[]>;
     /** Si se define, la próxima conversión en módulo responde este estado (ej. 500, 409). */
     extractStatus?: number;
+    /** La próxima eliminación queda a mitad (202 `pending`), como un paso que falló en la API (ADR-0017). */
+    deletionPending?: boolean;
   } = {};
+  /** Eliminaciones por id (ADR-0017): `GET /api/deletions/{id}` las responde. */
+  const deletions = new Map<string, Deletion>();
   let next = 1;
   const id = () => `00000000-0000-7000-8000-${String(next++).padStart(12, '0')}`;
 
@@ -228,6 +234,100 @@ export function installFakeApi(
       if (index < 0) return notFound();
       shares.splice(index, 1);
       return new Response(null, { status: 204 });
+    }
+
+    // Eliminar (ADR-0017, spec eliminar-apps-y-features): impacto, bloqueos, 403 a quien no es owner, 204 o 202.
+    if (parts[1] === 'deletions' && method === 'GET') {
+      const found = deletions.get(parts[2]!);
+      return found ? json(200, found) : notFound();
+    }
+    const finish = (deletionId: string, kind: 'feature' | 'app', appId: string, name: string, featureId?: string) => {
+      const pending = next_.deletionPending === true;
+      delete next_.deletionPending;
+      const deletion: Deletion = {
+        id: deletionId,
+        kind,
+        appId,
+        ...(featureId ? { featureId } : {}),
+        name,
+        status: pending ? 'pending' : 'completed',
+        requestedAt: new Date(0).toISOString(),
+        steps: pending ? [{ step: 'files', status: 'failed', error: 'S3 no responde' }] : [],
+        ...(pending ? { error: 'files: S3 no responde' } : {}),
+      };
+      deletions.set(deletionId, deletion);
+      return pending ? json(202, deletion) : new Response(null, { status: 204 });
+    };
+    if (parts[1] === 'features' && parts.length >= 3 && (parts[3] === 'deletion' || (parts.length === 3 && method === 'DELETE'))) {
+      const feature = features.find((f) => f.id === parts[2]);
+      const owner = feature && apps.find((a) => a.id === feature.appId);
+      if (!feature || !owner) return notFound();
+      if ((owner.role ?? 'owner') !== 'owner') return json(403, { title: 'Tu rol en esta app no permite esta acción: hace falta owner.', status: 403 });
+      const graph = canvases[feature.id];
+      const portals = features.filter(
+        (f) => f.id !== feature.id && Object.values(canvases[f.id]?.nodes ?? {}).some((n) => n.type === 'portal' && n.targetFeatureId === feature.id),
+      );
+      const blockers: DeletionImpact['blockers'] = [
+        ...(isModule(feature) ? [{ code: 'module' as const, message: 'Es un módulo compartido: se elimina desde su página.', references: [] }] : []),
+        ...(portals.length > 0
+          ? [{
+              code: 'portal' as const,
+              message: 'Otras features tienen portales hacia esta: quítalos o cámbialos antes de eliminarla.',
+              references: portals.map((p) => ({ kind: 'feature' as const, id: p.id, name: p.name })),
+            }]
+          : []),
+      ];
+      const tours = Object.values(graph?.tours ?? {});
+      const impact: DeletionImpact = {
+        kind: 'feature',
+        id: feature.id,
+        name: feature.name,
+        reversible: false,
+        canvasVersion: graph?.version ?? 0,
+        counts: {
+          nodes: Object.keys(graph?.nodes ?? {}).length,
+          edges: Object.keys(graph?.edges ?? {}).length,
+          tours: tours.filter((t) => t.kind !== 'flow').length,
+          flows: tours.filter((t) => t.kind === 'flow').length,
+          shares: shares.filter((x) => x.featureId === feature.id).length,
+        },
+        blockers,
+      };
+      if (method === 'GET') return json(200, impact);
+      if (blockers.length > 0) return json(409, { title: 'No se puede eliminar todavía.', status: 409, impact });
+      if (Number(url.searchParams.get('canvasVersion')) !== impact.canvasVersion)
+        return json(409, { title: 'La feature cambió desde que viste el resumen.', status: 409, impact });
+      features.splice(features.indexOf(feature), 1);
+      delete canvases[feature.id];
+      for (let i = shares.length - 1; i >= 0; i--) if (shares[i]!.featureId === feature.id) shares.splice(i, 1);
+      return finish(url.searchParams.get('deletionId') ?? '', 'feature', feature.appId, feature.name, feature.id);
+    }
+    if (parts[1] === 'apps' && parts[2] && (parts[3] === 'deletion' || (parts.length === 3 && method === 'DELETE'))) {
+      const target = apps.find((a) => a.id === parts[2]);
+      if (!target) return notFound();
+      if ((target.role ?? 'owner') !== 'owner') return json(403, { title: 'Tu rol en esta app no permite esta acción: hace falta owner.', status: 403 });
+      const own = features.filter((f) => f.appId === target.id);
+      const impact: DeletionImpact = {
+        kind: 'app',
+        id: target.id,
+        name: target.name,
+        reversible: false,
+        counts: {
+          features: own.filter((f) => !isModule(f)).length,
+          modules: own.filter(isModule).length,
+          catalogItems: catalog.filter((i) => i.appId === target.id).length,
+          members: membersOf(target.id).length,
+          images: 0,
+          shares: shares.filter((x) => own.some((f) => f.id === x.featureId)).length,
+        },
+        blockers: [],
+      };
+      if (method === 'GET') return json(200, impact);
+      if (url.searchParams.get('confirmName') !== target.name)
+        return json(400, { title: 'Error de validación', status: 400, errors: { confirmName: ['Escribe el nombre exacto de la app.'] } });
+      apps.splice(apps.indexOf(target), 1);
+      for (const f of own) features.splice(features.indexOf(f), 1);
+      return finish(url.searchParams.get('deletionId') ?? '', 'app', target.id, target.name);
     }
 
     // /api/features/{featureId} — renombrar: 400 sin nombre, 404, la feature con su nueva fecha.
@@ -617,5 +717,5 @@ export function installFakeApi(
   });
 
   vi.stubGlobal('fetch', fetchMock);
-  return { apps, features, canvases, catalog, assets, shares, members, next: next_, discovery, fetchMock };
+  return { apps, features, canvases, catalog, assets, shares, members, deletions, next: next_, discovery, fetchMock };
 }

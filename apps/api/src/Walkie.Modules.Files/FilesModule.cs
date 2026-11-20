@@ -23,6 +23,7 @@ public static class FilesModule
         services.AddScoped<Walkie.Modules.Apps.Contracts.IAppScopeResolver, AssetScope>();
         services.AddScoped<Contracts.IAssetDirectory, AssetDirectory>();
         services.AddScoped<Contracts.IAssetWriter, AssetWriter>();
+        services.AddScoped<Walkie.Modules.Apps.Contracts.IDeletionParticipant, FilesDeletion>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

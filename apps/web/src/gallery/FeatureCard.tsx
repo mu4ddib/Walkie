@@ -10,13 +10,15 @@ interface FeatureCardProps {
   preview?: CanvasPreview;
   /** Sin él (un viewer, ADR-0015) la tarjeta no ofrece «Editar». */
   onSave?: (changes: FeatureChanges) => Promise<unknown>;
+  /** Solo para el owner (ADR-0015, ADR-0017): abre «Eliminar feature». */
+  onDelete?: () => void;
 }
 
 /**
  * Tarjeta de una feature en la galería (spec espacio-de-trabajo, criterios 7 y 8): miniatura del lienzo,
  * nombre, descripción y fecha de actualización; "Editar" la renombra sin salir de la galería.
  */
-export function FeatureCard({ feature, preview, onSave }: FeatureCardProps) {
+export function FeatureCard({ feature, preview, onSave, onDelete }: FeatureCardProps) {
   const [editing, setEditing] = useState(false);
   const updated = latest(feature.updatedAt, preview?.updatedAt);
 
@@ -47,6 +49,16 @@ export function FeatureCard({ feature, preview, onSave }: FeatureCardProps) {
                 onClick={() => setEditing(true)}
               >
                 Editar
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                className="pixel-button is-ghost feature-card-delete"
+                aria-label={`Eliminar ${feature.name}`}
+                onClick={onDelete}
+              >
+                Eliminar…
               </button>
             )}
           </footer>

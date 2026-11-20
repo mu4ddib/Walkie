@@ -21,6 +21,8 @@
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-architecture.schema.json" LogicalName="walkie-discovery-architecture.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-discovery-architecture-group.schema.json" LogicalName="walkie-discovery-architecture-group.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-app-member.schema.json" LogicalName="walkie-app-member.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-deletion-impact.schema.json" LogicalName="walkie-deletion-impact.schema.json" />
+    <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-deletion.schema.json" LogicalName="walkie-deletion.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-catalog-item.schema.json" LogicalName="walkie-catalog-item.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-operations.schema.json" LogicalName="walkie-operations.schema.json" />
     <EmbeddedResource Include="..\..\..\..\packages\schema\walkie-operations.json" LogicalName="walkie-operations.json" />
