@@ -225,7 +225,7 @@ test('explorar la arquitectura descubierta e incorporar una propuesta como conju
   await expect(sameName.getByRole('radio', { name: 'Vincular a «PUT /api/pedidos/{id}»' })).not.toBeChecked();
   await expect(review.getByRole('button', { name: 'Ver qué se creará' })).toBeDisabled();
   await sameName.scrollIntoViewIfNeeded();
-  await capture(page, 'revision-eleccion-por-titulo');
+  if (process.env.WALKIE_CAPTURES) await review.screenshot({ path: join(process.env.WALKIE_CAPTURES, 'arquitectura-revision-eleccion-por-titulo.png') });
   await sameName.getByRole('radio', { name: 'Crear en el catálogo' }).check();
   await review.getByRole('button', { name: 'Ver qué se creará' }).click();
   const preview = review.getByRole('region', { name: 'Lo que se creará' });
