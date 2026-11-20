@@ -32,7 +32,10 @@ Para mejorar sin perder la regla de no adivinar, hay que decidir cuatro cosas:
 
 **Análisis estático acotado (CLI).**
 
-- Una llamada se sigue por nombre a funciones resueltas por importación relativa, como mucho **3 saltos**: envoltorios HTTP (`getApp` → `request` → `send` → `fetch`), funciones que arman rutas (`appPath(id)` → `` `/apps/${id}` ``) y consumidores (pantalla → hook → función del cliente).
+- Una llamada se sigue por nombre a funciones resueltas en el mismo archivo o por importación relativa (también objetos de funciones, `import * as` y métodos de servicios de Angular inyectados). Se cuentan aparte dos límites de **3 saltos**:
+  - **hacia adentro:** envoltorios HTTP (`getApp` → `request` → `send` → `fetch`) y funciones que arman rutas (`appPath(id)` → `` `/apps/${id}` ``);
+  - **hacia afuera:** consumidores (pantalla → hook → función del cliente).
+- Un envoltorio se reconoce por la forma de su URL. Su parámetro ocupa el principio de la ruta (después de una base opcional: una constante del módulo que no es literal, `this.apiUrl`, `environment.x`) o un pedazo que no es un segmento entero (`/v1${path}`). Un parámetro que ocupa un segmento entero (`/api/apps/${appId}`) es un parámetro de la ruta: la llamada ya se resuelve ahí. El método sale de la opción `method` (literal, de un parámetro o de las opciones que llegan como parámetro); sin ella, el de `fetch` (`GET`).
 - No se siguen callbacks, recursión, valores calculados, inyección dinámica ni paquetes.
 - Un componente que dibujan más de **3 pantallas** es compartido: sus llamadas y enlaces quedan en la app técnica, no en cada pantalla.
 - En .NET, endpoint → método del handler (grupo de métodos o lambda) → método de un parámetro inyectado → `DbSet` del `DbContext` del constructor. Esto da `reads` (consulta) o `writes` (`Add`, `Update`, `Remove`, `ExecuteUpdate`, `ExecuteDelete`, `SaveChanges`) desde la **api** hacia la base lógica. Un registro de DI solo no prueba nada.

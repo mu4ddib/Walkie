@@ -46,7 +46,6 @@ public sealed class ReactRouterDetector : IDetector
                     screens += RouteScreens.AddScreens(context, model, app, file, facts, RouteScreens.Resolve(facts.Routes, "/", lazyMount: null), Id, "react", depth);
                 }
 
-                links.AddRange(facts.Navigations.Select(n => (file.Path, n.Path, model.Line(file.Path, n.Offset), facts.EnclosingDeclaration(n.Offset))));
             }
 
             RouteScreens.AddNavigation(context, model, app, Id, links);
@@ -164,7 +163,6 @@ public sealed partial class AngularRouterDetector : IDetector
                     continue;
                 }
 
-                links.AddRange(facts.Navigations.Select(n => (file.Path, n.Path, model.Line(file.Path, n.Offset), facts.EnclosingDeclaration(n.Offset))));
                 foreach (var url in facts.TemplateUrls)
                 {
                     if (model.Resolve(file.Path, url) is { } html && context.Read(html, Id) is { } markup)
@@ -309,11 +307,6 @@ public sealed class NextJsDetector : IDetector
                         screen.Technology ??= context.Findings.HasTechnology("nextjs") ? "nextjs" : null;
                         model.AddScreen(new ScreenRecord(app, screen.Key, route, null, file.Path, 1), file.Path, null);
                     }
-
-                    if (model.Facts(file, Id) is { } facts)
-                    {
-                        links.AddRange(facts.Navigations.Select(n => (file.Path, n.Path, model.Line(file.Path, n.Offset), facts.EnclosingDeclaration(n.Offset))));
-                    }
                 }
                 else if (model.Facts(file, Id) is { } handler)
                 {
@@ -405,58 +398,49 @@ public sealed class FrontendHttpDetector : IDetector
         var model = FrontendModel.Of(context);
         foreach (var app in model.Apps)
         {
+            var reach = model.ReachOf(app);
             foreach (var file in model.ScriptsOf(app))
             {
-                if (model.Facts(file, Id) is not { Http.Count: > 0 } facts)
+                if (model.Facts(file, Id) is not { } facts)
                 {
                     continue;
                 }
 
-                var external = 0;
-                foreach (var call in facts.Http)
-                {
-                    // Desde la pantalla cuyo componente hace la llamada; si es otro código del archivo, desde la app.
-                    var screens = model.ScreensAt(file.Path, facts.EnclosingDeclaration(call.Offset));
-                    var callers = screens.Count > 0 ? screens : [app.ServiceKey];
-                    var line = model.Line(file.Path, call.Offset);
-                    if (call.External)
-                    {
-                        external++;
-                        continue;
-                    }
+                var external = facts.Http.Count(h => h.External);
+                var problems = new List<SymbolProblem>();
 
+                // Código suelto del módulo (fuera de toda función con nombre): como siempre, desde la app.
+                foreach (var call in facts.Http.Where(h => !h.External && facts.FunctionAt(h.Index) is null))
+                {
+                    var line = model.Line(file.Path, call.Offset);
                     if (call.Path is null)
                     {
-                        context.Findings.Limitation("dynamic-http-url",
-                            $"Una llamada {call.Method} usa una URL que no se puede resolver sin ejecutar ({call.Unresolved}): no se relaciona con ninguna API.",
-                            Id, file.Path);
+                        problems.Add(new SymbolProblem("dynamic-http-url", file.Path, line,
+                            $"Una llamada {call.Method} en la línea {line} usa una URL que no se puede resolver sin ejecutar ({call.Unresolved}): no se relaciona con ninguna API."));
                         continue;
                     }
 
-                    var key = DiscoveryKeys.Api(call.Method, call.Path);
-                    var confidence = call.Relative ? Confidence.Low : Confidence.Medium;
-                    var evidence = context.Findings.Evidence(Id, file.Path, confidence, $"{call.Method} {call.Path}", new Lines(line, line),
-                        call.Relative ? "URL relativa: se asumió que cuelga de la raíz del sitio" : null);
-                    if (context.Findings.Entity(key, "api", $"{call.Method} {DiscoveryKeys.NormalizePath(call.Path)}", Basis.Inferred, confidence, evidence) is not { } api)
-                    {
-                        continue;
-                    }
+                    var resolved = new ResolvedCall(call.Method, call.Path, false, [new Hop(file.Path, line, $"{call.Method} {call.Path}")], 0, call.Offset);
+                    Relate(context, model, app, resolved, [], call.Relative);
+                }
 
-                    api.Http ??= RouteScreens.Http(call.Method, Text.Truncate(call.Path.Split('?', '#')[0], 500));
-                    foreach (var caller in callers)
+                foreach (var function in facts.Functions)
+                {
+                    var reference = new FunctionRef(file, facts, function);
+                    var summary = model.Symbols.Summary(reference);
+                    problems.AddRange(summary.Problems.Where(p => p.Code is "dynamic-http-url" or "http-wrapper-unresolved" or "non-api-fetch" && p.Path == file.Path));
+                    foreach (var call in summary.Calls)
                     {
-                        api.AddDerivedFrom(caller);
-                        context.Findings.Relation("calls", caller, key, Basis.Observed, confidence, evidence);
-                        if (screens.Count > 0)
-                        {
-                            if (!model.CallsByScreen.TryGetValue(caller, out var calls))
-                            {
-                                model.CallsByScreen[caller] = calls = new SortedSet<string>(StringComparer.Ordinal);
-                            }
-
-                            calls.Add(key);
-                        }
+                        Relate(context, model, app, call, reach.Reaching(reference), relative: false);
                     }
+                }
+
+                foreach (var group in problems.Distinct().GroupBy(p => p.Code).OrderBy(g => g.Key, StringComparer.Ordinal))
+                {
+                    var list = group.OrderBy(p => p.Line).ToList();
+                    var messages = string.Join(" · ", list.Select(p => p.Message).Distinct());
+                    var message = list.Count == 1 ? list[0].Message : $"{list.Count} llamadas (líneas {string.Join(", ", list.Select(p => p.Line))}): {messages}";
+                    context.Findings.Limitation(group.Key, Text.Truncate(message, 1000), Id, file.Path, incomplete: group.Key != "non-api-fetch");
                 }
 
                 if (external > 0)
@@ -466,6 +450,62 @@ public sealed class FrontendHttpDetector : IDetector
                         Id, file.Path, incomplete: false);
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// La relación <c>calls</c> de una llamada resuelta, desde cada pantalla que alcanza su función (o desde la app si
+    /// ninguna). Confianza (ADR-0016): escrita en la pantalla y sin envoltorio, observada media; a través de un
+    /// envoltorio, un hook o un servicio, inferida media; a través de un componente dibujado, inferida baja. La
+    /// evidencia es la cadena entera, cada salto con su archivo y línea.
+    /// </summary>
+    private void Relate(AnalysisContext context, FrontendModel model, FrontendApp app, ResolvedCall call, IReadOnlyList<Reach> consumers, bool relative)
+    {
+        var key = DiscoveryKeys.Api(call.Method, call.Path);
+        var site = call.Chain[0];
+        var siteConfidence = relative ? Confidence.Low : Confidence.Medium;
+        var siteEvidence = context.Findings.Evidence(Id, site.Path, siteConfidence, $"{call.Method} {call.Path}", new Lines(site.Line, site.Line),
+            relative ? "URL relativa: se asumió que cuelga de la raíz del sitio"
+            : call.ViaBase ? "Ruta literal sobre una base configurable (una constante que no es literal)" : null);
+        if (context.Findings.Entity(key, "api", $"{call.Method} {DiscoveryKeys.NormalizePath(call.Path)}", Basis.Inferred, siteConfidence, siteEvidence) is not { } api)
+        {
+            return;
+        }
+
+        api.Http ??= RouteScreens.Http(call.Method, Text.Truncate(call.Path.Split('?', '#')[0], 500));
+        var chain = call.Chain.Skip(1).Select(h => context.Findings.Evidence(Id, h.Path, Confidence.Medium, h.Note, new Lines(h.Line, h.Line))).ToList();
+        var bestByScreen = consumers.GroupBy(c => c.Screen).Select(g => g.OrderBy(c => c.Jsx).ThenBy(c => c.Calls).First()).OrderBy(c => c.Screen, StringComparer.Ordinal).ToList();
+        if (bestByScreen.Count == 0)
+        {
+            var (basis, confidence) = call.Depth == 0 ? (Basis.Observed, siteConfidence) : (Basis.Inferred, Confidence.Medium);
+            api.AddDerivedFrom(app.ServiceKey);
+            context.Findings.Relation("calls", app.ServiceKey, key, basis, confidence, siteEvidence);
+            foreach (var hop in chain)
+            {
+                context.Findings.Relation("calls", app.ServiceKey, key, basis, confidence, hop);
+            }
+
+            return;
+        }
+
+        foreach (var consumer in bestByScreen)
+        {
+            var (basis, confidence) = consumer.Direct && call.Depth == 0 ? (Basis.Observed, siteConfidence)
+                : consumer.Jsx > 0 ? (Basis.Inferred, Confidence.Low)
+                : (Basis.Inferred, Confidence.Medium);
+            api.AddDerivedFrom(consumer.Screen);
+            context.Findings.Relation("calls", consumer.Screen, key, basis, confidence, siteEvidence);
+            foreach (var hop in chain.Concat(consumer.Path.Select(h => context.Findings.Evidence(Id, h.Path, Confidence.Medium, h.Note, new Lines(h.Line, h.Line)))))
+            {
+                context.Findings.Relation("calls", consumer.Screen, key, basis, confidence, hop);
+            }
+
+            if (!model.CallsByScreen.TryGetValue(consumer.Screen, out var calls))
+            {
+                model.CallsByScreen[consumer.Screen] = calls = new SortedSet<string>(StringComparer.Ordinal);
+            }
+
+            calls.Add(key);
         }
     }
 }

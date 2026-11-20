@@ -266,7 +266,8 @@ public sealed class FrontendDetectorTests
         Assert.Contains("calls:service:tienda-angular->api:PUT /api/pedidos/{}", result.RelationKeys());
         Assert.Contains("navigates:screen:ng:/pedidos->screen:ng:/perfil", result.RelationKeys()); // routerLink de la plantilla
         Assert.Contains("navigates:screen:ng:/pedidos->screen:ng:/pedidos/{}", result.RelationKeys()); // [routerLink]="['/pedidos', p.id]"
-        Assert.Contains("dynamic-http-url", result.LimitationCodes());
+        // `${environment.apiUrl}/clientes`: la base es configurable, la ruta es literal (ADR-0016).
+        Assert.Contains("calls:service:tienda-angular->api:GET /clientes", result.RelationKeys());
         Assert.DoesNotContain(result.Keys(), k => k.StartsWith("module:", StringComparison.Ordinal));
     }
 

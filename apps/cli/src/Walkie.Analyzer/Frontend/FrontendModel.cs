@@ -101,6 +101,18 @@ internal sealed class FrontendModel
 
     public static FrontendModel Of(AnalysisContext context) => context.Frontend ??= new FrontendModel(context);
 
+    private FrontendSymbols? symbols;
+    private readonly Dictionary<string, FrontendReach> reach = new(StringComparer.Ordinal);
+
+    /// <summary>La evaluación entre archivos (envoltorios, funciones de rutas), compartida por los detectores del front.</summary>
+    public FrontendSymbols Symbols => symbols ??= new FrontendSymbols(this, "frontend-http");
+
+    /// <summary>Quién usa qué en una app. Se arma la primera vez que se pide, cuando sus pantallas ya están registradas.</summary>
+    public FrontendReach ReachOf(FrontendApp app) =>
+        reach.TryGetValue(app.Scope, out var built) ? built : reach[app.Scope] = FrontendReach.Build(this, Symbols, app, "frontend-http");
+
+    public SourceFile? FileAt(string path) => byPath.GetValueOrDefault(path);
+
     private List<FrontendApp> FindApps()
     {
         var apps = new List<FrontendApp>();
