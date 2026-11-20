@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import type { ReactNode } from 'react';
@@ -177,10 +177,10 @@ describe('KindEdge', () => {
     expect(document.querySelector('.kind-edge-label')?.textContent).toBe('responde 404 · Cliente');
   });
 
-  function renderEdge(kind: string, selected: boolean, labelOffset?: number) {
+  function renderEdge(kind: string, selected: boolean, labelOffset?: number, quiet?: boolean) {
     const props = {
       id: 'e1',
-      data: { kind, labelOffset },
+      data: { kind, labelOffset, quiet },
       selected,
       sourceX: 0,
       sourceY: 0,
@@ -216,6 +216,15 @@ describe('KindEdge', () => {
 
     expect(document.querySelector('.kind-edge')).not.toHaveAttribute('marker-end');
     expect((document.querySelector('.kind-edge-label') as HTMLElement).style.transform).toContain('26px');
+  });
+
+  it('«Explorar interacciones»: sin etiqueta mientras no está enfocada; elegida, la muestra', () => {
+    renderEdge('request', false, undefined, true);
+    expect(document.querySelector('.kind-edge')).toBeInTheDocument();
+    expect(document.querySelector('.kind-edge-label')).toBeNull();
+    cleanup();
+    renderEdge('request', true, undefined, true);
+    expect(document.querySelector('.kind-edge-label')).toBeInTheDocument();
   });
 });
 

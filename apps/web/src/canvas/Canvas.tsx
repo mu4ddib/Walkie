@@ -26,6 +26,7 @@ import {
   resolveInterface,
   portalTarget,
   refTarget,
+  effectiveType,
   type CanvasCatalog,
 } from '../catalog/catalogContext';
 import { InterfacePicker, type InterfaceChoice } from '../modules/InterfacePicker';
@@ -79,10 +80,13 @@ import {
   getFlowSpeed,
   getInspectorOpen,
   getSavedViewport,
+  getViewMode,
   saveViewport,
   setEdgeMotion,
   setInspectorOpen,
+  setViewMode,
 } from '../workspace/session';
+import { VIEW_MODE_OPTIONS, focusOf, hiddenCalls, summaryHidden, type ViewMode } from './viewModes';
 import { EdgeMarkers } from '../edges/EdgeMarkers';
 import { labelSize, placePairLabels, type PlacedLabel } from '../edges/labels';
 import { laneOffsets, laneRoute } from '../edges/lanes';
@@ -98,8 +102,12 @@ import { ZoomControls } from './ZoomControls';
 import './canvas.css';
 
 const NO_CATALOG: CanvasCatalog = { appId: '', items: {} };
+const NOTHING_HIDDEN: ReadonlySet<string> = new Set();
 /** Tamaño de una caja sin medir (el mínimo de `.pixel-node`). */
 const NODE_SIZE = { width: 184, height: 72 } as const;
+/** Zoom mínimo al abrir un lienzo sin vista guardada: por debajo, títulos y etiquetas no se leen. */
+const LEGIBLE_ZOOM = 0.7;
+const MIN_ZOOM = 0.25;
 /** Separación entre conexiones que unen el mismo par (px): cada una va por su carril, con su etiqueta. */
 const LANE_GAP = 24;
 /** Lo que dura cada tramo de "Previsualizar interacción" (la ida, luego la vuelta). */
@@ -219,6 +227,15 @@ function CanvasInner({
   const [helpOpen, setHelpOpen] = useState(false);
   // Animación del sentido de las conexiones (criterio 21): se recuerda; con movimiento reducido no anima (CSS).
   const [edgeMotion, setEdgeMotionState] = useState(getEdgeMotion);
+  // Modo de presentación (spec walkie-live-documentacion): solo cambia lo que se dibuja, nunca el grafo.
+  const [viewMode, setViewModeState] = useState<ViewMode>(getViewMode);
+  const chooseViewMode = useCallback((mode: ViewMode) => {
+    setViewModeState(mode);
+    setViewMode(mode);
+    reframeMode.current = true;
+  }, []);
+  // Al cambiar de modo cambia lo que se ve (el resumen oculta lo técnico): se encuadra de nuevo, con la cámara.
+  const reframeMode = useRef(false);
   const toggleEdgeMotion = useCallback(() => {
     setEdgeMotionState((on) => {
       setEdgeMotion(!on);
@@ -338,7 +355,7 @@ function CanvasInner({
 
   // «Ver todo» encuadra las cajas y también las etiquetas de las conexiones que sobresalen de ellas: si no, una
   // etiqueta al costado de la última caja quedaba debajo del inspector. Solo mide lo que ya está dibujado; no mueve nada.
-  const fitAll = useCallback((options?: CameraOptions, onlyIfLabelsOutside = false) => {
+  const fitAll = useCallback((options?: CameraOptions, onlyIfLabelsOutside = false, floor?: number) => {
     const visible = getNodes().filter((n) => !n.hidden);
     if (visible.length === 0) return;
     let { x, y, width, height } = getNodesBounds(visible);
@@ -356,14 +373,17 @@ function CanvasInner({
     }
     const boxes = getNodesBounds(visible);
     const wider = x < boxes.x || y < boxes.y || right > boxes.x + boxes.width || bottom > boxes.y + boxes.height;
-    if (onlyIfLabelsOutside && !wider) return; // el fitView inicial ya basta: no mover la vista ni una fracción
     width = right - x;
     height = bottom - y;
-    void camera.fitBounds({ x, y, width, height }, fitPadding, options);
-  }, [getNodes, getNodesBounds, screenToFlowPosition, camera, fitPadding]);
+    const legible = floor === undefined || getViewport().zoom >= floor;
+    if (onlyIfLabelsOutside && !wider && legible) return; // el fitView inicial ya basta: no mover la vista ni una fracción
+    void camera.fitBounds({ x, y, width, height }, fitPadding, options, floor);
+  }, [getNodes, getNodesBounds, getViewport, screenToFlowPosition, camera, fitPadding]);
 
   // Al abrir sin vista guardada, `fitView` encuadra solo las cajas; cuando ya están medidas y las etiquetas
-  // dibujadas (dos cuadros después), se corrige una vez con las etiquetas, sin animación.
+  // dibujadas (dos cuadros después), se corrige una vez con las etiquetas, sin animación. Si para verlo todo el zoom
+  // quedara por debajo de `LEGIBLE_ZOOM` (un lienzo descubierto grande), abre legible desde la esquina de arriba a la
+  // izquierda, donde empieza la navegación (spec walkie-live-documentacion); «Ver todo» (0) sigue mostrando todo.
   const nodesInitialized = useNodesInitialized();
   const fittedWithLabels = useRef(!fitOnMount);
   useEffect(() => {
@@ -372,7 +392,7 @@ function CanvasInner({
     const first = requestAnimationFrame(() => {
       second = requestAnimationFrame(() => {
         fittedWithLabels.current = true;
-        fitAll({ duration: 0 }, true);
+        fitAll({ duration: 0 }, true, LEGIBLE_ZOOM);
       });
     });
     return () => {
@@ -380,6 +400,19 @@ function CanvasInner({
       cancelAnimationFrame(second);
     };
   }, [nodesInitialized, fitAll]);
+
+  useEffect(() => {
+    if (!reframeMode.current) return;
+    reframeMode.current = false;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => fitAll());
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [viewMode, fitAll]);
 
   const startPreview = useCallback(
     (edgeId: string, scenario?: string, chain = true) => {
@@ -500,6 +533,19 @@ function CanvasInner({
   // Al elegir pasos desde el lienzo, se destacan las conexiones que continúan desde donde quedó el recorrido.
   const pickFrom = pickingTour ? lastEnd(pickingTour, graphEdges) : null;
 
+  // En un tour, un recorrido o una previsualización manda lo suyo: el modo vuelve al terminar.
+  const modeActive = !playing && !preview;
+  const summaryOff = useMemo(
+    () => (viewMode === 'summary' && modeActive ? summaryHidden(graphNodes, (n) => effectiveType(n, catalog.items)) : NOTHING_HIDDEN),
+    [viewMode, modeActive, graphNodes, catalog.items],
+  );
+  const summaryCounts = useMemo(() => hiddenCalls(graphEdges, summaryOff), [graphEdges, summaryOff]);
+  const focus = useMemo(
+    () => (viewMode === 'interactions' && modeActive ? focusOf(graphEdges, selectedNodes, selectedEdges) : null),
+    [viewMode, modeActive, graphEdges, selectedNodes, selectedEdges],
+  );
+  const quietLabels = viewMode === 'interactions' && modeActive;
+
   const nodes = useMemo<CanvasFlowNode[]>(() => {
     // En una previsualización se destacan los extremos del intercambio.
     const previewEdges = (preview?.ids ?? []).map((id) => graphEdges[id]).filter((e) => !!e);
@@ -589,11 +635,14 @@ function CanvasInner({
       width: node.type === 'module' ? layout[node.id]?.w : undefined,
       // La seleccionada queda encima de sus vecinas (los grupos siguen detrás: zIndex negativo).
       zIndex: selectedNodes.has(node.id) ? 1 : 0,
-      data: { node, editing: editingId === node.id, onEditDone: stopEditing },
+      data: { node, editing: editingId === node.id, onEditDone: stopEditing, calls: summaryCounts[node.id] },
       selected: selectedNodes.has(node.id),
       measured: measured[node.id],
-      hidden: isHidden(hierarchy, node.id, collapsedGroups),
-      className: [stateClass(node.id), flash === node.id && 'locate-flash'].filter(Boolean).join(' ') || undefined,
+      hidden: isHidden(hierarchy, node.id, collapsedGroups) || summaryOff.has(node.id),
+      className:
+        [stateClass(node.id), focus && !focus.nodes.has(node.id) && 'focus-dim', flash === node.id && 'locate-flash']
+          .filter(Boolean)
+          .join(' ') || undefined,
     }));
     return nodeCache.reuse([...groupNodes, ...noteNodes, ...graphFlowNodes]);
   }, [
@@ -618,6 +667,9 @@ function CanvasInner({
     currentEdges,
     participants,
     dropHint,
+    summaryOff,
+    summaryCounts,
+    focus,
     flash,
   ]);
 
@@ -652,6 +704,7 @@ function CanvasInner({
       return request === undefined ? position.get(edge.id)! : request + 0.5;
     };
     const visible = [...all]
+      .filter((edge) => !summaryOff.has(edge.from) && !summaryOff.has(edge.to))
       .sort((a, b) => order(a) - order(b) || position.get(a.id)! - position.get(b.id)!)
       .map((edge) => ({ edge, source: end(edge.from), target: end(edge.to) }))
       .filter(({ source, target }) => source !== target);
@@ -935,6 +988,7 @@ function CanvasInner({
           },
           step: step >= 0 && preview!.ids.length > 1 ? String(step + 1) : flowBadge,
           operation: selectedEdges.has(edge.id) && !branch ? operationOf(edge) : undefined,
+          quiet: quietLabels && !focus?.edges.has(edge.id),
         },
         selected: selectedEdges.has(edge.id),
         className: preview
@@ -943,7 +997,11 @@ function CanvasInner({
             : edge.id === previewId
               ? 'edge-preview edge-preview-active'
               : 'edge-preview'
-          : [playing && !flowPlaying ? tourClass(edge.from, edge.to) : flowClass(edge.id), flash === edge.id && 'locate-flash']
+          : [
+              playing && !flowPlaying ? tourClass(edge.from, edge.to) : flowClass(edge.id),
+              focus && (focus.edges.has(edge.id) ? 'edge-focus' : 'edge-focus-dim'),
+              flash === edge.id && 'locate-flash',
+            ]
               .filter(Boolean)
               .join(' ') || undefined,
       };
@@ -972,6 +1030,9 @@ function CanvasInner({
     nextTourNodeId,
     preview,
     previewId,
+    summaryOff,
+    focus,
+    quietLabels,
   ]);
 
   /**
@@ -1727,6 +1788,7 @@ function CanvasInner({
         playing && 'canvas-touring',
         edgeMotion && 'edge-motion',
         !readOnly && inspectorOpen && 'has-inspector',
+        `view-${viewMode}`,
       ]
         .filter(Boolean)
         .join(' ')}
@@ -1745,6 +1807,8 @@ function CanvasInner({
         }}
       >
         <ReactFlow
+          // «Ver todo» tiene que poder mostrar un lienzo descubierto grande entero (el mínimo de React Flow es 0,5).
+          minZoom={MIN_ZOOM}
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
@@ -1846,6 +1910,23 @@ function CanvasInner({
               />
             );
           })()}
+        {!playing && (
+          <div className="view-modes floating" role="radiogroup" aria-label="Vista del lienzo">
+            {VIEW_MODE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={viewMode === option.id}
+                className="view-mode-button"
+                data-tip={option.tip}
+                onClick={() => chooseViewMode(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
         {!playing && (
           <ZoomControls
             onFit={() => fitAll()}

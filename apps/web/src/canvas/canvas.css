@@ -2268,3 +2268,74 @@ div.pixel-node-image {
 .flow-timeout-note {
   color: var(--stone-700);
 }
+
+/* Modos de presentación (spec walkie-live-documentacion): arriba a la derecha, sin tapar el inspector. */
+.view-modes {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+}
+
+.canvas.has-inspector .view-modes {
+  right: 376px;
+}
+
+@media (max-width: 900px) {
+  .canvas.has-inspector .view-modes {
+    right: 16px;
+  }
+}
+
+.view-mode-button {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--stone-700);
+  font: 500 12px/1 var(--font-body);
+  cursor: pointer;
+}
+
+.view-mode-button:hover {
+  background: var(--dune-100);
+  color: var(--ink);
+}
+
+.view-mode-button[aria-checked='true'] {
+  background: var(--ink);
+  color: var(--sand-raised);
+}
+
+.view-mode-button:focus-visible {
+  outline: 2px solid var(--ibad);
+  outline-offset: 1px;
+}
+
+.view-modes [data-tip]::after {
+  right: 0;
+  left: auto;
+}
+
+/* Explorar interacciones: lo que no se relaciona con lo elegido queda tenue. */
+.react-flow__node.focus-dim {
+  opacity: 0.28;
+}
+
+.react-flow__edge.edge-focus-dim {
+  opacity: 0.15;
+}
+
+.react-flow__edge.edge-focus .kind-edge {
+  stroke-width: 3;
+}
+
+.pixel-node-calls {
+  margin: 6px 10px 0;
+  font: 500 11px/1.3 var(--font-mono);
+  color: var(--stone-700);
+}

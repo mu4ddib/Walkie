@@ -96,3 +96,12 @@ const MAP_SHARED = 'walkie.mapShared';
 export const getMapShowShared = () => read(MAP_SHARED, (v): v is boolean => typeof v === 'boolean') ?? false;
 
 export const setMapShowShared = (on: boolean) => write(MAP_SHARED, on);
+
+const VIEW_MODE = 'walkie.viewMode';
+const VIEW_MODES = ['summary', 'interactions', 'full'] as const;
+
+/** Modo de presentación del lienzo (spec walkie-live-documentacion): de este navegador; «Arquitectura completa» por defecto. */
+export const getViewMode = (): (typeof VIEW_MODES)[number] =>
+  read(VIEW_MODE, (v): v is (typeof VIEW_MODES)[number] => VIEW_MODES.includes(v as never)) ?? 'full';
+
+export const setViewMode = (mode: (typeof VIEW_MODES)[number]) => write(VIEW_MODE, mode);

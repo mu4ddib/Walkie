@@ -81,7 +81,10 @@ describe('lienzo inicial de Walkie Live', () => {
     expect(overlaps(a!, b!)).toBe(false);
   });
 
-  it('con muchas APIs las pone en una grilla de 4 debajo de las pantallas, sin encimarse (spec walkie-live-arquitectura)', () => {
+  // Cambio de comportamiento esperado (spec walkie-live-documentacion, parte 3): antes, todas las APIs iban en una
+  // grilla de 4 debajo de las pantallas (spec walkie-live-arquitectura) y las llamadas cruzaban el lienzo; ahora cada
+  // API va junto a la pantalla que la llama, en columnas, con el corredor de la navegación libre.
+  it('con muchas APIs pone cada una junto a la pantalla que la llama, sin encimarse ni tapar la navegación', () => {
     const apis = Array.from({ length: 11 }, (_, i) => `api:GET /api/recurso/${i}`);
     const draft: CanvasDraft = {
       ...feature,
@@ -93,13 +96,17 @@ describe('lienzo inicial de Walkie Live', () => {
     };
     const { layout } = planInitialCanvas(draft);
 
-    const screensBottom = Math.max(...['screen:web:/', 'screen:web:/pedidos', 'screen:web:/pedidos/{}'].map((k) => layout[k]!.y));
-    const rows = new Map<number, number>();
-    for (const key of apis) {
-      expect(layout[key]!.y).toBeGreaterThan(screensBottom);
-      rows.set(layout[key]!.y, (rows.get(layout[key]!.y) ?? 0) + 1);
-    }
-    expect([...rows.values()]).toEqual([4, 4, 3]);
+    const list = layout['screen:web:/pedidos']!;
+    const detail = layout['screen:web:/pedidos/{}']!;
+    expect(list.x).toBeLessThan(detail.x);
+    apis.forEach((key, i) => {
+      const p = layout[key]!;
+      // Las de la lista, entre la lista y su detalle; las del detalle, a su derecha.
+      if (i % 2) expect(p.x > list.x && p.x < detail.x).toBe(true);
+      else expect(p.x).toBeGreaterThan(detail.x);
+      // La navegación lista → detalle va por la fila de las pantallas: ninguna API se cruza en ese corredor.
+      if (i % 2) expect(p.y).toBeGreaterThan(list.y + BOX.h);
+    });
     const all = Object.values(layout);
     all.forEach((a, i) => all.slice(i + 1).forEach((b) => expect(overlaps(a, b)).toBe(false)));
   });

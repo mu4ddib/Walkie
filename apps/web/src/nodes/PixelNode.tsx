@@ -23,6 +23,8 @@ export type WalkieFlowNode = FlowNode<{
   /** El lienzo lo activa con `onNodeDoubleClick` (un onDoubleClick propio lo interceptaría el arrastre). */
   editing: boolean;
   onEditDone: () => void;
+  /** «Resumen funcional»: a cuántas cajas técnicas (ocultas) llama. */
+  calls?: number;
 }>;
 
 /**
@@ -101,6 +103,11 @@ export function PixelNode({ id, data, selected }: NodeProps<WalkieFlowNode>) {
       )}
       {node.type === 'screen' && node.assetId && <NodeImage assetId={node.assetId} />}
       <NodeContent node={shown} />
+      {data.calls ? (
+        <div className="pixel-node-calls" title="APIs, servicios, bases y recursos ocultos en el resumen">
+          llama a {data.calls} {data.calls === 1 ? 'elemento técnico' : 'elementos técnicos'}
+        </div>
+      ) : null}
       {decision ? (
         <>
           {/* Cada salida tiene su punto: la conexión que nace de él es esa rama y lleva su etiqueta. */}
