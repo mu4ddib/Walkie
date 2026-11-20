@@ -211,6 +211,70 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
         Assert.Equal(0, features.GetArrayLength());
     }
 
+    [Theory]
+    [InlineData(499, true)]
+    [InlineData(500, true)]
+    [InlineData(501, false)]
+    public async Task El_limite_de_500_miembros_es_exacto(int members, bool creates)
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client, $"Propuesta de {members}");
+        var snapshotId = await UploadSnapshotAsync(client, appId, Huge(members - 2)); // 2 pantallas y el resto APIs
+
+        var proposal = (await ArchitectureAsync(client, snapshotId)).GetProperty("proposals").EnumerateArray().Single();
+        Assert.Equal(members, proposal.GetProperty("memberCount").GetInt32());
+        Assert.Equal(Math.Min(members, 500), proposal.GetProperty("members").GetArrayLength());
+        // Con exactamente 500, la lista está entera: la revisión puede pedir todos los miembros en una consulta.
+        var keys = proposal.GetProperty("members").EnumerateArray().Select(m => m.GetString()!).ToList();
+        var review = await JsonAsync(await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/review?pageSize=500&" + string.Join('&', keys.Select(k => "key=" + Uri.EscapeDataString(k))), UriKind.Relative)), HttpStatusCode.OK);
+        Assert.Equal(keys.Count, review.GetProperty("items").GetArrayLength());
+
+        var key = proposal.GetProperty("key").GetString()!;
+        var featureId = Guid.CreateVersion7();
+        var preview = await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), true, [Create(key, featureId)]);
+        if (!creates)
+        {
+            await JsonAsync(preview, HttpStatusCode.BadRequest);
+            return;
+        }
+
+        var draft = Created(await JsonAsync(preview, HttpStatusCode.OK), key).GetProperty("canvas");
+        // Lo que la persona no decidió no entra: las APIs sin decidir quedan como omitidas, nunca creadas en silencio.
+        Assert.Equal(members - 2, draft.GetProperty("omitted").EnumerateArray().Count(o => o.GetProperty("code").GetString() == "api-undecided"));
+        var result = await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), false, [Create(key, featureId, Canvas(draft))]), HttpStatusCode.OK);
+        Assert.Equal("completed", result.GetProperty("status").GetString());
+        var catalog = await JsonAsync(await client.GetAsync(new Uri($"/api/apps/{appId}/catalog", UriKind.Relative)), HttpStatusCode.OK);
+        Assert.Equal(0, catalog.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Si_un_miembro_cambia_entre_la_vista_previa_y_la_confirmacion_no_se_crea_nada()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var appId = await CreateAppAsync(client, "Cambio a mitad");
+        var snapshotId = await UploadSnapshotAsync(client, appId, Shop(Guid.CreateVersion7()));
+        var proposal = (await ArchitectureAsync(client, snapshotId)).GetProperty("proposals").EnumerateArray().Single();
+        var key = proposal.GetProperty("key").GetString()!;
+        var apis = proposal.GetProperty("members").EnumerateArray().Select(m => m.GetString()!).Where(m => m.StartsWith("api:", StringComparison.Ordinal)).ToList();
+
+        // La persona revisa: crear las APIs y la feature.
+        var operations = apis.Select(a => Create(a, Guid.CreateVersion7())).ToList();
+        var featureId = Guid.CreateVersion7();
+        var preview = await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), true, [.. operations, Create(key, featureId)]), HttpStatusCode.OK);
+        var draft = Created(preview, key).GetProperty("canvas");
+
+        // Mientras tanto, otra decisión descarta una de esas APIs.
+        var reject = new JsonObject { ["op"] = "reject", ["entityKey"] = apis[0], ["bindingVersion"] = 0 };
+        Assert.Equal(HttpStatusCode.OK, (await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), false, [reject])).StatusCode);
+
+        // La confirmación de lo revisado ya no vale: 409 y nada creado (ni la feature ni las demás APIs).
+        var confirm = await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), false, [.. operations, Create(key, featureId, Canvas(draft))]);
+        Assert.Equal(HttpStatusCode.Conflict, confirm.StatusCode);
+        var catalog = await JsonAsync(await client.GetAsync(new Uri($"/api/apps/{appId}/catalog", UriKind.Relative)), HttpStatusCode.OK);
+        Assert.Equal(0, catalog.GetArrayLength());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(new Uri($"/api/features/{featureId}/canvas", UriKind.Relative))).StatusCode);
+    }
+
     // ---------- Escala ----------
 
     [Fact]

@@ -6,7 +6,7 @@ import { useApplyDiscovery, useDiscoveryReview } from '../../api/hooks';
 import { featurePath } from '../../workspace/paths';
 import { planInitialCanvas, type CanvasInput } from '../initialCanvas';
 import { STATUS, reviewPath } from '../discoveryText';
-import { MAX_MEMBERS, choiceSummary, initialChoice, proposalOperations, type Choice } from './proposalModel';
+import { MAX_MEMBERS, choiceSummary, initialChoice, memberCoverage, proposalOperations, type Choice } from './proposalModel';
 
 /**
  * Revisar una propuesta de feature como conjunto: sus pantallas y APIs con su estado en Walkie, qué hacer con cada API
@@ -26,8 +26,11 @@ export function ProposalReview({
   canEdit: boolean;
   onClose: () => void;
 }) {
-  const keys = useMemo(() => [proposal.key, ...proposal.members].slice(0, MAX_MEMBERS), [proposal]);
-  const review = useDiscoveryReview(snapshotId, { keys, page: 0, pageSize: MAX_MEMBERS });
+  // La propuesta y sus miembros van en consultas separadas: así sus hasta 500 miembros caben enteros en una (antes, con
+  // la propuesta en la misma lista, una de 500 miembros pedía 501 claves y la última se perdía sin aviso).
+  const self = useDiscoveryReview(snapshotId, { keys: [proposal.key], page: 0, pageSize: 1 });
+  const memberKeys = useMemo(() => proposal.members.slice(0, MAX_MEMBERS), [proposal]);
+  const review = useDiscoveryReview(snapshotId, { keys: memberKeys, page: 0, pageSize: MAX_MEMBERS });
   const preview = useApplyDiscovery(snapshotId, appId);
   const commit = useApplyDiscovery(snapshotId, appId);
   const [choices, setChoices] = useState<Record<string, Choice> | null>(null);
@@ -38,7 +41,7 @@ export function ProposalReview({
   const canvasInput = useRef<CanvasInput | undefined>(undefined);
 
   const items = review.data?.items ?? [];
-  const self = items.find((i) => i.key === proposal.key);
+  const selfItem = self.data?.items.find((i) => i.key === proposal.key);
   const screens = items.filter((i) => i.kind === 'screen');
   const apis = items.filter((i) => i.kind === 'api');
   // La elección inicial se calcula una vez por respuesta (un «crear» lleva su id: no puede cambiar en cada render).
@@ -47,7 +50,8 @@ export function ProposalReview({
     [review.data],
   );
   const current = choices ?? initial;
-  const decided = self ? self.status !== 'new' && self.status !== 'matched' : !!proposal.decision;
+  const decided = selfItem ? selfItem.status !== 'new' && selfItem.status !== 'matched' : !!proposal.decision;
+  const coverage = review.data ? memberCoverage(proposal, items) : null;
 
   function choose(key: string, choice: Choice) {
     setChoices({ ...current, [key]: choice });
@@ -79,8 +83,6 @@ export function ProposalReview({
 
   const conflict = [preview.error, commit.error].find((e) => e instanceof ApiError && e.status === 409) as ApiError | undefined;
   const failure = conflict ? null : (commit.error ?? preview.error);
-  // La lista llega truncada a 500: un conjunto más grande no se crea de una vez (la API también lo rechaza).
-  const truncated = proposal.memberCount > proposal.members.length;
   const summary = choiceSummary(current);
 
   return (
@@ -98,13 +100,21 @@ export function ProposalReview({
           Grupo débil: se armó con pocas pistas (por ejemplo, solo la familia de rutas). Revisa sus miembros antes de crearla.
         </p>
       )}
-      {review.isPending && <p role="status">Cargando los miembros…</p>}
-      {review.error && <p role="alert">No se pudieron cargar los miembros de la propuesta.</p>}
+      {(review.isPending || self.isPending) && <p role="status">Cargando los miembros…</p>}
+      {(review.error || self.error) && (
+        <p role="alert" className="save-error">
+          No se pudieron cargar todos los miembros de la propuesta: sin el conjunto entero no se puede crear.{' '}
+          <button type="button" className="pixel-button is-ghost" onClick={() => void Promise.all([review.refetch(), self.refetch()])}>
+            Reintentar
+          </button>
+        </p>
+      )}
 
       {commit.data ? (
         <Done appId={appId} result={commit.data} entityKey={proposal.key} onClose={onClose} />
       ) : (
-        review.data && (
+        review.data &&
+        self.data && (
           <>
             <section className="arch-section" aria-label="Pantallas">
               <h4>Pantallas ({screens.length})</h4>
@@ -128,17 +138,18 @@ export function ProposalReview({
                 ))}
               </ul>
             </section>
-            {truncated ? (
+            {coverage && !coverage.complete ? (
               <div className="discovery-note" role="alert">
                 <p>
-                  Esta propuesta tiene {proposal.memberCount} miembros y aquí se ven {proposal.members.length}: no se puede revisar ni crear como un
-                  solo conjunto, porque quedarían elementos sin ver.
+                  {coverage.reason === 'truncated'
+                    ? `Esta propuesta tiene ${proposal.memberCount} miembros y aquí se ven ${proposal.members.length}: no se puede revisar ni crear como un solo conjunto, porque quedarían elementos sin ver.`
+                    : `${coverage.missing.length === 1 ? 'Un miembro de la propuesta no llegó' : `${coverage.missing.length} miembros de la propuesta no llegaron`} a esta revisión (${coverage.missing.slice(0, 5).join(', ')}${coverage.missing.length > 5 ? '…' : ''}): sin el conjunto entero no se puede crear de una vez.`}
                 </p>
                 <Link to={reviewPath(appId, snapshotId)}>Decidir sus elementos uno por uno en la revisión</Link>
               </div>
             ) : decided ? (
               <p className="discovery-note" role="note">
-                Esta propuesta ya tiene una decisión en Walkie ({STATUS[self?.status ?? 'created'].label.toLowerCase()}). Para cambiarla, ve a la
+                Esta propuesta ya tiene una decisión en Walkie ({STATUS[selfItem?.status ?? 'created'].label.toLowerCase()}). Para cambiarla, ve a la
                 revisión hallazgo por hallazgo.
               </p>
             ) : !canEdit ? (

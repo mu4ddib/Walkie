@@ -65,3 +65,21 @@ export function proposalOperations(
   });
   return ops;
 }
+
+/**
+ * Si lo que se revisa es el conjunto entero de la propuesta (spec walkie-live-arquitectura, cierre del PR B): la lista de
+ * miembros no está truncada (`memberCount`), cabe en una sola consulta y cada miembro pedido llegó en la respuesta. Si
+ * no, la aplicación agrupada se bloquea: la API armaría la feature con todos sus miembros y la persona habría visto
+ * menos.
+ */
+export function memberCoverage(
+  proposal: Pick<ArchitectureProposal, 'members' | 'memberCount'>,
+  items: readonly Pick<DiscoveryReviewItem, 'key'>[],
+): { complete: true } | { complete: false; reason: 'truncated' | 'missing'; missing: string[] } {
+  if (proposal.memberCount > proposal.members.length || proposal.members.length > MAX_MEMBERS) {
+    return { complete: false, reason: 'truncated', missing: [] };
+  }
+  const received = new Set(items.map((i) => i.key));
+  const missing = proposal.members.filter((m) => !received.has(m));
+  return missing.length > 0 ? { complete: false, reason: 'missing', missing } : { complete: true };
+}

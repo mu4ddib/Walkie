@@ -451,3 +451,16 @@ Una consulta de proyección sin `jsonb` (solo `members` de módulos y features),
 | Vista a 1280 y 1440 px | Paneles de grupos y detalle plegables (se recuerdan); la vista general elige columnas o filas según el tamaño del lienzo al abrirse, con zoom inicial de al menos 0,5; la vista no salta al plegar paneles (E2E compara la transformación), filtrar ni cambiar de página; controles de zoom y encuadre a pedido |
 | Orden de la evidencia | Pantalla → servicio → envoltorio (E2E del caso F y Vitest con la cadena real de Walkie: HomePage → useApps → listApps → request → send) |
 | Safari | Caso F completo en WebKit (Playwright `Desktop Safari`, 1280 × 800): pasa |
+
+**Cierre de la revisión agrupada (2026-11-20).** Con la propuesta en la misma consulta que sus miembros, una feature de exactamente 500 miembros pedía 501 claves y la última se perdía sin aviso: se revisaban 499 y la API creaba con 500. Ahora la propuesta y sus miembros van en consultas separadas y `memberCoverage` exige el conjunto entero antes de dejar crear.
+
+| Caso | Web (Vitest) | API (integración) |
+|---|---|---|
+| 499 miembros | revisa 497 APIs y crea | crea; las APIs sin decidir quedan omitidas |
+| 500 miembros | revisa 498 APIs (todas) y crea | la lista de 500 llega entera y crea |
+| 501 miembros | bloquea y lleva a la revisión individual | 400 en la vista previa |
+| 500 con una API descartada | la descartada queda fuera y el resumen lo dice | — |
+| 500 con una coincidencia solo por título | espera la elección | — |
+| Una decisión cambia entre vista previa y confirmación | 409: aviso, «Confirmar» deshabilitado, nada creado | 409; ni la feature ni las APIs se crean |
+| Un miembro no llegó en la respuesta | bloquea y lo nombra | — |
+| Error de red al cargar los miembros | bloquea y ofrece «Reintentar» | — |
