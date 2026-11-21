@@ -296,9 +296,12 @@ public sealed partial class DiscoveryArchitectureTests(WalkieApiFactory factory,
             JsonElement architecture = default;
             for (var i = 0; i < 5; i++)
             {
+                // Se mide la API (HTTP + leer el JSON); validar la respuesta contra el schema es de la prueba y va
+                // aparte: con 20.000 hallazgos cuesta ~190 ms y antes se sumaba a la medida (de ahí los «470 ms»).
                 var watch = Stopwatch.StartNew();
-                architecture = await ArchitectureAsync(client, snapshotId);
+                architecture = await JsonAsync(await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/architecture", UriKind.Relative)), HttpStatusCode.OK);
                 overview.Add(watch.ElapsedMilliseconds);
+                Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.DiscoveryArchitecture, architecture));
                 watch.Restart();
                 var group = architecture.GetProperty("groups")[0].GetProperty("key").GetString()!;
                 await JsonAsync(await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/architecture/group?key={Uri.EscapeDataString(group)}", UriKind.Relative)), HttpStatusCode.OK);

@@ -140,7 +140,7 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
     /// anterior, vínculo y si su destino sigue vivo. La usan la revisión y la arquitectura descubierta, así las dos dicen
     /// lo mismo. No abre transacción: corre en la de quien llama.
     /// </summary>
-    private async Task<Classification> ClassifyAllAsync(Snapshot snapshot, CancellationToken ct)
+    private async Task<Classification> ClassifyAllAsync(Snapshot snapshot, CancellationToken ct, PhaseTimer? timer = null)
     {
         var entities = await db.Entities.AsNoTracking()
             .Where(e => e.SnapshotId == snapshot.Id)
@@ -149,8 +149,10 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         var bindings = await db.Bindings.AsNoTracking()
             .Where(b => b.AppId == snapshot.AppId && b.SourceId == snapshot.SourceId && b.Decision != null)
             .ToDictionaryAsync(b => b.EntityKey, StringComparer.Ordinal, ct).ConfigureAwait(false);
+        timer?.Lap("clasificación: hallazgos y decisiones");
 
         var existing = await ExistingTargetsAsync(snapshot.AppId, ct).ConfigureAwait(false);
+        timer?.Lap("clasificación: catálogo, módulos y features");
         var index = new MatchIndex(existing);
         // Un vínculo cuyo elemento se borró a mano sigue guardado, pero no se presenta como válido.
         var alive = existing.Select(t => (t.TargetKind, t.Id)).ToHashSet();
@@ -174,6 +176,7 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         // en cada contraparte para que decida una persona (ADR-0014).
         var counterparts = LegacyBindings.Counterparts(current);
         var legacy = await LegacyBindings.FindAsync(db, bindings.Values, current, counterparts, ct).ConfigureAwait(false);
+        timer?.Lap("clasificación: análisis anterior y versión 0");
         var legacyOf = new Dictionary<string, Binding>(StringComparer.Ordinal);
         foreach (var (key, binding) in legacy.OrderBy(l => l.Key, StringComparer.Ordinal))
         {
@@ -187,7 +190,9 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
         {
             Change = before is null ? null : !before.TryGetValue(e.Key, out var was) ? "added" : was == e.Fingerprint ? "unchanged" : "modified",
         }).ToList();
+        timer?.Lap("clasificación: reglas");
         classified.AddRange(await MissingAsync(snapshot, bindings, current, legacy.Keys.ToHashSet(StringComparer.Ordinal), ct).ConfigureAwait(false));
+        timer?.Lap("clasificación: ya no aparecen");
 
         return new Classification(classified, alive, legacyOf, previous, before, existing);
     }
@@ -201,9 +206,10 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
     /// mismo de la revisión, con el destino (título actual) y si se borró. Solo los del análisis (no los que ya no
     /// aparecen). Corre en la transacción de quien llama.
     /// </summary>
-    internal async Task<Dictionary<string, ArchitectureState>> StatesAsync(Snapshot snapshot, CancellationToken ct)
+    internal async Task<Dictionary<string, ArchitectureState>> StatesAsync(Snapshot snapshot, CancellationToken ct, PhaseTimer? timer = null)
     {
-        var all = await ClassifyAllAsync(snapshot, ct).ConfigureAwait(false);
+        timer?.Lap("(antes de clasificar)");
+        var all = await ClassifyAllAsync(snapshot, ct, timer).ConfigureAwait(false);
         var titles = all.Existing.GroupBy(t => (t.TargetKind, t.Id)).ToDictionary(g => g.Key, g => g.First().Title);
         var states = new Dictionary<string, ArchitectureState>(StringComparer.Ordinal);
         foreach (var c in all.Items.Where(c => !c.FromPrevious))
@@ -220,6 +226,7 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
             states[c.Row.Key] = new ArchitectureState(c.Status, c.Change, target, targetMissing, NeedsReview(c, all));
         }
 
+        timer?.Lap("clasificación: estados");
         return states;
     }
 

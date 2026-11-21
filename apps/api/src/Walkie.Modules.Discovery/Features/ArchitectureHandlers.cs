@@ -15,23 +15,28 @@ internal sealed class ArchitectureHandlers(DiscoveryDbContext db, ReviewHandlers
 {
     public const int MaxPageSize = 500;
 
-    public async Task<DiscoveryArchitecture?> OverviewAsync(Guid snapshotId, CancellationToken ct)
+    public Task<DiscoveryArchitecture?> OverviewAsync(Guid snapshotId, CancellationToken ct) => OverviewAsync(snapshotId, null, ct);
+
+    /// <summary>Con <paramref name="timer"/>, anota el tiempo de cada fase (pruebas de rendimiento).</summary>
+    internal async Task<DiscoveryArchitecture?> OverviewAsync(Guid snapshotId, PhaseTimer? timer, CancellationToken ct)
     {
-        if (await LoadAsync(snapshotId, ct).ConfigureAwait(false) is not { } data)
+        if (await LoadAsync(snapshotId, timer, ct).ConfigureAwait(false) is not { } data)
         {
             return null;
         }
 
-        return ArchitectureProjection.Overview(snapshotId, data.Completeness, data.Entities, data.Relations, Limitations(data.Manifest), data.Decisions, data.States)
+        var overview = ArchitectureProjection.Overview(snapshotId, data.Completeness, data.Entities, data.Relations, Limitations(data.Manifest), data.Decisions, data.States)
             with
         {
             PreviousSnapshotId = data.PreviousSnapshotId,
         };
+        timer?.Lap("proyección");
+        return overview;
     }
 
     public async Task<DiscoveryArchitectureGroup?> GroupAsync(Guid snapshotId, string groupKey, int page, int pageSize, CancellationToken ct)
     {
-        if (await LoadAsync(snapshotId, ct).ConfigureAwait(false) is not { } data)
+        if (await LoadAsync(snapshotId, null, ct).ConfigureAwait(false) is not { } data)
         {
             return null;
         }
@@ -43,7 +48,7 @@ internal sealed class ArchitectureHandlers(DiscoveryDbContext db, ReviewHandlers
         string Completeness, string Manifest, List<ArchitectureEntityRow> Entities, List<ArchitectureRelationRow> Relations, Dictionary<string, string> Decisions,
         Dictionary<string, ArchitectureState> States, Guid? PreviousSnapshotId);
 
-    private async Task<Data?> LoadAsync(Guid snapshotId, CancellationToken ct)
+    private async Task<Data?> LoadAsync(Guid snapshotId, PhaseTimer? timer, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct).ConfigureAwait(false);
         var snapshot = await db.Snapshots.AsNoTracking().SingleOrDefaultAsync(s => s.Id == snapshotId, ct).ConfigureAwait(false);
@@ -66,13 +71,15 @@ internal sealed class ArchitectureHandlers(DiscoveryDbContext db, ReviewHandlers
             .Where(b => b.AppId == snapshot.AppId && b.SourceId == snapshot.SourceId && b.Decision != null)
             .Select(b => new { b.EntityKey, b.Decision })
             .ToDictionaryAsync(b => b.EntityKey, b => b.Decision!, StringComparer.Ordinal, ct).ConfigureAwait(false);
+        timer?.Lap("consultas de la arquitectura");
         // El estado de cada hallazgo en Walkie, con la misma clasificación que la revisión y en la misma transacción.
-        var states = await review.StatesAsync(snapshot, ct).ConfigureAwait(false);
+        var states = await review.StatesAsync(snapshot, ct, timer).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
 
         // El orden de Postgres depende de la intercalación: se ordena aquí (ordinal), como el resto del módulo.
         entities.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
         relations.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
+        timer?.Lap("orden");
         return new Data(snapshot.Completeness, snapshot.Manifest, entities, relations, decisions, states, snapshot.PreviousSnapshotId);
     }
 
