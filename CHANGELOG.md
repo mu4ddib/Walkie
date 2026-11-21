@@ -20,6 +20,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
     - abre con zoom legible (0,7 o más) y «Ver todo» baja hasta 0,25.
   - **Inspector de la revisión:** cabe en la zona visible, se desplaza solo y no arrastra la página; apilado en pantallas angostas.
   - **Cambio de comportamiento:** las APIs del lienzo inicial ya no van en una grilla de 4 debajo de las pantallas (ver «Lienzo inicial» de `walkie-live-arquitectura`).
+  - **Revisión final:**
+    - la API valida posiciones con el tamaño con que se dibuja cada caja, no con 184 × 72;
+    - dos incorporaciones a la misma feature en una solicitud se rechazan enteras;
+    - «Resumen» junta las pantallas sin los huecos de lo oculto y vuelve exacto a «Completa»;
+    - la geometría dibujada se mide en Chromium y WebKit;
+    - arreglo: al volver del login ya no se abre la última feature en vez de la página pedida;
+    - en WebKit, las E2E corren contra la compilación de producción (el servidor de desarrollo hacía caer el proceso de red de WebKit en Linux).
 - **Eliminar apps y features** (spec `eliminar-apps-y-features`; ADR-0017):
   - **Feature:** el owner la elimina desde su tarjeta en la galería. Antes ve qué se pierde (cajas, conexiones, tours, recorridos, imágenes propias, enlaces públicos, procedencia de Walkie Live) y que es definitivo. No se elimina si otra feature tiene un portal hacia ella (dice cuáles), si es un módulo o si alguien guardó su lienzo después del resumen (409). El catálogo, las imágenes compartidas y los demás lienzos no cambian.
   - **App:** «Eliminar app…» en la sección «Administración» de la página de la app, solo para el owner; pide escribir el nombre y vuelve a la galería con un aviso. Elimina features, módulos, catálogo, lienzos, mapa, imágenes (también en S3), enlaces, miembros y los análisis de Walkie Live, sin tocar otras apps. Una operación de Walkie Live en curso la bloquea.
