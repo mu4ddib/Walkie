@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Link } from 'react-router';
 import { v7 as uuidv7 } from 'uuid';
 import {
@@ -9,19 +9,20 @@ import {
   type DiscoveryStatus,
   type DiscoveryTarget,
 } from '../api/client';
-import { useApplyDiscovery, useCatalog, useDiscoveryEvidence, useFeatures, useModules } from '../api/hooks';
+import { useApplyDiscovery, useCatalog, useDiscoveryEvidence, useFeatures, useModules, useReadCanvas } from '../api/hooks';
 import { catalogPath } from '../pages/catalogPaths';
 import { featurePath, modulePath } from '../workspace/paths';
 import { formatDayAndTime } from '../share/shareFormat';
 import { BASIS, CONFIDENCE, CONTAINER_KINDS, CREATABLE_KINDS, KIND, REASON, STATUS, TARGET_KIND, targetKindFor } from './discoveryText';
-import { planInitialCanvas, type CanvasDraft, type CanvasInput } from './initialCanvas';
+import { planAttachCanvas, planInitialCanvas, type CanvasDraft, type CanvasInput } from './initialCanvas';
 
 type Decision =
   | { op: 'reject'; note: string }
   | { op: 'reset' }
   | { op: 'reset-legacy' }
   | { op: 'link'; target: DiscoveryTarget }
-  | { op: 'create'; id: string; withApis?: Record<string, string> };
+  | { op: 'create'; id: string; withApis?: Record<string, string> }
+  | { op: 'attach'; target: DiscoveryTarget; withApis?: Record<string, string> };
 
 type Warning = DiscoveryApplyResult['warnings'][number];
 
@@ -39,6 +40,7 @@ export function ReviewInspector({
   item,
   canDecide,
   readOnly = false,
+  onBackToList,
 }: {
   appId: string;
   snapshotId: string;
@@ -46,10 +48,24 @@ export function ReviewInspector({
   canDecide: boolean;
   /** Un viewer de la app (ADR-0015): ve todo y no decide. */
   readOnly?: boolean;
+  /** Pantallas angostas: vuelve a la fila del hallazgo en la lista. */
+  onBackToList?: () => void;
 }) {
   const status = STATUS[item.status as DiscoveryStatus];
+  // Otro hallazgo empieza arriba (su título a la vista); abrir evidencia o una vista previa del mismo no mueve nada.
+  const panel = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (panel.current) panel.current.scrollTop = 0;
+  }, [item.key]);
+  useVisibleHeight(panel);
   return (
-    <aside className="discovery-inspector" aria-label="Detalle del hallazgo">
+    // tabIndex: el panel se desplaza con el teclado (flechas, Re Pág, Av Pág, Inicio, Fin) también en Safari.
+    <aside ref={panel} className="discovery-inspector" aria-label="Detalle del hallazgo" tabIndex={0}>
+      {onBackToList && (
+        <button type="button" className="pixel-button is-ghost discovery-back-to-list" onClick={onBackToList}>
+          ← Volver a la lista
+        </button>
+      )}
       <h3>{item.title}</h3>
       <p className={`discovery-status status-${item.status}`}>
         <span aria-hidden="true">{status.glyph}</span> {status.label}
@@ -85,6 +101,52 @@ export function ReviewInspector({
       )}
     </aside>
   );
+}
+
+/** Alto mínimo del panel cuando casi no queda espacio bajo la cabecera de la página (ventanas muy bajas). */
+const MIN_PANEL = 200;
+
+/**
+ * El alto que de verdad tiene libre el inspector: desde donde empieza (su lugar en la página o, ya pegado, `top`) hasta
+ * el fondo del área que se desplaza (`.app-main`), menos el mismo margen. Sin esto, con la página arriba el panel
+ * empieza debajo de la cabecera y sus filtros, y su parte de abajo queda fuera de la ventana. Se recalcula al
+ * desplazar (un cuadro por vez), al cambiar el tamaño de la ventana o de la página. Apilado (`position: static`) no
+ * limita nada: el CSS lo deja sin scroll propio. El CSS (`100cqh`) sigue siendo el tope.
+ */
+function useVisibleHeight(panel: RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const element = panel.current;
+    const scroller = element?.closest<HTMLElement>('.app-main');
+    if (!element || !scroller) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const style = getComputedStyle(element);
+      if (style.position !== 'sticky') {
+        element.style.removeProperty('--inspector-available');
+        return;
+      }
+      const gap = parseFloat(style.top) || 0;
+      const area = scroller.getBoundingClientRect();
+      const top = Math.max(element.getBoundingClientRect().top, area.top + gap);
+      element.style.setProperty('--inspector-available', `${Math.max(MIN_PANEL, Math.floor(area.bottom - top - gap))}px`);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    scroller.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
+    resize?.observe(scroller);
+    if (scroller.firstElementChild) resize?.observe(scroller.firstElementChild);
+    return () => {
+      cancelAnimationFrame(frame);
+      scroller.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      resize?.disconnect();
+    };
+  }, [panel]);
 }
 
 function Match({ target, reason }: { target: DiscoveryTarget; reason: string }) {
@@ -248,8 +310,13 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
   const version = item.binding?.version ?? 0;
   const decided = item.binding !== undefined;
   const canCreate = CREATABLE_KINDS.includes(item.kind) && !decided && item.status !== 'missing';
-  const container = CONTAINER_KINDS.includes(item.kind);
+  // Una pantalla suelta (ADR-0018) se crea como una feature por el mismo camino que las propuestas.
+  const isScreen = item.kind === 'screen';
+  const container = CONTAINER_KINDS.includes(item.kind) || isScreen;
   const canCreateContainer = container && !decided && item.status !== 'missing';
+  const features = useFeatures(appId);
+  const [into, setInto] = useState('');
+  const readCanvas = useReadCanvas();
   // Ids y posiciones del lienzo inicial: se calculan una vez por borrador y se reutilizan en un reintento.
   const canvasInput = useRef<CanvasInput | undefined>(undefined);
   // Nombre elegido (null: el que propone la vista previa).
@@ -268,8 +335,12 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
    * Las operaciones de la decisión: la principal y, al crear un módulo o una feature, las APIs que la persona eligió
    * crear también en el catálogo (van primero: el lienzo las referencia). `canvas` solo al confirmar.
    */
-  function operations(d: Decision, canvas?: CanvasInput): DiscoveryOperation[] {
+  function operations(d: Decision, canvas?: CanvasInput, canvasVersion?: number): DiscoveryOperation[] {
     const main = operation(d);
+    if (d.op === 'attach') {
+      const apis = Object.entries(d.withApis ?? {}).map(([entityKey, id]): DiscoveryOperation => ({ op: 'create', entityKey, id, bindingVersion: 0 }));
+      return [...apis, { ...main, ...(canvasVersion !== undefined ? { canvasVersion } : {}), ...(canvas ? { canvas } : {}) }];
+    }
     if (d.op !== 'create' || !container) return [main];
     const apis = Object.entries(d.withApis ?? {}).map(
       ([entityKey, id]): DiscoveryOperation => ({ op: 'create', entityKey, id, bindingVersion: 0 }),
@@ -284,7 +355,7 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
 
   /** Suma o quita las APIs que faltan en el catálogo y vuelve a pedir la vista previa (mismo applyId). */
   function toggleApis(keys: string[], on: boolean) {
-    if (decision?.op !== 'create' || !applyId.current) return;
+    if ((decision?.op !== 'create' && decision?.op !== 'attach') || !applyId.current) return;
     const next: Decision = { ...decision, withApis: on ? Object.fromEntries(keys.map((k) => [k, uuidv7()])) : undefined };
     setDecision(next);
     canvasInput.current = undefined;
@@ -296,14 +367,24 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
     if (d.op === 'create') return { op: 'create', entityKey: item.key, id: d.id, bindingVersion: version };
     if (d.op === 'reject') return { op: 'reject', entityKey: item.key, bindingVersion: version, ...(d.note ? { note: d.note } : {}) };
     if (d.op === 'link') return { op: 'link', entityKey: item.key, target: { kind: d.target.kind, id: d.target.id }, bindingVersion: version };
+    if (d.op === 'attach') return { op: 'attach', entityKey: item.key, target: { kind: 'feature', id: d.target.id }, bindingVersion: version };
     if (d.op === 'reset-legacy' && item.legacyBinding) {
       return { op: 'reset', entityKey: item.legacyBinding.entityKey, bindingVersion: item.legacyBinding.version };
     }
     return { op: 'reset', entityKey: item.key, bindingVersion: version };
   }
 
-  function confirm() {
+  async function confirm() {
     if (!decision || !applyId.current) return;
+    if (decision.op === 'attach') {
+      // Lo nuevo va en un lugar libre del lienzo como está ahora; la versión es la que mostró la vista previa (si cambió, 409).
+      const attached = preview.data?.attached?.find((a) => a.entityKey === item.key);
+      if (!attached) return;
+      const graph = await readCanvas(decision.target.id);
+      const canvas = (canvasInput.current = planAttachCanvas(attached.canvas, { nodes: graph.nodes, layout: graph.layout }, canvasInput.current));
+      commit.mutate({ applyId: applyId.current, operations: operations(decision, canvas, attached.canvasVersion), dryRun: false });
+      return;
+    }
     // El mismo applyId que la vista previa: si la red falla y se reintenta, la API no lo aplica dos veces.
     let canvas: CanvasInput | undefined;
     if (decision.op === 'create' && container) {
@@ -334,7 +415,9 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
       <h4>Decidir</h4>
       {conflict && (
         <p role="alert" className="save-error">
-          Alguien decidió sobre este hallazgo mientras lo mirabas. La revisión se recargó con lo actual: revísalo y vuelve a decidir.
+          {decision?.op === 'attach'
+            ? `${conflict.userMessage} Nada se agregó; cancela y pide la vista previa de nuevo para ver el lienzo como está ahora.`
+            : 'Alguien decidió sobre este hallazgo mientras lo mirabas. La revisión se recargó con lo actual: revísalo y vuelve a decidir.'}
         </p>
       )}
       {!decision && (
@@ -387,8 +470,39 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
                 </button>
               </div>
             )
+          ) : isScreen && !decided && item.status !== 'missing' ? (
+            <div className="discovery-screen-options">
+              <div className="discovery-link">
+                <label>
+                  Incorporar a una feature existente
+                  <select value={into} onChange={(e) => setInto(e.target.value)}>
+                    <option value="">Elige una feature…</option>
+                    {(features.data ?? []).map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="pixel-button"
+                  disabled={!into}
+                  onClick={() => {
+                    const feature = features.data?.find((f) => f.id === into);
+                    if (feature) start({ op: 'attach', target: { kind: 'feature', id: feature.id, title: feature.name } });
+                  }}
+                >
+                  Incorporar…
+                </button>
+              </div>
+              <p className="panel-help">
+                O déjala pendiente: no se crea ni se descarta nada, y puedes decidir cuando quieras. Walkie no la agrega a una feature por su nombre o su
+                ruta: la eliges tú.
+              </p>
+            </div>
           ) : (
-            <p className="panel-help">Una pantalla no se vincula sola: entra con su feature.</p>
+            isScreen && <p className="panel-help">Esta pantalla ya tiene una decisión: restablécela para decidir otra cosa.</p>
           )}
           {item.status !== 'rejected' && item.status !== 'missing' && (
             <div className="discovery-link">
@@ -414,12 +528,14 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
           {canCreateContainer && (
             <div className="discovery-link">
               <p className="panel-help">
-                {item.kind === 'feature'
+                {isScreen
+                  ? 'Crea una feature nueva a partir de esta pantalla: con su ruta, sus llamadas a APIs ya en el catálogo y su navegación hacia features documentadas. No cambia ningún lienzo existente.'
+                  : item.kind === 'feature'
                   ? 'Crea una feature nueva con un lienzo inicial: sus pantallas, la navegación y las llamadas que el análisis vio. No cambia ningún lienzo existente.'
                   : 'Crea un módulo nuevo con un lienzo inicial: sus APIs y las interfaces que ofrece. No cambia ningún lienzo existente.'}
               </p>
               <button type="button" className="pixel-button is-primary" onClick={() => start({ op: 'create', id: uuidv7() })}>
-                {item.kind === 'feature' ? 'Crear feature…' : 'Crear módulo…'}
+                {isScreen ? 'Crear feature desde esta pantalla…' : item.kind === 'feature' ? 'Crear feature…' : 'Crear módulo…'}
               </button>
             </div>
           )}
@@ -429,11 +545,13 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
         <div className="discovery-box">
           {preview.isPending && <p role="status">Revisando…</p>}
           {preview.data &&
-            (decision.op === 'create' && container ? (
+            (decision.op === 'attach' ? (
+              <AttachPreview result={preview.data} entityKey={item.key} withApis={decision.withApis !== undefined} onApis={toggleApis} />
+            ) : decision.op === 'create' && container ? (
               <CanvasPreview
                 result={preview.data}
                 entityKey={item.key}
-                kind={item.kind}
+                kind={isScreen ? 'feature' : item.kind}
                 name={name}
                 onName={setName}
                 withApis={decision.withApis !== undefined}
@@ -458,9 +576,9 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
               type="button"
               className="pixel-button is-primary"
               disabled={!preview.data || preview.isPending || commit.isPending || !!conflict}
-              onClick={confirm}
+              onClick={() => void confirm()}
             >
-              {commit.isPending ? 'Guardando…' : decision.op === 'create' ? 'Confirmar y crear' : 'Confirmar'}
+              {commit.isPending ? 'Guardando…' : decision.op === 'create' ? 'Confirmar y crear' : decision.op === 'attach' ? 'Confirmar e incorporar' : 'Confirmar'}
             </button>
             <button type="button" className="pixel-button is-ghost" onClick={cancel}>
               Cancelar
@@ -551,6 +669,8 @@ function CreatePreview({ result, entityKey }: { result: DiscoveryApplyResult; en
 }
 
 const OMITTED_HELP: Record<string, string> = {
+  'navigation-undecided': 'Navegación a una pantalla sin feature',
+  'navigation-same-feature': 'Navegación dentro de la misma feature',
   'api-undecided': 'Sin decidir',
   'api-rejected': 'Descartada',
   'api-target-missing': 'Su elemento se borró',
@@ -652,6 +772,74 @@ function CanvasPreview({
   );
 }
 
+/**
+ * Vista previa de incorporar una pantalla a una feature existente (ADR-0018): lo que el lienzo ya tiene y no cambia,
+ * lo que se agrega, lo que se reutiliza (una API o un portal que ya están), lo que no entra y por qué, y los avisos
+ * (una pantalla con el mismo título: posible duplicado). Confirmar solo agrega, con la versión que se ve aquí.
+ */
+function AttachPreview({
+  result,
+  entityKey,
+  withApis,
+  onApis,
+}: {
+  result: DiscoveryApplyResult;
+  entityKey: string;
+  withApis: boolean;
+  onApis: (keys: string[], on: boolean) => void;
+}) {
+  const attached = result.attached?.find((a) => a.entityKey === entityKey);
+  if (!attached) return null;
+  const draft = attached.canvas;
+  const added = draft.nodes.filter((n) => !n.existing);
+  const reused = draft.nodes.filter((n) => n.existing);
+  const undecided = draft.omitted.filter((o) => o.code === 'api-undecided').map((o) => o.key);
+  const describe = (n: CanvasDraft['nodes'][number]) =>
+    n.type === 'screen' ? `pantalla «${n.title}»${n.route ? ` (${n.route})` : ''}` : n.type === 'portal' ? `portal a «${n.title}»` : n.type === 'module' ? `${n.title} (módulo)` : n.title;
+  return (
+    <section className="discovery-create" aria-label="Lo que se agregará">
+      <p>
+        Se incorpora a «{attached.target.title}». Su lienzo tiene {attached.existing.nodes} {attached.existing.nodes === 1 ? 'caja' : 'cajas'},{' '}
+        {attached.existing.edges} {attached.existing.edges === 1 ? 'conexión' : 'conexiones'}
+        {attached.existing.tours ? ` y ${attached.existing.tours} ${attached.existing.tours === 1 ? 'tour' : 'tours'}` : ''}: nada de eso se mueve ni
+        cambia.
+      </p>
+      <dl className="discovery-facts">
+        <dt>Se agrega</dt>
+        <dd>{added.length === 0 ? 'ninguna caja' : added.map(describe).join(', ')}</dd>
+        <dt>Se reutiliza</dt>
+        <dd>{reused.length === 0 ? 'nada' : `${reused.map(describe).join(', ')} (ya está en el lienzo)`}</dd>
+        <dt>Conexiones nuevas</dt>
+        <dd>
+          {draft.edges.filter((e) => e.kind === 'navigation').length} de navegación y {draft.edges.filter((e) => e.kind === 'request').length} solicitudes
+          HTTP, tal como las vio el análisis
+        </dd>
+        <dt>Versión del lienzo</dt>
+        <dd>{attached.canvasVersion} (si alguien lo guarda antes de confirmar, no se agrega nada y se pide revisar de nuevo)</dd>
+      </dl>
+      {draft.omitted.length > 0 && (
+        <>
+          <p>No entra al lienzo:</p>
+          <ul className="discovery-omitted" aria-label="Lo que no entra">
+            {draft.omitted.map((o) => (
+              <li key={o.key} data-code={o.code}>
+                <strong>{OMITTED_HELP[o.code] ?? o.code}:</strong> {o.message}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {(undecided.length > 0 || withApis) && (
+        <label className="discovery-check">
+          <input type="checkbox" checked={withApis} onChange={(e) => onApis(undecided, e.target.checked)} /> Crear también en el catálogo las APIs que
+          faltan{undecided.length > 0 ? ` (${undecided.length})` : ''}
+        </label>
+      )}
+      <Warnings warnings={result.warnings.filter((w) => w.code !== 'omitted')} />
+    </section>
+  );
+}
+
 function Warnings({ warnings }: { warnings: Warning[] }) {
   if (warnings.length === 0) return null;
   return (
@@ -677,6 +865,22 @@ function Done({ appId, entityKey, result, onAgain }: { appId: string; entityKey:
         <Warnings warnings={result.warnings.filter((w) => w.code !== 'compensated')} />
         <button type="button" className="pixel-button is-ghost" onClick={onAgain}>
           Volver a decidir
+        </button>
+      </div>
+    );
+  }
+  const attached = result.attached?.find((a) => a.entityKey === entityKey);
+  if (attached) {
+    return (
+      <div className="discovery-box">
+        <p role="status">
+          Incorporada a «{attached.target.title ?? attached.target.id}»: se agregó al lienzo sin mover ni cambiar nada de lo que tenía.
+        </p>
+        <Link className="pixel-button is-primary" to={featurePath(appId, attached.target.id)}>
+          Abrir la feature
+        </Link>
+        <button type="button" className="pixel-button is-ghost" onClick={onAgain}>
+          Tomar otra decisión
         </button>
       </div>
     );

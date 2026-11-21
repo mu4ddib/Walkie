@@ -90,56 +90,10 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
             return new ReviewResult.NotFound();
         }
 
-        var entities = await db.Entities.AsNoTracking()
-            .Where(e => e.SnapshotId == snapshotId)
-            .Select(e => new Row(e.Key, e.Kind, e.Title, e.Basis, e.Confidence, e.Fingerprint))
-            .ToListAsync(ct).ConfigureAwait(false);
-        var bindings = await db.Bindings.AsNoTracking()
-            .Where(b => b.AppId == snapshot.AppId && b.SourceId == snapshot.SourceId && b.Decision != null)
-            .ToDictionaryAsync(b => b.EntityKey, StringComparer.Ordinal, ct).ConfigureAwait(false);
+        var all = await ClassifyAllAsync(snapshot, ct).ConfigureAwait(false);
+        var (classified, alive, legacyOf, previous, before) = (all.Items, all.Alive, all.LegacyOf, all.Previous, all.Before);
 
-        var existing = await ExistingTargetsAsync(snapshot.AppId, ct).ConfigureAwait(false);
-        var index = new MatchIndex(existing);
-        // Un vínculo cuyo elemento se borró a mano sigue guardado, pero no se presenta como válido.
-        var alive = existing.Select(t => (t.TargetKind, t.Id)).ToHashSet();
-        // A qué hallazgo está vinculado cada destino: uno ya tomado no se propone para otro (diccionario, no búsqueda lineal).
-        var bound = new Dictionary<(string Kind, Guid Id), string>();
-        foreach (var b in bindings.Values.Where(b => b.TargetId is not null).OrderBy(b => b.EntityKey, StringComparer.Ordinal))
-        {
-            bound.TryAdd((b.TargetKind!, b.TargetId!.Value), b.EntityKey);
-        }
-
-        var current = new HashSet<string>(entities.Select(e => e.Key), StringComparer.Ordinal);
-        // El análisis anterior: solo clave y fingerprint (sin jsonb), para decir qué apareció, cambió o sigue igual.
-        var previous = snapshot.PreviousSnapshotId is { } previousId
-            ? await db.Snapshots.AsNoTracking().FirstOrDefaultAsync(x => x.Id == previousId, ct).ConfigureAwait(false)
-            : null;
-        var before = previous is null
-            ? null
-            : await db.Entities.AsNoTracking().Where(e => e.SnapshotId == previous.Id).Select(e => new { e.Key, e.Fingerprint })
-                .ToDictionaryAsync(e => e.Key, e => e.Fingerprint, StringComparer.Ordinal, ct).ConfigureAwait(false);
-        // Decisiones de la versión 0 con varias contrapartes (la misma ruta en dos apps): no son missing; se muestran
-        // en cada contraparte para que decida una persona (ADR-0014).
-        var counterparts = LegacyBindings.Counterparts(current);
-        var legacy = await LegacyBindings.FindAsync(db, bindings.Values, current, counterparts, ct).ConfigureAwait(false);
-        var legacyOf = new Dictionary<string, Binding>(StringComparer.Ordinal);
-        foreach (var (key, binding) in legacy.OrderBy(l => l.Key, StringComparer.Ordinal))
-        {
-            foreach (var counterpart in counterparts[key])
-            {
-                legacyOf.TryAdd(counterpart, binding);
-            }
-        }
-
-        var classified = entities.Select(e => Classify(e, bindings.GetValueOrDefault(e.Key), index, bound) with
-        {
-            Change = before is null ? null : !before.TryGetValue(e.Key, out var was) ? "added" : was == e.Fingerprint ? "unchanged" : "modified",
-        }).ToList();
-        classified.AddRange(await MissingAsync(snapshot, bindings, current, legacy.Keys.ToHashSet(StringComparer.Ordinal), ct).ConfigureAwait(false));
-
-        bool Needs(Classified c) =>
-            NeedsDecision.Contains(c.Status) || (!c.FromPrevious && legacyOf.ContainsKey(c.Row.Key))
-            || (c.Binding is { TargetKind: { } k, TargetId: { } t } && !alive.Contains((k, t)));
+        bool Needs(Classified c) => NeedsReview(c, all);
         var counts = new DiscoveryReviewCounts(
             Count(classified, "new"), Count(classified, "matched"), Count(classified, "linked"), Count(classified, "created"),
             Count(classified, "rejected"), Count(classified, "changed"), Count(classified, "missing"), Count(classified, "unverified"));
@@ -180,6 +134,105 @@ internal sealed class ReviewHandlers(DiscoveryDbContext db, ICatalogDirectory ca
             Comparison = comparison,
         });
     }
+
+    /// <summary>
+    /// La clasificación de todos los hallazgos de un análisis (sin paginar ni evidencia): estado, cambio respecto del
+    /// anterior, vínculo y si su destino sigue vivo. La usan la revisión y la arquitectura descubierta, así las dos dicen
+    /// lo mismo. No abre transacción: corre en la de quien llama.
+    /// </summary>
+    private async Task<Classification> ClassifyAllAsync(Snapshot snapshot, CancellationToken ct, PhaseTimer? timer = null)
+    {
+        var entities = await db.Entities.AsNoTracking()
+            .Where(e => e.SnapshotId == snapshot.Id)
+            .Select(e => new Row(e.Key, e.Kind, e.Title, e.Basis, e.Confidence, e.Fingerprint))
+            .ToListAsync(ct).ConfigureAwait(false);
+        var bindings = await db.Bindings.AsNoTracking()
+            .Where(b => b.AppId == snapshot.AppId && b.SourceId == snapshot.SourceId && b.Decision != null)
+            .ToDictionaryAsync(b => b.EntityKey, StringComparer.Ordinal, ct).ConfigureAwait(false);
+        timer?.Lap("clasificación: hallazgos y decisiones");
+
+        var existing = await ExistingTargetsAsync(snapshot.AppId, ct).ConfigureAwait(false);
+        timer?.Lap("clasificación: catálogo, módulos y features");
+        var index = new MatchIndex(existing);
+        // Un vínculo cuyo elemento se borró a mano sigue guardado, pero no se presenta como válido.
+        var alive = existing.Select(t => (t.TargetKind, t.Id)).ToHashSet();
+        // A qué hallazgo está vinculado cada destino: uno ya tomado no se propone para otro (diccionario, no búsqueda lineal).
+        var bound = new Dictionary<(string Kind, Guid Id), string>();
+        foreach (var b in bindings.Values.Where(b => b.TargetId is not null).OrderBy(b => b.EntityKey, StringComparer.Ordinal))
+        {
+            bound.TryAdd((b.TargetKind!, b.TargetId!.Value), b.EntityKey);
+        }
+
+        var current = new HashSet<string>(entities.Select(e => e.Key), StringComparer.Ordinal);
+        // El análisis anterior: solo clave y fingerprint (sin jsonb), para decir qué apareció, cambió o sigue igual.
+        var previous = snapshot.PreviousSnapshotId is { } previousId
+            ? await db.Snapshots.AsNoTracking().FirstOrDefaultAsync(x => x.Id == previousId, ct).ConfigureAwait(false)
+            : null;
+        var before = previous is null
+            ? null
+            : await db.Entities.AsNoTracking().Where(e => e.SnapshotId == previous.Id).Select(e => new { e.Key, e.Fingerprint })
+                .ToDictionaryAsync(e => e.Key, e => e.Fingerprint, StringComparer.Ordinal, ct).ConfigureAwait(false);
+        // Decisiones de la versión 0 con varias contrapartes (la misma ruta en dos apps): no son missing; se muestran
+        // en cada contraparte para que decida una persona (ADR-0014).
+        var counterparts = LegacyBindings.Counterparts(current);
+        var legacy = await LegacyBindings.FindAsync(db, bindings.Values, current, counterparts, ct).ConfigureAwait(false);
+        timer?.Lap("clasificación: análisis anterior y versión 0");
+        var legacyOf = new Dictionary<string, Binding>(StringComparer.Ordinal);
+        foreach (var (key, binding) in legacy.OrderBy(l => l.Key, StringComparer.Ordinal))
+        {
+            foreach (var counterpart in counterparts[key])
+            {
+                legacyOf.TryAdd(counterpart, binding);
+            }
+        }
+
+        var classified = entities.Select(e => Classify(e, bindings.GetValueOrDefault(e.Key), index, bound) with
+        {
+            Change = before is null ? null : !before.TryGetValue(e.Key, out var was) ? "added" : was == e.Fingerprint ? "unchanged" : "modified",
+        }).ToList();
+        timer?.Lap("clasificación: reglas");
+        classified.AddRange(await MissingAsync(snapshot, bindings, current, legacy.Keys.ToHashSet(StringComparer.Ordinal), ct).ConfigureAwait(false));
+        timer?.Lap("clasificación: ya no aparecen");
+
+        return new Classification(classified, alive, legacyOf, previous, before, existing);
+    }
+
+    private sealed record Classification(
+        List<Classified> Items, HashSet<(string Kind, Guid Id)> Alive, Dictionary<string, Binding> LegacyOf, Snapshot? Previous,
+        Dictionary<string, string>? Before, IReadOnlyList<ExistingTarget> Existing);
+
+    /// <summary>
+    /// El estado de cada hallazgo del análisis, para la arquitectura descubierta (spec walkie-live-documentacion): el
+    /// mismo de la revisión, con el destino (título actual) y si se borró. Solo los del análisis (no los que ya no
+    /// aparecen). Corre en la transacción de quien llama.
+    /// </summary>
+    internal async Task<Dictionary<string, ArchitectureState>> StatesAsync(Snapshot snapshot, CancellationToken ct, PhaseTimer? timer = null)
+    {
+        timer?.Lap("(antes de clasificar)");
+        var all = await ClassifyAllAsync(snapshot, ct, timer).ConfigureAwait(false);
+        var titles = all.Existing.GroupBy(t => (t.TargetKind, t.Id)).ToDictionary(g => g.Key, g => g.First().Title);
+        var states = new Dictionary<string, ArchitectureState>(StringComparer.Ordinal);
+        foreach (var c in all.Items.Where(c => !c.FromPrevious))
+        {
+            DiscoveryTarget? target = null;
+            bool? targetMissing = null;
+            if (c.Binding is { TargetKind: { } kind, TargetId: { } id })
+            {
+                var alive = all.Alive.Contains((kind, id));
+                target = new DiscoveryTarget(kind, id, alive ? titles.GetValueOrDefault((kind, id)) : c.Binding.TargetTitle);
+                targetMissing = alive ? null : true;
+            }
+
+            states[c.Row.Key] = new ArchitectureState(c.Status, c.Change, target, targetMissing, NeedsReview(c, all));
+        }
+
+        timer?.Lap("clasificación: estados");
+        return states;
+    }
+
+    private static bool NeedsReview(Classified c, Classification all) =>
+        NeedsDecision.Contains(c.Status) || (!c.FromPrevious && all.LegacyOf.ContainsKey(c.Row.Key))
+        || (c.Binding is { TargetKind: { } k, TargetId: { } t } && !all.Alive.Contains((k, t)));
 
     /// <summary>Catálogo, módulos y features de la app como candidatos (solo de esta app: la consulta va por <c>appId</c>).</summary>
     internal async Task<IReadOnlyList<ExistingTarget>> ExistingTargetsAsync(Guid appId, CancellationToken ct)

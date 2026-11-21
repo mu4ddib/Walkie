@@ -33,10 +33,13 @@ export default defineConfig({
       timeout: 180_000,
     },
     {
-      command: 'pnpm dev',
+      // En WebKit, la compilación de producción: el WebSocket del servidor de desarrollo de Vite hace caer el proceso
+      // de red de WebKit en Linux (GLib-CRITICAL «g_atomic_rc_box_release_full»), que se lleva el `sessionStorage` y
+      // con él la sesión. Safari nunca carga ese WebSocket. Ver `e2e/sesion-navegacion.spec.ts` y apps/web/CLAUDE.md.
+      command: process.env.WALKIE_BROWSER === 'webkit' ? 'pnpm build && pnpm preview --port 5173 --strictPort' : 'pnpm dev',
       url: 'http://localhost:5173',
       reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
+      timeout: process.env.WALKIE_BROWSER === 'webkit' ? 240_000 : 60_000,
     },
   ],
 });

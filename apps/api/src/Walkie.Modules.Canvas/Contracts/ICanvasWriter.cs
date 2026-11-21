@@ -46,6 +46,23 @@ public interface ICanvasWriter
 
     /// <summary>Borra los lienzos de esas features (deshacer una importación).</summary>
     Task DeleteAsync(IReadOnlyCollection<Guid> featureIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Agrega a un lienzo existente (ADR-0018, incorporar una pantalla descubierta) las cajas, conexiones y posiciones de
+    /// <paramref name="additions"/> (<c>{ nodes, edges, layout }</c>, por id), por el mismo camino y las mismas reglas que
+    /// el <c>PUT</c>. Solo agrega: nunca mueve, cambia ni borra nada de lo que ya está. Exige la versión que vio la vista
+    /// previa: si cambió, no escribe (<see cref="CanvasAppendOutcome.VersionChanged"/>). Si el lienzo ya tiene todo lo
+    /// que se agrega (un reintento), no escribe (<see cref="CanvasAppendOutcome.AlreadyApplied"/>).
+    /// </summary>
+    Task<CanvasAppend> AppendAsync(Guid featureId, int expectedVersion, JsonElement additions, string userId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deshace un <see cref="AppendAsync"/> que no terminó su operación: quita esas cajas y conexiones (y sus posiciones)
+    /// solo si el lienzo sigue en <paramref name="appendedVersion"/>, la versión que dejó el agregado. Si alguien ya lo
+    /// guardó después, no toca nada (<see cref="CanvasRemoval.Edited"/>).
+    /// </summary>
+    Task<CanvasRemoval> DetachUntouchedAsync(
+        Guid featureId, int appendedVersion, IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> edgeIds, CancellationToken cancellationToken);
 }
 
 /// <summary>Resultado de <see cref="ICanvasWriter.CreateInitialAsync"/>.</summary>
@@ -58,6 +75,24 @@ public enum InitialCanvas
     AlreadyExists,
 
     /// <summary>El grafo no es válido o la feature no existe: no se escribió nada; los errores dicen por qué.</summary>
+    Invalid,
+}
+
+/// <summary>Resultado de <see cref="ICanvasWriter.AppendAsync"/>: qué pasó, la versión del lienzo después y los errores.</summary>
+public sealed record CanvasAppend(CanvasAppendOutcome Outcome, int Version, IReadOnlyDictionary<string, string[]> Errors);
+
+public enum CanvasAppendOutcome
+{
+    /// <summary>Se agregó ahora (versión + 1).</summary>
+    Appended,
+
+    /// <summary>Ya estaba todo agregado (un reintento): no se escribió nada.</summary>
+    AlreadyApplied,
+
+    /// <summary>El lienzo cambió desde la vista previa: no se escribió nada.</summary>
+    VersionChanged,
+
+    /// <summary>Lo agregado choca con lo que hay o el grafo resultante no es válido: no se escribió nada.</summary>
     Invalid,
 }
 

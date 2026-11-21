@@ -1,4 +1,6 @@
-import type { DiscoveryStatus } from '../api/client';
+import type { DiscoveryStatus, DiscoveryTarget } from '../api/client';
+import { catalogPath } from '../pages/catalogPaths';
+import { featurePath, modulePath } from '../workspace/paths';
 
 /**
  * Textos de Walkie Live (spec walkie-live, tarea 5). Cada estado tiene nombre, glifo y explicación: nunca se distingue
@@ -115,3 +117,46 @@ export const architecturePath = (appId: string, snapshotId: string) => `${review
 export const shortCommit = (commit: string) => commit.slice(0, 8);
 
 export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** Estado en Walkie de un hallazgo de la arquitectura descubierta (el mismo de la revisión). */
+export interface EntityState {
+  status: DiscoveryStatus;
+  change?: 'added' | 'modified' | 'unchanged';
+  target?: DiscoveryTarget;
+  targetMissing?: true;
+  needsReview: boolean;
+}
+
+/**
+ * Texto corto del estado de un hallazgo en la arquitectura (spec walkie-live-documentacion): glifo y nombre, nunca
+ * solo color. Lo vinculado o creado es «Ya en Walkie»; si su elemento se borró, lo dice.
+ */
+export function stateText(state: EntityState | undefined): string | null {
+  if (!state) return null;
+  if (state.targetMissing) return '⚠ Su elemento en Walkie se borró';
+  if (state.status === 'linked' || state.status === 'created') return '✓ Ya en Walkie';
+  const s = STATUS[state.status];
+  return `${s.glyph} ${s.label}`;
+}
+
+/** Ruta al elemento documentado (catálogo, módulo o feature) al que apunta una decisión. */
+export function targetPath(appId: string, target: DiscoveryTarget): string {
+  if (target.kind === 'feature') return featurePath(appId, target.id);
+  if (target.kind === 'module') return modulePath(appId, target.id);
+  return catalogPath(appId, target.id);
+}
+
+/** Los estados de un grupo en una línea: cuántos faltan por decidir y cuántos ya están en Walkie. */
+export function groupStatesText(states: Record<string, number> | undefined): string | null {
+  if (!states) return null;
+  const pending = (states.new ?? 0) + (states.matched ?? 0) + (states.changed ?? 0) + (states.missing ?? 0);
+  const done = (states.linked ?? 0) + (states.created ?? 0);
+  const rejected = states.rejected ?? 0;
+  const parts = [
+    pending > 0 ? `${pending} por decidir` : null,
+    done > 0 ? `${done} en Walkie` : null,
+    rejected > 0 ? `${rejected} ${rejected === 1 ? 'descartado' : 'descartados'}` : null,
+    states.unverified ? `${states.unverified} sin cobertura` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}

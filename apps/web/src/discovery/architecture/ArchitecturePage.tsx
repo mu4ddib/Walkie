@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { ApiError, type ArchitectureProposal } from '../../api/client';
 import { useApp, useAppRole, useDiscoveryArchitecture, useDiscoveryArchitectureGroup } from '../../api/hooks';
 import { appPath } from '../../workspace/paths';
-import { reviewPath } from '../discoveryText';
+import { architecturePath, groupStatesText, reviewPath, stateText, targetPath } from '../discoveryText';
 import { ArchitectureCanvas, type ArchitectureSelection } from './ArchitectureCanvas';
 import { ArchitectureInspector } from './ArchitectureInspector';
 import { DEFAULT_FILTERS, GROUP_KIND_LABELS, GROUP_PAGE_SIZE, SEMANTICS, SEMANTIC_LABELS, count, type Filters, type Semantic } from './architectureModel';
@@ -104,13 +104,21 @@ export function ArchitecturePage() {
       </nav>
       <div className="discovery-heading">
         <h2>Arquitectura descubierta</h2>
-        <Link className="pixel-button" to={reviewPath(appId, snapshotId)}>
-          Volver a la revisión
-        </Link>
+        <span className="arch-heading-actions">
+          {data?.previousSnapshotId && (
+            <Link className="pixel-button is-ghost" to={architecturePath(appId, data.previousSnapshotId)}>
+              Arquitectura del análisis anterior
+            </Link>
+          )}
+          <Link className="pixel-button" to={reviewPath(appId, snapshotId)}>
+            Volver a la revisión
+          </Link>
+        </span>
       </div>
       <p className="discovery-note arch-banner" role="note">
-        Descubierta, no confirmada: es lo que el análisis vio en el código. Explorarla no crea nada en Walkie; para incorporar
-        algo, revisa una propuesta o decide hallazgo por hallazgo.
+        Descubierta, no confirmada: es lo que el análisis vio en el código, con su evidencia. Lo documentado en Walkie (catálogo,
+        módulos y features) es aparte: cada hallazgo dice si ya está en Walkie y enlaza a su elemento. Decidir no lo quita de
+        esta vista; explorarla no crea nada.
       </p>
 
       {unavailable && (
@@ -224,6 +232,7 @@ export function ArchitecturePage() {
                             {GROUP_KIND_LABELS[g.kind]}
                             {g.incomplete > 0 ? ` · ◐ ${g.incomplete}` : ''}
                           </span>
+                          {groupStatesText(g.states) && <span className="arch-evidence-meta">{groupStatesText(g.states)}</span>}
                           <button type="button" className="pixel-button is-ghost arch-open" aria-label={`Abrir ${g.title}`} onClick={() => open(g.key)}>
                             Abrir
                           </button>
@@ -241,8 +250,18 @@ export function ArchitecturePage() {
                         <strong>{p.title}</strong>
                         <span className="arch-evidence-meta">
                           {count(p.screens, 'screen')} · {count(p.apis, 'api')} · confianza {CONFIDENCE_TEXT[p.confidence as keyof typeof CONFIDENCE_TEXT] ?? p.confidence}
-                          {p.decision ? ` · ${p.decision === 'rejected' ? 'descartada' : 'ya en Walkie'}` : ''}
                         </span>
+                        {p.state && (
+                          <span className={`arch-node-state is-${p.state.targetMissing ? 'missing-target' : p.state.status}`}>
+                            {stateText(p.state)}
+                            {p.state.target && !p.state.targetMissing && p.state.target.kind === 'feature' && (
+                              <>
+                                {' · '}
+                                <Link to={targetPath(appId, p.state.target)}>Abrir el lienzo de «{p.state.target.title ?? p.title}»</Link>
+                              </>
+                            )}
+                          </span>
+                        )}
                         {p.confidence === 'low' && <span className="arch-weak">Grupo débil: revisa sus miembros antes de crearla.</span>}
                         <span className="arch-proposal-actions">
                           <button
@@ -310,6 +329,7 @@ export function ArchitecturePage() {
             ) : (
               panels.inspector && (
                 <ArchitectureInspector
+                  appId={appId}
                   snapshotId={snapshotId}
                   architecture={data}
                   selection={selection}

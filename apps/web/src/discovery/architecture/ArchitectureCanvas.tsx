@@ -17,13 +17,14 @@ import {
   type Orientation,
   type Semantic,
 } from './architectureModel';
+import type { EntityState } from '../discoveryText';
 import { architectureNodeTypes } from './architectureTypes';
 
 /** Lo elegido en la vista: un grupo, un vínculo entre grupos, un hallazgo o una relación. */
 export type ArchitectureSelection =
   | { kind: 'group'; key: string }
   | { kind: 'link'; link: ArchitectureLink }
-  | { kind: 'entity'; key: string; title?: string }
+  | { kind: 'entity'; key: string; title?: string; state?: EntityState }
   | { kind: 'relation'; key: string; from: string; to: string; relation: string };
 
 type Props = {
@@ -179,7 +180,10 @@ export function ArchitectureCanvas(props: Props) {
             onNodeClick={(_, node) => {
               if (node.type === 'archGroup') onSelect({ kind: 'group', key: node.id });
               else if (node.type === 'archStub') onSelect({ kind: 'group', key: node.id.slice('grupo:'.length) });
-              else onSelect({ kind: 'entity', key: node.id, title: (node.data as { entity?: { title: string } }).entity?.title });
+              else {
+                const entity = (node.data as { entity?: { title: string; state?: EntityState } }).entity;
+                onSelect({ kind: 'entity', key: node.id, title: entity?.title, state: entity?.state });
+              }
             }}
             onNodeDoubleClick={(_, node) => {
               if (node.type === 'archGroup') onOpen(node.id);

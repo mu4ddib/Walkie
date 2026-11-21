@@ -121,7 +121,9 @@ public sealed record DiscoveryDraftNode(
     string Title,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Route = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? CatalogId = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ModuleId = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? ModuleId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? TargetFeatureId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? Existing = null);
 
 /// <summary>Una conexión del borrador, de una relación observada (<c>navigates</c> o <c>calls</c>).</summary>
 public sealed record DiscoveryDraftEdge(
@@ -156,7 +158,18 @@ public sealed record DiscoveryApplyResult(
     IReadOnlyList<string> Rejected,
     IReadOnlyList<string> Reset,
     IReadOnlyList<DiscoveryTarget> Unchanged,
-    IReadOnlyList<DiscoveryApplyWarning> Warnings);
+    IReadOnlyList<DiscoveryApplyWarning> Warnings)
+{
+    /// <summary>Pantallas incorporadas a features existentes (<c>attach</c>, ADR-0018); null si no hay.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<DiscoveryAttached>? Attached { get; init; }
+}
+
+/// <summary>Una pantalla que se incorpora a una feature existente: lo que su lienzo ya tiene y lo que se agrega.</summary>
+public sealed record DiscoveryAttached(string EntityKey, DiscoveryTarget Target, int CanvasVersion, DiscoveryCanvasExisting Existing, DiscoveryCanvasDraft Canvas);
+
+/// <summary>Lo que el lienzo existente ya tiene (no cambia).</summary>
+public sealed record DiscoveryCanvasExisting(int Nodes, int Edges, int Tours);
 
 /// <summary>Una fuente de una app con su último análisis.</summary>
 public sealed record DiscoverySourceItem(

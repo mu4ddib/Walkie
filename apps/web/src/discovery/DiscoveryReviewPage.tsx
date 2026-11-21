@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { ApiError, type DiscoveryReview, type DiscoveryReviewItem, type DiscoveryStatus } from '../api/client';
 import { useApp, useAppRole, useDiscoveryReview, useDiscoverySources } from '../api/hooks';
@@ -35,6 +35,8 @@ export function DiscoveryReviewPage() {
   const review = useDiscoveryReview(snapshotId, query);
   const [selected, setSelected] = useState<string | null>(null);
   const list = useRef<HTMLUListElement>(null);
+  // Pantallas angostas (inspector debajo de la lista): elegir un hallazgo lleva a su detalle; «Volver a la lista», a su fila.
+  const [reveal, setReveal] = useState(0);
 
   const data = review.data;
   const source = sources.data?.sources.find((s) => s.source.id === data?.sourceId);
@@ -56,6 +58,23 @@ export function DiscoveryReviewPage() {
   }
 
   /** Flechas arriba y abajo recorren la lista (además de Tab). */
+  useEffect(() => {
+    if (reveal === 0) return;
+    const inspector = document.querySelector<HTMLElement>('.discovery-inspector');
+    if (!inspector) return;
+    inspector.focus({ preventScroll: true });
+    inspector.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  }, [reveal]);
+
+  function select(key: string) {
+    setSelected(key);
+    if (stackedLayout()) setReveal((n) => n + 1);
+  }
+
+  function backToList() {
+    list.current?.querySelector<HTMLButtonElement>('button.discovery-item[aria-current="true"]')?.focus();
+  }
+
   function onListKey(e: KeyboardEvent<HTMLUListElement>) {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const buttons = [...(list.current?.querySelectorAll<HTMLButtonElement>('button.discovery-item') ?? [])];
@@ -73,7 +92,7 @@ export function DiscoveryReviewPage() {
   const to = Math.min(total, (page + 1) * REVIEW_PAGE_SIZE);
 
   return (
-    <section className="page discovery-page">
+    <section className="page discovery-page discovery-review-page">
       <nav className="breadcrumb" aria-label="Ruta">
         <Link to="/apps">Apps</Link>
         {' / '}
@@ -181,7 +200,7 @@ export function DiscoveryReviewPage() {
               <ul ref={list} className="discovery-list" aria-label="Hallazgos" onKeyDown={onListKey}>
                 {items.map((item) => (
                   <li key={item.key}>
-                    <ItemRow item={item} selected={item.key === selected} onSelect={() => setSelected(item.key)} />
+                    <ItemRow item={item} selected={item.key === selected} onSelect={() => select(item.key)} />
                   </li>
                 ))}
               </ul>
@@ -200,7 +219,14 @@ export function DiscoveryReviewPage() {
               )}
             </div>
             {current ? (
-              <ReviewInspector appId={appId} snapshotId={snapshotId} item={current} canDecide={isLatest} readOnly={!canEdit} />
+              <ReviewInspector
+                appId={appId}
+                snapshotId={snapshotId}
+                item={current}
+                canDecide={isLatest}
+                readOnly={!canEdit}
+                onBackToList={backToList}
+              />
             ) : (
               <aside className="discovery-inspector" aria-label="Detalle del hallazgo">
                 <p className="gallery-note">Elige un hallazgo para ver por qué Walkie lo detectó y decidir qué hacer con él.</p>
@@ -211,6 +237,15 @@ export function DiscoveryReviewPage() {
       )}
     </section>
   );
+}
+
+/** El inspector va debajo de la lista (mismo punto de corte que `discovery.css`). */
+function stackedLayout(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 900px)').matches;
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /**

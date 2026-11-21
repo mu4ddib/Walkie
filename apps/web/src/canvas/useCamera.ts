@@ -6,8 +6,11 @@ import { createCamera, type Camera, type CameraOptions, type View } from './came
 export interface CanvasCamera extends Camera {
   /** «Ver todo»: encuadra las cajas visibles (grupos plegados incluidos) dejando libre `padding`. */
   fit(padding: FitViewOptions['padding'], options?: CameraOptions): Promise<boolean>;
-  /** Encuadra un rectángulo del lienzo. */
-  fitBounds(bounds: Rect, padding: FitViewOptions['padding'], options?: CameraOptions): Promise<boolean>;
+  /**
+   * Encuadra un rectángulo del lienzo. Con `floor`, si para que entre entero el zoom quedaría por debajo, usa `floor`
+   * y muestra su esquina de arriba a la izquierda (lo que se lee primero) en vez de un lienzo ilegible.
+   */
+  fitBounds(bounds: Rect, padding: FitViewOptions['padding'], options?: CameraOptions, floor?: number): Promise<boolean>;
   /** Centra un punto del lienzo con un zoom. */
   centerOn(x: number, y: number, zoom: number, options?: CameraOptions): Promise<boolean>;
 }
@@ -34,6 +37,14 @@ export function useCameraController(): CanvasCamera {
   return camera;
 }
 
+/** Lo libre arriba y a la izquierda de un `padding` por lado (`'72px'`); un número (fracción) cuenta como 0. */
+function paddingPx(padding: FitViewOptions['padding']): { top: number; left: number } {
+  if (!padding || typeof padding !== 'object') return { top: 0, left: 0 };
+  const px = (v: unknown) => (typeof v === 'number' ? v : typeof v === 'string' && v.endsWith('px') ? Number.parseFloat(v) : 0);
+  const sides = padding as Record<string, unknown>;
+  return { top: px(sides.top ?? sides.y), left: px(sides.left ?? sides.x) };
+}
+
 type Flow = Pick<ReturnType<typeof useReactFlow>, 'getViewport' | 'setViewport' | 'getNodes' | 'getNodesBounds'>;
 
 function makeCamera(
@@ -46,10 +57,13 @@ function makeCamera(
     setViewport: (view: View) => void setViewport(view),
     size,
   });
-  const fitBounds: CanvasCamera['fitBounds'] = (bounds, padding, options) => {
+  const fitBounds: CanvasCamera['fitBounds'] = (bounds, padding, options, floor) => {
     const { width, height, minZoom, maxZoom } = store.getState();
     if (!width || !height) return Promise.resolve(false);
-    return base.to(getViewportForBounds(bounds, width, height, minZoom, maxZoom, padding ?? 0.1), options);
+    const view = getViewportForBounds(bounds, width, height, minZoom, maxZoom, padding ?? 0.1);
+    if (floor === undefined || view.zoom >= floor) return base.to(view, options);
+    const { top, left } = paddingPx(padding);
+    return base.to({ x: left - bounds.x * floor, y: top - bounds.y * floor, zoom: floor }, options);
   };
   return {
     get animating() {

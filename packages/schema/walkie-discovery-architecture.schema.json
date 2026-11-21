@@ -66,9 +66,27 @@
       "items": {
         "$ref": "#/$defs/limitation"
       }
+    },
+    "previousSnapshotId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "El análisis anterior de la misma fuente, para abrir su arquitectura"
     }
   },
   "$defs": {
+    "state": {
+      "type": "object",
+      "description": "Estado del hallazgo en Walkie, el mismo de la revisión (spec walkie-live-documentacion). Decidir no lo quita de la arquitectura descubierta",
+      "required": ["status", "needsReview"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "$ref": "walkie-discovery-review.schema.json#/$defs/status" },
+        "change": { "enum": ["added", "modified", "unchanged"], "description": "Respecto del análisis anterior de la fuente" },
+        "target": { "$ref": "walkie-discovery-binding.schema.json#/$defs/target" },
+        "targetMissing": { "const": true, "description": "El elemento documentado al que apunta se borró" },
+        "needsReview": { "type": "boolean" }
+      }
+    },
     "groupKind": {
       "enum": [
         "frontend",
@@ -153,6 +171,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "De ellas, las que dejan algo sin ver"
+        },
+        "states": {
+          "type": "object",
+          "description": "Hallazgos del grupo por estado (solo los que hay)",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
         }
       }
     },
@@ -318,6 +341,7 @@
           ],
           "description": "Si ya se decidió (la feature existe o se descartó)"
         },
+        "state": { "$ref": "#/$defs/state" },
         "members": {
           "type": "array",
           "maxItems": 500,

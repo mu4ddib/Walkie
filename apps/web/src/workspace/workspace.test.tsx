@@ -51,6 +51,20 @@ describe('inicio: el lienzo primero (criterio 1)', () => {
     expect(ruta()).toHaveTextContent('Iniciar sesión');
   });
 
+  it('al volver del login con otra página en la URL, no la pisa abriendo la última feature', async () => {
+    installFakeApi({ apps: [app], features: [login, transferir] });
+    setLastWorkspace({ appId: 'app-1', featureId: 'feat-2' });
+    // `onSigninCallback` ya dejó «/apps» en la URL y el router todavía muestra «/» (lo aplica en una transición).
+    window.history.replaceState(null, '', '/apps');
+    try {
+      renderRoute('/');
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.queryByRole('button', { name: 'lienzo' })).toBeNull();
+    } finally {
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
   it('una app sin features abre su página para crear la primera', async () => {
     installFakeApi({ apps: [app], features: [] });
 

@@ -130,12 +130,66 @@
           }
         }
       }
+    },
+    "attached": {
+      "type": "array",
+      "description": "Pantallas que se incorporan a una feature existente (attach, ADR-0018): lo que ya tiene su lienzo y lo que se agrega. Sin attach, no viene",
+      "items": {
+        "type": "object",
+        "required": [
+          "entityKey",
+          "target",
+          "canvasVersion",
+          "existing",
+          "canvas"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entityKey": {
+            "$ref": "walkie-discovery.schema.json#/$defs/entityKey"
+          },
+          "target": {
+            "$ref": "walkie-discovery-binding.schema.json#/$defs/target"
+          },
+          "canvasVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "La versión del lienzo que se vio: confirmar la manda; si cambió, 409"
+          },
+          "existing": {
+            "type": "object",
+            "required": [
+              "nodes",
+              "edges"
+            ],
+            "additionalProperties": false,
+            "description": "Lo que el lienzo ya tiene y no cambia",
+            "properties": {
+              "nodes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "edges": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tours": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "canvas": {
+            "$ref": "#/$defs/canvas"
+          }
+        }
+      }
     }
   },
   "$defs": {
     "canvas": {
       "type": "object",
-      "description": "Borrador del lienzo inicial de un módulo o una feature (spec walkie-live, tarea 9): solo lo que el análisis observó y una persona ya decidió. Las claves son de este borrador (de hallazgos, de relaciones o walkie-module:<id> para la caja de un módulo existente); la solicitud les da ids y posiciones. Sin respuestas, códigos ni pasos internos que el análisis no vio",
+      "description": "Borrador del lienzo inicial de un módulo o una feature (spec walkie-live, tarea 9): solo lo que el análisis observó y una persona ya decidió. Las claves son de este borrador (de hallazgos, de relaciones walkie-module:<id> para la caja de un módulo existente o walkie-feature:<id> para un portal a una feature); la solicitud les da ids y posiciones. Sin respuestas, códigos ni pasos internos que el análisis no vio",
       "required": [
         "nodes",
         "edges",
@@ -164,7 +218,8 @@
                 "enum": [
                   "screen",
                   "ref",
-                  "module"
+                  "module",
+                  "portal"
                 ]
               },
               "title": {
@@ -186,6 +241,16 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "Solo module: el módulo existente que ofrece la interfaz"
+              },
+              "targetFeatureId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Solo portal: la feature donde ya está la pantalla a la que navega (ADR-0018)"
+              },
+              "existing": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Solo en attach: la caja que ya está en el lienzo y se reutiliza (no se agrega ni se mueve)"
               }
             }
           }

@@ -28,7 +28,8 @@
         "confidence": { "enum": ["high", "medium", "low"] },
         "group": { "type": "string", "maxLength": 600 },
         "route": { "type": "string", "maxLength": 500 },
-        "decision": { "enum": ["created", "linked", "rejected"] }
+        "decision": { "enum": ["created", "linked", "rejected"] },
+        "state": { "$ref": "walkie-discovery-architecture.schema.json#/$defs/state" }
       }
     },
     "relation": {

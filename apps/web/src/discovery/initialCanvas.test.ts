@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { planInitialCanvas, type CanvasDraft } from './initialCanvas';
+import { planAttachCanvas, planInitialCanvas, type CanvasDraft } from './initialCanvas';
+import { boxSize, draftBoxSize, lines } from './layout/layoutQuality';
 
 const V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const BOX = { w: 184, h: 72 }; // la caja de Canvas.tsx; la API rechaza dos así encimadas (con 8 px de aire)
@@ -81,7 +82,10 @@ describe('lienzo inicial de Walkie Live', () => {
     expect(overlaps(a!, b!)).toBe(false);
   });
 
-  it('con muchas APIs las pone en una grilla de 4 debajo de las pantallas, sin encimarse (spec walkie-live-arquitectura)', () => {
+  // Cambio de comportamiento esperado (spec walkie-live-documentacion, parte 3): antes, todas las APIs iban en una
+  // grilla de 4 debajo de las pantallas (spec walkie-live-arquitectura) y las llamadas cruzaban el lienzo; ahora cada
+  // API va junto a la pantalla que la llama, en columnas, con el corredor de la navegación libre.
+  it('con muchas APIs pone cada una junto a la pantalla que la llama, sin encimarse ni tapar la navegación', () => {
     const apis = Array.from({ length: 11 }, (_, i) => `api:GET /api/recurso/${i}`);
     const draft: CanvasDraft = {
       ...feature,
@@ -93,14 +97,51 @@ describe('lienzo inicial de Walkie Live', () => {
     };
     const { layout } = planInitialCanvas(draft);
 
-    const screensBottom = Math.max(...['screen:web:/', 'screen:web:/pedidos', 'screen:web:/pedidos/{}'].map((k) => layout[k]!.y));
-    const rows = new Map<number, number>();
-    for (const key of apis) {
-      expect(layout[key]!.y).toBeGreaterThan(screensBottom);
-      rows.set(layout[key]!.y, (rows.get(layout[key]!.y) ?? 0) + 1);
-    }
-    expect([...rows.values()]).toEqual([4, 4, 3]);
+    const list = layout['screen:web:/pedidos']!;
+    const detail = layout['screen:web:/pedidos/{}']!;
+    expect(list.x).toBeLessThan(detail.x);
+    apis.forEach((key, i) => {
+      const p = layout[key]!;
+      // Las de la lista, entre la lista y su detalle; las del detalle, a su derecha.
+      if (i % 2) expect(p.x > list.x && p.x < detail.x).toBe(true);
+      else expect(p.x).toBeGreaterThan(detail.x);
+      // La navegación lista → detalle va por la fila de las pantallas: ninguna API se cruza en ese corredor.
+      if (i % 2) expect(p.y).toBeGreaterThan(list.y + BOX.h);
+    });
     const all = Object.values(layout);
     all.forEach((a, i) => all.slice(i + 1).forEach((b) => expect(overlaps(a, b)).toBe(false)));
+  });
+});
+
+describe('tamaño real de las cajas (spec walkie-live-documentacion, revisión final)', () => {
+  it('la web reserva lo mismo que valida la API (BoxSizes.Estimate, CanvasGeometryTests)', () => {
+    expect(boxSize('GET /api/apps', 'GET /api/apps')).toEqual({ w: 184, h: 89 });
+    expect(boxSize('PUT /api/apps/{appId}/members/{userId}', 'PUT /api/apps/{appId}/members/{userId}')).toEqual({ w: 264, h: 167 });
+    expect(boxSize('Inicio', undefined, 'Ruta: /')).toEqual({ w: 184, h: 87 });
+    expect(lines('PUT /api/apps/{appId}/members/{userId}', 29)).toBe(3);
+  });
+
+  it('incorporar ubica lo nuevo a la derecha de la caja más ancha y sin encimar las nuevas entre sí', () => {
+    const draft: CanvasDraft = {
+      nodes: [
+        { key: 'screen:web:/', type: 'screen', title: 'Inicio', route: '/' },
+        { key: 'api:a', type: 'ref', title: 'PUT /api/apps/{appId}/members/{userId}', catalogId: '0198f0c0-1111-7000-8000-000000000001' },
+        { key: 'api:b', type: 'ref', title: 'POST /api/apps/{appId}/sources/snapshots', catalogId: '0198f0c0-1111-7000-8000-000000000002' },
+      ],
+      edges: [],
+      interfaces: [],
+      omitted: [],
+    };
+    const existing = {
+      nodes: { big: { type: 'api', title: 'GET /api/x/y/z/una-ruta-bastante-larga', http: { method: 'GET', path: '/api/x/y/z/una-ruta-bastante-larga' } } },
+      layout: { big: { x: 0, y: 40 }, g: { x: 300, y: 0, w: 500, h: 300 } },
+    };
+    const plan = planAttachCanvas(draft, existing);
+    const placed = Object.entries(plan.layout).map(([key, p]) => ({ ...p, ...draftBoxSize(draft.nodes.find((n) => n.key === key)!) }));
+    // A la derecha del grupo (su ancho guardado manda), con aire.
+    placed.forEach((p) => expect(p.x).toBeGreaterThanOrEqual(800 + 8));
+    const sorted = [...placed].sort((a, b) => a.y - b.y);
+    for (let i = 1; i < sorted.length; i++) expect(sorted[i]!.y).toBeGreaterThanOrEqual(sorted[i - 1]!.y + sorted[i - 1]!.h + 8);
+    expect(Object.keys(plan.layout)).not.toContain('big');
   });
 });

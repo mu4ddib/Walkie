@@ -1,5 +1,7 @@
+import { Link } from 'react-router';
 import type { ArchitectureGroup, ArchitectureLimitation, DiscoveryArchitecture } from '../../api/client';
 import { useDiscoveryArchitectureGroup, useDiscoveryEvidence, useDiscoveryRelationEvidence } from '../../api/hooks';
+import { CHANGE, TARGET_KIND, reviewPath, stateText, targetPath, type EntityState } from '../discoveryText';
 import type { ArchitectureSelection } from './ArchitectureCanvas';
 import { ENTITY_LABELS, GROUP_KIND_LABELS, RELATION_LABELS, SEMANTIC_HELP, SEMANTIC_LABELS, count, linkCount, linkCounts, orderChain, shortKey, stepParts, visibleLinks, visibleRelations, type Filters, type Semantic } from './architectureModel';
 
@@ -60,6 +62,7 @@ function Limitations({ items }: { items: readonly ArchitectureLimitation[] }) {
  * una relación inferida, la cadena entera).
  */
 export function ArchitectureInspector({
+  appId,
   snapshotId,
   architecture,
   selection,
@@ -67,6 +70,7 @@ export function ArchitectureInspector({
   onSelect,
   onOpen,
 }: {
+  appId: string;
   snapshotId: string;
   architecture: DiscoveryArchitecture;
   selection: ArchitectureSelection | null;
@@ -214,6 +218,7 @@ export function ArchitectureInspector({
     <aside className="arch-inspector" aria-label="Detalle de la arquitectura">
       <p className="arch-kicker">Hallazgo</p>
       <h3>{selection.title ?? shortKey(selection.key)}</h3>
+      {selection.state && <EntityStateInfo appId={appId} snapshotId={snapshotId} state={selection.state} />}
       {entity.isPending && <p role="status">Cargando la evidencia…</p>}
       {entity.isError && <p role="alert">No se pudo cargar la evidencia de este hallazgo.</p>}
       {entity.data && (
@@ -238,5 +243,28 @@ export function ArchitectureInspector({
         </>
       )}
     </aside>
+  );
+}
+
+/**
+ * El estado del hallazgo en Walkie (spec walkie-live-documentacion): si ya está documentado, el enlace a su elemento;
+ * si su elemento se borró, lo dice; si falta decidir, lleva a la revisión. Decidir no lo quita de esta vista.
+ */
+function EntityStateInfo({ appId, snapshotId, state }: { appId: string; snapshotId: string; state: EntityState }) {
+  const documented = (state.status === 'linked' || state.status === 'created' || state.status === 'changed') && state.target && !state.targetMissing;
+  return (
+    <div className="discovery-box arch-entity-state">
+      <p>
+        <strong>{stateText(state)}</strong>
+        {state.change && ` · ${CHANGE[state.change].glyph} ${CHANGE[state.change].label.toLowerCase()} respecto del análisis anterior`}
+      </p>
+      {documented && state.target && (
+        <p>
+          {TARGET_KIND[state.target.kind]}: <Link to={targetPath(appId, state.target)}>{state.target.title ?? 'abrir'}</Link>
+        </p>
+      )}
+      {state.targetMissing && <p className="panel-help">«{state.target?.title ?? 'Su elemento'}» se borró de Walkie. El hallazgo sigue aquí; decide de nuevo en la revisión.</p>}
+      {state.needsReview && <Link to={reviewPath(appId, snapshotId)}>Decidir en la revisión</Link>}
+    </div>
   );
 }

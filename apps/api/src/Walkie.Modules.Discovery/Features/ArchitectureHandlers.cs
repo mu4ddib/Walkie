@@ -11,39 +11,47 @@ namespace Walkie.Modules.Discovery.Features;
 /// limitaciones del manifest; y las decisiones activas de la fuente. Tres consultas, sin N+1, en una transacción de
 /// lectura repetible. No escribe nada.
 /// </summary>
-internal sealed class ArchitectureHandlers(DiscoveryDbContext db)
+internal sealed class ArchitectureHandlers(DiscoveryDbContext db, ReviewHandlers review)
 {
     public const int MaxPageSize = 500;
 
-    public async Task<DiscoveryArchitecture?> OverviewAsync(Guid snapshotId, CancellationToken ct)
+    public Task<DiscoveryArchitecture?> OverviewAsync(Guid snapshotId, CancellationToken ct) => OverviewAsync(snapshotId, null, ct);
+
+    /// <summary>Con <paramref name="timer"/>, anota el tiempo de cada fase (pruebas de rendimiento).</summary>
+    internal async Task<DiscoveryArchitecture?> OverviewAsync(Guid snapshotId, PhaseTimer? timer, CancellationToken ct)
     {
-        if (await LoadAsync(snapshotId, ct).ConfigureAwait(false) is not { } data)
+        if (await LoadAsync(snapshotId, timer, ct).ConfigureAwait(false) is not { } data)
         {
             return null;
         }
 
-        return ArchitectureProjection.Overview(snapshotId, data.Completeness, data.Entities, data.Relations, Limitations(data.Manifest), data.Decisions);
+        var overview = ArchitectureProjection.Overview(snapshotId, data.Completeness, data.Entities, data.Relations, Limitations(data.Manifest), data.Decisions, data.States)
+            with
+        {
+            PreviousSnapshotId = data.PreviousSnapshotId,
+        };
+        timer?.Lap("proyección");
+        return overview;
     }
 
     public async Task<DiscoveryArchitectureGroup?> GroupAsync(Guid snapshotId, string groupKey, int page, int pageSize, CancellationToken ct)
     {
-        if (await LoadAsync(snapshotId, ct).ConfigureAwait(false) is not { } data)
+        if (await LoadAsync(snapshotId, null, ct).ConfigureAwait(false) is not { } data)
         {
             return null;
         }
 
-        return ArchitectureProjection.Group(groupKey, page, pageSize, data.Entities, data.Relations, data.Decisions);
+        return ArchitectureProjection.Group(groupKey, page, pageSize, data.Entities, data.Relations, data.Decisions, data.States);
     }
 
     private sealed record Data(
-        string Completeness, string Manifest, List<ArchitectureEntityRow> Entities, List<ArchitectureRelationRow> Relations, Dictionary<string, string> Decisions);
+        string Completeness, string Manifest, List<ArchitectureEntityRow> Entities, List<ArchitectureRelationRow> Relations, Dictionary<string, string> Decisions,
+        Dictionary<string, ArchitectureState> States, Guid? PreviousSnapshotId);
 
-    private async Task<Data?> LoadAsync(Guid snapshotId, CancellationToken ct)
+    private async Task<Data?> LoadAsync(Guid snapshotId, PhaseTimer? timer, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct).ConfigureAwait(false);
-        var snapshot = await db.Snapshots.AsNoTracking().Where(s => s.Id == snapshotId)
-            .Select(s => new { s.AppId, s.SourceId, s.Completeness, s.Manifest })
-            .SingleOrDefaultAsync(ct).ConfigureAwait(false);
+        var snapshot = await db.Snapshots.AsNoTracking().SingleOrDefaultAsync(s => s.Id == snapshotId, ct).ConfigureAwait(false);
         if (snapshot is null)
         {
             return null;
@@ -63,12 +71,16 @@ internal sealed class ArchitectureHandlers(DiscoveryDbContext db)
             .Where(b => b.AppId == snapshot.AppId && b.SourceId == snapshot.SourceId && b.Decision != null)
             .Select(b => new { b.EntityKey, b.Decision })
             .ToDictionaryAsync(b => b.EntityKey, b => b.Decision!, StringComparer.Ordinal, ct).ConfigureAwait(false);
+        timer?.Lap("consultas de la arquitectura");
+        // El estado de cada hallazgo en Walkie, con la misma clasificación que la revisión y en la misma transacción.
+        var states = await review.StatesAsync(snapshot, ct, timer).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
 
         // El orden de Postgres depende de la intercalación: se ordena aquí (ordinal), como el resto del módulo.
         entities.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
         relations.Sort((a, b) => string.CompareOrdinal(a.Key, b.Key));
-        return new Data(snapshot.Completeness, snapshot.Manifest, entities, relations, decisions);
+        timer?.Lap("orden");
+        return new Data(snapshot.Completeness, snapshot.Manifest, entities, relations, decisions, states, snapshot.PreviousSnapshotId);
     }
 
     /// <summary>Las limitaciones del manifest, tal como las dejó el analizador (texto no confiable: la web lo muestra como texto).</summary>

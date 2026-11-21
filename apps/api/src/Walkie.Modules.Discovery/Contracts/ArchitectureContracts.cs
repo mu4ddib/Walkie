@@ -10,7 +10,25 @@ public sealed record DiscoveryArchitecture(
     IReadOnlyList<ArchitectureGroup> Groups,
     IReadOnlyList<ArchitectureLink> Links,
     IReadOnlyList<ArchitectureProposal> Proposals,
-    IReadOnlyList<ArchitectureLimitation> Limitations);
+    IReadOnlyList<ArchitectureLimitation> Limitations)
+{
+    /// <summary>El análisis anterior de la misma fuente, para abrir su arquitectura.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? PreviousSnapshotId { get; init; }
+}
+
+/// <summary>
+/// El estado de un hallazgo en Walkie, el mismo de la revisión (spec walkie-live-documentacion): nuevo, coincide,
+/// vinculado, creado, descartado, cambió…, si cambió respecto del análisis anterior, a qué elemento documentado
+/// apunta (con su título actual) y si ese elemento se borró. La arquitectura descubierta sigue mostrando todo lo
+/// decidido: decidir no borra la evidencia.
+/// </summary>
+public sealed record ArchitectureState(
+    string Status,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Change,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DiscoveryTarget? Target,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? TargetMissing,
+    bool NeedsReview);
 
 public sealed record ArchitectureTotals(int Entities, int Relations);
 
@@ -23,7 +41,12 @@ public sealed record ArchitectureGroup(
     IReadOnlyDictionary<string, int> Counts,
     IReadOnlyDictionary<string, int> Internal,
     int Limitations,
-    int Incomplete);
+    int Incomplete)
+{
+    /// <summary>Hallazgos del grupo por estado (solo los que hay): qué falta decidir y qué ya está en Walkie.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, int>? States { get; init; }
+}
 
 public sealed record ArchitectureLink(string From, string To, string Kind, string Semantic, int Total, int Observed, int Inferred, int Low, LinkBreakdown ByBasis);
 
@@ -47,7 +70,11 @@ public sealed record ArchitectureProposal(
     int Unresolved,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Decision,
     IReadOnlyList<string> Members,
-    int MemberCount);
+    int MemberCount)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArchitectureState? State { get; init; }
+}
 
 public sealed record ArchitectureLimitation(
     string Code,
@@ -75,7 +102,11 @@ public sealed record ArchitectureEntity(
     string Confidence,
     string Group,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Route,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Decision);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Decision)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArchitectureState? State { get; init; }
+}
 
 public sealed record ArchitectureRelation(string Key, string Kind, string From, string To, string Basis, string Confidence, string Semantic);
 

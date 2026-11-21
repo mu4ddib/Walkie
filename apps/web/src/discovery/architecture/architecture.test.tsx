@@ -2,10 +2,11 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ArchitectureLink, DiscoveryArchitecture, DiscoveryReviewItem } from '../../api/client';
-import { APP_ID, SNAPSHOT_ID, SOURCE, evidenceOf, item, sourcesEntry } from '../../test/discoveryFixtures';
+import { APP_ID, OLD_SNAPSHOT_ID, SNAPSHOT_ID, SOURCE, evidenceOf, item, sourcesEntry } from '../../test/discoveryFixtures';
 import { installFakeApi } from '../../test/fakeApi';
 import type { DiscoverySeed } from '../../test/fakeDiscovery';
 import { renderRoute } from '../../test/render';
+import type { EntityState } from '../discoveryText';
 import type { CanvasDraft } from '../initialCanvas';
 import type { ArchitectureSelection } from './ArchitectureCanvas';
 import { DEFAULT_FILTERS, linkCount, linkCounts, linkText, orderChain, overviewLayout, shortKey, stepParts, visibleLinks } from './architectureModel';
@@ -19,7 +20,7 @@ vi.mock('./ArchitectureCanvas', () => ({
     mode: 'overview' | 'detail';
     groups: { key: string; title: string }[];
     links?: ArchitectureLink[];
-    detail?: { entities: { key: string; title: string }[] };
+    detail?: { entities: { key: string; title: string; state?: EntityState }[] };
     onSelect: (s: ArchitectureSelection) => void;
     onOpen: (key: string) => void;
   }) => (
@@ -31,7 +32,7 @@ vi.mock('./ArchitectureCanvas', () => ({
             </button>
           ))
         : props.detail!.entities.map((e) => (
-            <button key={e.key} type="button" onClick={() => props.onSelect({ kind: 'entity', key: e.key, title: e.title })}>
+            <button key={e.key} type="button" onClick={() => props.onSelect({ kind: 'entity', key: e.key, title: e.title, state: e.state })}>
               caja {e.title}
             </button>
           ))}
@@ -350,6 +351,69 @@ describe('Explorar arquitectura', () => {
     await waitFor(() => expect(review).toHaveTextContent('Tu rol en esta app es de lectura'));
     expect(within(review).queryByRole('button', { name: 'Ver qué se creará' })).not.toBeInTheDocument();
     for (const radio of within(review).getAllByRole('radio')) expect(radio).toBeDisabled();
+  });
+});
+
+describe('arquitectura descubierta permanente (spec walkie-live-documentacion)', () => {
+  const featureId = '0198f0c0-2222-7000-8000-000000000001';
+  const documented = { status: 'created' as const, target: { kind: 'feature' as const, id: featureId, title: 'Pedidos' }, needsReview: false };
+
+  it('después de decidir sigue todo a la vista: el estado de propuestas y grupos, el enlace al lienzo y el análisis anterior', async () => {
+    const s = seed();
+    s.architecture![SNAPSHOT_ID] = {
+      ...architecture,
+      previousSnapshotId: OLD_SNAPSHOT_ID,
+      groups: [
+        { ...architecture.groups[0]!, states: { created: 2, rejected: 1 } },
+        { ...architecture.groups[1]!, states: { new: 3, linked: 1 } },
+      ],
+      proposals: [{ ...architecture.proposals[0]!, decision: 'created', state: documented }],
+    };
+    const group = s.groups![`${SNAPSHOT_ID}|frontend:web`]!;
+    group.entities = group.entities.map((e) => (e.key === LIST ? { ...e, state: documented } : e));
+    installFakeApi({ apps: [app], discovery: s });
+    renderRoute(`/apps/${APP_ID}/sources/${SNAPSHOT_ID}/architecture`);
+
+    const proposals = await screen.findByRole('heading', { name: 'Propuestas de feature (1)' });
+    const proposal = within(proposals.parentElement!).getByRole('listitem');
+    expect(proposal).toHaveTextContent('✓ Ya en Walkie');
+    expect(within(proposal).getByRole('link', { name: 'Abrir el lienzo de «Pedidos»' })).toHaveAttribute('href', `/apps/${APP_ID}/features/${featureId}`);
+    expect(screen.getByText('2 en Walkie · 1 descartado')).toBeInTheDocument();
+    expect(screen.getByText('3 por decidir · 1 en Walkie')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Arquitectura del análisis anterior' })).toHaveAttribute(
+      'href',
+      `/apps/${APP_ID}/sources/${OLD_SNAPSHOT_ID}/architecture`,
+    );
+
+    // Un hallazgo documentado: su estado y su elemento en Walkie; nada pide decidir.
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir tienda-web' }));
+    // La feature y la pantalla se llaman igual: la segunda caja es la pantalla de la lista.
+    await userEvent.click((await screen.findAllByRole('button', { name: 'caja Pedidos' }))[1]!);
+    const inspector = await screen.findByRole('complementary', { name: /Detalle/ });
+    expect(inspector).toHaveTextContent('✓ Ya en Walkie');
+    expect(within(inspector).getByRole('link', { name: 'Pedidos' })).toHaveAttribute('href', `/apps/${APP_ID}/features/${featureId}`);
+    expect(within(inspector).queryByRole('link', { name: 'Decidir en la revisión' })).not.toBeInTheDocument();
+  });
+
+  it('si el elemento documentado se borró, lo dice y lleva a decidir de nuevo', async () => {
+    const s = seed();
+    s.architecture![SNAPSHOT_ID] = {
+      ...architecture,
+      proposals: [{ ...architecture.proposals[0]!, state: { ...documented, targetMissing: true, needsReview: true } }],
+    };
+    installFakeApi({ apps: [app], discovery: s });
+    renderRoute(`/apps/${APP_ID}/sources/${SNAPSHOT_ID}/architecture`);
+    const proposals = await screen.findByRole('heading', { name: 'Propuestas de feature (1)' });
+    const proposal = within(proposals.parentElement!).getByRole('listitem');
+    expect(proposal).toHaveTextContent('⚠ Su elemento en Walkie se borró');
+    expect(within(proposal).queryByRole('link', { name: /Abrir el lienzo/ })).not.toBeInTheDocument();
+  });
+
+  it('la página de la app lleva a la arquitectura de cada fuente, aunque no quede nada por decidir', async () => {
+    installFakeApi({ apps: [app], discovery: seed() });
+    renderRoute(`/apps/${APP_ID}`);
+    const link = await screen.findByRole('link', { name: 'Arquitectura' });
+    expect(link).toHaveAttribute('href', `/apps/${APP_ID}/sources/${SNAPSHOT_ID}/architecture`);
   });
 });
 

@@ -60,6 +60,8 @@ export type WalkieFlowEdge = FlowEdge<{
    * selector de la etiqueta. Sin ella (retornos, ramas, no seleccionada) la etiqueta es solo texto.
    */
   operation?: { id: OperationId; explicit: boolean; suggested: OperationId[] };
+  /** Sin etiqueta salvo seleccionada («Explorar interacciones»: el detalle aparece al enfocar). */
+  quiet?: boolean;
 }>;
 
 /**
@@ -117,6 +119,7 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
       {/* Pulso direccional: `pathLength` normaliza el largo para que el pulso recorra del origen al destino. */}
       <path d={path} pathLength={100} className="kind-edge-flow-halo" fill="none" aria-hidden="true" />
       <path d={path} pathLength={100} className="kind-edge-flow" fill="none" aria-hidden="true" />
+      {data?.quiet && !selected ? null : (
       <EdgeLabelRenderer>
         <div
           className="kind-edge-label nodrag nopan"
@@ -168,6 +171,7 @@ export function KindEdge({ id, data, selected, ...props }: EdgeProps<WalkieFlowE
           {display.when && <span className="kind-edge-when"> [{display.when}]</span>}
         </div>
       </EdgeLabelRenderer>
+      )}
     </>
   );
 }

@@ -18,7 +18,9 @@ import {
 import { installFakeApi } from '../test/fakeApi';
 import type { DiscoverySeed } from '../test/fakeDiscovery';
 import { renderRoute } from '../test/render';
+import type { WalkieCanvasGraphV0 } from '../schema/walkie-graph';
 import { REVIEW_PAGE_SIZE } from './DiscoveryReviewPage';
+import type { CanvasDraft } from './initialCanvas';
 
 vi.mock('react-oidc-context', () => ({ useAuth: () => ({ user: { access_token: 'token-de-prueba' } }) }));
 vi.mock('../canvas/Canvas', () => ({ Canvas: () => <div>lienzo</div> }));
@@ -260,6 +262,60 @@ describe('revisión de un análisis', () => {
     expect(first).toHaveFocus();
   });
 
+  it('el inspector se desplaza con el teclado y, al cambiar de hallazgo, empieza arriba; dentro del mismo no se mueve', async () => {
+    await openReview();
+    await userEvent.click(row(/GET \/api\/pedidos/));
+    const inspector = screen.getByRole('complementary', { name: 'Detalle del hallazgo' });
+    // Una región desplazable alcanzable con Tab (Safari no la enfoca sola): Re Pág, Av Pág, Inicio y Fin la mueven.
+    expect(inspector).toHaveAttribute('tabindex', '0');
+    // jsdom no tiene layout: el desplazamiento se simula en el propio panel.
+    Object.defineProperty(inspector, 'scrollTop', { value: 240, writable: true, configurable: true });
+
+    // Abrir una decisión del mismo hallazgo no mueve el panel.
+    await userEvent.click(within(inspector).getByRole('button', { name: 'Descartar…' }));
+    expect(inspector.scrollTop).toBe(240);
+
+    // Otro hallazgo: el mismo panel, arriba, con su título a la vista.
+    await userEvent.click(row(/tienda/));
+    expect(screen.getByRole('complementary', { name: 'Detalle del hallazgo' })).toBe(inspector);
+    expect(inspector.scrollTop).toBe(0);
+    expect(row(/tienda/)).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('apilado (pantalla angosta): elegir lleva al detalle y «Volver a la lista» a su fila; con movimiento reducido, sin animar', async () => {
+    const queries: string[] = [];
+    vi.stubGlobal('matchMedia', (query: string) => {
+      queries.push(query);
+      return { matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} };
+    });
+    const scrolls: ScrollIntoViewOptions[] = [];
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = function (options?: boolean | ScrollIntoViewOptions) {
+      scrolls.push(options as ScrollIntoViewOptions);
+    };
+    try {
+      await openReview();
+      await userEvent.click(row(/GET \/api\/pedidos/));
+      const inspector = screen.getByRole('complementary', { name: 'Detalle del hallazgo' });
+      await waitFor(() => expect(inspector).toHaveFocus());
+      expect(scrolls.at(-1)).toEqual({ block: 'start', behavior: 'auto' });
+      expect(queries).toContain('(prefers-reduced-motion: reduce)');
+
+      await userEvent.click(within(inspector).getByRole('button', { name: '← Volver a la lista' }));
+      expect(row(/GET \/api\/pedidos/)).toHaveFocus();
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('en escritorio elegir un hallazgo no mueve la página ni el foco', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+    await openReview();
+    const first = row(/GET \/api\/pedidos/);
+    await userEvent.click(first);
+    expect(first).toHaveFocus();
+  });
+
   it('el inspector explica la coincidencia y pide la evidencia de ese hallazgo solo', async () => {
     const api = await openReview();
     await userEvent.click(row(/GET \/api\/pedidos/));
@@ -314,13 +370,105 @@ describe('revisión de un análisis', () => {
     expect(api.discovery.applies.at(-1)!.body.operations[0]).toMatchObject({ op: 'link', target: { id: 'cat-9' } });
   });
 
-  it('una pantalla no se vincula sola y no hay botón de crear', async () => {
-    await openReview();
+  // ---------- Pantallas sueltas (spec walkie-live-documentacion, ADR-0018) ----------
+
+  const PEDIDOS_FEATURE = { id: '0198f0c0-3333-7000-8000-000000000001', appId: APP_ID, name: 'Pedidos', description: '', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' };
+  const SCREEN = 'screen:web:/pedidos';
+  const screenDraft: CanvasDraft = {
+    nodes: [
+      { key: SCREEN, type: 'screen', title: 'Pedidos', route: '/pedidos' },
+      { key: 'api:GET /api/pedidos', type: 'ref', title: 'Consultar pedido', catalogId: 'cat-1' },
+      { key: `walkie-feature:${PEDIDOS_FEATURE.id}`, type: 'portal', title: 'Pedidos', targetFeatureId: PEDIDOS_FEATURE.id },
+    ],
+    edges: [
+      { key: 'calls|a', from: SCREEN, to: 'api:GET /api/pedidos', kind: 'request', operation: 'http.request' },
+      { key: 'navigates|b', from: SCREEN, to: `walkie-feature:${PEDIDOS_FEATURE.id}`, kind: 'navigation', operation: 'navigation' },
+    ],
+    interfaces: [],
+    omitted: [{ key: 'navigates|c', code: 'navigation-undecided', message: 'Navega a /otra, que todavía no está en ninguna feature de Walkie.' }],
+  };
+  const existingCanvas: WalkieCanvasGraphV0 = {
+    schemaVersion: 0,
+    version: 4,
+    nodes: { n1: { id: 'n1', type: 'screen', title: 'Lista' }, n2: { id: 'n2', type: 'ref', title: 'Consultar pedido', catalogId: 'cat-1' } },
+    edges: { e1: { id: 'e1', from: 'n1', to: 'n2', kind: 'request' } },
+    layout: { n1: { x: 0, y: 0 }, n2: { x: 0, y: 200 } },
+    tours: { t: { id: 't', name: 'Guía', kind: 'guide', steps: [{ id: 's', nodeId: 'n1' }] } },
+  };
+  const attachDraft: CanvasDraft = {
+    ...screenDraft,
+    nodes: [screenDraft.nodes[0]!, { ...screenDraft.nodes[1]!, existing: 'n2' }],
+    edges: [screenDraft.edges[0]!],
+    omitted: [{ key: 'navigates|b', code: 'navigation-same-feature', message: 'Navega a /pedidos/:id, que ya está en esta misma feature.' }],
+  };
+
+  async function openScreen(extra: Partial<DiscoverySeed> = {}) {
+    const api = installFakeApi({
+      apps: [app],
+      catalog,
+      features: [PEDIDOS_FEATURE],
+      canvases: { [PEDIDOS_FEATURE.id]: existingCanvas },
+      discovery: seed({ drafts: { [SCREEN]: screenDraft }, attaches: { [SCREEN]: { canvasVersion: 4, existing: { nodes: 2, edges: 1, tours: 1 }, canvas: attachDraft } }, ...extra }),
+    });
+    renderRoute(path);
+    await screen.findByRole('list', { name: 'Hallazgos' });
     await userEvent.click(row(/screen:web:\/pedidos/));
-    const inspector = screen.getByRole('complementary', { name: 'Detalle del hallazgo' });
-    expect(inspector).toHaveTextContent('Una pantalla no se vincula sola');
-    expect(within(inspector).queryByRole('button', { name: /Vincular/ })).not.toBeInTheDocument();
-    expect(within(inspector).queryByRole('button', { name: /Crear/ })).not.toBeInTheDocument();
+    return { api, inspector: screen.getByRole('complementary', { name: 'Detalle del hallazgo' }) };
+  }
+
+  it('una pantalla suelta ofrece crear una feature, incorporarla a una existente o dejarla pendiente; nunca vincularla sola', async () => {
+    const { inspector } = await openScreen();
+    expect(within(inspector).getByRole('button', { name: 'Crear feature desde esta pantalla…' })).toBeInTheDocument();
+    expect(within(inspector).getByRole('combobox', { name: 'Incorporar a una feature existente' })).toBeInTheDocument();
+    expect(within(inspector).getByRole('button', { name: 'Incorporar…' })).toBeDisabled(); // la feature la elige la persona
+    expect(inspector).toHaveTextContent('O déjala pendiente: no se crea ni se descarta nada');
+    expect(within(inspector).queryByRole('button', { name: 'Vincular…' })).not.toBeInTheDocument();
+  });
+
+  it('crear una feature desde una pantalla: vista previa con su ruta, su llamada y el portal, y un nombre editable', async () => {
+    const { api, inspector } = await openScreen();
+    await userEvent.click(within(inspector).getByRole('button', { name: 'Crear feature desde esta pantalla…' }));
+    const preview = await within(inspector).findByRole('region', { name: 'Lo que se creará' });
+    expect(preview).toHaveTextContent('Pedidos (/pedidos)');
+    expect(preview).toHaveTextContent('Consultar pedido');
+    expect(preview).toHaveTextContent('Navegación a una pantalla sin feature');
+    await userEvent.clear(within(preview).getByLabelText('Nombre'));
+    await userEvent.type(within(preview).getByLabelText('Nombre'), 'Inicio');
+    await userEvent.click(within(inspector).getByRole('button', { name: 'Confirmar y crear' }));
+    expect(await within(inspector).findByRole('status')).toHaveTextContent('Feature creada: «Inicio»');
+    const sent = api.discovery.applies.at(-1)!.body.operations.at(-1)!;
+    expect(sent).toMatchObject({ op: 'create', entityKey: SCREEN, name: 'Inicio' });
+    expect(Object.keys(sent.canvas!.nodes).sort()).toEqual(screenDraft.nodes.map((n) => n.key).sort());
+  });
+
+  it('incorporar a una feature existente: dice qué tiene, qué se agrega y qué se reutiliza; solo agrega, con la versión vista', async () => {
+    const { api, inspector } = await openScreen();
+    await userEvent.selectOptions(within(inspector).getByRole('combobox', { name: 'Incorporar a una feature existente' }), PEDIDOS_FEATURE.id);
+    await userEvent.click(within(inspector).getByRole('button', { name: 'Incorporar…' }));
+    const preview = await within(inspector).findByRole('region', { name: 'Lo que se agregará' });
+    expect(preview).toHaveTextContent('Se incorpora a «Pedidos». Su lienzo tiene 2 cajas, 1 conexión y 1 tour: nada de eso se mueve ni cambia.');
+    expect(preview).toHaveTextContent('pantalla «Pedidos» (/pedidos)');
+    expect(preview).toHaveTextContent('Consultar pedido (ya está en el lienzo)');
+    expect(preview).toHaveTextContent('Navegación dentro de la misma feature');
+    await userEvent.click(within(inspector).getByRole('button', { name: 'Confirmar e incorporar' }));
+    expect(await within(inspector).findByRole('status')).toHaveTextContent('Incorporada a «Pedidos»');
+    expect(within(inspector).getByRole('link', { name: 'Abrir la feature' })).toHaveAttribute('href', `/apps/${APP_ID}/features/${PEDIDOS_FEATURE.id}`);
+    const sent = api.discovery.applies.at(-1)!.body.operations.at(-1)!;
+    expect(sent).toMatchObject({ op: 'attach', entityKey: SCREEN, canvasVersion: 4, target: { kind: 'feature', id: PEDIDOS_FEATURE.id } });
+    // Solo lo nuevo, a la derecha de lo que ya está (nada se encima ni se mueve).
+    expect(Object.keys(sent.canvas!.nodes)).toEqual([SCREEN]);
+    expect(sent.canvas!.layout[SCREEN]!.x).toBeGreaterThan(184);
+  });
+
+  it('si el lienzo cambió desde la vista previa, no se agrega nada y lo dice', async () => {
+    const { api, inspector } = await openScreen();
+    api.discovery.next.attachConflict = true;
+    await userEvent.selectOptions(within(inspector).getByRole('combobox', { name: 'Incorporar a una feature existente' }), PEDIDOS_FEATURE.id);
+    await userEvent.click(within(inspector).getByRole('button', { name: 'Incorporar…' }));
+    await within(inspector).findByRole('region', { name: 'Lo que se agregará' });
+    await userEvent.click(within(inspector).getByRole('button', { name: 'Confirmar e incorporar' }));
+    expect(await within(inspector).findByRole('alert')).toHaveTextContent('Nada se agregó');
+    expect(within(inspector).getByRole('button', { name: 'Confirmar e incorporar' })).toBeDisabled();
   });
 
   it('descarta con nota (vista previa y confirmación) y luego restablece', async () => {

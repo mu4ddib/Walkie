@@ -11,13 +11,17 @@ import { Welcome } from './Welcome';
  */
 export function HomePage() {
   const apps = useApps();
+  // Al volver del login, `onSigninCallback` ya puso en la URL la página de la que se venía y `BrowserRouter` la aplica
+  // en una transición; mientras tanto esta página puede montarse con la ruta vieja («/»). Si la URL real ya no es «/»,
+  // no hay que llevar a ningún lado: abrir la última feature pisaría la página pedida (pasaba en WebKit).
+  const stale = window.location.pathname !== '/';
   const last = getLastWorkspace();
   const target = apps.data?.find((a) => a.id === last?.appId) ?? apps.data?.[0];
 
-  if (!apps.data) {
+  if (stale || !apps.data) {
     return (
       <div className="workspace-loading">
-        <QueryState isPending={apps.isPending} error={apps.error} notFound="" />
+        <QueryState isPending={stale || apps.isPending} error={stale ? null : apps.error} notFound="" />
       </div>
     );
   }

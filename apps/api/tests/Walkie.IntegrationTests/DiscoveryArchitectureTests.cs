@@ -19,7 +19,7 @@ namespace Walkie.IntegrationTests;
 /// sola solicitud) sin duplicar ni tocar lo existente.
 /// </summary>
 [Collection(ApiTestGroup.Name)]
-public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOutputHelper output)
+public sealed partial class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOutputHelper output)
 {
     private static readonly bool Bench = Environment.GetEnvironmentVariable("WALKIE_BENCH") == "1";
 
@@ -37,7 +37,10 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
         var web = groups.Single(g => g.GetProperty("key").GetString() == "frontend:service:@walkie/web");
         Assert.Equal("frontend", web.GetProperty("kind").GetString());
         Assert.True(web.GetProperty("counts").GetProperty("screen").GetInt32() >= 11);
-        Assert.Equal(3, web.GetProperty("counts").GetProperty("feature").GetInt32());
+        // Dos propuestas: «Apps» y «Catalog». «Discovery review» dejó de proponerse (spec walkie-live-documentacion): la
+        // página de la app ahora enlaza directo a la arquitectura, así que esa pantalla ya no se alcanza solo desde la
+        // revisión y no se une a su familia (regla de las pantallas de detalle del analizador, sin cambios).
+        Assert.Equal(2, web.GetProperty("counts").GetProperty("feature").GetInt32());
         var modules = groups.Where(g => g.GetProperty("kind").GetString() == "module").Select(g => g.GetProperty("title").GetString()).ToList();
         Assert.Contains("Walkie.Modules.Apps", modules);
         Assert.Contains("Walkie.Modules.Discovery", modules);
@@ -66,7 +69,7 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
 
         // Propuestas con su evidencia, y las limitaciones de la web en su grupo.
         var proposals = architecture.GetProperty("proposals").EnumerateArray().ToList();
-        Assert.Equal(["feature:apps/web:Apps", "feature:apps/web:Catalog", "feature:apps/web:Discovery review"], proposals.Select(p => p.GetProperty("key").GetString()));
+        Assert.Equal(["feature:apps/web:Apps", "feature:apps/web:Catalog"], proposals.Select(p => p.GetProperty("key").GetString()));
         Assert.All(proposals, p =>
         {
             Assert.Equal("evidence", p.GetProperty("strength").GetString());
@@ -293,9 +296,12 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
             JsonElement architecture = default;
             for (var i = 0; i < 5; i++)
             {
+                // Se mide la API (HTTP + leer el JSON); validar la respuesta contra el schema es de la prueba y va
+                // aparte: con 20.000 hallazgos cuesta ~190 ms y antes se sumaba a la medida (de ahí los «470 ms»).
                 var watch = Stopwatch.StartNew();
-                architecture = await ArchitectureAsync(client, snapshotId);
+                architecture = await JsonAsync(await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/architecture", UriKind.Relative)), HttpStatusCode.OK);
                 overview.Add(watch.ElapsedMilliseconds);
+                Assert.Empty(WalkieSchemas.Errors(WalkieSchemas.DiscoveryArchitecture, architecture));
                 watch.Restart();
                 var group = architecture.GetProperty("groups")[0].GetProperty("key").GetString()!;
                 await JsonAsync(await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/architecture/group?key={Uri.EscapeDataString(group)}", UriKind.Relative)), HttpStatusCode.OK);
@@ -334,7 +340,11 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
     // ---------- Proyectos de prueba ----------
 
     /// <summary>Una tienda ficticia React + .NET: listado, detalle y edición de pedidos, con su servicio y EF Core.</summary>
-    private static byte[] Shop(Guid source) => Scan(new Dictionary<string, string>
+    /// <summary>La tienda ficticia; <paramref name="extra"/> suma código al backend (un reanálisis con un endpoint nuevo).</summary>
+    private static byte[] Shop(Guid source, string extra = "") => Scan(ShopFiles(extra), "--source-id", source.ToString());
+
+    /// <summary>Los archivos de la tienda ficticia (para variantes: una pantalla de inicio, un endpoint nuevo).</summary>
+    private static Dictionary<string, string> ShopFiles(string extra = "") => new()
     {
         ["Directory.Build.props"] = "<Project><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>",
         ["api/Tienda.Api/Tienda.Api.csproj"] = "<Project Sdk=\"Microsoft.NET.Sdk.Web\"></Project>",
@@ -346,6 +356,7 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
             pedidos.MapGet("/", (PedidosService s) => s.Listar());
             pedidos.MapGet("/{id:guid}", (Guid id, PedidosService s) => s.Obtener(id));
             pedidos.MapPut("/{id:guid}", (Guid id, PedidosService s) => s.Editar(id));
+            EXTRA
             app.Run();
             public sealed class PedidosService(TiendaDbContext db)
             {
@@ -354,7 +365,7 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
                 public object Editar(Guid id) { var p = db.Pedidos.Single(x => x.Id == id); db.SaveChanges(); return p; }
             }
             public sealed class TiendaDbContext(DbContextOptions<TiendaDbContext> o) : DbContext(o) { public DbSet<Pedido> Pedidos { get; set; } = null!; }
-            """,
+            """.Replace("EXTRA", extra, StringComparison.Ordinal),
         ["web/package.json"] = """{ "name": "tienda-web", "dependencies": { "react": "19.0.0", "react-router-dom": "7.0.0" } }""",
         ["web/src/api.ts"] = """
             export const listar = () => fetch('/api/pedidos');
@@ -378,7 +389,7 @@ public sealed class DiscoveryArchitectureTests(WalkieApiFactory factory, ITestOu
             export function PedidoPage({ id }: { id: string }) { obtener(id); return <Link to={`/pedidos/${id}/editar`}>Editar</Link>; }
             export function EditarPedidoPage({ id }: { id: string }) { const navigate = useNavigate(); obtener(id); return <form onSubmit={() => editar(id).then(() => navigate(pedidoPath(id)))} />; }
             """,
-    }, "--source-id", source.ToString());
+    };
 
     /// <summary>Una lista y su detalle que navegan entre sí; la lista llama a <paramref name="apis"/> APIs distintas (una propuesta enorme).</summary>
     private static byte[] Huge(int apis) => Scan(new Dictionary<string, string>

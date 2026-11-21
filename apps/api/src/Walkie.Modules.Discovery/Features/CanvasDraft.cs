@@ -26,7 +26,11 @@ internal sealed record DraftContext(
     IReadOnlyDictionary<string, (Guid Id, string Title)> PlannedCatalog,
     IReadOnlyDictionary<Guid, string> Catalog,
     IReadOnlyDictionary<string, IReadOnlyList<string>> AmbiguousApis,
-    IReadOnlyDictionary<Guid, IReadOnlyList<ModuleInterface>> ModuleInterfaces);
+    IReadOnlyDictionary<Guid, IReadOnlyList<ModuleInterface>> ModuleInterfaces)
+{
+    /// <summary>Features vivas de la app (id → nombre): destinos posibles de un portal (ADR-0018).</summary>
+    public IReadOnlyDictionary<Guid, string> Features { get; init; } = new Dictionary<Guid, string>();
+}
 
 /// <summary>Los ids (UUID v7 del cliente) y las posiciones que manda la persona para cada clave del borrador.</summary>
 internal sealed record CanvasInput(
@@ -80,18 +84,21 @@ internal sealed record Draft(
 /// </summary>
 internal static class CanvasDraft
 {
-    /// <summary>Tamaño nominal de una caja del lienzo (el de <c>Canvas.tsx</c>), para no aceptar posiciones encimadas.</summary>
-    public const double BoxWidth = 184;
-
-    public const double BoxHeight = 72;
-
     private const double Gap = 8;
     private const double MaxCoordinate = 1_000_000;
 
     /// <summary>Clave del borrador de la caja de un módulo existente (no es un hallazgo).</summary>
     public static string ModuleNodeKey(Guid moduleId) => "walkie-module:" + moduleId.ToString();
 
-    public static Draft Feature(JsonElement feature, DraftContext context)
+    /// <summary>Clave del borrador de un portal a una feature existente (no es un hallazgo).</summary>
+    public static string PortalNodeKey(Guid featureId) => "walkie-feature:" + featureId.ToString();
+
+    /// <summary>
+    /// El lienzo de una feature. Con <paramref name="portals"/> (una sola pantalla, ADR-0018) su navegación hacia una
+    /// pantalla ya documentada en otra feature entra como portal; hacia una sin feature, o hacia otra de
+    /// <paramref name="into"/> (la feature a la que se incorpora), queda fuera con su porqué.
+    /// </summary>
+    public static Draft Feature(JsonElement feature, DraftContext context, bool portals = false, Guid? into = null)
     {
         var draft = new Draft([], [], [], [], [], []);
         var app = feature.TryGetProperty("app", out var scope) ? scope.GetString() : null;
@@ -181,7 +188,269 @@ internal static class CanvasDraft
             draft.Edges.Add(new DiscoveryDraftEdge(relation.Key, relation.From, nodeKey, "request", "http.request", toInterface));
         }
 
+        if (portals)
+        {
+            foreach (var relation in context.Relations.Where(r => r.Kind == "navigates" && included.Contains(r.From) && !included.Contains(r.To))
+                         .OrderBy(r => r.Key, StringComparer.Ordinal))
+            {
+                var route = RouteOf(relation.To);
+                if (context.Decisions.TryGetValue(relation.To, out var decision)
+                    && decision is { Decision: "linked" or "created", TargetKind: "feature", TargetId: { } featureId }
+                    && context.Features.TryGetValue(featureId, out var featureName))
+                {
+                    if (featureId == into)
+                    {
+                        draft.Omitted.Add(new DiscoveryDraftOmission(relation.Key, "navigation-same-feature", Truncate(
+                            $"Navega a {route}, que ya está en esta misma feature: Walkie no sabe cuál de sus cajas es, así que esa conexión no se dibuja. Agrégala a mano si corresponde.", 500)));
+                        continue;
+                    }
+
+                    var portalKey = PortalNodeKey(featureId);
+                    if (nodes.Add(portalKey))
+                    {
+                        draft.Nodes.Add(new DiscoveryDraftNode(portalKey, "portal", Truncate(featureName, 120), TargetFeatureId: featureId));
+                    }
+
+                    draft.Edges.Add(new DiscoveryDraftEdge(relation.Key, relation.From, portalKey, "navigation", "navigation"));
+                    continue;
+                }
+
+                draft.Omitted.Add(new DiscoveryDraftOmission(relation.Key, "navigation-undecided", Truncate(
+                    $"Navega a {route}, que todavía no está en ninguna feature de Walkie: esa conexión no se dibuja. Cuando esa pantalla esté documentada, el portal se puede agregar.", 500)));
+            }
+        }
+
         return draft;
+    }
+
+    /// <summary>
+    /// Para incorporar a un lienzo existente (ADR-0018): cada caja del borrador que ya está en el lienzo (un <c>ref</c> al
+    /// mismo elemento del catálogo, la caja del mismo módulo o un portal a la misma feature) se reutiliza en vez de
+    /// agregarse; las pantallas siempre se agregan. Avisa de una pantalla con el mismo título (posible duplicado).
+    /// </summary>
+    public static (Draft Draft, List<string> Duplicates) Attach(Draft draft, JsonElement existing)
+    {
+        var refs = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        var titles = new List<string>();
+        if (existing.TryGetProperty("nodes", out var nodes))
+        {
+            foreach (var node in nodes.EnumerateObject().OrderBy(n => n.Name, StringComparer.Ordinal))
+            {
+                if (!Guid.TryParse(node.Name, out var nodeId))
+                {
+                    continue;
+                }
+
+                var type = node.Value.TryGetProperty("type", out var t) ? t.GetString() : null;
+                var by = type switch
+                {
+                    "ref" => Prop(node.Value, "catalogId"),
+                    "module" => Prop(node.Value, "moduleId"),
+                    "portal" => Prop(node.Value, "targetFeatureId"),
+                    _ => null,
+                };
+                if (by is not null)
+                {
+                    refs.TryAdd($"{type}:{by.ToUpperInvariant()}", nodeId);
+                }
+
+                if (type == "screen" && Prop(node.Value, "title") is { } title)
+                {
+                    titles.Add(MatchIndex.NormalizeTitle(title));
+                }
+            }
+        }
+
+        var reconciled = draft with
+        {
+            Nodes =
+            [
+                .. draft.Nodes.Select(n => (n.Type switch
+                {
+                    "ref" => n.CatalogId,
+                    "module" => n.ModuleId,
+                    "portal" => n.TargetFeatureId,
+                    _ => null,
+                }) is { } id && refs.TryGetValue($"{n.Type}:{id.ToString().ToUpperInvariant()}", out var existingId)
+                    ? n with { Existing = existingId }
+                    : n),
+            ],
+        };
+        var duplicates = reconciled.Nodes.Where(n => n.Type == "screen" && titles.Contains(MatchIndex.NormalizeTitle(n.Title))).Select(n => n.Title).ToList();
+        return (reconciled, duplicates);
+    }
+
+    /// <summary>
+    /// Lo que se agrega a un lienzo existente (<c>{ nodes, edges, layout }</c>): las cajas nuevas con los ids y posiciones
+    /// de la persona, y las conexiones (a cajas nuevas o reutilizadas). Errores si no cubren exactamente lo nuevo, repiten
+    /// o pisan un id existente, no son UUID v7 o encima una caja nueva con otra (nueva o existente).
+    /// </summary>
+    public static (JsonObject? Additions, Dictionary<string, string[]> Errors) Additions(Draft draft, CanvasInput input, JsonElement existing, string path)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        var added = draft.Nodes.Where(n => n.Existing is null).ToList();
+        Same(added.Select(n => n.Key), input.Nodes.Keys, $"{path}/nodes", errors);
+        Same(draft.Edges.Select(e => e.Key), input.Edges.Keys, $"{path}/edges", errors);
+        Same(added.Select(n => n.Key), input.Layout.Keys, $"{path}/layout", errors);
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var section in new[] { "nodes", "edges", "layout" })
+        {
+            if (existing.TryGetProperty(section, out var items))
+            {
+                foreach (var item in items.EnumerateObject())
+                {
+                    used.Add(item.Name);
+                }
+            }
+        }
+
+        var all = input.Nodes.Values.Concat(input.Edges.Values).ToList();
+        if (all.Any(id => id.Version != 7))
+        {
+            errors[path] = ["Cada id nuevo tiene que ser un UUID v7 generado por el cliente."];
+        }
+        else if (all.Distinct().Count() != all.Count || all.Any(id => used.Contains(id.ToString())))
+        {
+            errors[path] = ["Hay ids repetidos o que ya están en el lienzo."];
+        }
+
+        // Las cajas nuevas no se enciman entre sí ni con las que ya están, con el tamaño con que se dibujan
+        // (`BoxSizes`): el guardado si lo tienen (grupos, ancho de un módulo) y si no, el de su contenido. Las nuevas
+        // siempre con el de su contenido: el cliente no manda tamaños, así que uno chico no puede colarse.
+        var boxes = new List<Box>();
+        if (existing.TryGetProperty("layout", out var layout))
+        {
+            var nodes = existing.TryGetProperty("nodes", out var n) && n.ValueKind == JsonValueKind.Object ? n : (JsonElement?)null;
+            foreach (var box in layout.EnumerateObject())
+            {
+                var p = box.Value;
+                JsonElement? node = nodes is { } saved && saved.TryGetProperty(box.Name, out var found) ? found : null;
+                var (w, h) = BoxSizes.OfSaved(node, p);
+                boxes.Add(new Box(Describe(node, box.Name), Number(p, "x") ?? 0, Number(p, "y") ?? 0, w, h));
+            }
+        }
+
+        var drafted = draft.Nodes.ToDictionary(n => n.Key, StringComparer.Ordinal);
+
+        if (errors.Count == 0)
+        {
+            foreach (var (key, (x, y)) in input.Layout.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                if (!double.IsFinite(x) || !double.IsFinite(y) || Math.Abs(x) > MaxCoordinate || Math.Abs(y) > MaxCoordinate)
+                {
+                    errors[$"{path}/layout/{key}"] = ["Posición fuera de rango."];
+                    break;
+                }
+
+                var (w, h) = SizeOf(drafted[key]);
+                var placed = new Box(key, x, y, w, h);
+                if (boxes.FindIndex(b => Overlaps(b, placed)) is >= 0 and var index && boxes[index] is var hit)
+                {
+                    errors[$"{path}/layout/{key}"] = [string.Create(CultureInfo.InvariantCulture,
+                        $"Se encima con {hit.Label}: la caja nueva mide unos {w:0} × {h:0} px en ({x:0}, {y:0}) y {hit.Label} ocupa unos {hit.W:0} × {hit.H:0} px en ({hit.X:0}, {hit.Y:0}). Lo que se agrega va en un lugar libre, sin mover nada de lo que ya está.")];
+                    break;
+                }
+
+                boxes.Add(placed);
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return (null, errors);
+        }
+
+        string Id(DiscoveryDraftNode node) => (node.Existing ?? input.Nodes[node.Key]).ToString();
+        var byKey = draft.Nodes.ToDictionary(n => n.Key, StringComparer.Ordinal);
+        var nodesOut = new JsonObject();
+        var layoutOut = new JsonObject();
+        foreach (var node in added)
+        {
+            nodesOut[Id(node)] = NodeJson(node, Id(node));
+            var (x, y) = input.Layout[node.Key];
+            layoutOut[Id(node)] = new JsonObject { ["x"] = x, ["y"] = y };
+        }
+
+        var edgesOut = new JsonObject();
+        foreach (var edge in draft.Edges)
+        {
+            var id = input.Edges[edge.Key].ToString();
+            edgesOut[id] = EdgeJson(edge, id, Id(byKey[edge.From]), Id(byKey[edge.To]));
+        }
+
+        return (new JsonObject { ["nodes"] = nodesOut, ["edges"] = edgesOut, ["layout"] = layoutOut }, errors);
+    }
+
+    private readonly record struct Box(string Label, double X, double Y, double W, double H);
+
+    private static bool Overlaps(Box a, Box b) =>
+        a.X < b.X + b.W + Gap && b.X < a.X + a.W + Gap && a.Y < b.Y + b.H + Gap && b.Y < a.Y + a.H + Gap;
+
+    /// <summary>Cómo se nombra una caja existente en un error: su título y su id.</summary>
+    private static string Describe(JsonElement? node, string id) =>
+        node is { } n && Prop(n, "title") is { Length: > 0 } title ? $"«{title}» ({id})" : id;
+
+    /// <summary>
+    /// Tamaño con que se dibujará una caja del borrador: una pantalla con su ruta como descripción, un componente con
+    /// su título y su firma, un portal con «→» y el nombre, un módulo con sus interfaces.
+    /// </summary>
+    private static (double W, double H) SizeOf(DiscoveryDraftNode node) => node.Type switch
+    {
+        "screen" => BoxSizes.Estimate(node.Title, description: node.Route is { } route ? Truncate("Ruta: " + route, 2000) : null),
+        "ref" => BoxSizes.Estimate(node.Title, http: node.Title),
+        "portal" => BoxSizes.Estimate("→ " + node.Title),
+        "module" => BoxSizes.Estimate(node.Title, extra: 48),
+        _ => BoxSizes.Estimate(node.Title),
+    };
+
+    private static JsonObject NodeJson(DiscoveryDraftNode node, string id)
+    {
+        var item = new JsonObject { ["id"] = id, ["type"] = node.Type, ["title"] = node.Title };
+        if (node.Route is { } route)
+        {
+            item["description"] = Truncate("Ruta: " + route, 2000);
+        }
+
+        if (node.CatalogId is { } catalogId)
+        {
+            item["catalogId"] = catalogId.ToString();
+        }
+
+        if (node.ModuleId is { } moduleId)
+        {
+            item["moduleId"] = moduleId.ToString();
+        }
+
+        if (node.TargetFeatureId is { } featureId)
+        {
+            item["targetFeatureId"] = featureId.ToString();
+        }
+
+        return item;
+    }
+
+    private static JsonObject EdgeJson(DiscoveryDraftEdge edge, string id, string from, string to)
+    {
+        var item = new JsonObject { ["id"] = id, ["from"] = from, ["to"] = to, ["kind"] = edge.Kind, ["operation"] = edge.Operation };
+        if (edge.ToInterface is { } target)
+        {
+            item["toInterface"] = new JsonObject { ["id"] = target.Id, ["name"] = target.Name };
+        }
+
+        return item;
+    }
+
+    private static string? Prop(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static double? Number(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble() : null;
+
+    /// <summary>La ruta de una pantalla desde su clave (<c>screen:&lt;ámbito&gt;:&lt;ruta&gt;</c>), para explicar una omisión.</summary>
+    private static string RouteOf(string screenKey)
+    {
+        var parts = screenKey.Split(':', 3);
+        return parts.Length == 3 ? parts[2] : screenKey;
     }
 
     public static Draft Module(JsonElement module, DraftContext context)
@@ -250,14 +519,27 @@ internal static class CanvasDraft
             }
         }
 
-        for (var i = 0; i < boxes.Count && errors.Count == 0; i++)
+        // Cada caja con el tamaño con que se dibuja (`BoxSizes`), no el nominal: una API de ruta larga ocupa varias líneas.
+        var drafted = draft.Nodes.ToDictionary(n => n.Key, StringComparer.Ordinal);
+        var sized = new List<Box>();
+        if (errors.Count == 0)
         {
-            for (var j = i + 1; j < boxes.Count; j++)
+            foreach (var (key, (x, y)) in boxes)
             {
-                var (a, b) = (boxes[i].Value, boxes[j].Value);
-                if (a.X < b.X + BoxWidth + Gap && b.X < a.X + BoxWidth + Gap && a.Y < b.Y + BoxHeight + Gap && b.Y < a.Y + BoxHeight + Gap)
+                var (w, h) = SizeOf(drafted[key]);
+                sized.Add(new Box(key, x, y, w, h));
+            }
+        }
+
+        for (var i = 0; i < sized.Count && errors.Count == 0; i++)
+        {
+            for (var j = i + 1; j < sized.Count; j++)
+            {
+                var (a, b) = (sized[i], sized[j]);
+                if (Overlaps(a, b))
                 {
-                    errors[$"{path}/layout/{boxes[j].Key}"] = [$"Se encima con {boxes[i].Key}: el lienzo inicial no debe tener cajas superpuestas."];
+                    errors[$"{path}/layout/{b.Label}"] = [string.Create(CultureInfo.InvariantCulture,
+                        $"Se encima con {a.Label}: mide unos {b.W:0} × {b.H:0} px en ({b.X:0}, {b.Y:0}) y la otra unos {a.W:0} × {a.H:0} px en ({a.X:0}, {a.Y:0}). El lienzo inicial no debe tener cajas superpuestas.")];
                     break;
                 }
             }
@@ -273,23 +555,7 @@ internal static class CanvasDraft
         var layout = new JsonObject();
         foreach (var node in draft.Nodes)
         {
-            var item = new JsonObject { ["id"] = Id(node.Key), ["type"] = node.Type, ["title"] = node.Title };
-            if (node.Route is { } route)
-            {
-                item["description"] = Truncate("Ruta: " + route, 2000);
-            }
-
-            if (node.CatalogId is { } catalogId)
-            {
-                item["catalogId"] = catalogId.ToString();
-            }
-
-            if (node.ModuleId is { } moduleId)
-            {
-                item["moduleId"] = moduleId.ToString();
-            }
-
-            nodes[Id(node.Key)] = item;
+            nodes[Id(node.Key)] = NodeJson(node, Id(node.Key));
             var (x, y) = input.Layout[node.Key];
             layout[Id(node.Key)] = new JsonObject { ["x"] = x, ["y"] = y };
         }
@@ -298,13 +564,7 @@ internal static class CanvasDraft
         foreach (var edge in draft.Edges)
         {
             var id = input.Edges[edge.Key].ToString();
-            var item = new JsonObject { ["id"] = id, ["from"] = Id(edge.From), ["to"] = Id(edge.To), ["kind"] = edge.Kind, ["operation"] = edge.Operation };
-            if (edge.ToInterface is { } target)
-            {
-                item["toInterface"] = new JsonObject { ["id"] = target.Id, ["name"] = target.Name };
-            }
-
-            edges[id] = item;
+            edges[id] = EdgeJson(edge, id, Id(edge.From), Id(edge.To));
         }
 
         var graph = new JsonObject

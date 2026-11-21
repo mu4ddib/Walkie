@@ -545,3 +545,32 @@
   background: var(--sand-raised);
   border-bottom: 1px solid var(--dune-200);
 }
+
+/* Estado en Walkie de un hallazgo o una propuesta (spec walkie-live-documentacion): glifo y texto, el color acompaña. */
+.arch-node-state {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--stone-700);
+}
+
+.arch-node-state.is-linked,
+.arch-node-state.is-created {
+  color: var(--ok);
+}
+
+.arch-node-state.is-missing-target,
+.arch-node-state.is-changed {
+  color: var(--spice);
+}
+
+.arch-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.arch-entity-state p {
+  margin: 0;
+}

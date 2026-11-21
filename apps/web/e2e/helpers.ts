@@ -88,11 +88,11 @@ export async function seedCanvas(page: Page, graph: Record<string, unknown>) {
       const url = `${api}/api/features/${featureId}/canvas`;
       const current = (await (await fetch(url, { headers })).json()) as { version: number };
       const put = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ ...graph, version: current.version }) });
-      return put.status;
+      return { code: put.status, body: put.ok ? '' : await put.text() };
     },
     { api: API, featureId, graph },
   );
-  expect(status).toBe(200);
+  expect(status.code, status.body).toBe(200);
   await page.reload();
   await expect(page.locator('.react-flow__node').first()).toBeVisible();
   // La vista recordada es la del lienzo vacío: «Ver todo» encuadra lo sembrado (ya medido).
