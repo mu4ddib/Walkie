@@ -58,6 +58,22 @@ async function capture(page: Page, name: string) {
 type Rect = { x: number; y: number; w: number; h: number; id?: string };
 const overlap = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
+/** Espera a que la cámara termine (en Safari, con cuadros lentos, «Ver todo» tarda más de un segundo). */
+async function settled(page: Page) {
+  let last = '';
+  await expect
+    .poll(
+      async () => {
+        const now = await page.evaluate(() => getComputedStyle(document.querySelector('.react-flow__viewport')!).transform);
+        const same = now === last;
+        last = now;
+        return same;
+      },
+      { intervals: [300], timeout: 10_000 },
+    )
+    .toBe(true);
+}
+
 /** Cajas y etiquetas visibles en px de pantalla, y el zoom actual. */
 async function geometry(page: Page) {
   return page.evaluate(() => {
@@ -90,17 +106,32 @@ function assertNoOverlaps(g: Awaited<ReturnType<typeof geometry>>, ends: Record<
   return covering;
 }
 
+/**
+ * Navega y, si WebKit perdió la sesión de la pestaña (intermitente: el token vive en `sessionStorage`), vuelve a entrar
+ * por el SSO de Keycloak sin contraseña. No cambia lo que se mide: solo evita falsos fallos de sesión.
+ */
+async function go(page: Page, url: string) {
+  await page.goto(url);
+  const signIn = page.getByRole('button', { name: 'Iniciar sesión' });
+  const ready = page.getByRole('button', { name: 'Salir' });
+  await expect(signIn.or(ready)).toBeVisible({ timeout: 30_000 });
+  if (await signIn.isVisible()) {
+    await signIn.click();
+    await expect(ready).toBeVisible({ timeout: 30_000 });
+  }
+}
+
 async function openSeeded(page: Page, draft: CanvasDraft, name: string) {
   await openNewFeature(page, name);
   const graph = graphOf(draft);
   await seedCanvas(page, graph);
   // Sin vista guardada, como un lienzo recién creado desde la revisión (el lienzo guarda su vista al salir: se borra
   // desde otra página).
-  const url = page.url();
-  await page.goto('/apps');
+  const url = new URL(page.url()).pathname;
+  await go(page, '/apps');
   await expect(page.getByRole('list', { name: 'Apps' })).toBeVisible();
   await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('walkie.viewport.')).forEach((k) => localStorage.removeItem(k)));
-  await page.goto(url);
+  await go(page, url);
   await expect(page.locator('.react-flow__node').first()).toBeVisible();
   await page.waitForTimeout(600);
   await expect(saveStatus(page)).toHaveAttribute('data-state', 'idle');
@@ -141,7 +172,7 @@ for (const viewport of VIEWPORTS) {
 
       // «Ver todo» muestra las 30 cajas.
       await page.keyboard.press('0');
-      await page.waitForTimeout(800);
+      await settled(page);
       const all = await geometry(page);
       expect(all.boxes).toHaveLength(Object.keys(graph.nodes).length);
       const coveringFull = assertNoOverlaps(all, ends);
@@ -182,32 +213,30 @@ for (const viewport of VIEWPORTS) {
       });
     });
 
-    test('Catalog, Pedidos y 75 cajas: sin cajas encimadas y con zoom inicial legible', async ({ page }) => {
-      test.setTimeout(120_000);
-      await login(page);
-      await page.evaluate(() => localStorage.setItem('walkie.viewMode', '"full"'));
-      const results: Record<string, unknown> = {};
-      for (const [name, draft] of [
-        ['Componentes compartidos', walkieCatalog],
-        ['Tienda de pedidos', pedidos],
-        ['Sintética de 75 cajas', synthetic(75)],
-      ] as const) {
-        await page.goto('/apps');
+    for (const [name, draft, minZoom] of [
+      ['Componentes compartidos', walkieCatalog, LEGIBLE_ZOOM - 0.01],
+      ['Tienda de pedidos', pedidos, 0.75],
+      ['Sintética de 75 cajas', synthetic(75), LEGIBLE_ZOOM - 0.01],
+    ] as const) {
+      test(`${name}: sin cajas encimadas y con zoom inicial legible`, async ({ page }) => {
+        test.setTimeout(120_000);
+        await login(page);
+        await page.evaluate(() => localStorage.setItem('walkie.viewMode', '"full"'));
         // La galería tiene que haber cargado antes de escribir el nombre de la app (ver «Trampas conocidas»).
         await expect(page.getByRole('list', { name: 'Apps' })).toBeVisible();
         const t0 = Date.now();
         const { ends } = await openSeeded(page, draft, name);
         const g = await geometry(page);
-        expect(g.zoom, name).toBeGreaterThanOrEqual(name === 'Tienda de pedidos' ? 0.75 : LEGIBLE_ZOOM - 0.01);
+        expect(g.zoom, name).toBeGreaterThanOrEqual(minZoom);
         assertNoOverlaps(g, ends);
         await capture(page, `${viewport.width}-${slug(name)}-inicial`);
         await page.keyboard.press('0');
-        await page.waitForTimeout(800);
+        await settled(page);
         const fit = await geometry(page);
-        results[name] = { initialZoom: g.zoom, fitZoom: fit.zoom, covering: assertNoOverlaps(fit, ends), openMs: Date.now() - t0 };
+        const result = { initialZoom: g.zoom, fitZoom: fit.zoom, covering: assertNoOverlaps(fit, ends), openMs: Date.now() - t0 };
         await capture(page, `${viewport.width}-${slug(name)}-completa`);
-      }
-      test.info().annotations.push({ type: 'medidas', description: JSON.stringify({ viewport, ...results }) });
-    });
+        test.info().annotations.push({ type: 'medidas', description: JSON.stringify({ viewport, name, ...result }) });
+      });
+    }
   });
 }
