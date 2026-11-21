@@ -2,7 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type { DiscoveryApplyResult, DiscoveryOperation } from '../api/client';
 import { type LayoutMetrics } from '../map/mapLayout';
 import { layeredLayout } from './layout/layered';
-import { boxSize } from './layout/layoutQuality';
+import { draftBoxSize, savedBoxSize } from './layout/layoutQuality';
 
 /** El borrador del lienzo inicial que devuelve la vista previa de un módulo o una feature (`created[].canvas`). */
 export type CanvasDraft = NonNullable<DiscoveryApplyResult['created'][number]['canvas']>;
@@ -23,8 +23,6 @@ export const CANVAS_METRICS: LayoutMetrics = {
   belowSpacing: 32,
   belowPerRow: 4,
 };
-
-const snap = (v: number) => Math.round(v / 8) * 8 || 0;
 
 /**
  * Ids (UUID v7 del cliente, como todo id de nodo, conexión e interfaz) y posiciones del lienzo inicial con la
@@ -50,32 +48,41 @@ export function planInitialCanvas(draft: CanvasDraft, previous?: CanvasInput): C
   const forward = (from: string, to: string) => depth.get(from)! < depth.get(to)! || (depth.get(from) === depth.get(to) && from < to);
   const navigation = draft.edges.filter((e) => e.kind === 'navigation' && forward(e.from, e.to));
   const calls = draft.edges.filter((e) => e.kind !== 'navigation');
-  const titles = new Map(draft.nodes.map((n) => [n.key, n.title]));
-  const layout: CanvasInput['layout'] = layeredLayout(screens, others, navigation, calls, undefined, (k) => boxSize(titles.get(k) ?? ''));
+  const byKey = new Map(draft.nodes.map((n) => [n.key, n]));
+  const layout: CanvasInput['layout'] = layeredLayout(screens, others, navigation, calls, undefined, (k) => draftBoxSize(byKey.get(k)!));
 
   return { nodes, edges, interfaces, layout };
 }
 
 type Box = { x: number; y: number; w?: number; h?: number };
 
+/** Lo que hace falta del lienzo existente para ubicar lo nuevo: sus cajas (para medirlas) y sus posiciones. */
+export type ExistingCanvas = { nodes?: Record<string, object>; layout: Record<string, Box> };
+
+/** Aire entre cajas al incorporar (la API exige 8 px; se deja más para las etiquetas). */
+const ATTACH_GAP = 32;
+
 /**
  * Ids y posiciones de lo que se agrega a un lienzo existente (ADR-0018): solo las cajas nuevas (las que el borrador
- * no reutiliza), en una columna libre a la derecha de todo lo que ya está, alineada con su borde de arriba. Nada de lo
- * que hay se mueve. `previous` conserva los ids de una vista previa anterior (un reintento manda los mismos).
+ * no reutiliza), en una columna libre a la derecha de todo lo que ya está, alineada con su borde de arriba. Cada caja,
+ * existente o nueva, con el tamaño con que se dibuja (`savedBoxSize`, `draftBoxSize`): es lo que valida la API. Nada
+ * de lo que hay se mueve. `previous` conserva los ids de una vista previa anterior (un reintento manda los mismos).
  */
-export function planAttachCanvas(draft: CanvasDraft, existing: Record<string, Box>, previous?: CanvasInput): CanvasInput {
+export function planAttachCanvas(draft: CanvasDraft, existing: ExistingCanvas, previous?: CanvasInput): CanvasInput {
   const id = (map: Record<string, string> | undefined, key: string) => map?.[key] ?? uuidv7();
   const added = draft.nodes.filter((n) => !n.existing);
   const order = ['screen', 'ref', 'module', 'portal'];
   const sorted = [...added].sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type) || a.key.localeCompare(b.key));
-  const boxes = Object.values(existing);
-  const right = boxes.length === 0 ? 0 : Math.max(...boxes.map((b) => b.x + (b.w ?? 184)));
+  const boxes = Object.entries(existing.layout).map(([key, b]) => ({ ...b, ...savedBoxSize(existing.nodes?.[key], b) }));
+  const right = boxes.length === 0 ? 0 : Math.max(...boxes.map((b) => b.x + b.w));
   const top = boxes.length === 0 ? 0 : Math.min(...boxes.map((b) => b.y));
-  const x = snap(right + CANVAS_METRICS.columnGap);
+  const x = Math.ceil((right + CANVAS_METRICS.columnGap) / 8) * 8;
   const layout: CanvasInput['layout'] = {};
-  sorted.forEach((n, i) => {
-    layout[n.key] = { x, y: snap(top + i * (CANVAS_METRICS.main.h + CANVAS_METRICS.rowGap)) };
-  });
+  let y = Math.ceil(top / 8) * 8;
+  for (const n of sorted) {
+    layout[n.key] = { x, y };
+    y += Math.ceil((draftBoxSize(n).h + ATTACH_GAP) / 8) * 8;
+  }
   return {
     nodes: Object.fromEntries(added.map((n) => [n.key, id(previous?.nodes, n.key)])),
     edges: Object.fromEntries(draft.edges.map((e) => [e.key, id(previous?.edges, e.key)])),

@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { autoLayout, catalogKey } from '../../map/mapLayout';
 import { CANVAS_METRICS, planInitialCanvas, type CanvasDraft } from '../initialCanvas';
 import { LAYOUT_CASES, pedidos } from './layoutFixtures';
-import { boxSize, measure, type Point } from './layoutQuality';
+import { draftBoxSize, measure, type Point } from './layoutQuality';
 
 const edgesOf = (d: CanvasDraft) => d.edges.map((e) => ({ from: e.from, to: e.to }));
 const sizeOf = (d: CanvasDraft) => {
-  const titles = new Map(d.nodes.map((n) => [n.key, n.title]));
-  return (k: string) => boxSize(titles.get(k) ?? '');
+  const nodes = new Map(d.nodes.map((n) => [n.key, n]));
+  return (k: string) => draftBoxSize(nodes.get(k)!);
 };
 
 /** La distribución anterior (hasta esta spec): pantallas en columnas y todas las APIs en una grilla de 4 debajo. */

@@ -37,15 +37,78 @@ type Rect = { x: number; y: number; w: number; h: number };
 
 const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
+/** Líneas de un texto partido por palabras; una palabra más larga que la línea ocupa las que necesite. */
+export function lines(text: string, perLine: number): number {
+  let count = 1;
+  let used = 0;
+  for (const word of text.split(' ').filter(Boolean)) {
+    if (used > 0 && used + 1 + word.length <= perLine) {
+      used += 1 + word.length;
+      continue;
+    }
+    if (used > 0) count++;
+    count += Math.floor((word.length - 1) / perLine);
+    used = ((word.length - 1) % perLine) + 1;
+  }
+  return count;
+}
+
 /**
- * Tamaño de una caja del lienzo según su título, medido en el navegador (`.pixel-node`: de 184 a 264 px de ancho;
- * 89 px de alto con título y método/ruta en una línea; cada línea de más al partirse, unos 20 px). Se redondea hacia
- * arriba para no quedarse corto: es lo que reserva la distribución.
+ * Tamaño con que el navegador dibuja una caja (`.pixel-node`), medido en Chromium: de 184 a 264 px de ancho según el
+ * texto más largo; de alto, el título, la línea de método y ruta (`http`) y la descripción (hasta 2 líneas) partidos
+ * por palabras. Conservador: nunca menor que lo medido. Es la misma fórmula que valida la API
+ * (`BoxSizes.Estimate` en `Walkie.Modules.Discovery`): lo que la distribución reserva, la API lo acepta.
  */
-export function boxSize(title: string): { w: number; h: number } {
-  const w = Math.min(264, Math.max(184, Math.ceil((8 + title.length * 8.4) / 8) * 8));
-  const extra = title.length <= 29 ? 0 : Math.ceil((title.length - 29) / 2.5);
-  return { w, h: 96 + extra * 20 };
+export function boxSize(title: string, http?: string, description?: string, extra = 0): { w: number; h: number } {
+  const longest = Math.max(title.length * 8.4, (description?.length ?? 0) * 6.3, (http?.length ?? 0) * 7.6);
+  const w = Math.min(264, Math.max(184, Math.ceil((longest + 12) / 8) * 8));
+  let h = 50 + 19 * lines(title, 29);
+  if (http) h += 20 * lines(http, 30);
+  if (description) h += 18 * Math.min(2, lines(description, 40));
+  return { w, h: h + extra };
+}
+
+type SavedNode = {
+  type?: string;
+  title?: string;
+  description?: string;
+  http?: { method?: string; path?: string };
+  inputs?: unknown[];
+  expression?: string;
+  assetId?: string;
+};
+
+/**
+ * Tamaño de una caja de un lienzo guardado, como la mide la API (`BoxSizes.OfSaved`): lo explícito de su `layout`
+ * manda (un grupo, el ancho de un módulo) y lo que falta sale de su contenido (un `ref`, con su título como firma).
+ */
+export function savedBoxSize(node: SavedNode | undefined, box: { w?: number; h?: number }): { w: number; h: number } {
+  let size = { w: 184, h: 72 };
+  if (node) {
+    const http = node.http ? `${node.http.method ?? ''} ${node.http.path ?? ''}`.trim() : node.type === 'ref' ? node.title : undefined;
+    let extra = 0;
+    if (Array.isArray(node.inputs)) extra += 16 + 16 * Math.min(6, node.inputs.length);
+    if (node.expression) extra += 16 * Math.min(4, node.expression.split('\n').length);
+    if (node.assetId) extra += 112;
+    size = boxSize(node.title ?? '', http, node.description, extra);
+  }
+  return { w: box.w ?? size.w, h: box.h ?? size.h };
+}
+
+/** Tamaño de una caja del borrador de Walkie Live, como la dibujará el lienzo (y como la valida la API). */
+export function draftBoxSize(node: { type: string; title: string; route?: string }): { w: number; h: number } {
+  switch (node.type) {
+    case 'screen':
+      return boxSize(node.title, undefined, node.route !== undefined ? `Ruta: ${node.route}` : undefined);
+    case 'ref':
+      return boxSize(node.title, node.title);
+    case 'portal':
+      return boxSize(`→ ${node.title}`);
+    case 'module':
+      return boxSize(node.title, undefined, undefined, 48);
+    default:
+      return boxSize(node.title);
+  }
 }
 
 /** Si los segmentos ab y cd se cruzan (sin contar extremos compartidos). */

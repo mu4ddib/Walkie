@@ -169,6 +169,82 @@ public sealed partial class DiscoveryArchitectureTests
     }
 
     [Fact]
+    public async Task Dos_incorporaciones_a_la_misma_feature_en_una_solicitud_se_rechazan_enteras_sin_aplicar_nada()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var (_, snapshotId, pedidos, _) = await ShopDocumentedAsync(client, "Dos incorporaciones", help: true);
+        const string Help = "screen:web:/ayuda";
+        var before = await GraphAsync(client, pedidos);
+
+        // Vista previa de las dos juntas: 400 en la segunda, con el motivo y sin vista previa parcial.
+        var both = await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), true, [Attach(Home, pedidos, null, null), Attach(Help, pedidos, null, null)]), HttpStatusCode.BadRequest);
+        var message = both.GetProperty("errors").GetProperty("/operations/1/target")[0].GetString()!;
+        Assert.Contains("una pantalla por vez", message, StringComparison.Ordinal);
+        Assert.Contains("No se aplicó nada", message, StringComparison.Ordinal);
+
+        // Confirmar las dos (cada una con su lugar libre y la versión vista): tampoco se aplica ninguna.
+        var homePreview = (await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), true, [Attach(Home, pedidos, null, null)]), HttpStatusCode.OK)).GetProperty("attached")[0];
+        var helpPreview = (await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), true, [Attach(Help, pedidos, null, null)]), HttpStatusCode.OK)).GetProperty("attached")[0];
+        var version = before.GetProperty("version").GetInt32();
+        var helpCanvas = AttachCanvas(helpPreview.GetProperty("canvas"), before);
+        helpCanvas["layout"]![Help]!["y"] = 1200;
+        await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), false,
+            [Attach(Home, pedidos, version, AttachCanvas(homePreview.GetProperty("canvas"), before)), Attach(Help, pedidos, version, helpCanvas)]), HttpStatusCode.BadRequest);
+        Assert.True(JsonElement.DeepEquals(before, await GraphAsync(client, pedidos)));
+        var review = await JsonAsync(await client.GetAsync(new Uri($"/api/snapshots/{snapshotId}/review?key={Uri.EscapeDataString(Home)}&key={Uri.EscapeDataString(Help)}", UriKind.Relative)), HttpStatusCode.OK);
+        Assert.Equal(2, review.GetProperty("items").GetArrayLength());
+        Assert.All(review.GetProperty("items").EnumerateArray(), i => Assert.Equal("new", i.GetProperty("status").GetString()));
+
+        // Una por vez sí: la segunda, con la vista previa del lienzo ya actualizado.
+        Assert.Equal("completed", (await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), false,
+            [Attach(Home, pedidos, version, AttachCanvas(homePreview.GetProperty("canvas"), before))]), HttpStatusCode.OK)).GetProperty("status").GetString());
+        var middle = await GraphAsync(client, pedidos);
+        var second = (await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), true, [Attach(Help, pedidos, null, null)]), HttpStatusCode.OK)).GetProperty("attached")[0];
+        Assert.Equal("completed", (await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), false,
+            [Attach(Help, pedidos, second.GetProperty("canvasVersion").GetInt32(), AttachCanvas(second.GetProperty("canvas"), middle))]), HttpStatusCode.OK)).GetProperty("status").GetString());
+        Assert.Equal(version + 2, (await GraphAsync(client, pedidos)).GetProperty("version").GetInt32());
+    }
+
+    [Fact]
+    public async Task Incorporar_rechaza_una_caja_encima_de_una_existente_por_lo_que_mide_dibujada()
+    {
+        using var client = factory.CreateAuthenticatedClient();
+        var (_, snapshotId, pedidos, _) = await ShopDocumentedAsync(client, "Incorporar con cajas reales");
+        // Una API hecha a mano con una ruta larga: en el navegador mide 264 × 166, no 184 × 72.
+        var graph = (await GraphAsync(client, pedidos)).Deserialize<JsonObject>()!;
+        const string Big = "0198f0c0-2222-7000-8000-000000000001";
+        graph["nodes"]![Big] = new JsonObject
+        {
+            ["id"] = Big, ["type"] = "api", ["title"] = "PUT /api/apps/{appId}/members/{userId}",
+            ["http"] = new JsonObject { ["method"] = "PUT", ["path"] = "/api/apps/{appId}/members/{userId}" },
+        };
+        graph["layout"]![Big] = new JsonObject { ["x"] = 5000, ["y"] = 0 };
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(new Uri($"/api/features/{pedidos}/canvas", UriKind.Relative), graph)).StatusCode);
+        var before = await GraphAsync(client, pedidos);
+        var preview = (await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), true, [Attach(Home, pedidos, null, null)]), HttpStatusCode.OK)).GetProperty("attached")[0];
+
+        // Justo debajo de la API, donde con 184 × 72 había lugar (y = 96): 400 con el tamaño y la posición de las dos.
+        var canvas = AttachCanvas(preview.GetProperty("canvas"), before);
+        canvas["layout"]![Home] = new JsonObject { ["x"] = 5000, ["y"] = 96 };
+        var rejected = await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), false,
+            [Attach(Home, pedidos, preview.GetProperty("canvasVersion").GetInt32(), canvas)]), HttpStatusCode.BadRequest);
+        var message = rejected.GetProperty("errors").GetProperty($"/operations/0/canvas/layout/{Home}")[0].GetString()!;
+        Assert.Contains("PUT /api/apps/{appId}/members/{userId}", message, StringComparison.Ordinal);
+        Assert.Contains("264 × 167", message, StringComparison.Ordinal);
+        Assert.True(JsonElement.DeepEquals(before, await GraphAsync(client, pedidos)));
+
+        // Debajo de lo que mide de verdad, con aire: entra y nada de lo anterior se mueve.
+        canvas["layout"]![Home] = new JsonObject { ["x"] = 5000, ["y"] = 200 };
+        Assert.Equal("completed", (await JsonAsync(await ApplyAsync(client, snapshotId, Guid.CreateVersion7(), false,
+            [Attach(Home, pedidos, preview.GetProperty("canvasVersion").GetInt32(), canvas)]), HttpStatusCode.OK)).GetProperty("status").GetString());
+        var after = await GraphAsync(client, pedidos);
+        foreach (var box in before.GetProperty("layout").EnumerateObject())
+        {
+            Assert.True(JsonElement.DeepEquals(box.Value, after.GetProperty("layout").GetProperty(box.Name)));
+        }
+    }
+
+    [Fact]
     public async Task Incorporar_exige_una_feature_de_la_app_y_una_pantalla_sin_decision()
     {
         using var client = factory.CreateAuthenticatedClient();
@@ -184,10 +260,10 @@ public sealed partial class DiscoveryArchitectureTests
     // ---------- Ayudas ----------
 
     /// <summary>La tienda con su pantalla de inicio, analizada, con la propuesta «Pedidos» creada (APIs y feature).</summary>
-    private static async Task<(Guid App, Guid Snapshot, Guid Pedidos, Dictionary<string, Guid> Apis)> ShopDocumentedAsync(HttpClient client, string name)
+    private static async Task<(Guid App, Guid Snapshot, Guid Pedidos, Dictionary<string, Guid> Apis)> ShopDocumentedAsync(HttpClient client, string name, bool help = false)
     {
         var appId = await CreateAppAsync(client, name);
-        var snapshotId = await UploadSnapshotAsync(client, appId, ShopWithHome(Guid.CreateVersion7()));
+        var snapshotId = await UploadSnapshotAsync(client, appId, ShopWithHome(Guid.CreateVersion7(), help));
         var proposal = (await ArchitectureAsync(client, snapshotId)).GetProperty("proposals").EnumerateArray().Single(p => p.GetProperty("key").GetString() == "feature:web:Pedidos");
         var apis = proposal.GetProperty("members").EnumerateArray().Select(m => m.GetString()!).Where(m => m.StartsWith("api:", StringComparison.Ordinal))
             .ToDictionary(a => a, _ => Guid.CreateVersion7());
@@ -199,8 +275,11 @@ public sealed partial class DiscoveryArchitectureTests
         return (appId, snapshotId, pedidos, apis);
     }
 
-    /// <summary>La misma tienda, más una pantalla de inicio en «/» que lista los pedidos y lleva a la lista.</summary>
-    private static byte[] ShopWithHome(Guid source)
+    /// <summary>
+    /// La misma tienda, más una pantalla de inicio en «/» que lista los pedidos y lleva a la lista (y, con
+    /// <paramref name="help"/>, otra pantalla suelta en «/ayuda» que también lista los pedidos).
+    /// </summary>
+    private static byte[] ShopWithHome(Guid source, bool help = false)
     {
         var files = new Dictionary<string, string>(ShopFiles(), StringComparer.Ordinal)
         {
@@ -221,6 +300,18 @@ public sealed partial class DiscoveryArchitectureTests
                 """,
         };
         files["web/src/paginas.tsx"] = "export { InicioPage } from './inicio';\n" + files["web/src/paginas.tsx"];
+        if (help)
+        {
+            files["web/src/rutas.tsx"] = files["web/src/rutas.tsx"]
+                .Replace("{ InicioPage,", "{ InicioPage, AyudaPage,", StringComparison.Ordinal)
+                .Replace("  { path: '/', element: <InicioPage /> },", "  { path: '/', element: <InicioPage /> },\n  { path: '/ayuda', element: <AyudaPage /> },", StringComparison.Ordinal);
+            files["web/src/ayuda.tsx"] = """
+                import { listar } from './api';
+                export function AyudaPage() { listar(); return <p>Ayuda</p>; }
+                """;
+            files["web/src/paginas.tsx"] = "export { AyudaPage } from './ayuda';\n" + files["web/src/paginas.tsx"];
+        }
+
         return Scan(files, "--source-id", source.ToString());
     }
 
@@ -246,7 +337,7 @@ public sealed partial class DiscoveryArchitectureTests
     /// <summary>Ids nuevos y posiciones libres (a la derecha de lo que ya está) solo para lo que se agrega.</summary>
     private static JsonObject AttachCanvas(JsonElement draft, JsonElement graph)
     {
-        var right = graph.GetProperty("layout").EnumerateObject().Select(p => p.Value.GetProperty("x").GetDouble() + (p.Value.TryGetProperty("w", out var w) ? w.GetDouble() : 184)).DefaultIfEmpty(0).Max() + 80;
+        var right = graph.GetProperty("layout").EnumerateObject().Select(p => p.Value.GetProperty("x").GetDouble() + (p.Value.TryGetProperty("w", out var w) ? w.GetDouble() : BoxSizes.MaxWidth)).DefaultIfEmpty(0).Max() + 80;
         var nodes = new JsonObject();
         var layout = new JsonObject();
         var row = 0;
@@ -254,7 +345,7 @@ public sealed partial class DiscoveryArchitectureTests
         {
             var key = node.GetProperty("key").GetString()!;
             nodes[key] = Guid.CreateVersion7().ToString();
-            layout[key] = new JsonObject { ["x"] = right, ["y"] = row++ * 120 };
+            layout[key] = new JsonObject { ["x"] = right, ["y"] = row++ * 280 };
         }
 
         var edges = new JsonObject([.. draft.GetProperty("edges").EnumerateArray()

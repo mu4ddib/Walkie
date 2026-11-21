@@ -84,11 +84,6 @@ internal sealed record Draft(
 /// </summary>
 internal static class CanvasDraft
 {
-    /// <summary>Tamaño nominal de una caja del lienzo (el de <c>Canvas.tsx</c>), para no aceptar posiciones encimadas.</summary>
-    public const double BoxWidth = 184;
-
-    public const double BoxHeight = 72;
-
     private const double Gap = 8;
     private const double MaxCoordinate = 1_000_000;
 
@@ -319,16 +314,23 @@ internal static class CanvasDraft
             errors[path] = ["Hay ids repetidos o que ya están en el lienzo."];
         }
 
-        // Las cajas nuevas no se enciman entre sí ni con las que ya están (con su tamaño guardado o el nominal).
-        var boxes = new List<(string Key, double X, double Y, double W, double H)>();
+        // Las cajas nuevas no se enciman entre sí ni con las que ya están, con el tamaño con que se dibujan
+        // (`BoxSizes`): el guardado si lo tienen (grupos, ancho de un módulo) y si no, el de su contenido. Las nuevas
+        // siempre con el de su contenido: el cliente no manda tamaños, así que uno chico no puede colarse.
+        var boxes = new List<Box>();
         if (existing.TryGetProperty("layout", out var layout))
         {
+            var nodes = existing.TryGetProperty("nodes", out var n) && n.ValueKind == JsonValueKind.Object ? n : (JsonElement?)null;
             foreach (var box in layout.EnumerateObject())
             {
                 var p = box.Value;
-                boxes.Add((box.Name, Number(p, "x") ?? 0, Number(p, "y") ?? 0, Number(p, "w") ?? BoxWidth, Number(p, "h") ?? BoxHeight));
+                JsonElement? node = nodes is { } saved && saved.TryGetProperty(box.Name, out var found) ? found : null;
+                var (w, h) = BoxSizes.OfSaved(node, p);
+                boxes.Add(new Box(Describe(node, box.Name), Number(p, "x") ?? 0, Number(p, "y") ?? 0, w, h));
             }
         }
+
+        var drafted = draft.Nodes.ToDictionary(n => n.Key, StringComparer.Ordinal);
 
         if (errors.Count == 0)
         {
@@ -340,13 +342,16 @@ internal static class CanvasDraft
                     break;
                 }
 
-                if (boxes.FirstOrDefault(b => x < b.X + b.W + Gap && b.X < x + BoxWidth + Gap && y < b.Y + b.H + Gap && b.Y < y + BoxHeight + Gap) is { Key: not null } hit)
+                var (w, h) = SizeOf(drafted[key]);
+                var placed = new Box(key, x, y, w, h);
+                if (boxes.FindIndex(b => Overlaps(b, placed)) is >= 0 and var index && boxes[index] is var hit)
                 {
-                    errors[$"{path}/layout/{key}"] = [$"Se encima con {hit.Key}: lo que se agrega va en un lugar libre, sin mover nada de lo que ya está."];
+                    errors[$"{path}/layout/{key}"] = [string.Create(CultureInfo.InvariantCulture,
+                        $"Se encima con {hit.Label}: la caja nueva mide unos {w:0} × {h:0} px en ({x:0}, {y:0}) y {hit.Label} ocupa unos {hit.W:0} × {hit.H:0} px en ({hit.X:0}, {hit.Y:0}). Lo que se agrega va en un lugar libre, sin mover nada de lo que ya está.")];
                     break;
                 }
 
-                boxes.Add((key, x, y, BoxWidth, BoxHeight));
+                boxes.Add(placed);
             }
         }
 
@@ -375,6 +380,28 @@ internal static class CanvasDraft
 
         return (new JsonObject { ["nodes"] = nodesOut, ["edges"] = edgesOut, ["layout"] = layoutOut }, errors);
     }
+
+    private readonly record struct Box(string Label, double X, double Y, double W, double H);
+
+    private static bool Overlaps(Box a, Box b) =>
+        a.X < b.X + b.W + Gap && b.X < a.X + a.W + Gap && a.Y < b.Y + b.H + Gap && b.Y < a.Y + a.H + Gap;
+
+    /// <summary>Cómo se nombra una caja existente en un error: su título y su id.</summary>
+    private static string Describe(JsonElement? node, string id) =>
+        node is { } n && Prop(n, "title") is { Length: > 0 } title ? $"«{title}» ({id})" : id;
+
+    /// <summary>
+    /// Tamaño con que se dibujará una caja del borrador: una pantalla con su ruta como descripción, un componente con
+    /// su título y su firma, un portal con «→» y el nombre, un módulo con sus interfaces.
+    /// </summary>
+    private static (double W, double H) SizeOf(DiscoveryDraftNode node) => node.Type switch
+    {
+        "screen" => BoxSizes.Estimate(node.Title, description: node.Route is { } route ? Truncate("Ruta: " + route, 2000) : null),
+        "ref" => BoxSizes.Estimate(node.Title, http: node.Title),
+        "portal" => BoxSizes.Estimate("→ " + node.Title),
+        "module" => BoxSizes.Estimate(node.Title, extra: 48),
+        _ => BoxSizes.Estimate(node.Title),
+    };
 
     private static JsonObject NodeJson(DiscoveryDraftNode node, string id)
     {
@@ -492,14 +519,27 @@ internal static class CanvasDraft
             }
         }
 
-        for (var i = 0; i < boxes.Count && errors.Count == 0; i++)
+        // Cada caja con el tamaño con que se dibuja (`BoxSizes`), no el nominal: una API de ruta larga ocupa varias líneas.
+        var drafted = draft.Nodes.ToDictionary(n => n.Key, StringComparer.Ordinal);
+        var sized = new List<Box>();
+        if (errors.Count == 0)
         {
-            for (var j = i + 1; j < boxes.Count; j++)
+            foreach (var (key, (x, y)) in boxes)
             {
-                var (a, b) = (boxes[i].Value, boxes[j].Value);
-                if (a.X < b.X + BoxWidth + Gap && b.X < a.X + BoxWidth + Gap && a.Y < b.Y + BoxHeight + Gap && b.Y < a.Y + BoxHeight + Gap)
+                var (w, h) = SizeOf(drafted[key]);
+                sized.Add(new Box(key, x, y, w, h));
+            }
+        }
+
+        for (var i = 0; i < sized.Count && errors.Count == 0; i++)
+        {
+            for (var j = i + 1; j < sized.Count; j++)
+            {
+                var (a, b) = (sized[i], sized[j]);
+                if (Overlaps(a, b))
                 {
-                    errors[$"{path}/layout/{boxes[j].Key}"] = [$"Se encima con {boxes[i].Key}: el lienzo inicial no debe tener cajas superpuestas."];
+                    errors[$"{path}/layout/{b.Label}"] = [string.Create(CultureInfo.InvariantCulture,
+                        $"Se encima con {a.Label}: mide unos {b.W:0} × {b.H:0} px en ({b.X:0}, {b.Y:0}) y la otra unos {a.W:0} × {a.H:0} px en ({a.X:0}, {a.Y:0}). El lienzo inicial no debe tener cajas superpuestas.")];
                     break;
                 }
             }

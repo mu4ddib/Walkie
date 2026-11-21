@@ -275,6 +275,7 @@ internal sealed partial class ApplyHandlers(
         var steps = new List<CreateStep>();
         var created = new List<DiscoveryAppliedTarget>();
         var attaches = new List<AttachStep>();
+        var attachTargets = new HashSet<Guid>();
         var attached = new List<DiscoveryAttached>();
         var warnings = new List<DiscoveryApplyWarning>();
         var unchanged = new List<DiscoveryTarget>();
@@ -514,6 +515,14 @@ internal sealed partial class ApplyHandlers(
             if (op.Target!.Kind != FeatureTarget || !targets.TryGetValue((FeatureTarget, op.Target.Id), out var feature))
             {
                 errors[$"{path}/target"] = ["Tiene que ser una feature de esta app (no un módulo)."];
+                return;
+            }
+
+            // Una incorporación por feature y por solicitud (ADR-0018): cada una se previsualiza contra la misma versión
+            // del lienzo, así que la segunda nunca aplicaría. Se rechaza el conjunto entero antes de escribir nada.
+            if (!attachTargets.Add(feature.Id))
+            {
+                errors[$"{path}/target"] = [$"Esta solicitud ya incorpora otra pantalla a «{feature.Title}»: incorpora una pantalla por vez en cada feature (la siguiente, con la vista previa del lienzo ya actualizado). No se aplicó nada."];
                 return;
             }
 

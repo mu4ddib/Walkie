@@ -30,6 +30,14 @@ Opción 3, más «Crear feature desde esta pantalla» como un `create` sobre la 
   - lo que queda fuera y por qué: APIs sin decidir, navegación hacia pantallas sin feature o dentro de la misma feature;
   - avisos: una pantalla con el mismo título ya en el lienzo (posible duplicado), o la misma pantalla ya incorporada (error).
 - **Confirmar** manda `canvasVersion` (la de la vista previa) y los ids (UUID v7 del cliente) y posiciones de lo nuevo. Las cajas nuevas no se pueden encimar con las existentes.
+- **Geometría (revisión final):** «encimar» se mide con el tamaño con que el navegador dibuja cada caja, no con lo nominal (184 × 72).
+  - **`BoxSizes`** (Discovery) hace la estimación conservadora: ancho de 184 a 264 y alto por las líneas del título, la línea de método y ruta y la descripción. Una API de firma larga mide 264 × 166 o más.
+  - **Lo explícito guardado manda:** el `w`/`h` de un grupo o el ancho de un módulo. Lo demás se estima por el contenido de la caja.
+  - **El cliente no manda tamaños.** Las cajas nuevas siempre se miden por su contenido, así que una dimensión chica no puede colarse.
+  - **El error** dice con qué caja choca, y el tamaño y la posición de las dos.
+  - **La web reserva lo mismo:** `boxSize` en `layoutQuality.ts`, con una prueba de paridad. Lo que propone, la API lo acepta.
+  - **El lienzo inicial** (`create`) se valida igual.
+- **Una incorporación por feature y por solicitud.** Dos `attach` a la misma feature en una solicitud se rechazan enteros (400 en la segunda, «No se aplicó nada»). Las dos se previsualizan contra la misma versión, así que la segunda nunca aplicaría. Se incorpora una pantalla por vez, y la siguiente con la vista previa del lienzo ya actualizado. Nunca se aplica una parte del conjunto.
 - **Escritura: `ICanvasWriter.AppendAsync`** (Canvas). Carga el lienzo y:
   - si su versión no es la esperada, no escribe nada → **409** «el lienzo cambió: revisa la vista previa de nuevo»;
   - si ya contiene todas las cajas y conexiones nuevas con esos ids, es un reintento: no escribe;

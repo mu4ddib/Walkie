@@ -381,7 +381,7 @@ function Decisions({ appId, snapshotId, item }: { appId: string; snapshotId: str
       const attached = preview.data?.attached?.find((a) => a.entityKey === item.key);
       if (!attached) return;
       const graph = await readCanvas(decision.target.id);
-      const canvas = (canvasInput.current = planAttachCanvas(attached.canvas, graph.layout as Record<string, { x: number; y: number }>, canvasInput.current));
+      const canvas = (canvasInput.current = planAttachCanvas(attached.canvas, { nodes: graph.nodes, layout: graph.layout }, canvasInput.current));
       commit.mutate({ applyId: applyId.current, operations: operations(decision, canvas, attached.canvasVersion), dryRun: false });
       return;
     }
