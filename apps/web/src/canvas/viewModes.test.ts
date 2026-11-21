@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Edge, Node } from '../schema/walkie-graph';
-import { focusOf, hiddenCalls, summaryHidden } from './viewModes';
+import { compactPositions, focusOf, hiddenCalls, summaryHidden } from './viewModes';
 
 const nodes: Record<string, Node> = {
   s1: { id: 's1', type: 'screen', title: 'Lista' },
@@ -43,5 +43,36 @@ describe('modos de presentación del lienzo', () => {
     focusOf(edges, new Set(['s1']), new Set());
     hiddenCalls(edges, summaryHidden(nodes, typeOf));
     expect(JSON.stringify({ nodes, edges })).toBe(before);
+  });
+});
+
+describe('Resumen compacto', () => {
+  const overlap = (a: { x: number; y: number }, b: { x: number; y: number }, w = 184, h = 100) =>
+    a.x < b.x + w && b.x < a.x + w && a.y < b.y + h && b.y < a.y + h;
+
+  it('junta las pantallas sin los huecos de las APIs ocultas, en el mismo orden', () => {
+    // Tres pantallas en fila con dos bloques de APIs (ocultas) entre ellas: 1200 px de ancho que sobran.
+    const boxes = [
+      { id: 'a', x: 0, y: 0, w: 184, h: 100 },
+      { id: 'b', x: 800, y: 0, w: 184, h: 100 },
+      { id: 'c', x: 1800, y: 0, w: 184, h: 100 },
+      { id: 'd', x: 800, y: 600, w: 184, h: 100 },
+    ];
+    const p = compactPositions(boxes);
+    expect(p.a).toEqual({ x: 0, y: 0 });
+    expect(p.b!.x).toBe(304);
+    expect(p.c!.x).toBe(608);
+    // La de abajo sigue debajo de su compañera de columna, sin el hueco.
+    expect(p.d).toEqual({ x: 304, y: 176 });
+    // El orden de izquierda a derecha y de arriba abajo se conserva.
+    expect(p.a!.x < p.b!.x && p.b!.x < p.c!.x && p.b!.y < p.d!.y).toBe(true);
+  });
+
+  it('no encima lo que no estaba encimado y es determinista', () => {
+    const boxes = Array.from({ length: 30 }, (_, i) => ({ id: `n${i}`, x: (i % 6) * 413 + (i % 2) * 37, y: Math.floor(i / 6) * 291, w: 184 + (i % 3) * 40, h: 90 }));
+    const p = compactPositions(boxes);
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++) expect(overlap(p[boxes[i]!.id]!, p[boxes[j]!.id]!, 184, 90)).toBe(false);
+    expect(compactPositions(boxes)).toEqual(p);
   });
 });

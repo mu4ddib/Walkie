@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -86,7 +86,7 @@ import {
   setInspectorOpen,
   setViewMode,
 } from '../workspace/session';
-import { VIEW_MODE_OPTIONS, focusOf, hiddenCalls, summaryHidden, type ViewMode } from './viewModes';
+import { VIEW_MODE_OPTIONS, compactPositions, focusOf, hiddenCalls, summaryHidden, type ViewMode } from './viewModes';
 import { EdgeMarkers } from '../edges/EdgeMarkers';
 import { labelSize, placePairLabels, type PlacedLabel } from '../edges/labels';
 import { laneOffsets, laneRoute } from '../edges/lanes';
@@ -107,7 +107,9 @@ const NOTHING_HIDDEN: ReadonlySet<string> = new Set();
 const NODE_SIZE = { width: 184, height: 72 } as const;
 /** Zoom mínimo al abrir un lienzo sin vista guardada: por debajo, títulos y etiquetas no se leen. */
 const LEGIBLE_ZOOM = 0.7;
-const MIN_ZOOM = 0.25;
+const MIN_ZOOM = 0.2;
+/** Lo que dura el paso de un modo a otro: las cajas se deslizan y las conexiones vuelven a aparecer. */
+const MODE_SWITCH_MS = 320;
 /** Separación entre conexiones que unen el mismo par (px): cada una va por su carril, con su etiqueta. */
 const LANE_GAP = 24;
 /** Lo que dura cada tramo de "Previsualizar interacción" (la ida, luego la vuelta). */
@@ -212,7 +214,8 @@ function CanvasInner({
   useEffect(
     () =>
       camera.onSettle((view) => {
-        if (catalog.featureId && !catalog.share) saveViewport(catalog.featureId, view);
+        // La vista que se recuerda es la de las posiciones guardadas: la del resumen no.
+        if (catalog.featureId && !catalog.share && !summaryRef.current) saveViewport(catalog.featureId, view);
       }),
     [camera, catalog.featureId, catalog.share],
   );
@@ -229,13 +232,27 @@ function CanvasInner({
   const [edgeMotion, setEdgeMotionState] = useState(getEdgeMotion);
   // Modo de presentación (spec walkie-live-documentacion): solo cambia lo que se dibuja, nunca el grafo.
   const [viewMode, setViewModeState] = useState<ViewMode>(getViewMode);
-  const chooseViewMode = useCallback((mode: ViewMode) => {
-    setViewModeState(mode);
-    setViewMode(mode);
-    reframeMode.current = true;
-  }, []);
-  // Al cambiar de modo cambia lo que se ve (el resumen oculta lo técnico): se encuadra de nuevo, con la cámara.
-  const reframeMode = useRef(false);
+  // Al entrar al resumen se encuadra lo que queda a la vista; al salir, vuelve la vista que la persona tenía
+  // (`fullView`), exacta. Entre «Interacciones» y «Completa» las cajas no se mueven: la vista no cambia.
+  const reframeMode = useRef<'fit' | 'restore' | null>(null);
+  const fullView = useRef<Viewport | null>(null);
+  const summaryRef = useRef(false);
+  const [switching, setSwitching] = useState(false);
+  const chooseViewMode = useCallback(
+    (mode: ViewMode) => {
+      if (mode === viewMode) return;
+      if (mode === 'summary') {
+        fullView.current = getViewport();
+        reframeMode.current = 'fit';
+      } else if (viewMode === 'summary') reframeMode.current = 'restore';
+      // Marcas de rendimiento (`walkie-modo:*`): las lee `walkie-live-legibilidad.spec.ts` para medir cada fase.
+      performance.mark('walkie-modo:inicio');
+      setSwitching(true);
+      setViewModeState(mode);
+      setViewMode(mode);
+    },
+    [viewMode, getViewport],
+  );
   const toggleEdgeMotion = useCallback(() => {
     setEdgeMotionState((on) => {
       setEdgeMotion(!on);
@@ -377,7 +394,7 @@ function CanvasInner({
     height = bottom - y;
     const legible = floor === undefined || getViewport().zoom >= floor;
     if (onlyIfLabelsOutside && !wider && legible) return; // el fitView inicial ya basta: no mover la vista ni una fracción
-    void camera.fitBounds({ x, y, width, height }, fitPadding, options, floor);
+    return camera.fitBounds({ x, y, width, height }, fitPadding, options, floor);
   }, [getNodes, getNodesBounds, getViewport, screenToFlowPosition, camera, fitPadding]);
 
   // Al abrir sin vista guardada, `fitView` encuadra solo las cajas; cuando ya están medidas y las etiquetas
@@ -401,18 +418,37 @@ function CanvasInner({
     };
   }, [nodesInitialized, fitAll]);
 
+  // El render del modo nuevo ya está en el DOM (antes de pintar).
+  const firstMode = useRef(true);
+  useLayoutEffect(() => {
+    if (firstMode.current) {
+      firstMode.current = false;
+      return;
+    }
+    performance.mark('walkie-modo:commit');
+  }, [viewMode]);
   useEffect(() => {
-    if (!reframeMode.current) return;
-    reframeMode.current = false;
+    if (!switching) return;
+    const done = window.setTimeout(() => setSwitching(false), MODE_SWITCH_MS);
+    return () => window.clearTimeout(done);
+  }, [switching]);
+  useEffect(() => {
+    const action = reframeMode.current;
+    if (!action) return;
+    reframeMode.current = null;
     let second = 0;
     const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => fitAll());
+      second = requestAnimationFrame(() => {
+        performance.mark('walkie-modo:camara-inicio');
+        const moving = action === 'fit' ? fitAll() : fullView.current ? camera.to(fullView.current) : undefined;
+        void moving?.then(() => performance.mark('walkie-modo:camara-fin'));
+      });
     });
     return () => {
       cancelAnimationFrame(first);
       cancelAnimationFrame(second);
     };
-  }, [viewMode, fitAll]);
+  }, [viewMode, fitAll, camera]);
 
   const startPreview = useCallback(
     (edgeId: string, scenario?: string, chain = true) => {
@@ -493,10 +529,46 @@ function CanvasInner({
     [groups, tempExpanded],
   );
 
+  // En un tour, un recorrido o una previsualización manda lo suyo: el modo vuelve al terminar.
+  const modeActive = !playing && !preview;
+  const summaryOff = useMemo(
+    () => (viewMode === 'summary' && modeActive ? summaryHidden(graphNodes, (n) => effectiveType(n, catalog.items)) : NOTHING_HIDDEN),
+    [viewMode, modeActive, graphNodes, catalog.items],
+  );
+  const summaryCounts = useMemo(() => hiddenCalls(graphEdges, summaryOff), [graphEdges, summaryOff]);
+  const focus = useMemo(
+    () => (viewMode === 'interactions' && modeActive ? focusOf(graphEdges, selectedNodes, selectedEdges) : null),
+    [viewMode, modeActive, graphEdges, selectedNodes, selectedEdges],
+  );
+  const quietLabels = viewMode === 'interactions' && modeActive;
+  const summaryActive = viewMode === 'summary' && modeActive;
+  summaryRef.current = summaryActive;
+  // «Resumen»: las cajas visibles juntas, sin los huecos de lo técnico oculto (`compactPositions`). Son posiciones
+  // de presentación: no pasan por el store, no se guardan y no se arrastran; al volver, mandan las guardadas.
+  const presentation = useMemo(() => {
+    if (!summaryActive) return null;
+    const boxes = Object.values(graphNodes)
+      .filter((n) => layout[n.id] && !summaryOff.has(n.id) && !isHidden(hierarchy, n.id, collapsedGroups))
+      .map((n) => {
+        const at = layout[n.id]!;
+        const size = measured[n.id] ?? NODE_SIZE;
+        return { id: n.id, x: at.x, y: at.y, w: at.w ?? size.width, h: size.height };
+      });
+    const started = performance.now();
+    const positions = compactPositions(boxes);
+    performance.measure('walkie-modo:calculo', { start: started });
+    return positions;
+  }, [summaryActive, graphNodes, layout, summaryOff, measured, hierarchy, collapsedGroups]);
+  const shown = useMemo<typeof layout>(
+    () => (presentation ? { ...layout, ...Object.fromEntries(Object.entries(presentation).map(([id, p]) => [id, { ...layout[id], ...p }])) } : layout),
+    [layout, presentation],
+  );
+
+
   /** Caja con la que se dibuja `id` (nodo medido, nota, grupo desplegado o plegado). */
   const boxOf = useCallback(
     (id: string): Rect | null => {
-      const at = layout[id];
+      const at = shown[id];
       if (!at) return null;
       if (groups[id]) {
         return collapsedGroups.has(id)
@@ -506,7 +578,7 @@ function CanvasInner({
       const size = measured[id] ?? NODE_SIZE;
       return { x: at.x, y: at.y, w: size.width, h: size.height };
     },
-    [layout, groups, collapsedGroups, measured],
+    [shown, groups, collapsedGroups, measured],
   );
 
   /** Caja completa de `id`: la de un grupo aunque se vea plegado (es lo que ocupará al desplegarlo). */
@@ -532,19 +604,6 @@ function CanvasInner({
   const participants = useMemo(() => tourNodes(playingTour, graphEdges), [playingTour, graphEdges]);
   // Al elegir pasos desde el lienzo, se destacan las conexiones que continúan desde donde quedó el recorrido.
   const pickFrom = pickingTour ? lastEnd(pickingTour, graphEdges) : null;
-
-  // En un tour, un recorrido o una previsualización manda lo suyo: el modo vuelve al terminar.
-  const modeActive = !playing && !preview;
-  const summaryOff = useMemo(
-    () => (viewMode === 'summary' && modeActive ? summaryHidden(graphNodes, (n) => effectiveType(n, catalog.items)) : NOTHING_HIDDEN),
-    [viewMode, modeActive, graphNodes, catalog.items],
-  );
-  const summaryCounts = useMemo(() => hiddenCalls(graphEdges, summaryOff), [graphEdges, summaryOff]);
-  const focus = useMemo(
-    () => (viewMode === 'interactions' && modeActive ? focusOf(graphEdges, selectedNodes, selectedEdges) : null),
-    [viewMode, modeActive, graphEdges, selectedNodes, selectedEdges],
-  );
-  const quietLabels = viewMode === 'interactions' && modeActive;
 
   const nodes = useMemo<CanvasFlowNode[]>(() => {
     // En una previsualización se destacan los extremos del intercambio.
@@ -600,7 +659,8 @@ function CanvasInner({
           width: collapsed ? COLLAPSED_GROUP.width : (box.w ?? GROUP_MIN.w),
           height: collapsed ? COLLAPSED_GROUP.height : (box.h ?? GROUP_MIN.h),
           zIndex: collapsed ? 0 : -20 + Math.min(depth, 18),
-          hidden: isHidden(hierarchy, group.id, collapsedGroups),
+          // En el resumen los grupos y las notas no se ven: las cajas están en posiciones de presentación.
+          hidden: isHidden(hierarchy, group.id, collapsedGroups) || summaryActive,
           dragHandle: '.group-node-header',
           data: {
             group: { ...group, collapsed: collapsed || undefined },
@@ -623,14 +683,14 @@ function CanvasInner({
       selected: selectedNodes.has(note.id),
       measured: measured[note.id],
       connectable: false,
-      hidden: isHidden(hierarchy, note.id, collapsedGroups),
+      hidden: isHidden(hierarchy, note.id, collapsedGroups) || summaryActive,
       className: dimClass,
     }));
     // Una caja sin posición no se dibuja: el contenido se lee diferido y, al borrar, la posición se va un render antes.
     const graphFlowNodes: WalkieFlowNode[] = Object.values(graphNodes).filter((node) => layout[node.id]).map((node) => ({
       id: node.id,
       type: node.type,
-      position: layout[node.id]!,
+      position: shown[node.id]!,
       // La caja de un módulo conserva su ancho en este lienzo (spec modulos-compartidos, criterio 3).
       width: node.type === 'module' ? layout[node.id]?.w : undefined,
       // La seleccionada queda encima de sus vecinas (los grupos siguen detrás: zIndex negativo).
@@ -670,6 +730,8 @@ function CanvasInner({
     summaryOff,
     summaryCounts,
     focus,
+    summaryActive,
+    shown,
     flash,
   ]);
 
@@ -1117,7 +1179,8 @@ function CanvasInner({
           // Una caja que crece (ej. al completar su contrato) empuja hacia abajo a las que tapa, en vez de montarse.
           const before = measuredRef.current[change.id];
           const at = layout[change.id];
-          if (before && at && graphNodes[change.id] && !change.resizing && !locked && height > before.height + 1) {
+          // En el resumen una caja crece por la línea «llama a…»: es presentación, no empuja nada.
+          if (before && at && graphNodes[change.id] && !change.resizing && !locked && !summaryRef.current && height > before.height + 1) {
             const boxes: Record<string, Rect> = {};
             for (const id of [...Object.keys(graphNodes), ...Object.keys(stickyNotes)]) {
               const r = id !== change.id && !isHidden(hierarchy, id, collapsedGroups) ? boxOf(id) : null;
@@ -1670,7 +1733,11 @@ function CanvasInner({
   useEffect(() => {
     if (!catalog.featureId || readOnly) return;
     const featureId = catalog.featureId;
-    const save = () => saveViewport(featureId, getViewport());
+    // En el resumen se recuerda la vista que había antes de entrar (la de las posiciones guardadas).
+    const save = () => {
+      const view = summaryRef.current ? fullView.current : getViewport();
+      if (view) saveViewport(featureId, view);
+    };
     window.addEventListener('pagehide', save);
     return () => {
       window.removeEventListener('pagehide', save);
@@ -1681,7 +1748,7 @@ function CanvasInner({
   const onMoveEnd = useCallback(
     (_: unknown, viewport: Viewport) => {
       // Durante una transición de la cámara no se guarda en cada cuadro: lo hace ella al llegar.
-      if (catalog.featureId && !readOnly && !camera.animating) saveViewport(catalog.featureId, viewport);
+      if (catalog.featureId && !readOnly && !camera.animating && !summaryRef.current) saveViewport(catalog.featureId, viewport);
     },
     [catalog.featureId, readOnly, camera],
   );
@@ -1789,6 +1856,7 @@ function CanvasInner({
         edgeMotion && 'edge-motion',
         !readOnly && inspectorOpen && 'has-inspector',
         `view-${viewMode}`,
+        switching && 'view-switching',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -1867,7 +1935,7 @@ function CanvasInner({
           snapToGrid
           snapGrid={[GRID, GRID]}
           deleteKeyCode={locked ? null : ['Delete', 'Backspace']}
-          nodesDraggable={!locked}
+          nodesDraggable={!locked && !summaryActive}
           nodesConnectable={!locked}
           elementsSelectable={!locked && !pickingTourId}
           fitView={fitOnMount}

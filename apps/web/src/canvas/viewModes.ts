@@ -54,3 +54,44 @@ export function focusOf(
   }
   return { nodes, edges: lit };
 }
+
+type PlacedBox = { id: string; x: number; y: number; w: number; h: number };
+
+/**
+ * Posiciones de presentación del «Resumen» (spec walkie-live-documentacion, revisión final): las cajas visibles con
+ * su orden documentado, sin los huecos que dejan las ocultas. Las cajas que comparten una franja vertical (se tocan
+ * en x) forman una columna y las que comparten una horizontal, una fila; columnas y filas se juntan en su mismo orden
+ * con `gap` entre ellas y cada caja conserva su lugar dentro de la suya. Así no se inventa otra distribución, no se
+ * encima nada que no estuviera encimado y, al volver a «Completa», se usan otra vez las posiciones guardadas (esto
+ * nunca se guarda).
+ */
+export function compactPositions(
+  boxes: readonly PlacedBox[],
+  gap: { x: number; y: number } = { x: 120, y: 72 },
+): Record<string, { x: number; y: number }> {
+  const along = (axis: 'x' | 'y') => {
+    const size = axis === 'x' ? 'w' : 'h';
+    const sorted = [...boxes].sort((a, b) => a[axis] - b[axis] || a.id.localeCompare(b.id));
+    const shift = new Map<string, number>();
+    let cursor = 0;
+    let i = 0;
+    while (i < sorted.length) {
+      // Una franja: las cajas cuyos intervalos se tocan, en cadena.
+      const start = sorted[i]![axis];
+      let end = start + sorted[i]![size];
+      let j = i + 1;
+      while (j < sorted.length && sorted[j]![axis] < end) {
+        end = Math.max(end, sorted[j]![axis] + sorted[j]![size]);
+        j++;
+      }
+      for (let k = i; k < j; k++) shift.set(sorted[k]!.id, cursor - start);
+      cursor += end - start + (axis === 'x' ? gap.x : gap.y);
+      i = j;
+    }
+    return shift;
+  };
+  const dx = along('x');
+  const dy = along('y');
+  const snap = (v: number) => Math.round(v / 8) * 8 || 0;
+  return Object.fromEntries(boxes.map((b) => [b.id, { x: snap(b.x + dx.get(b.id)!), y: snap(b.y + dy.get(b.id)!) }]));
+}

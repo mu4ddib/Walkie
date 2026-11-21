@@ -2339,3 +2339,30 @@ div.pixel-node-image {
   font: 500 11px/1.3 var(--font-mono);
   color: var(--stone-700);
 }
+
+/* Paso entre modos (320 ms): las cajas se deslizan a su lugar y las conexiones, que se recalculan para el destino,
+   aparecen después en vez de saltar. Con movimiento reducido, directo. */
+.canvas.view-switching .react-flow__node {
+  transition: transform 280ms var(--ease);
+}
+
+.canvas.view-switching .react-flow__edges,
+.canvas.view-switching .react-flow__edgelabel-renderer {
+  opacity: 0;
+}
+
+.canvas .react-flow__edges,
+.canvas .react-flow__edgelabel-renderer {
+  transition: opacity 160ms var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas.view-switching .react-flow__node {
+    transition: none;
+  }
+
+  .canvas.view-switching .react-flow__edges,
+  .canvas.view-switching .react-flow__edgelabel-renderer {
+    opacity: 1;
+  }
+}
