@@ -38,11 +38,11 @@ Equipos que documentan su app con Walkie Live (desarrollo y onboarding) y vuelve
 
 ### Parte 4 — Documentación humana
 
-- [ ] Ningún lienzo existente se reorganiza, ninguna posición manual cambia, ningún tour, recorrido o portal se toca sin una acción explícita; un análisis parcial no borra nada.
+- [x] Ningún lienzo existente se reorganiza, ninguna posición manual cambia, ningún tour, recorrido o portal se toca sin una acción explícita; un análisis parcial no borra nada.
 
 ### Parte 5 — Inspector de la revisión
 
-- [ ] Corrección de `fix/inspector-revision-discovery` (no estaba en `main`): cabe en la zona visible, scroll propio sin encadenar, responsive; Chromium y WebKit.
+- [x] Corrección de `fix/inspector-revision-discovery` (no estaba en `main`): cabe en la zona visible, scroll propio sin encadenar, responsive; Chromium y WebKit.
 
 ## Fuera de alcance
 

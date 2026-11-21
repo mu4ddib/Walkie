@@ -97,4 +97,23 @@ Cada caso se siembra con la distribución nueva y se abre sin vista guardada. En
 El cambio de modo se mide desde el clic hasta dos cuadros después de que se pinta (en esta máquina, sin acelerar).
 Incluye el reencuadre de la cámara.
 
-Los resultados en WebKit y las capturas están en el informe de la parte 5.
+## En WebKit (`WALKIE_BROWSER=webkit`, Linux headless)
+
+Lo que llegó al lienzo pasó las mismas comprobaciones: sin cajas encimadas y zoom inicial de 0,7 o más.
+
+| Viewport | Apps: zoom inicial / «Ver todo» | Catalog | Pedidos | 75 cajas | Cambio de modo (Resumen / Interacciones / Completa) |
+| --- | --- | --- | --- | --- | --- |
+| 1280 × 800 | 0,70 / 0,51 (1) | 0,70 / 0,63 | (2) | 0,70 / 0,25 | 517 / 520 / 534 ms |
+| 1440 × 900 | 0,70 / 0,41 | (2) | 0,93 / 0,93 | 0,70 / 0,26 | 276 / 421 / 632 ms |
+| 1920 × 1080 | 0,70 / 0,58 | 0,99 / 0,99 | 1,39 / 1,39 | 0,70 / 0,60 (1) | 278 / 515 / 650 ms |
+
+Notas:
+
+1. Medido antes de esperar a que la cámara termine (en Safari, «Ver todo» tarda más de un segundo con cuadros lentos).
+   La prueba ahora espera (`settled`).
+2. La prueba no llegó al lienzo: en WebKit headless la pestaña pierde a veces la sesión, o la galería no carga, dentro
+   de los helpers de login y creación de app. Es intermitente: cambia de prueba en cada corrida y también afecta a
+   `revision-inspector.spec.ts`. Ver «Riesgos» en el plan.
+
+En WebKit cambiar de modo cuesta entre 2 y 3 veces lo de Chromium (repinta el lienzo entero), pero queda por debajo de
+0,7 s con 30 cajas y 38 conexiones.

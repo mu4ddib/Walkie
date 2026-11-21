@@ -5,6 +5,21 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Walkie Live, **documentación descubierta y lienzos legibles** (spec `walkie-live-documentacion`; ADR-0018):
+  - **La arquitectura descubierta queda entera** después de decidir, importar o reanalizar:
+    - cada hallazgo, grupo y propuesta dice su estado en Walkie (nuevo, vinculado, creado, descartado, cambió, destino borrado, sin cobertura);
+    - lo documentado enlaza a su elemento o a su lienzo («Ya en Walkie»);
+    - se abre desde cada fuente de la app y desde el análisis anterior.
+  - **Pantallas sueltas** (como `Home` en `/`):
+    - «Crear feature desde esta pantalla», con nombre editable, vista previa, portales a pantallas ya documentadas y las APIs pendientes;
+    - «Incorporar a una feature existente» que elige la persona: operación `attach`, que solo agrega. Vista previa de lo que hay y lo que se suma, sin mover ni borrar nada, y 409 si el lienzo cambió;
+    - o dejarla pendiente.
+  - **Lienzos legibles:**
+    - el lienzo inicial se distribuye por capas: pantallas por navegación, cada API junto a quien la llama, el tamaño real de cada caja. En «Apps» de Walkie, de 125 a 9 cruces y de 5 a 0 cajas encimadas;
+    - tres modos de presentación que no cambian lo guardado: Resumen, Interacciones (detalle al enfocar) y Completa;
+    - abre con zoom legible (0,7 o más) y «Ver todo» baja hasta 0,25.
+  - **Inspector de la revisión:** cabe en la zona visible, se desplaza solo y no arrastra la página; apilado en pantallas angostas.
+  - **Cambio de comportamiento:** las APIs del lienzo inicial ya no van en una grilla de 4 debajo de las pantallas (ver «Lienzo inicial» de `walkie-live-arquitectura`).
 - **Eliminar apps y features** (spec `eliminar-apps-y-features`; ADR-0017):
   - **Feature:** el owner la elimina desde su tarjeta en la galería. Antes ve qué se pierde (cajas, conexiones, tours, recorridos, imágenes propias, enlaces públicos, procedencia de Walkie Live) y que es definitivo. No se elimina si otra feature tiene un portal hacia ella (dice cuáles), si es un módulo o si alguien guardó su lienzo después del resumen (409). El catálogo, las imágenes compartidas y los demás lienzos no cambian.
   - **App:** «Eliminar app…» en la sección «Administración» de la página de la app, solo para el owner; pide escribir el nombre y vuelve a la galería con un aviso. Elimina features, módulos, catálogo, lienzos, mapa, imágenes (también en S3), enlaces, miembros y los análisis de Walkie Live, sin tocar otras apps. Una operación de Walkie Live en curso la bloquea.
