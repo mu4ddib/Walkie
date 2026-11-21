@@ -111,9 +111,95 @@ Notas:
 
 1. Medido antes de esperar a que la cámara termine (en Safari, «Ver todo» tarda más de un segundo con cuadros lentos).
    La prueba ahora espera (`settled`).
-2. La prueba no llegó al lienzo: en WebKit headless la pestaña pierde a veces la sesión, o la galería no carga, dentro
-   de los helpers de login y creación de app. Es intermitente: cambia de prueba en cada corrida y también afecta a
-   `revision-inspector.spec.ts`. Ver «Riesgos» en el plan.
+2. La prueba no llegó al lienzo. Había dos causas, investigadas en la revisión final (`e2e/sesion-navegacion.spec.ts`):
+   - **la caída del proceso de red de WebKit** en Linux con el WebSocket del servidor de desarrollo de Vite
+     (`GLib-CRITICAL`, «Network process crashed»), que se lleva el `sessionStorage` y con él la sesión;
+   - **una carrera de la app al volver del login:** `/` llevaba a la última feature y pisaba la página pedida.
+   Las dos están resueltas: WebKit corre contra la compilación de producción, y `HomePage` no redirige si la URL ya
+   cambió.
 
 En WebKit cambiar de modo cuesta entre 2 y 3 veces lo de Chromium (repinta el lienzo entero), pero queda por debajo de
 0,7 s con 30 cajas y 38 conexiones.
+
+## Revisión final: lo dibujado, medido en el Canvas real
+
+`e2e/walkie-live-legibilidad.spec.ts` mide lo que dibuja el Canvas, ya no la distribución. Mide en px de pantalla, con
+«Ver todo»:
+
+- **Cajas:** rectángulos del DOM.
+- **Etiquetas:** `.kind-edge-label`.
+- **Trazos:** cada `path` muestreado cada 6 px con `getScreenCTM`.
+- **Flechas:** el marcador existe y la punta está a 6 px o menos del borde de su caja destino.
+- **Área libre:** sin la barra de herramientas ni el inspector.
+
+Lo obligatorio, en los tres anchos y en Chromium y WebKit:
+
+- ninguna caja encimada;
+- ninguna flecha mal puesta;
+- todas las cajas visibles dentro del área libre;
+- al volver a «Completa», las posiciones guardadas y la vista que había, exactas (diferencia menor a 1 px);
+- nada se guarda: «Al día» y el grafo del servidor sin cambios.
+
+Lo que se mide y se documenta (no se exige cero). Los valores son iguales en Chromium y WebKit y en los tres anchos,
+porque se miden en pantalla sobre el mismo dibujo:
+
+| Lienzo | Conexiones | Cruces dibujados | Etiquetas sobre cajas ajenas | Etiquetas encimadas |
+| --- | --- | --- | --- | --- |
+| Walkie · Apps, Completa | 38 | 16 | 16 de 38 | 6 pares |
+| Walkie · Apps, Resumen | 5 | 0 | 0 | 0 |
+| Walkie · Apps, Interacciones (App elegida) | 38 trazos, 24 etiquetas | 16 | 9 de 24 | 5 pares |
+| Walkie · Catalog, Completa | 24 | 25 | 11 de 24 | 2 pares |
+| Pedidos, Completa | 6 | 0 | 0 | 1 par (ida y vuelta) |
+| Sintético 75, Completa | 90 | 218 (219 en WebKit) | 31 de 90 | 27 pares |
+
+Por qué hay cruces inevitables:
+
+- «Catalog» es un K₂,₁₁: dos pantallas llaman a las mismas 11 APIs, y un grafo bipartito completo así no se dibuja
+  sin cruces en capas.
+- En «Apps», los cruces son las navegaciones de vuelta (detalle → lista) sobre los abanicos de llamadas.
+- Para leerlos están «Resumen», sin cruces, e «Interacciones», con las etiquetas solo de lo elegido.
+
+### Zoom (vista inicial y «Ver todo»)
+
+| Lienzo | 1280 × 800 | 1440 × 900 | 1920 × 1080 |
+| --- | --- | --- | --- |
+| Apps: al abrir / Ver todo / Resumen | 0,70 / 0,34 / **0,93** | 0,70 / 0,41 / **1,12** | 0,70 / 0,61 / **1,67** |
+| Catalog: Ver todo / Resumen | 0,63 / 1,46 | 0,75 / 1,75 | 1,04 / 2,00 |
+| Pedidos: Ver todo / Resumen | 0,78 / 0,99 | 0,93 / 1,18 | 1,39 / 1,76 |
+| 75 cajas: Ver todo / Resumen | 0,22 / 0,45 | 0,26 / 0,52 | 0,39 / 0,65 |
+
+«Resumen» junta las pantallas sin los huecos que dejaban las APIs ocultas (`compactPositions`): en «Apps» a 1280 pasa
+de 0,41 (antes de la revisión, sin compactar) a 0,93. «Ver todo» baja hasta 0,2; las 75 cajas a 1280 necesitan 0,22.
+
+### Costo de cada cambio de modo (Apps de Walkie, 1280 × 800, ms)
+
+Las fases salen de las marcas `walkie-modo:*` del Canvas:
+
+- **cálculo:** `compactPositions`;
+- **render:** del clic al DOM nuevo;
+- **primer cuadro:** del DOM al primer cuadro pintado;
+- **cámara:** el encuadre;
+- **estable:** del clic al último cuadro en que algo se movió.
+
+Las tareas largas solo las informa Chromium; WebKit no tiene `longtask`.
+
+| Cambio | Navegador | Cálculo | Render | Primer cuadro | Cámara | Estable | Tareas largas |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Completa → Resumen | Chromium | 3,7 | 65 | 22 | 345 | 474 | 90 |
+| Resumen → Completa | Chromium | — | 31 | 58 | 342 | 544 | 89, 98 |
+| Completa → Interacciones | Chromium | — | 66 | 37 | — | 104 | 104 |
+| Interacciones → Completa | Chromium | — | 41 | 28 | — | 69 | 69 |
+| Completa → Resumen | WebKit | 2 | 15 | 21 | 553 | 757 | n/d |
+| Resumen → Completa | WebKit | — | 12 | 29 | 1154 | 1441 | n/d |
+| Completa → Interacciones | WebKit | — | 6 | 7 | — | 13 | n/d |
+| Interacciones → Completa | WebKit | — | 5 | 19 | — | 24 | n/d |
+
+Lectura:
+
+- **Cálculo:** menos de 4 ms incluso con 75 cajas.
+- **Lo más caro:** la transición de la cámara. Con cuadros lentos tarda más en vez de saltar (`MAX_STEP`), así que en
+  WebKit llega a 1,4 s al volver de «Resumen».
+- **Saltos:** el mayor salto de la vista en un cuadro es el 14–27 % del recorrido, sin saltos.
+- **Interacciones ↔ Completa:** no mueven la vista ni las cajas.
+- **Tareas largas en Chromium:** 60–125 ms, del render de las 30 cajas y las 38 conexiones al cambiar de modo. Son
+  perceptibles en un equipo lento; reducirlas es trabajo de la spec `fluidez`, no de esta.
